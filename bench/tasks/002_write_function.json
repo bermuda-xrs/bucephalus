@@ -1,0 +1,13 @@
+{
+  "key": "write-function-002",
+  "goal": "Write work/strings.py containing a function slugify(s) that lowercases, strips punctuation, and joins words with hyphens. Then confirm it runs.",
+  "success_criterion": "execution",
+  "output_schema": {
+    "type": "object",
+    "required": ["path"],
+    "properties": { "path": { "type": "string" } }
+  },
+  "artifact_scope": ["work"],
+  "budget_usd": 0.25,
+  "budget_seconds": 300
+}

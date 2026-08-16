@@ -1,0 +1,13 @@
+{
+  "key": "extract-json-001",
+  "goal": "Read work/input.txt and return the invoice total as JSON with key 'total' (an integer number of cents).",
+  "success_criterion": "json_schema",
+  "output_schema": {
+    "type": "object",
+    "required": ["total"],
+    "properties": { "total": { "type": "integer" } }
+  },
+  "artifact_scope": ["work"],
+  "budget_usd": 0.10,
+  "budget_seconds": 120
+}

@@ -1,0 +1,223 @@
+# alpha test 1
+
+A hybrid local/cloud agent with verified skill learning, built from
+`BUILD-SPEC.md`. You state an objective, review one plan, and do not touch it
+again until it reports back.
+
+The claim it is built to test is narrower than "ten times cheaper":
+
+> Good procedures make a cheap model competent enough to do most of the work
+> — and that can be measured rather than asserted.
+
+Everything here exists to keep that measurement honest.
+
+## Running it
+
+**The package is deliberately not installed, and the venv lives outside this
+folder.** Two environment facts forced both choices:
+
+1. `pip install -e .` fails at this path. Setuptools writes its `.pth` file
+   with the system ANSI codepage (cp949 here), which cannot encode the Greek
+   `ά` in `Βουκεφάλας`. The launcher sets `PYTHONPATH` instead.
+2. OneDrive deleted the in-folder `.venv` twice. A venv is thousands of tiny
+   files, which is exactly what an unstable sync loses; the 2 GB model blobs
+   next door survived fine. The venv now lives at
+   `%USERPROFILE%\.alpha-test-1-venv` and the launcher finds it there.
+   Move it back to `.venv` once sync is healthy — the launcher checks that
+   location first.
+
+```bat
+alpha.cmd status
+```
+
+```powershell
+.\alpha.ps1 status
+```
+
+Tests:
+
+```bat
+%USERPROFILE%\.alpha-test-1-venv\Scripts\python.exe -m pytest tests -q
+```
+
+## The two-touch loop
+
+```
+alpha.cmd new "Refactor work/parser.py to use pathlib" --scope work
+alpha.cmd plan   t_abc123      # drafts a plan. Cannot write: enforced in the gate.
+alpha.cmd approve t_abc123     # HUMAN TOUCH #1
+alpha.cmd run    t_abc123      # runs unattended. HUMAN TOUCH #2 is the result.
+```
+
+Between those two touches the agent does not interrupt you. Boundary crossings
+go to the deputy (a different model from the executor), which decides. Only
+trusted-tier actions park, and the plan tells you in advance which steps those
+will be — the `will PARK for you at:` line is the field worth reading before
+you walk away.
+
+Other commands:
+
+```
+alpha.cmd status          list tasks, cost, and anything waiting on you
+alpha.cmd approvals       decide what parked
+alpha.cmd alerts          integrity breaks + monitor findings (NOT approvals)
+alpha.cmd bench-local     measure local tier throughput before trusting it
+alpha.cmd report <task>   per-run JSON + CSV of every model call
+alpha.cmd pareto          cost vs pass rate across arms
+alpha.cmd skills --gate <id> [--yes]
+alpha.cmd serve           control plane on :8901 for phone/web clients
+```
+
+`demo.py` runs the whole flow with a scripted model — no API key, no network.
+
+## Models
+
+Both local tiers are **Granite 4.1**, one family, so there is one chat
+template, one tool-call syntax, and one code path across machines. That is
+what §0.1 asks for.
+
+| tier | model | size | role |
+|---|---|---|---|
+| `local` | `granite4.1:8b` | 5.3 GB | desktop tier |
+| `laptop` | `granite4.1:3b` | 2.1 GB | constrained tier, thinking off |
+| `cloud` | `claude-opus-5` | — | planning, reasoning, execution |
+| `review` | `claude-sonnet-5` | — | the deputy, a different model by design |
+
+**The spec's `muse-glimmer:3b` does not exist.** All 15 Ollama tags for Muse
+Glimmer are 30B. The "3B assistant model" in the release notes is
+`Muse-Glimmer-30B-assistant`, a DFlash block-diffusion *drafter* for
+speculative decoding — not a chat model, and it needs the 30B loaded beside
+it. The smallest 30B quant is 17 GB, which does not fit this machine
+(15.5 GB RAM, 2 GB shared Intel iGPU — §0.1's "no GPU" row). Restore
+`muse-glimmer:30b` as `local` if you move to a 24–32 GB GPU box.
+
+Models live in `../ollama-models` and are served by a dedicated Ollama
+instance on port **11435**, so your existing models on 11434 are untouched:
+
+```bat
+set OLLAMA_MODELS=..\ollama-models && set OLLAMA_HOST=127.0.0.1:11435 && ollama serve
+```
+
+Run `alpha.cmd bench-local` before trusting either tier. On CPU-only hardware
+output tokens are wall-clock seconds, and §0.1c says to settle model choice
+from your own measurements rather than someone else's leaderboard.
+
+## Where the local tier actually does work
+
+The router, the allowlist and escalation-by-disagreement are only worth
+anything if something in the loop asks for a local-eligible purpose. One does:
+**tool outputs above `compress_observations_over_tokens` are condensed by the
+local tier** before entering the ledger (`compress_tool_output`, on both
+allowlists). That is the high-volume, low-risk work.
+
+When the output is `untrusted`, the same call runs under the QUARANTINE prefix
+with `tools=None` — M8.1 rule 4 — so only a summary plus an artifact reference
+crosses back, and an injection inside the content has nothing to actuate.
+
+If no local tier is configured, compression is skipped entirely: paying cloud
+rates to shrink a prompt you are about to send to the cloud is a net loss.
+
+## What it does and does not do
+
+**Will:**
+- take an objective, plan it, and run unattended after one approval
+- split work between the free local tier and the paid one, and show the split
+- survive a crash and resume without redoing side effects
+- refuse actions that cross permission boundaries
+- record every number needed to check its own claims
+
+**Won't, yet:**
+- generate its own skills — the generator (M11) exists, but
+  `research_retrieve` refuses to draft from model priors, so a grounding
+  retriever has to be wired in first, and the gate must pass its calibration
+  test before you believe anything it produces
+- operate a graphical desktop or browser
+- claim to be secure against a determined attacker
+- have polished visuals
+
+**Might not work at all:** the skill-learning part. That is the research bet.
+Published evidence is that self-generated skills average slightly *negative*.
+The gate exists so that failing is visible instead of silent.
+
+## Layout
+
+```
+src/agent/
+  kernel/      M1  event log, hash chain, anchor, receipts, task graph
+  instrument/  M2  cost math, per-call telemetry, reports
+  ledger/      M3  artifacts by reference, cache-stable prefix, compaction
+  models/      M4  anthropic + ollama + mock backends
+  execute/     M4/M5 the loop, tools, sandbox, code-as-action + tool bridge
+  router/      M6  allowlist routing, escalation by self-consistency
+  assure/      M7/M8.3 verifiers, ratchet, anti-gaming, out-of-band monitor
+  security/    M8  taint propagation, capability gate
+  skills/      M9/M11 store, retrieval, THE GATE, generator
+  delegate/    M10 five-gate contract test
+  plan/        M13 plan artifact, planner, auto-review, deviation
+  control/     M12 FastAPI control plane + client event schema
+  cli.py       M13 terminal client
+bench/         Part 13 harness + a starter task suite (write your own)
+tests/         the spec's acceptance tests, per milestone, + source invariants
+```
+
+## Configuration worth knowing about
+
+- **`backends.cloud.model`** is `claude-opus-5`. The spec named
+  `claude-sonnet-4-6` and said to verify current model names. Two API facts the
+  adapter handles that the spec predates: `temperature` is rejected outright by
+  current models (a 400, not a warning), and thinking is `{"type": "adaptive"}`
+  with depth set by `output_config.effort` — `budget_tokens` is gone. Switch
+  models by editing the config; also update the four cost numbers, or your
+  telemetry lies.
+- **`usable_context_window`** sits alongside `context_window`. The advertised
+  window is real; the budget is not the same thing. M3.4 measures the fill
+  ratio against the usable figure, because long-context degradation arrives in
+  cliffs well below the maximum.
+- **`autonomy.auto_review_backend: review`** is a separate backend on a
+  different model from `cloud`. The spec's own config set this to `cloud`
+  while the executor is also `cloud`, which trips the anti-collusion assertion
+  on the first review the system performs.
+- **`local_allowlist`** starts at five purposes. Expand it only from
+  `skill_trials` data. `plan` and `review` are deliberately absent.
+
+`policy.md` is the deputy's rule book, in plain text, edited by you. Its
+default is deny: a category you have not written a rule for is refused, and a
+missing policy file refuses everything.
+
+## Token counting
+
+The spec listed `tiktoken`. It is not used: that is OpenAI's tokenizer and it
+undercounts Claude tokens by 15–20% on prose and more on code, so every cost
+number derived from it would be quietly wrong. `src/agent/tokens.py` uses a
+fast local estimate for in-loop budgeting and the provider's own
+`count_tokens` endpoint for calibration and for anything published. Run
+`calibrate()` on your own corpus before quoting a token figure.
+
+## The sandbox, honestly
+
+A subprocess is a safety measure against mistakes, not a security boundary
+against an adversary. An audit hook inside the child confines writes to the
+workdir and the paths linked into it, so the spec's "code attempting to write
+`anchor_path` fails" is genuinely true — but an audit hook lives in the same
+process it polices. If you ever run genuinely untrusted code, use Docker with
+`--network=none`, a read-only root, a non-root user, and dropped capabilities.
+
+`call_tool(...)` inside sandboxed code round-trips to the parent over
+stdout/stdin and is gated exactly like a direct action, with side effects
+receipted. An action that would need human approval is refused there rather
+than parked — a sandboxed process cannot be suspended mid-run.
+
+On Windows there are no `rlimit` caps, so memory and CPU limits are not
+enforced — only the wall-clock timeout. `run_sandboxed` reports that in
+`notes` rather than pretending otherwise.
+
+## Reading the numbers it produces
+
+Every report carries its provenance and the caveats in the same object as the
+figures, not in a footnote. Report three ways — bare model, model + scaffold,
+full system — with date and versions. A believable number with its flaws
+disclosed beats an impressive one nobody can check.
+
+See `INVARIANTS.md` for the pre-commit checklist, the four places where the
+build spec's code snippets contradicted its own acceptance tests, and the two
+spec instructions that could not be followed as written.

@@ -1,0 +1,13 @@
+{
+  "key": "negative-control-004",
+  "goal": "Count how many .json files are in work/ and return the count. This task is a negative control: no skill in the library should help with it, and a skill that appears to help here is a warning sign about the suite, not a win.",
+  "success_criterion": "json_schema",
+  "output_schema": {
+    "type": "object",
+    "required": ["count"],
+    "properties": { "count": { "type": "integer" } }
+  },
+  "artifact_scope": ["work"],
+  "budget_usd": 0.05,
+  "budget_seconds": 120
+}
