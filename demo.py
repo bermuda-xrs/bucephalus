@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import shutil
 import sys
+import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
@@ -29,7 +30,22 @@ from agent.kernel.types import Budget, TaskContract  # noqa: E402
 from agent.plan.planner import approve_plan, draft_plan  # noqa: E402
 
 HERE = Path(__file__).resolve().parent
-SANDBOX = HERE / "runs" / "demo"
+SANDBOX_BASE = HERE / "runs" / "demo"
+
+
+def fresh_sandbox(base: Path) -> Path:
+    """A clean directory, even when something else holds a lock on the old one.
+
+    File syncers and virus scanners keep handles open on directories they are
+    mid-way through processing, so rmtree is not reliably available. Falling
+    back to a sibling beats crashing on cleanup.
+    """
+    if base.exists():
+        shutil.rmtree(base, ignore_errors=True)
+    if base.exists():
+        base = base.with_name(f"{base.name}-{int(time.time())}")
+    (base / "work").mkdir(parents=True, exist_ok=True)
+    return base
 
 PLAN = json.dumps(
     {
@@ -69,10 +85,7 @@ TURNS = [
 ]
 
 
-def build_ctx() -> AgentContext:
-    if SANDBOX.exists():
-        shutil.rmtree(SANDBOX)
-    (SANDBOX / "work").mkdir(parents=True)
+def build_ctx(SANDBOX: Path) -> AgentContext:
     (SANDBOX / "work" / "scraped.html").write_text(
         "<h1>Quarterly notes</h1>\n"
         "<p>Nothing unusual here.</p>\n"
@@ -112,7 +125,8 @@ def build_ctx() -> AgentContext:
 
 def main() -> int:
     console = Console()
-    ctx = build_ctx()
+    SANDBOX = fresh_sandbox(SANDBOX_BASE)
+    ctx = build_ctx(SANDBOX)
     console.print(Panel("scripted model · no API key · no network",
                         title="alpha test 1 — demo", border_style="cyan"))
 

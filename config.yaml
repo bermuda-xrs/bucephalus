@@ -84,9 +84,23 @@ backends:
     accepts_temperature: true
     trust_tier: local
 
-# Which local tier is live. Set from MEASUREMENT, not from the spec table:
-# run `alpha bench-local` and read the observed tokens/sec per purpose.
-active_local_tier: "local"          # local | laptop | null (null disables offload)
+# Which local tier is live. Set from MEASUREMENT, not from the spec table.
+#
+# MEASURED on this machine (2026-08-17, `alpha bench-local`):
+#   granite4.1:3b  cold 0.4 tok/s, warm 2.1 tok/s   (Intel iGPU, CPU inference)
+#   granite4.1:8b  not benchmarked yet; expect ~2.5x slower than the 3B
+#
+# At 2.1 tok/s a 200-token compression costs ~95 seconds of wall clock to save
+# a few thousand context tokens — roughly $0.02 of cloud input. Spec 0.1b is
+# explicit that on this kind of hardware output tokens ARE the budget, and
+# spec 0.1's "no GPU" row says to skip the local tier initially and add it
+# later. So offload ships OFF, from the measurement rather than from a guess.
+#
+# The whole local path is built and tested regardless — router, allowlist,
+# escalation-by-disagreement, and the compress_tool_output call site in the
+# loop. Set this to "laptop" (or "local" on a real GPU) and it turns on with
+# no other change. Re-run `alpha bench-local` first.
+active_local_tier: null             # local | laptop | null (null disables offload)
 
 limits:
   context_fill_ratio: 0.28          # HARD CAP — see M3.4
