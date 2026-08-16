@@ -1,0 +1,14 @@
+.env
+.venv/
+__pycache__/
+*.pyc
+agent.db
+agent.db-wal
+agent.db-shm
+anchor/chain.anchor
+runs/
+.pytest_cache/
+*.egg-info/
+build/
+dist/
+.token_calibration.json

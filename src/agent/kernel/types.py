@@ -1,0 +1,135 @@
+"""Core types. Spec 1.2.
+
+Everything that crosses a module boundary is defined here so there is exactly
+one definition of taint, budget, and the model-call result shape.
+"""
+
+from __future__ import annotations
+
+from enum import Enum
+from typing import Any, Literal
+
+from pydantic import BaseModel, Field
+
+
+class Taint(str, Enum):
+    TRUSTED = "trusted"  # system-authored
+    USER = "user"  # from the human
+    UNTRUSTED = "untrusted"  # web, files, tool output
+
+    @property
+    def level(self) -> int:
+        return {"trusted": 0, "user": 1, "untrusted": 2}[self.value]
+
+
+def join_taint(*taints: Taint) -> Taint:
+    """Combining data takes the HIGHEST taint. Monotonic, never decreases."""
+    return max(taints, key=lambda t: t.level) if taints else Taint.TRUSTED
+
+
+class TaskStatus(str, Enum):
+    PENDING = "pending"
+    RUNNING = "running"
+    PAUSED = "paused"
+    DONE = "done"
+    FAILED = "failed"
+    HALTED = "halted"
+
+
+class Budget(BaseModel):
+    usd: float
+    seconds: int
+    spent_usd: float = 0.0
+    spent_seconds: float = 0.0
+
+    def remaining_usd(self) -> float:
+        return max(0.0, self.usd - self.spent_usd)
+
+    def remaining_seconds(self) -> float:
+        return max(0.0, self.seconds - self.spent_seconds)
+
+    def exhausted(self) -> bool:
+        return self.spent_usd >= self.usd or self.spent_seconds >= self.seconds
+
+
+class TaskContract(BaseModel):
+    """MUST be fully specifiable before a task runs. See M10 for why."""
+
+    goal: str
+    output_schema: dict[str, Any] = Field(default_factory=dict)  # JSON Schema
+    success_criterion: str = "always_pass"  # names a registered verifier
+    artifact_scope: list[str] = Field(default_factory=list)  # readable paths
+    max_taint_in: Taint = Taint.UNTRUSTED
+
+
+class TokenUsage(BaseModel):
+    input_tokens: int = 0
+    output_tokens: int = 0
+    cache_read_tokens: int = 0
+    cache_write_tokens: int = 0
+
+    @property
+    def total(self) -> int:
+        return (
+            self.input_tokens
+            + self.output_tokens
+            + self.cache_read_tokens
+            + self.cache_write_tokens
+        )
+
+
+class ModelResponse(BaseModel):
+    text: str
+    usage: TokenUsage
+    backend: str
+    wall_ms: int
+    raw: dict[str, Any] = Field(default_factory=dict)
+
+
+class VerifyResult(BaseModel):
+    passed: bool
+    score: float = 0.0  # 0..1, for the ratchet
+    observation: str = ""  # THE external signal fed back
+    verifier_id: str = ""
+
+
+GateVerdict = Literal[
+    "allow", "deny", "needs_approval", "promote", "reject", "insufficient"
+]
+
+
+class GateDecision(BaseModel):
+    """Used by both the capability gate (M8) and the skill gate (M9)."""
+
+    verdict: GateVerdict
+    reason: str = ""
+    preview: str | None = None
+    detail: dict[str, Any] = Field(default_factory=dict)
+
+    @property
+    def allowed(self) -> bool:
+        return self.verdict == "allow"
+
+    @classmethod
+    def allow_(cls, reason: str = "") -> GateDecision:
+        return cls(verdict="allow", reason=reason)
+
+    @classmethod
+    def deny(cls, reason: str) -> GateDecision:
+        return cls(verdict="deny", reason=reason)
+
+    @classmethod
+    def needs_approval(cls, reason: str, preview: str | None = None) -> GateDecision:
+        return cls(verdict="needs_approval", reason=reason, preview=preview)
+
+    @classmethod
+    def promote(cls, **detail: Any) -> GateDecision:
+        return cls(verdict="promote", reason="gate passed", detail=detail)
+
+    @classmethod
+    def reject(cls, reason: str, **detail: Any) -> GateDecision:
+        return cls(verdict="reject", reason=reason, detail=detail)
+
+    @classmethod
+    def insufficient(cls, reason: str, **detail: Any) -> GateDecision:
+        return cls(verdict="insufficient", reason=reason, detail=detail)
