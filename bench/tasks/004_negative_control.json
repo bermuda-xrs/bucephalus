@@ -9,5 +9,10 @@
   },
   "artifact_scope": ["work"],
   "budget_usd": 0.05,
-  "budget_seconds": 120
+  "budget_seconds": 120,
+  "fixtures": {
+    "work/a.json": "{\"id\": 1}\n",
+    "work/b.json": "{\"id\": 2}\n",
+    "work/notes.txt": "not a json file\n"
+  }
 }

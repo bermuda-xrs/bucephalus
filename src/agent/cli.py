@@ -25,7 +25,7 @@ from .context import AgentContext
 from .execute.loop import run_task
 from .instrument.report import pareto_points, run_report, write_calls_csv, write_run_json
 from .kernel.integrity import verify_all
-from .kernel.tasks import create_task, load_task
+from .kernel.tasks import create_task, load_task, set_status
 from .kernel.types import Budget, TaskContract
 from .plan.planner import approve_plan, draft_plan, load_plan, reject_plan
 from .skills.gate import decay_pass, evaluate_skill, promote
@@ -269,6 +269,29 @@ def cmd_pareto(ctx, args, console) -> int:
 def cmd_skills(ctx, args, console) -> int:
     from .skills.generate import promotion_rate
 
+    if args.add:
+        # M9 needs a hand-written skill before it can calibrate. Everything
+        # added here starts as a CANDIDATE: the gate is the only way to
+        # promote, and it needs 30 paired trials first.
+        path = Path(args.add)
+        if not path.exists():
+            console.print(f"[red]no such file: {path}[/red]")
+            return 1
+        body = path.read_text(encoding="utf-8")
+        sid = ctx.skills.store(
+            name=args.name or path.stem,
+            body=body,
+            contract={"applies_when": args.when or "(not stated)"},
+            provenance={"drafted_by": "human", "source_file": str(path)},
+            status="candidate",
+        )
+        console.print(f"stored [bold]{sid[:12]}[/bold] as a candidate")
+        console.print(
+            f"next: run paired trials, then\n"
+            f"  python bench/run.py paired {sid} --suite bench/tasks"
+        )
+        return 0
+
     if args.gate:
         decision = evaluate_skill(ctx, args.gate)
         console.print_json(json.dumps({"verdict": decision.verdict, "reason": decision.reason,
@@ -336,6 +359,25 @@ def cmd_bench_local(ctx, args, console) -> int:
         f"seconds. Pick the tier whose tok/s keeps a compress step under a "
         f"second or two, and leave thinking off.[/]"
     )
+    return 0
+
+
+def cmd_steer(ctx, args, console) -> int:
+    """M12.3 — never mutate a running task. Fork it, keeping history replayable."""
+    from .kernel.types import TaskStatus
+
+    parent = load_task(ctx.conn, args.task_id)
+    ctx.log.append(args.task_id, "human.steered", {"correction": args.correction})
+    child_contract = parent.contract.model_copy(
+        update={"goal": parent.contract.goal + f"\n\n[steered] {args.correction}"}
+    )
+    child = create_task(
+        ctx.conn, ctx.log, child_contract, parent.budget.model_copy(),
+        parent_id=args.task_id,
+    )
+    set_status(ctx.conn, ctx.log, parent, TaskStatus.PAUSED, "superseded by steer")
+    console.print(f"forked into [bold]{child.id}[/bold]; parent paused, history intact")
+    console.print(f"next: alpha run {child.id}")
     return 0
 
 
@@ -412,11 +454,19 @@ def build_parser() -> argparse.ArgumentParser:
     pa = sub.add_parser("pareto", help="cost vs pass rate across arms")
     pa.set_defaults(fn=cmd_pareto)
 
-    sk = sub.add_parser("skills", help="list skills, run the gate, run decay")
+    sk = sub.add_parser("skills", help="list skills, add one, run the gate or decay")
+    sk.add_argument("--add", metavar="SKILL.md", help="store a hand-written skill as a candidate")
+    sk.add_argument("--name", help="skill name (defaults to the filename)")
+    sk.add_argument("--when", help="one line: when this skill applies")
     sk.add_argument("--gate", help="skill id to evaluate")
     sk.add_argument("--decay", action="store_true")
     sk.add_argument("--yes", action="store_true", help="human approval for promotion")
     sk.set_defaults(fn=cmd_skills)
+
+    st = sub.add_parser("steer", help="correct a running task (forks; never mutates)")
+    st.add_argument("task_id")
+    st.add_argument("correction")
+    st.set_defaults(fn=cmd_steer)
 
     bl = sub.add_parser("bench-local", help="measure local tier throughput")
     bl.set_defaults(fn=cmd_bench_local)

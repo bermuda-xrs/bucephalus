@@ -66,10 +66,24 @@ def _provenance(ctx, arm: str) -> dict:
     }
 
 
+def provision(ctx, spec: dict) -> None:
+    """Create the files a task expects to find.
+
+    A benchmark whose fixtures you have to place by hand is a benchmark nobody
+    reruns. Each task declares its own inputs under `fixtures`, so the suite is
+    self-contained and every arm starts from identical bytes.
+    """
+    for rel, content in (spec.get("fixtures") or {}).items():
+        path = ctx.config.resolve(rel)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding="utf-8")
+
+
 def run_arm(ctx, suite: list[dict], arm: str, skills_on: bool) -> dict:
     """One configuration over the whole suite. Tasks are labelled for the chart."""
     results = []
     for spec in suite:
+        provision(ctx, spec)
         contract = TaskContract(
             goal=f"{spec['goal']} [arm:{arm}]",
             success_criterion=spec.get("success_criterion", "always_pass"),

@@ -40,6 +40,47 @@ Tests:
 %USERPROFILE%\.alpha-test-1-venv\Scripts\python.exe -m pytest tests -q
 ```
 
+## Running it with no API key at all
+
+There is a second profile that runs the entire system on the local Granite
+models — no key, no network, no spend. Start the dedicated Ollama instance in
+one window and leave it open:
+
+```bat
+ollama-serve.cmd
+```
+
+Then in another window:
+
+```bat
+alpha.cmd --config config.local.yaml new "Read work/note.txt and report what it says." --scope work --seconds 1800
+alpha.cmd --config config.local.yaml run t_xxxxxxxx
+```
+
+Verified working end to end: `done` in 2 steps, ~27s, 1,868 free tokens,
+$0.0000, hash chain verifying.
+
+Be honest about what this is. A 3B model at ~2 tok/s is not a good agent — one
+turn costs 15-40 seconds. The profile exists so the whole pipeline is
+genuinely runnable and inspectable without a paid key, which matters a lot
+more for understanding the system than raw capability does. Keep tasks small.
+
+The reviewer is `granite4.1:8b` while the executor is `granite4.1:3b`, because
+invariant 14 requires the deputy to be a different backend from the executor —
+and that rule earns its keep here rather than being satisfied on paper.
+
+Two things make this work that are worth knowing about:
+
+- **Constrained decoding.** Left to itself the 3B emits
+  `<action>list_dir("work")</action>` — right idea, wrong syntax. M5.4 says to
+  fix that with a schema rather than a retry loop, so ollama backends get
+  `ACTION_SCHEMA` through Ollama's `format` parameter and answer in JSON. The
+  cloud tier keeps the tag protocol, where forcing a schema would fight
+  extended thinking. `parse_action` accepts both shapes.
+- **A budget of `$0.00` means "free backends only"**, not "cannot run".
+  Before that fix a fully local task was declared exhausted before its first
+  step, because `spent_usd >= usd` is true at zero.
+
 ## The two-touch loop
 
 ```
@@ -58,15 +99,36 @@ you walk away.
 Other commands:
 
 ```
-alpha.cmd status          list tasks, cost, and anything waiting on you
-alpha.cmd approvals       decide what parked
-alpha.cmd alerts          integrity breaks + monitor findings (NOT approvals)
-alpha.cmd bench-local     measure local tier throughput before trusting it
-alpha.cmd report <task>   per-run JSON + CSV of every model call
-alpha.cmd pareto          cost vs pass rate across arms
-alpha.cmd skills --gate <id> [--yes]
-alpha.cmd serve           control plane on :8901 for phone/web clients
+alpha.cmd status              list tasks, cost, and anything waiting on you
+alpha.cmd approvals           decide what parked
+alpha.cmd alerts              integrity breaks + monitor findings (NOT approvals)
+alpha.cmd bench-local         measure local tier throughput before trusting it
+alpha.cmd report <task>       per-run JSON + CSV of every model call
+alpha.cmd pareto              cost vs pass rate across arms
+alpha.cmd steer <task> "..."  correct a task — forks it, never mutates
+alpha.cmd monitor <task>      run the out-of-band inspector over a trace
+alpha.cmd skills                          list skills + promotion rate
+alpha.cmd skills --add S.md --when "..."  store a hand-written skill (candidate)
+alpha.cmd skills --gate <id> [--yes]      evaluate, then promote with a human
+alpha.cmd serve               control plane on :8901 for phone/web clients
 ```
+
+## Measuring a skill, start to finish
+
+This is the M9 loop the whole project exists to test:
+
+```bat
+alpha.cmd skills --add my-skill.md --name tidy --when "cleaning a messy csv"
+python bench\run.py paired <skill_id> --suite bench\tasks
+alpha.cmd skills --gate <skill_id>          REM verdict + lift + p-value
+alpha.cmd skills --gate <skill_id> --yes    REM promote, requires a human
+```
+
+Nothing added by `--add` is ever live: it lands as a `candidate`, and only the
+gate promotes, only after 30 paired trials clear all four conditions, and only
+with a human saying yes. A 4-task starter suite is in `bench/tasks/` — it will
+correctly report `insufficient`, because 4 is not 30. Write your own 30; that
+suite is the denominator of every number this system reports.
 
 `demo.py` runs the whole flow with a scripted model — no API key, no network.
 

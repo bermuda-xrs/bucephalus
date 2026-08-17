@@ -9,5 +9,8 @@
   },
   "artifact_scope": ["work"],
   "budget_usd": 0.10,
-  "budget_seconds": 120
+  "budget_seconds": 120,
+  "fixtures": {
+    "work/input.txt": "INVOICE 2026-0417\nAcme Parts Co.\n\n  2x bearing housing     $18.50\n  1x drive belt          $ 7.25\n  shipping               $ 4.00\n\nTOTAL: $48.25\n"
+  }
 }
