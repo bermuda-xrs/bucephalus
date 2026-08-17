@@ -74,8 +74,67 @@ _ACTION_RX = re.compile(r"<action\s+tool=\"([\w.]+)\"\s*>(.*?)</action>", re.S)
 _CODE_RX = re.compile(r"<code>(.*?)</code>", re.S)
 _FINAL_RX = re.compile(r"<final>(.*?)</final>", re.S)
 
+# M5.4 — constrained output. Format adherence is weakest on the local tier, and
+# every retry-for-format is pure wasted tokens; on a CPU tier a wasted turn is
+# also 30+ seconds of wall clock. Ollama takes a JSON Schema in `format` and
+# constrains decoding to match, so the local tier answers in this shape instead
+# of the tag protocol, and `parse_action` accepts both.
+ACTION_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "kind": {"type": "string", "enum": ["action", "code", "final"]},
+        "tool": {"type": "string"},
+        "args": {"type": "object"},
+        "code": {"type": "string"},
+        # Deliberately unconstrained: a final answer may be an object matching
+        # the task's output_schema, or plain prose. Pinning it to "object" here
+        # makes small models emit an empty {} rather than the actual answer.
+        "answer": {},
+    },
+    "required": ["kind"],
+}
+
+ACTION_SCHEMA_HINT = """\
+
+Answer with a single JSON object, not the tag syntax:
+  {"kind": "action", "tool": "read_file", "args": {"path": "work/x.py"}}
+  {"kind": "code",   "code": "..."}
+  {"kind": "final",  "answer": {...}}"""
+
+
+def _parse_json_action(text: str) -> ParsedAction | None:
+    """The constrained-decoding shape. Tried before the tag protocol."""
+    s = text.strip()
+    if not s.startswith("{"):
+        return None
+    try:
+        obj = json.loads(s)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(obj, dict) or "kind" not in obj:
+        return None
+
+    kind = obj.get("kind")
+    if kind == "final":
+        return ParsedAction("final", payload=obj.get("answer", obj), raw=s)
+    if kind == "code":
+        return ParsedAction("code", args={"code": obj.get("code", "")}, raw=s)
+    if kind == "action":
+        tool = obj.get("tool", "")
+        args = obj.get("args") or {}
+        if not tool:
+            return ParsedAction("none", raw=s, error="action object has no 'tool'")
+        if not isinstance(args, dict):
+            return ParsedAction("none", raw=s, error="'args' must be an object")
+        return ParsedAction("action", tool=tool, args=args, raw=s)
+    return None
+
 
 def parse_action(text: str) -> ParsedAction:
+    parsed = _parse_json_action(text)
+    if parsed is not None:
+        return parsed
+
     m = _FINAL_RX.search(text)
     if m:
         body = m.group(1).strip()
@@ -105,8 +164,14 @@ def parse_action(text: str) -> ParsedAction:
         "none",
         raw=text,
         error=(
-            "no <action>, <code>, or <final> block found. Emit exactly one, "
-            "with a JSON body."
+            "no <action>, <code>, or <final> block found, and the reply was not "
+            "a JSON action object. Emit exactly ONE of:\n"
+            '  <action tool="read_file">{"path": "work/x.py"}</action>\n'
+            "  <code>...</code>\n"
+            '  <final>{"answer": "..."}</final>\n'
+            'or a single JSON object such as {"kind": "action", "tool": '
+            '"read_file", "args": {"path": "work/x.py"}}.\n'
+            "The tool name goes in the tag attribute, and the body is JSON."
         ),
     )
 
@@ -158,6 +223,13 @@ def run_task(ctx, task_id: str) -> TaskResult:
             backend = ctx.router.choose("step", task, step)
             ctx.executing_backend = backend.name
 
+            # M5.4: constrain decoding where format adherence is weakest.
+            # The cloud tier keeps the tag protocol — it follows it reliably,
+            # and forcing a schema there would fight with extended thinking.
+            step_schema = ACTION_SCHEMA if backend.cfg.kind == "ollama" else None
+            if step_schema is not None:
+                tail = tail + "\n" + ACTION_SCHEMA_HINT
+
             # Write-before-act: the intent is committed before the call.
             ctx.log.append(
                 task.id,
@@ -176,6 +248,7 @@ def run_task(ctx, task_id: str) -> TaskResult:
                 ctx.tools.schemas(),
                 max_tokens=backend.default_max_tokens(),
                 temperature=0.0,
+                schema=step_schema,
             )
             ctx.record(task, resp, purpose="step")
             ctx.log.append(

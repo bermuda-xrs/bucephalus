@@ -48,6 +48,26 @@ def test_no_call_bypasses_telemetry(ctx, task, scripted):
     assert rows == spy_calls > 0
 
 
+def test_zero_budget_means_free_backends_only_not_cannot_run():
+    """A fully local task costs nothing; it must not be born exhausted."""
+    from agent.kernel.types import Budget
+
+    free = Budget(usd=0.0, seconds=600)
+    assert not free.exhausted(), "a $0 budget blocked a free task before step 0"
+
+    free.spent_usd = 0.0001  # any real spend against a $0 budget stops it
+    assert free.exhausted()
+
+    paid = Budget(usd=0.50, seconds=600)
+    assert not paid.exhausted()
+    paid.spent_usd = 0.50
+    assert paid.exhausted(), "paid budgets must still stop at the limit"
+
+    timed = Budget(usd=0.0, seconds=10)
+    timed.spent_seconds = 10
+    assert timed.exhausted(), "the time limit still applies to free work"
+
+
 def test_metrics_split_paid_and_free(ctx, task, scripted):
     from agent.execute.loop import run_task
 

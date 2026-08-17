@@ -1,0 +1,102 @@
+# ALL-LOCAL profile — runs the whole system with NO API key and no network.
+#
+#   alpha.cmd --config config.local.yaml new "..." --scope work
+#
+# Everything runs on Granite 4.1 through the dedicated Ollama instance. Start
+# it first with ollama-serve.cmd, or every call fails with a connection refusal.
+#
+# BE HONEST ABOUT WHAT THIS IS. On CPU-only hardware the 3B runs at roughly
+# 1.4-2.1 tok/s and the 8B at 0.7 tok/s (measured, `alpha bench-local`). A
+# single turn is 20-40 seconds. This profile exists so the whole pipeline is
+# genuinely runnable and inspectable end to end without a paid key — not
+# because a 3B model is a good agent. Use small tasks and few steps.
+#
+# The invariant that shapes this file: the reviewer MUST be a different
+# backend from the executor (M13.3, invariant 14). So the 3B executes and the
+# 8B reviews — genuinely different models, which is the point of the rule.
+
+db_path: "./agent.local.db"
+anchor_path: "./anchor/chain.local.anchor"
+skills_path: "./skills_store"
+
+backends:
+  # "cloud" is the executor slot. Here it is the fast local model.
+  cloud:
+    kind: ollama
+    model: "granite4.1:3b"
+    endpoint: "http://localhost:11435"
+    input_cost_per_mtok: 0.0
+    output_cost_per_mtok: 0.0
+    cache_read_per_mtok: 0.0
+    cache_write_per_mtok: 0.0
+    context_window: 131072
+    usable_context_window: 16384    # CPU inference: long prompts cost wall clock
+    can_parallel: false
+    thinking: "disabled"            # a 3B that reasons for 2000 tokens is slower
+    accepts_temperature: true
+    max_output_tokens: 512
+    trust_tier: local
+
+  # The deputy. A different model from the executor, per invariant 14.
+  review:
+    kind: ollama
+    model: "granite4.1:8b"
+    endpoint: "http://localhost:11435"
+    input_cost_per_mtok: 0.0
+    output_cost_per_mtok: 0.0
+    cache_read_per_mtok: 0.0
+    cache_write_per_mtok: 0.0
+    context_window: 131072
+    usable_context_window: 8192
+    can_parallel: false
+    thinking: "disabled"
+    accepts_temperature: true
+    max_output_tokens: 128          # it only emits VERDICT + BECAUSE
+    trust_tier: local
+
+  local:
+    kind: ollama
+    model: "granite4.1:3b"
+    endpoint: "http://localhost:11435"
+    context_window: 131072
+    usable_context_window: 16384
+    thinking: "disabled"
+    accepts_temperature: true
+    max_output_tokens: 512
+    trust_tier: local
+
+# No separate offload tier: the executor is already the local model, so
+# compressing its own input on the same model would be pure overhead.
+active_local_tier: null
+
+limits:
+  context_fill_ratio: 0.28
+  default_task_budget_usd: 0.0      # nothing here costs money
+  default_task_budget_seconds: 1800 # ...but it costs a LOT of wall clock
+  max_refinement_iterations: 2
+  max_steps: 6
+  delegation_min_isolated_tokens: 1000
+
+local_allowlist: []
+laptop_allowlist: []
+compress_observations_over_tokens: 100000   # effectively off; see above
+
+gate:
+  min_paired_trials: 30
+  min_lift_pp: 5.0
+  max_p_value: 0.05
+  min_discordant_pairs: 10
+
+autonomy:
+  mode: "plan_then_run"
+  plan_required: false              # a 3B planner is not worth the wall clock
+  auto_review: true
+  auto_review_backend: "review"     # granite4.1:8b, different from the executor
+  auto_review_policy: "./policy.md"
+  deviation_tolerance: 0.25
+  human_only_tiers: ["trusted"]
+
+ui:
+  theme: "./themes/default.toml"
+  banner_art: "./assets/banner.ans"
+  spinner: "braille"

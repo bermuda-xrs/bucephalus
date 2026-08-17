@@ -21,6 +21,44 @@ def test_parse_action_shapes():
     assert n.kind == "none" and "no <action>" in n.error
 
 
+def test_parse_action_accepts_constrained_json():
+    """M5.4 — the local tier answers as JSON under constrained decoding.
+
+    Both shapes must parse, because the cloud tier keeps the tag protocol
+    while ollama backends are given a schema.
+    """
+    a = parse_action('{"kind": "action", "tool": "read_file", "args": {"path": "x.py"}}')
+    assert a.kind == "action" and a.tool == "read_file" and a.args == {"path": "x.py"}
+
+    f = parse_action('{"kind": "final", "answer": {"value": 7}}')
+    assert f.kind == "final" and f.payload == {"value": 7}
+
+    c = parse_action('{"kind": "code", "code": "print(1)"}')
+    assert c.kind == "code" and c.args["code"] == "print(1)"
+
+    bad = parse_action('{"kind": "action", "args": {}}')
+    assert bad.kind == "none" and "tool" in bad.error
+
+
+def test_parse_error_shows_the_expected_format():
+    """A 3B model that gets the syntax wrong needs the shape, not a scolding."""
+    n = parse_action('<action>\nlist_dir("work")\n</action>')
+    assert n.kind == "none"
+    assert 'tool="read_file"' in n.error and '"kind": "action"' in n.error
+
+
+def test_schema_only_constrains_ollama_backends(ctx, task, scripted):
+    """Forcing a schema on the cloud tier would fight extended thinking."""
+    from agent.execute.loop import ACTION_SCHEMA, run_task
+
+    scripted("cloud", '<final>{"answer": "ok"}</final>')
+    run_task(ctx, task.id)
+    # The mock cloud backend is kind="mock", so no schema should be passed and
+    # the tag protocol is what gets used.
+    assert ctx.backends["cloud"].cfg.kind != "ollama"
+    assert ACTION_SCHEMA["required"] == ["kind"]
+
+
 def test_end_to_end_trivial_task(ctx, workspace, scripted):
     """Write a function, save it, verify the file exists and the chain verifies."""
     from agent.kernel.tasks import create_task

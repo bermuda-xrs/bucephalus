@@ -49,7 +49,18 @@ class Budget(BaseModel):
         return max(0.0, self.seconds - self.spent_seconds)
 
     def exhausted(self) -> bool:
-        return self.spent_usd >= self.usd or self.spent_seconds >= self.seconds
+        """Out of money or out of time.
+
+        A budget of exactly 0 USD means "free backends only" — not "cannot
+        run". Without that case a fully local task, which costs nothing by
+        construction, would be declared exhausted before its first step.
+        Any actual spend against a zero budget still stops it immediately.
+        """
+        if self.usd > 0:
+            money_gone = self.spent_usd >= self.usd
+        else:
+            money_gone = self.spent_usd > 0
+        return money_gone or self.spent_seconds >= self.seconds
 
 
 class TaskContract(BaseModel):
