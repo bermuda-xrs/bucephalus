@@ -1,8 +1,0 @@
-INVOICE 2026-0417
-Acme Parts Co.
-
-  2x bearing housing     $18.50
-  1x drive belt          $ 7.25
-  shipping               $ 4.00
-
-TOTAL: $48.25

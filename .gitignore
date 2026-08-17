@@ -12,3 +12,6 @@ runs/
 build/
 dist/
 .token_calibration.json
+work/
+agent.local.db
+anchor/chain.local.anchor
