@@ -39,6 +39,24 @@ that would catch a violation, so "I checked it" means something.
 17. ☐ An approved plan hash is pinned and verified before every step
        — `test_plan_hash_pinned_after_approval`
 
+## Concurrency — the control plane serves on a threadpool
+
+23. ☐ Appending an event is atomic (read head → write successor)
+       — `test_chain_survives_concurrent_appends`
+24. ☐ `execute_once` is atomic (check receipt → perform effect)
+       — `test_execute_once_is_atomic_under_threads`
+25. ☐ The DB connection is usable from any thread
+       — `test_db_connection_is_usable_across_threads`
+
+Both critical sections take `db.chain_lock()`. Without it the M12 endpoints
+raise `ProgrammingError` on every request (thread-bound connection), and two
+threads racing `append` fork the chain — which `verify()` then reports as
+tampering on a database nobody tampered with.
+
+**Do not run multiple workers against one database file.** The lock is
+process-wide, so a second process would not see it. `src/agent/control/asgi.py`
+says so at the top.
+
 ## Five more this build added
 
 18. ☐ A cache hit never launders taint

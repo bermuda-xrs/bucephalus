@@ -8,6 +8,8 @@ import sqlite3
 import time
 from typing import Any
 
+from .db import chain_lock
+
 GENESIS = "0" * 64
 
 
@@ -77,36 +79,42 @@ class EventLog:
         self.conn = conn
 
     def append(self, task_id: str, etype: str, payload: dict) -> str:
-        """Append an event and extend the hash chain. Returns the new hash."""
+        """Append an event and extend the hash chain. Returns the new hash.
+
+        Reading the head and writing the successor must be atomic: two threads
+        interleaving here would both read the same prev_hash and fork the
+        chain, which verify() would then report as tampering.
+        """
         if etype not in EVENT_TYPES:
             raise ValueError(f"unknown event type {etype!r}")
-        cur = self.conn.cursor()
-        cur.execute(
-            "SELECT seq, hash FROM events WHERE task_id=? ORDER BY seq DESC LIMIT 1",
-            (task_id,),
-        )
-        row = cur.fetchone()
-        seq = (row[0] + 1) if row else 0
-        prev_hash = row[1] if row else GENESIS
+        with chain_lock():
+            cur = self.conn.cursor()
+            cur.execute(
+                "SELECT seq, hash FROM events WHERE task_id=? ORDER BY seq DESC LIMIT 1",
+                (task_id,),
+            )
+            row = cur.fetchone()
+            seq = (row[0] + 1) if row else 0
+            prev_hash = row[1] if row else GENESIS
 
-        body = canonical(
-            {
-                "task_id": task_id,
-                "seq": seq,
-                "type": etype,
-                "payload": payload,
-            }
-        )
-        h = sha256_hex(prev_hash + body)
+            body = canonical(
+                {
+                    "task_id": task_id,
+                    "seq": seq,
+                    "type": etype,
+                    "payload": payload,
+                }
+            )
+            h = sha256_hex(prev_hash + body)
 
-        cur.execute(
-            """INSERT INTO events(task_id, seq, type, payload_json,
-                                  prev_hash, hash, created_at)
-               VALUES (?,?,?,?,?,?,?)""",
-            (task_id, seq, etype, canonical(payload), prev_hash, h, time.time()),
-        )
-        self.conn.commit()
-        return h
+            cur.execute(
+                """INSERT INTO events(task_id, seq, type, payload_json,
+                                      prev_hash, hash, created_at)
+                   VALUES (?,?,?,?,?,?,?)""",
+                (task_id, seq, etype, canonical(payload), prev_hash, h, time.time()),
+            )
+            self.conn.commit()
+            return h
 
     def verify(self, task_id: str) -> tuple[bool, int | None]:
         """Walk the chain. Returns (ok, first_bad_seq)."""

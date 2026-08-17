@@ -113,6 +113,18 @@ alpha.cmd skills --gate <id> [--yes]      evaluate, then promote with a human
 alpha.cmd serve               control plane on :8901 for phone/web clients
 ```
 
+The control plane also runs under any ASGI server via a module-level app:
+
+```bat
+set ALPHA_CONFIG=config.local.yaml
+uvicorn agent.control.asgi:app --host 127.0.0.1 --port 8901
+```
+
+Verified working: `POST /tasks` creates, `GET /tasks/{id}` returns state and
+budget, `/metrics/{id}` returns telemetry, and `/alerts` stays separate from
+`/approvals`. **One worker only** — the hash chain assumes a single writer,
+and the lock protecting it is process-wide.
+
 ## Measuring a skill, start to finish
 
 This is the M9 loop the whole project exists to test:

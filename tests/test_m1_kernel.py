@@ -73,6 +73,82 @@ def test_unknown_event_type_is_rejected(ctx, task):
         ctx.log.append(task.id, "monitor.finding", {"leak": True})
 
 
+def test_chain_survives_concurrent_appends(ctx, task):
+    """The control plane serves on a threadpool, so appends race.
+
+    Without a lock around the read-head/write-successor section, two threads
+    read the same prev_hash and fork the chain — which verify() then reports
+    as tampering, on a database nobody tampered with.
+    """
+    import threading
+
+    errors: list[str] = []
+
+    def hammer(n: int) -> None:
+        try:
+            for i in range(10):
+                ctx.log.append(task.id, "task.status_changed", {"t": n, "i": i})
+        except Exception as e:  # noqa: BLE001
+            errors.append(f"{type(e).__name__}: {e}")
+
+    threads = [threading.Thread(target=hammer, args=(n,)) for n in range(4)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert not errors, errors
+    ok, bad = ctx.log.verify(task.id)
+    assert ok, f"concurrent appends forked the chain at seq {bad}"
+
+    seqs = [
+        r[0] for r in ctx.conn.execute(
+            "SELECT seq FROM events WHERE task_id=? ORDER BY seq", (task.id,)
+        ).fetchall()
+    ]
+    assert seqs == list(range(len(seqs))), "sequence numbers are not contiguous"
+
+
+def test_execute_once_is_atomic_under_threads(ctx, task):
+    """Two threads hitting the same idempotency key must not both send."""
+    import threading
+
+    performed: list[int] = []
+    key = idempotency_key(task.id, 0, "send_message", {"to": "a@b.c"})
+
+    def send() -> None:
+        execute_once(
+            ctx.conn, key, "send_message", {"to": "a@b.c"},
+            lambda: (performed.append(1), {"ok": True})[1],
+        )
+
+    threads = [threading.Thread(target=send) for _ in range(6)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert len(performed) == 1, f"the side effect ran {len(performed)} times"
+
+
+def test_db_connection_is_usable_across_threads(ctx):
+    """M12 runs on a threadpool; a thread-bound connection 500s every endpoint."""
+    import threading
+
+    err: dict[str, str] = {}
+
+    def query() -> None:
+        try:
+            ctx.conn.execute("SELECT COUNT(*) FROM tasks").fetchone()
+        except Exception as e:  # noqa: BLE001
+            err["e"] = f"{type(e).__name__}: {e}"
+
+    t = threading.Thread(target=query)
+    t.start()
+    t.join()
+    assert not err, err
+
+
 def test_kill_and_resume(tmp_path: Path):
     """Start a task, SIGKILL mid-run, resume, verify no duplicate side effects.
 

@@ -6,7 +6,22 @@ Rule that outranks convenience: nothing UPDATEs or DELETEs from `events`.
 from __future__ import annotations
 
 import sqlite3
+import threading
 from pathlib import Path
+
+# Serializes the chain-critical read-then-write sections: appending an event
+# reads the current head to compute prev_hash, and execute_once checks for a
+# receipt before running a side effect. Two threads interleaving either one
+# corrupts the guarantee — a forked chain, or an effect performed twice.
+#
+# A single process-wide lock is deliberate. The control plane serves requests
+# from a threadpool, so "one connection, one thread" is not achievable; what
+# IS achievable is one writer at a time, which is all the chain needs.
+_CHAIN_LOCK = threading.RLock()
+
+
+def chain_lock() -> threading.RLock:
+    return _CHAIN_LOCK
 
 SCHEMA_SQL = """
 PRAGMA journal_mode = WAL;
@@ -193,10 +208,17 @@ CREATE TABLE IF NOT EXISTS deviations (
 def connect(db_path: str | Path) -> sqlite3.Connection:
     path = Path(db_path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(str(path), timeout=30.0, isolation_level=None)
+    # check_same_thread=False because the control plane (M12) serves requests
+    # on a threadpool; without it every endpoint raises ProgrammingError. The
+    # safety this drops is replaced by chain_lock() around the critical
+    # sections, plus SQLite's own locking for everything else.
+    conn = sqlite3.connect(
+        str(path), timeout=30.0, isolation_level=None, check_same_thread=False
+    )
     conn.execute("PRAGMA journal_mode = WAL")
     conn.execute("PRAGMA foreign_keys = ON")
     conn.execute("PRAGMA synchronous = FULL")  # write-before-act needs real fsyncs
+    conn.execute("PRAGMA busy_timeout = 30000")
     return conn
 
 

@@ -11,6 +11,7 @@ import sqlite3
 import time
 from typing import Callable
 
+from .db import chain_lock
 from .events import canonical, sha256_hex
 
 
@@ -27,23 +28,30 @@ def execute_once(
     args: dict,
     fn: Callable[[], dict],
 ) -> dict:
-    """Run fn() at most once across all replays."""
-    cur = conn.cursor()
-    cur.execute("SELECT result_json FROM receipts WHERE idempotency_key=?", (key,))
-    row = cur.fetchone()
-    if row:
-        return json.loads(row[0])  # already done — do NOT re-run
+    """Run fn() at most once across all replays.
 
-    result = fn()
+    The check and the write are one critical section. Two threads reaching a
+    side-effecting tool with the same key concurrently would both see no
+    receipt and both perform the effect — the exact duplicate-send this
+    function exists to prevent.
+    """
+    with chain_lock():
+        cur = conn.cursor()
+        cur.execute("SELECT result_json FROM receipts WHERE idempotency_key=?", (key,))
+        row = cur.fetchone()
+        if row:
+            return json.loads(row[0])  # already done — do NOT re-run
 
-    cur.execute(
-        """INSERT INTO receipts(idempotency_key, tool_name, args_hash,
-                                result_json, created_at)
-           VALUES (?,?,?,?,?)""",
-        (key, tool_name, sha256_hex(canonical(args)), canonical(result), time.time()),
-    )
-    conn.commit()
-    return result
+        result = fn()
+
+        cur.execute(
+            """INSERT INTO receipts(idempotency_key, tool_name, args_hash,
+                                    result_json, created_at)
+               VALUES (?,?,?,?,?)""",
+            (key, tool_name, sha256_hex(canonical(args)), canonical(result), time.time()),
+        )
+        conn.commit()
+        return result
 
 
 def has_receipt(conn: sqlite3.Connection, key: str) -> bool:
