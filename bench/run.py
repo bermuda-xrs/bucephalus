@@ -31,6 +31,7 @@ from agent.execute.loop import run_task  # noqa: E402
 from agent.instrument.report import pareto_points, write_calls_csv  # noqa: E402
 from agent.kernel.tasks import create_task  # noqa: E402
 from agent.kernel.types import Budget, TaskContract  # noqa: E402
+from agent.models.registry import build_backends  # noqa: E402
 from agent.skills.gate import TaskSpec, evaluate_skill, run_paired_trial  # noqa: E402
 
 CAVEATS = [
@@ -128,10 +129,21 @@ def cmd_arms(args) -> int:
     ctx = AgentContext.open(args.config)
     suite = load_suite(Path(args.suite))
     out = {}
-    for arm, skills_on in (("skills-off", False), ("skills-on", True)):
-        if args.only and arm != args.only:
-            continue
-        out[arm] = run_arm(ctx, suite, arm, skills_on)
+
+    if args.executor:
+        # Spec 0.1c: the paired-trial harness is not skill-specific. Swap the
+        # arms from skill/no-skill to model A/model B and read the result off
+        # the same statistics — that is how model choice gets settled from
+        # your own workload instead of someone else's leaderboard.
+        ctx.config.backends["cloud"].model = args.executor
+        ctx.backends = build_backends(ctx.config)
+        label = args.label or args.executor
+        out[label] = run_arm(ctx, suite, label, skills_on=True)
+    else:
+        for arm, skills_on in (("skills-off", False), ("skills-on", True)):
+            if args.only and arm != args.only:
+                continue
+            out[arm] = run_arm(ctx, suite, arm, skills_on)
 
     report = {
         "pareto": pareto_points(ctx.conn, ctx.telemetry),
@@ -195,6 +207,8 @@ def main() -> int:
     a.add_argument("--suite", default="bench/tasks")
     a.add_argument("--out", default="runs/bench.json")
     a.add_argument("--only")
+    a.add_argument("--executor", help="override the executor model; makes this a model arm")
+    a.add_argument("--label", help="name for this arm in the report")
     a.set_defaults(fn=cmd_arms)
 
     q = sub.add_parser("paired", help="M9 paired trials for one skill")
