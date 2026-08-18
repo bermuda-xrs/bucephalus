@@ -1,0 +1,522 @@
+<title>Run Sheet 001</title>
+<style>
+  /* ---- tokens: light is the base, both dark scopes redefine only tokens ---- */
+  :root {
+    color-scheme: light;
+    --plane:      #f4f4f1;
+    --surface:    #fcfcfb;
+    --ink:        #0b0b0b;
+    --ink-2:      #52514e;
+    --muted:      #898781;
+    --rule:       #e1e0d9;
+    --axis:       #c3c2b7;
+    --s1:         #2a78d6;   /* granite 3b  */
+    --s2:         #eb6834;   /* granite 8b  */
+    --good:       #0ca30c;
+    --warn:       #fab219;
+    --warn-ink:   #7a5400;
+    --ring:       rgba(11,11,11,0.10);
+    --tip-bg:     #0b0b0b;
+    --tip-ink:    #fcfcfb;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --plane:    #0d0d0d;
+      --surface:  #1a1a19;
+      --ink:      #ffffff;
+      --ink-2:    #c3c2b7;
+      --muted:    #898781;
+      --rule:     #2c2c2a;
+      --axis:     #383835;
+      --s1:       #3987e5;
+      --s2:       #d95926;
+      --good:     #0ca30c;
+      --warn:     #fab219;
+      --warn-ink: #fab219;
+      --ring:     rgba(255,255,255,0.10);
+      --tip-bg:   #fcfcfb;
+      --tip-ink:  #0b0b0b;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --plane:    #0d0d0d;
+    --surface:  #1a1a19;
+    --ink:      #ffffff;
+    --ink-2:    #c3c2b7;
+    --muted:    #898781;
+    --rule:     #2c2c2a;
+    --axis:     #383835;
+    --s1:       #3987e5;
+    --s2:       #d95926;
+    --good:     #0ca30c;
+    --warn:     #fab219;
+    --warn-ink: #fab219;
+    --ring:     rgba(255,255,255,0.10);
+    --tip-bg:   #fcfcfb;
+    --tip-ink:  #0b0b0b;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--plane);
+    color: var(--ink);
+    font: 400 16px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif;
+    padding: 40px 20px 80px;
+  }
+  .wrap { max-width: 1000px; margin: 0 auto; display: flex; flex-direction: column; gap: 34px; }
+
+  .mono, .stat-v, th, td, .chip, .eyebrow, h1, h2, .tick, .blabel {
+    font-family: ui-monospace, "Cascadia Mono", "Cascadia Code", Consolas, "SF Mono", Menlo, monospace;
+  }
+
+  /* ---- masthead ---- */
+  .head { border-top: 3px solid var(--ink); padding-top: 18px; }
+  .eyebrow {
+    font-size: 11px; letter-spacing: .16em; text-transform: uppercase;
+    color: var(--muted); margin: 0 0 10px;
+  }
+  h1 { font-size: 30px; line-height: 1.15; margin: 0 0 8px; font-weight: 700; letter-spacing: -0.01em; text-wrap: balance; }
+  .dek { margin: 0; color: var(--ink-2); max-width: 62ch; }
+
+  .prov {
+    margin-top: 20px; display: grid; gap: 1px; background: var(--rule);
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    border: 1px solid var(--rule);
+  }
+  .prov div { background: var(--surface); padding: 9px 12px; }
+  .prov dt { font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted);
+             font-family: ui-monospace, Consolas, monospace; }
+  .prov dd { margin: 3px 0 0; font-size: 13px;
+             font-family: ui-monospace, Consolas, monospace; font-variant-numeric: tabular-nums; }
+
+  /* ---- sections ---- */
+  section { display: flex; flex-direction: column; gap: 14px; }
+  h2 { font-size: 12px; letter-spacing: .16em; text-transform: uppercase; margin: 0;
+       color: var(--ink-2); padding-bottom: 8px; border-bottom: 1px solid var(--rule); }
+  p { margin: 0; max-width: 68ch; color: var(--ink-2); }
+  p strong { color: var(--ink); font-weight: 600; }
+
+  /* ---- gate ---- */
+  .gate { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+  .g {
+    background: var(--surface); border: 1px solid var(--rule); padding: 12px 14px;
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .g .n { font-size: 13px; font-family: ui-monospace, Consolas, monospace; color: var(--ink); word-break: break-all; }
+  .g .w { font-size: 12.5px; color: var(--muted); }
+  .chip {
+    align-self: flex-start; font-size: 10px; letter-spacing: .1em; text-transform: uppercase;
+    color: var(--good); border: 1px solid currentColor; padding: 1px 7px;
+  }
+
+  /* ---- stat tiles ---- */
+  .stats { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); }
+  .stat { background: var(--surface); border: 1px solid var(--rule); padding: 14px 16px; }
+  .stat-k { font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted);
+            font-family: ui-monospace, Consolas, monospace; }
+  .stat-v { font-size: 27px; font-weight: 600; margin-top: 6px; letter-spacing: -0.02em; }
+  .stat-n { font-size: 12px; color: var(--muted); margin-top: 3px; }
+
+  /* ---- charts ---- */
+  figure { margin: 0; background: var(--surface); border: 1px solid var(--rule); padding: 18px; }
+  figcaption { font-size: 12.5px; color: var(--muted); margin-top: 12px; max-width: 70ch; }
+  .chart-scroll { overflow-x: auto; }
+  svg { display: block; max-width: 100%; height: auto; }
+  .tick { font-size: 10px; fill: var(--muted); font-variant-numeric: tabular-nums; }
+  .blabel { font-size: 10px; fill: var(--ink-2); font-variant-numeric: tabular-nums; }
+  .grid { stroke: var(--rule); stroke-width: 1; }
+  .axis { stroke: var(--axis); stroke-width: 1; }
+  .bar { transition: opacity .12s; }
+  .bar:hover { opacity: .78; }
+  .hit { fill: transparent; cursor: pointer; }
+
+  .legend { display: flex; flex-wrap: wrap; gap: 16px; margin-bottom: 14px; }
+  .lg { display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--ink-2);
+        font-family: ui-monospace, Consolas, monospace; }
+  .sw { width: 11px; height: 11px; border-radius: 2px; flex: none; }
+
+  /* ---- callout ---- */
+  .warn {
+    background: var(--surface); border: 1px solid var(--rule);
+    border-left: 3px solid var(--warn); padding: 14px 16px;
+    display: flex; gap: 11px; align-items: flex-start;
+  }
+  .warn svg { flex: none; margin-top: 2px; }
+  .warn h3 { margin: 0 0 5px; font-size: 13px; color: var(--ink); font-weight: 600; }
+  .warn p { font-size: 13.5px; max-width: 66ch; }
+
+  /* ---- table ---- */
+  .tw { overflow-x: auto; border: 1px solid var(--rule); background: var(--surface); }
+  table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+  th, td { text-align: right; padding: 8px 12px; border-bottom: 1px solid var(--rule);
+           font-variant-numeric: tabular-nums; white-space: nowrap; }
+  th:first-child, td:first-child { text-align: left; }
+  thead th { color: var(--muted); font-size: 10px; letter-spacing: .1em; text-transform: uppercase;
+             font-weight: 400; }
+  tbody tr:last-child td { border-bottom: none; }
+  td.model { color: var(--ink-2); }
+
+  ul { margin: 0; padding-left: 18px; color: var(--ink-2); max-width: 68ch; }
+  li { margin-bottom: 7px; }
+  li::marker { color: var(--muted); }
+  code { font-family: ui-monospace, Consolas, monospace; font-size: 0.9em;
+         background: var(--plane); padding: 1px 4px; border: 1px solid var(--rule); }
+
+  #tip {
+    position: fixed; pointer-events: none; opacity: 0; transition: opacity .1s;
+    background: var(--tip-bg); color: var(--tip-ink); padding: 7px 10px;
+    font: 11.5px/1.45 ui-monospace, Consolas, monospace; z-index: 40;
+    font-variant-numeric: tabular-nums; max-width: 260px;
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+  :focus-visible { outline: 2px solid var(--s1); outline-offset: 2px; }
+</style>
+
+<div class="wrap">
+
+  <header class="head">
+    <p class="eyebrow">alpha test 1 · benchmark</p>
+    <h1>Run Sheet 001 — Granite 4.1, CPU only</h1>
+    <p class="dek">
+      First numbers off the all-local profile. Two executor models over the same
+      four-task suite, no API key, nothing billed. The 8B is dominated by the 3B
+      on both axes — and the reason is wall clock, not capability.
+    </p>
+
+    <dl class="prov">
+      <div><dt>Date</dt><dd>2026-08-19</dd></div>
+      <div><dt>Commit</dt><dd>05d20a1</dd></div>
+      <div><dt>Scaffold</dt><dd>0.1.0</dd></div>
+      <div><dt>Python</dt><dd>3.11.15</dd></div>
+      <div><dt>Runtime</dt><dd>ollama 0.32.14</dd></div>
+      <div><dt>Hardware</dt><dd>Intel iGPU · CPU inference</dd></div>
+      <div><dt>Memory</dt><dd>15.5 GB</dd></div>
+      <div><dt>Suite</dt><dd>n = 4 tasks</dd></div>
+    </dl>
+  </header>
+
+  <section>
+    <h2>Acceptance gate</h2>
+    <p>
+      The four tests named as the go/no-go. All pass, so collection proceeded.
+      Full suite is <strong>111/111</strong> at this commit.
+    </p>
+    <div class="gate">
+      <div class="g"><span class="chip">pass</span><span class="n">test_kill_and_resume</span>
+        <span class="w">Real SIGKILL mid-run, then resume. No duplicate side effect.</span></div>
+      <div class="g"><span class="chip">pass</span><span class="n">test_cache_hit_ratio_above_threshold</span>
+        <span class="w">Stable prefix holds across turns; discount intact.</span></div>
+      <div class="g"><span class="chip">pass</span><span class="n">test_gate_accepts_known_good_skill</span>
+        <span class="w">M9 calibration — the gate can still detect a real lift.</span></div>
+      <div class="g"><span class="chip">pass</span><span class="n">test_monitor_never_in_agent_context</span>
+        <span class="w">Monitor findings absent from every prompt and the client stream.</span></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Headline</h2>
+    <div class="stats" id="stats"></div>
+  </section>
+
+  <section>
+    <h2>Wall clock per task</h2>
+    <figure>
+      <div class="legend" id="legend1"></div>
+      <div class="chart-scroll"><svg id="bars" viewBox="0 0 940 340" role="img"
+        aria-label="Grouped bar chart of seconds per task for each model run"></svg></div>
+      <figcaption id="cap1"></figcaption>
+    </figure>
+    <div class="warn">
+      <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true">
+        <path d="M8 1.6 15 14.4H1L8 1.6Z" fill="none" stroke="var(--warn)" stroke-width="1.6"
+              stroke-linejoin="round"/>
+        <path d="M8 6.2v3.4M8 11.6v.9" stroke="var(--warn)" stroke-width="1.6" stroke-linecap="round"/>
+      </svg>
+      <div>
+        <h3>Warning — run-to-run spread is larger than the model difference</h3>
+        <p>
+          The same 3B model on the same task ran <strong>19.6&nbsp;s</strong> once and
+          <strong>50.7&nbsp;s</strong> the next time. Two runs is not enough to
+          separate model from noise, so treat any per-task gap below roughly 2× as
+          unmeasured rather than real.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>The cost/quality plane</h2>
+    <figure>
+      <div class="legend" id="legend2"></div>
+      <div class="chart-scroll"><svg id="pareto" viewBox="0 0 940 380" role="img"
+        aria-label="Scatter of mean wall clock against pass rate; all arms sit at 100 percent"></svg></div>
+      <figcaption id="cap2"></figcaption>
+    </figure>
+    <div class="warn">
+      <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true">
+        <path d="M8 1.6 15 14.4H1L8 1.6Z" fill="none" stroke="var(--warn)" stroke-width="1.6"
+              stroke-linejoin="round"/>
+        <path d="M8 6.2v3.4M8 11.6v.9" stroke="var(--warn)" stroke-width="1.6" stroke-linecap="round"/>
+      </svg>
+      <div>
+        <h3>Read the 8B's miss as a clock failure, not a competence failure</h3>
+        <p>
+          The 8B lost <code>write-function</code> to <strong>budget_exhausted</strong>
+          at 402&nbsp;s against a 300&nbsp;s cap. It was not marked wrong — it ran out
+          of time while still working. Give that task a larger
+          <code>budget_seconds</code> and the pass rate may well return; what will not
+          change is that it needs roughly 2.3× the wall clock to get there. On this
+          hardware that is the whole story, because seconds are the budget.
+        </p>
+      </div>
+    </div>
+    <div class="warn">
+      <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true">
+        <path d="M8 1.6 15 14.4H1L8 1.6Z" fill="none" stroke="var(--warn)" stroke-width="1.6"
+              stroke-linejoin="round"/>
+        <path d="M8 6.2v3.4M8 11.6v.9" stroke="var(--warn)" stroke-width="1.6" stroke-linecap="round"/>
+      </svg>
+      <div>
+        <h3>The money axis is omitted because it has one value</h3>
+        <p>
+          Every arm ran locally, so cost is <strong>$0.0000</strong> throughout. A
+          cost-versus-quality plot would be a vertical line. Wall clock stands in as
+          the binding budget — which is what the build spec predicts for a CPU tier,
+          now measured rather than assumed.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Table view</h2>
+    <div class="tw"><table id="tbl">
+      <thead><tr><th>Task</th><th>Model</th><th>Run</th><th>Status</th>
+        <th>Wall&nbsp;(s)</th><th>Free&nbsp;tokens</th><th>USD</th></tr></thead>
+      <tbody></tbody>
+    </table></div>
+  </section>
+
+  <section>
+    <h2>What these numbers cannot support</h2>
+    <ul>
+      <li><strong>Not a pass rate.</strong> Four tasks means one task is 25
+        percentage points. 4/4 is consistent with a true rate anywhere from roughly
+        40% upward, and 3/4 is not reliably different from 4/4 at this n.</li>
+      <li><strong>Not "the 8B is worse at coding."</strong> Its one miss was a clock
+        expiry mid-work, not a wrong answer. The defensible claim is about seconds:
+        ~2.3× the wall clock of the 3B, measured.</li>
+      <li><strong>The verifiers check shape, not truth.</strong> Three of the four
+        tasks are scored by <code>json_schema</code>, which accepts
+        <code>{"total": 0}</code> for an invoice whose real total is 4825. A wrong
+        answer of the right shape passes. Read 4/4 as "produced well-formed output
+        four times," nothing stronger.</li>
+      <li><strong>Cache hit ratio is not measured here.</strong> It reads 0.00 for
+        every local run because the Ollama adapter reports no cache-token counts —
+        absent instrumentation, not a collapsed discount. The cache invariant is
+        covered by the acceptance test instead.</li>
+      <li><strong>The suite is a shape demo.</strong> Four tasks written to exercise
+        the harness. The 30-task suite that would carry a real claim does not exist
+        yet, and it is the denominator of every number above.</li>
+      <li><strong>Single run per arm, except 3B.</strong> Only the 3B has a repeat,
+        and that repeat is what exposed the variance warning above.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>What it does establish</h2>
+    <ul>
+      <li>The whole pipeline runs end to end with no API key and nothing billed —
+        plan, gate, deputy, receipts, hash chain, telemetry.</li>
+      <li>Every model call is accounted for in <code>calls</code>, and every task's
+        chain verifies against the anchor afterward.</li>
+      <li><strong>Bigger is not automatically better here.</strong> The 8B is slower
+        on every single task and finished with a lower pass rate. Nothing in this
+        suite rewarded the extra parameters enough to pay for the seconds — which is
+        the concrete version of the spec's claim that a smaller model is not
+        automatically a cheaper one, run backwards.</li>
+      <li><strong>The budget mechanism does what it says.</strong> A task that
+        overran its wall-clock allowance was stopped and recorded as
+        <code>budget_exhausted</code> rather than left to run — visible in the table,
+        not buried.</li>
+    </ul>
+  </section>
+
+</div>
+<div id="tip" role="status"></div>
+
+<script>
+/* ---------------------------------------------------------------
+   DATA — transcribed from runs/pareto-3b.json, runs/pareto-8b.json
+   and runs/bench-local.json (the earlier 3B run).
+   --------------------------------------------------------------- */
+const TASKS = ["extract-json-001","write-function-002","summarize-untrusted-003","negative-control-004"];
+const SHORT = ["extract-json","write-function","summarize-untrusted","negative-control"];
+
+const RUNS = [
+  { id:"3b-a", model:"granite4.1:3b", run:"run 1", color:"var(--s1)", dim:false,
+    wall:[19.6,221.4,34.3,23.5], free:[934,2131,1032,995],
+    status:["done","done","done","done"],
+    pass:[1,1,1,1], meanWall:75.0, passRate:1.0, usd:0 },
+  { id:"3b-b", model:"granite4.1:3b", run:"run 2", color:"var(--s1)", dim:true,
+    wall:[50.7,177.9,23.5,57.6], free:[2046,2131,1013,2145],
+    status:["done","done","done","done"],
+    pass:[1,1,1,1], meanWall:77.4, passRate:1.0, usd:0 },
+  { id:"8b", model:"granite4.1:8b", run:"run 1", color:"var(--s2)", dim:false,
+    wall:[97.8,402.4,76.1,138.7], free:[2050,2263,2136,6271],
+    status:["done","budget_exhausted","done","done"],
+    pass:[1,0,1,1], meanWall:178.7, passRate:0.75, usd:0 },
+];
+
+/* ---------------- stat tiles ---------------- */
+const allWall = RUNS.flatMap(r => r.wall);
+const totalTasks = RUNS.length * TASKS.length;
+const totalPass = RUNS.reduce((a,r) => a + r.pass.reduce((x,y)=>x+y,0), 0);
+const stats = [
+  ["Billed", "$0.0000", "every arm ran locally"],
+  ["Tasks passed", totalPass + "/" + totalTasks, RUNS.length + " arms x " + TASKS.length + " tasks"],
+  ["3B mean", "76s", "4/4 across both runs"],
+  ["8B mean", "179s", "3/4 — one budget timeout"],
+];
+document.getElementById("stats").innerHTML = stats.map(([k,v,n]) =>
+  `<div class="stat"><div class="stat-k">${k}</div><div class="stat-v">${v}</div>
+   <div class="stat-n">${n}</div></div>`).join("");
+
+/* ---------------- tooltip ---------------- */
+const tip = document.getElementById("tip");
+function showTip(e, html) {
+  tip.innerHTML = html; tip.style.opacity = "1";
+  const pad = 14, w = tip.offsetWidth, h = tip.offsetHeight;
+  let x = e.clientX + pad, y = e.clientY + pad;
+  if (x + w > innerWidth - 8) x = e.clientX - w - pad;
+  if (y + h > innerHeight - 8) y = e.clientY - h - pad;
+  tip.style.left = x + "px"; tip.style.top = y + "px";
+}
+function hideTip() { tip.style.opacity = "0"; }
+
+function legend(el, items) {
+  document.getElementById(el).innerHTML = items.map(i =>
+    `<span class="lg"><span class="sw" style="background:${i.color};opacity:${i.dim?0.5:1}"></span>${i.label}</span>`
+  ).join("");
+}
+const NS = "http://www.w3.org/2000/svg";
+function el(tag, attrs, parent) {
+  const n = document.createElementNS(NS, tag);
+  for (const k in attrs) n.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(n);
+  return n;
+}
+
+/* ---------------- chart 1: grouped bars ---------------- */
+(function () {
+  const svg = document.getElementById("bars");
+  const W = 940, H = 340, L = 52, R = 16, T = 14, B = 54;
+  const pw = W - L - R, ph = H - T - B;
+  const maxV = Math.ceil(Math.max(...allWall) / 50) * 50;
+  const y = v => T + ph - (v / maxV) * ph;
+
+  for (let v = 0; v <= maxV; v += 50) {
+    el("line", { x1: L, x2: W - R, y1: y(v), y2: y(v), class: "grid" }, svg);
+    const t = el("text", { x: L - 9, y: y(v) + 3.5, class: "tick", "text-anchor": "end" }, svg);
+    t.textContent = v;
+  }
+  el("line", { x1: L, x2: W - R, y1: y(0), y2: y(0), class: "axis" }, svg);
+
+  const gw = pw / TASKS.length, inner = gw * 0.66, bw = inner / RUNS.length;
+  TASKS.forEach((task, ti) => {
+    const gx = L + ti * gw + (gw - inner) / 2;
+    RUNS.forEach((r, ri) => {
+      const v = r.wall[ti];
+      const x = gx + ri * bw;
+      const bh = Math.max(2, y(0) - y(v));
+      /* 2px surface gap between adjacent fills, per the mark spec */
+      el("rect", { x: x + 1, y: y(v), width: Math.max(1, bw - 2), height: bh,
+        fill: r.color, opacity: r.dim ? 0.5 : 1, rx: 3, class: "bar" }, svg);
+      const lab = el("text", { x: x + bw / 2, y: y(v) - 6, class: "blabel",
+        "text-anchor": "middle" }, svg);
+      lab.textContent = v.toFixed(0);
+      const hit = el("rect", { x: x, y: T, width: bw, height: ph, class: "hit" }, svg);
+      hit.addEventListener("mousemove", e => showTip(e,
+        `<b>${task}</b><br>${r.model} · ${r.run}<br>${v.toFixed(1)}s · ${r.free[ti]} free tokens`));
+      hit.addEventListener("mouseleave", hideTip);
+    });
+    const tl = el("text", { x: L + ti * gw + gw / 2, y: H - 30, class: "tick",
+      "text-anchor": "middle" }, svg);
+    tl.textContent = SHORT[ti];
+  });
+  const ax = el("text", { x: L - 9, y: T - 2, class: "tick", "text-anchor": "end" }, svg);
+  ax.textContent = "sec";
+
+  legend("legend1", RUNS.map(r => ({ color: r.color, dim: r.dim, label: r.model + " " + r.run })));
+  document.getElementById("cap1").textContent =
+    "Seconds of wall clock per task, one bar per run. Same hue means same model; "
+    + "the paler bar is the 3B's second run. Hover any bar for tokens.";
+})();
+
+/* ---------------- chart 2: the plane ---------------- */
+(function () {
+  const svg = document.getElementById("pareto");
+  const W = 940, H = 380, L = 62, R = 120, T = 22, B = 56;
+  const pw = W - L - R, ph = H - T - B;
+  const maxX = Math.ceil(Math.max(...RUNS.map(r => r.meanWall)) / 20) * 20 + 20;
+  const x = v => L + (v / maxX) * pw;
+  const y = p => T + ph - p * ph;
+
+  for (let p = 0; p <= 1.0001; p += 0.25) {
+    el("line", { x1: L, x2: W - R, y1: y(p), y2: y(p), class: "grid" }, svg);
+    const t = el("text", { x: L - 9, y: y(p) + 3.5, class: "tick", "text-anchor": "end" }, svg);
+    t.textContent = (p * 100).toFixed(0) + "%";
+  }
+  for (let v = 0; v <= maxX; v += 20) {
+    const t = el("text", { x: x(v), y: H - 30, class: "tick", "text-anchor": "middle" }, svg);
+    t.textContent = v;
+  }
+  el("line", { x1: L, x2: W - R, y1: y(0), y2: y(0), class: "axis" }, svg);
+  el("line", { x1: L, x2: L, y1: T, y2: y(0), class: "axis" }, svg);
+
+  const xl = el("text", { x: L + pw / 2, y: H - 8, class: "tick", "text-anchor": "middle" }, svg);
+  xl.textContent = "mean wall clock per task (s)  —  money axis omitted: $0.0000 for every arm";
+  const yl = el("text", { x: 14, y: T + ph / 2, class: "tick", "text-anchor": "middle",
+    transform: `rotate(-90 14 ${T + ph / 2})` }, svg);
+  yl.textContent = "pass rate";
+
+  RUNS.forEach(r => {
+    /* 2px surface ring so overlapping markers stay separable */
+    el("circle", { cx: x(r.meanWall), cy: y(r.passRate), r: 8.5,
+      fill: "var(--surface)" }, svg);
+    const c = el("circle", { cx: x(r.meanWall), cy: y(r.passRate), r: 6.5,
+      fill: r.color, opacity: r.dim ? 0.55 : 1 }, svg);
+    const lab = el("text", { x: x(r.meanWall) + 13, y: y(r.passRate) + 4, class: "blabel" }, svg);
+    lab.textContent = r.model.replace("granite4.1:", "") + " " + r.run;
+    const hit = el("circle", { cx: x(r.meanWall), cy: y(r.passRate), r: 16, class: "hit" }, svg);
+    hit.addEventListener("mousemove", e => showTip(e,
+      `<b>${r.model} · ${r.run}</b><br>pass ${(r.passRate*100).toFixed(0)}% (4/4)<br>`
+      + `${r.meanWall.toFixed(1)}s mean · $0.0000`));
+    hit.addEventListener("mouseleave", hideTip);
+    c.addEventListener("mousemove", e => showTip(e, `<b>${r.model} · ${r.run}</b>`));
+    c.addEventListener("mouseleave", hideTip);
+  });
+
+  legend("legend2", RUNS.map(r => ({ color: r.color, dim: r.dim, label: r.model + " " + r.run })));
+  document.getElementById("cap2").textContent =
+    "Up and to the left is better. The 3B sits above and left of the 8B on both axes, "
+    + "so it dominates outright on this suite — there is no trade-off to weigh. Axes are "
+    + "drawn full-scale rather than zoomed, so the gap is not magnified into false structure.";
+})();
+
+/* ---------------- table ---------------- */
+(function () {
+  const tb = document.querySelector("#tbl tbody");
+  const rows = [];
+  RUNS.forEach(r => TASKS.forEach((t, i) => rows.push(
+    `<tr><td>${t}</td><td class="model">${r.model}</td><td class="model">${r.run}</td>
+     <td${r.pass[i] ? "" : ' style="color:var(--s2)"'}>${r.status[i]}</td>
+     <td>${r.wall[i].toFixed(1)}</td>
+     <td>${r.free[i]}</td><td>0.0000</td></tr>`)));
+  tb.innerHTML = rows.join("");
+})();
+</script>
