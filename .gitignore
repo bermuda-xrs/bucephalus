@@ -15,3 +15,5 @@ dist/
 work/
 agent.local.db
 anchor/chain.local.anchor
+agent.local.db-wal
+agent.local.db-shm
