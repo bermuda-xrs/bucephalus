@@ -9,6 +9,7 @@ subsystems has a single home.
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 import time
 import uuid
@@ -51,7 +52,13 @@ class AgentContext:
 
         self.phase: str = "execute"  # "plan" makes every write tool unreachable
         self.executing_backend: str | None = None
-        self.web_fetcher = None  # set to a callable to enable web_fetch
+        # Our own fetcher, on purpose: content must enter through the tool path
+        # so it lands in the ledger as UNTRUSTED and the gate can see where it
+        # came from. See net/fetch.py for why a server-side fetch tool is not
+        # a drop-in replacement.
+        from .net.fetch import default_fetcher
+
+        self.web_fetcher = default_fetcher
 
         self._taint: dict[str, TaintTracker] = {}
         self._frozen_skills: dict[str, list[dict]] = {}
@@ -151,14 +158,58 @@ class AgentContext:
             f.write(json.dumps({"skill_id": skill_id, "at": time.time(), **detail}) + "\n")
 
     def research_retrieve(self, query: str, k: int = 5) -> list:
-        """Grounding sources for M11. Wire a real retriever in before trusting it."""
-        if self.web_fetcher is None:
+        """Grounding sources for M11.
+
+        Two places to ground from, both local and both auditable:
+
+        1. `grounding/` in the project — notes, docs, transcripts you put there
+           deliberately. Matched on lexical overlap with the query.
+        2. Any http(s) URL appearing in the query itself, fetched through our
+           own fetcher.
+
+        There is deliberately no search engine here. The spec's finding is that
+        self-generated skills drift negative when drafted from model priors;
+        substituting "whatever a search API returned" for priors swaps one
+        ungrounded source for another. Sources you chose beat sources you
+        happened to get back.
+        """
+        from .skills.generate import Source
+
+        sources: list[Source] = []
+        today = time.strftime("%Y-%m-%d")
+
+        for url in re.findall(r"https?://[^\s)>\]]+", query):
+            body = self.web_fetcher(url) if self.web_fetcher else ""
+            if body and not body.startswith("[fetch failed]"):
+                sources.append(Source(url=url, content=body, retrieved=today))
+            if len(sources) >= k:
+                return sources
+
+        gdir = Path(self.config.root) / "grounding"
+        if gdir.is_dir():
+            terms = {w.lower() for w in re.findall(r"\w{4,}", query)}
+            scored = []
+            for p in sorted(gdir.rglob("*")):
+                if not p.is_file() or p.suffix.lower() not in (".md", ".txt", ".rst"):
+                    continue
+                text = p.read_text(encoding="utf-8", errors="replace")
+                hay = {w.lower() for w in re.findall(r"\w{4,}", text)}
+                overlap = len(terms & hay) / max(1, len(terms))
+                if overlap > 0:
+                    scored.append((overlap, p, text))
+            for _, p, text in sorted(scored, key=lambda t: -t[0])[: k - len(sources)]:
+                sources.append(
+                    Source(url=f"file://{p.as_posix()}", content=text, retrieved=today)
+                )
+
+        if not sources:
             raise RuntimeError(
-                "skill generation needs grounding sources; set ctx.web_fetcher or "
-                "pass sources= explicitly. Drafting from model priors is exactly "
-                "the failure mode M9 exists to catch."
+                f"no grounding sources for {query!r}. Put notes in "
+                f"{gdir}, include a URL in the pattern description, or pass "
+                "sources= explicitly. Drafting from model priors is exactly the "
+                "failure mode M9 exists to catch."
             )
-        return []
+        return sources
 
     # -- ledger seeding ----------------------------------------------------
 

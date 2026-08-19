@@ -270,12 +270,138 @@ class CheckerProgramVerifier:
         )
 
 
+class ExpectedValueVerifier:
+    """Compare the answer against a known-correct value.
+
+    This is the verifier that makes a benchmark mean something. `json_schema`
+    checks that the answer has the right *shape*, so `{"total": 0}` passes for
+    an invoice totalling 4825 — the same failure the build spec cites about
+    SWE-bench, where an audit found ~59% of the hardest tasks had tests that
+    would not catch the bug they were meant to catch.
+
+    `expected` is carried on the contract's output_schema under `x-expected`,
+    so a task file declares its own right answer and nothing in the agent's
+    context ever sees it.
+
+    Numbers compare with a relative tolerance; strings compare case- and
+    whitespace-insensitively unless `x-exact` is set.
+    """
+
+    kind = "expected_value"
+
+    def check(self, artifact: str, contract: TaskContract) -> VerifyResult:
+        schema = contract.output_schema or {}
+        expected = schema.get("x-expected")
+        if expected is None:
+            return VerifyResult(
+                passed=False, score=0.0,
+                observation="no x-expected on this task; expected_value cannot judge it",
+                verifier_id=self.kind,
+            )
+
+        shape = JsonSchemaVerifier().check(artifact, contract)
+        if not shape.passed:
+            return VerifyResult(
+                passed=False, score=0.0,
+                observation=f"answer is not the right shape, so it cannot be "
+                            f"the right value: {shape.observation}",
+                verifier_id=self.kind,
+            )
+
+        try:
+            got = json.loads(artifact)
+        except json.JSONDecodeError as e:
+            return VerifyResult(passed=False, score=0.0,
+                                observation=f"not JSON: {e}", verifier_id=self.kind)
+
+        exact = bool(schema.get("x-exact", False))
+        wrong = list(_compare(got, expected, exact, "$"))
+        return VerifyResult(
+            passed=not wrong,
+            score=1.0 if not wrong else 0.0,
+            observation="; ".join(wrong) or "matches the expected value",
+            verifier_id=self.kind,
+        )
+
+
+def _norm_text(s: str) -> str:
+    return " ".join(str(s).split()).strip().lower()
+
+
+def _compare(got, expected, exact: bool, path: str):
+    """Yield a description of each mismatch. Empty means correct."""
+    if isinstance(expected, dict):
+        if not isinstance(got, dict):
+            yield f"{path}: expected an object, got {type(got).__name__}"
+            return
+        for k, v in expected.items():
+            if k not in got:
+                yield f"{path}.{k}: missing"
+            else:
+                yield from _compare(got[k], v, exact, f"{path}.{k}")
+        return
+    if isinstance(expected, list):
+        if not isinstance(got, list) or len(got) != len(expected):
+            yield (f"{path}: expected {len(expected)} items, got "
+                   f"{len(got) if isinstance(got, list) else type(got).__name__}")
+            return
+        for i, v in enumerate(expected):
+            yield from _compare(got[i], v, exact, f"{path}[{i}]")
+        return
+    if isinstance(expected, bool) or expected is None:
+        if got != expected:
+            yield f"{path}: expected {expected!r}, got {got!r}"
+        return
+    if isinstance(expected, (int, float)):
+        try:
+            g = float(got)
+        except (TypeError, ValueError):
+            yield f"{path}: expected the number {expected}, got {got!r}"
+            return
+        tol = max(1e-9, abs(float(expected)) * 1e-6)
+        if abs(g - float(expected)) > tol:
+            yield f"{path}: expected {expected}, got {got}"
+        return
+    a, b = (str(got), str(expected)) if exact else (_norm_text(got), _norm_text(expected))
+    if a != b:
+        yield f"{path}: expected {expected!r}, got {got!r}"
+
+
+class ContainsAllVerifier:
+    """Every required substring is present. For prose with checkable facts.
+
+    Weaker than expected_value and stronger than nothing: it cannot tell you
+    the summary is good, only that it did not drop the figures it had to keep.
+    """
+
+    kind = "contains_all"
+
+    def check(self, artifact: str, contract: TaskContract) -> VerifyResult:
+        needles = (contract.output_schema or {}).get("x-contains") or []
+        if not needles:
+            return VerifyResult(
+                passed=False, score=0.0,
+                observation="no x-contains on this task", verifier_id=self.kind,
+            )
+        hay = _norm_text(artifact)
+        missing = [n for n in needles if _norm_text(n) not in hay]
+        return VerifyResult(
+            passed=not missing,
+            score=(len(needles) - len(missing)) / len(needles),
+            observation=("missing: " + ", ".join(map(repr, missing))) if missing
+                        else f"all {len(needles)} required strings present",
+            verifier_id=self.kind,
+        )
+
+
 def default_verifiers(ctx=None) -> dict[str, Verifier]:
     reg: dict[str, Verifier] = {
         "always_pass": AlwaysPass(),
         "pytest": PytestVerifier(),
         "ruff": RuffVerifier(),
         "json_schema": JsonSchemaVerifier(),
+        "expected_value": ExpectedValueVerifier(),
+        "contains_all": ContainsAllVerifier(),
         "execution": ExecutionVerifier(),
         "citation_check": CitationCheckVerifier(),
     }

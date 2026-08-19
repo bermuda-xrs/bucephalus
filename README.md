@@ -65,6 +65,18 @@ turn costs 15-40 seconds. The profile exists so the whole pipeline is
 genuinely runnable and inspectable without a paid key, which matters a lot
 more for understanding the system than raw capability does. Keep tasks small.
 
+**Three things make it usably fast**, all measured on this laptop:
+
+- **`num_ctx` is sent explicitly.** Ollama otherwise defaults to a 4096-token
+  window whatever the model supports, and silently truncates the rest — so a
+  prompt built against a 16384 budget lost its head with no error. This was a
+  correctness bug wearing a performance costume.
+- **`keep_alive: 30m`.** A cold load is ~58s against ~5s warm. Without it the
+  weights unloaded every 5 minutes and every task paid the reload.
+- **The semantic cache is wired** into observation condensing. Three identical
+  requests cost one model call and two hits. Zero tokens beats cheap tokens,
+  and on a CPU tier zero seconds beats 30.
+
 The reviewer is `granite4.1:8b` while the executor is `granite4.1:3b`, because
 invariant 14 requires the deputy to be a different backend from the executor —
 and that rule earns its keep here rather than being satisfied on paper.
@@ -201,13 +213,46 @@ rates to shrink a prompt you are about to send to the cloud is a net loss.
 - record every number needed to check its own claims
 
 **Won't, yet:**
-- generate its own skills — the generator (M11) exists, but
-  `research_retrieve` refuses to draft from model priors, so a grounding
-  retriever has to be wired in first, and the gate must pass its calibration
-  test before you believe anything it produces
 - operate a graphical desktop or browser
 - claim to be secure against a determined attacker
-- have polished visuals
+- have polished visuals — there is no Ink/Textual TUI, only the CLI
+- talk to a paid API — the `anthropic` adapter is written and unit-tested but
+  has never made a live call
+
+## Grounding, fetching, and why not a server-side tool
+
+`web_fetch` uses **our own fetcher** (`src/agent/net/fetch.py`), not
+Anthropic's server-side `web_fetch`. That is deliberate. Server-tool results
+arrive inside the model's reply, so those bytes never pass through
+`write_artifact(taint=UNTRUSTED)` or `TaintTracker.observe()` — the capability
+gate would have no idea they came from the internet, and M8's whole defense
+keys off provenance the tool path establishes. Using the server tool would
+quietly delete the one guarantee this build demonstrates.
+
+The fetcher is small on purpose: http/https only, private and loopback
+addresses refused (a fetched page names the next URL — without that check
+"summarize this page" is one hop from the router's admin console), a hard byte
+cap enforced while streaming, text content types only, HTML reduced to text.
+
+Skill grounding (M11) reads from a `grounding/` folder in the project, or from
+any URL in the pattern description, fetched the same way. There is deliberately
+no search engine: the spec's finding is that self-generated skills drift
+negative when drafted from model priors, and substituting "whatever a search
+API returned" swaps one ungrounded source for another.
+
+## Verifiers that check the answer
+
+`json_schema` checks *shape* — `{"total": 0}` passes for an invoice totalling
+4825. Two verifiers check *correctness*, and the bench suite uses them:
+
+| verifier | declares | checks |
+|---|---|---|
+| `expected_value` | `x-expected` in output_schema | the answer equals the known-correct value (numeric tolerance, whitespace-insensitive strings unless `x-exact`) |
+| `contains_all` | `x-contains` | every required substring survived |
+
+The expected answer lives on the task file and never enters the agent's
+context. Verified live: the 3B returned `{"total": 4825}` and
+`expected_value` passed it — a pass that could have failed.
 
 **Might not work at all:** the skill-learning part. That is the research bet.
 Published evidence is that self-generated skills average slightly *negative*.

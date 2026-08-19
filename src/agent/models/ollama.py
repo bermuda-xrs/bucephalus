@@ -39,6 +39,13 @@ class OllamaBackend(BackendBase):
         options: dict = {
             "temperature": temperature,
             "num_predict": min(max_tokens, self.cfg.max_output_tokens),
+            # MUST be sent explicitly. Ollama defaults to a 4096-token window
+            # regardless of what the model supports, and silently truncates
+            # anything longer — no error, just a shorter prompt than the one
+            # you built. M3.4 budgets against usable_context_window, so if that
+            # is larger than num_ctx the ceiling math is a lie and the agent
+            # loses the head of its own context mid-task.
+            "num_ctx": self.cfg.budgeted_window,
         }
         body: dict = {
             "model": self.model,
@@ -48,6 +55,10 @@ class OllamaBackend(BackendBase):
             ],
             "stream": False,
             "options": options,
+            # Keeping weights resident is the single biggest wall-clock win on
+            # a CPU tier: a cold load measured 30s against 8s warm for the same
+            # call. Free in money, enormous in the budget that actually binds.
+            "keep_alive": self.cfg.keep_alive,
             # Thinking is a routing variable, not a model setting (M6.2).
             "think": self.cfg.thinking == "adaptive",
         }

@@ -93,7 +93,7 @@ def test_planner_cannot_write(ctx, workspace):
     )
     ctx.phase = "plan"
     try:
-        for name in ("write_file", "run_code", "send_message", "git_push"):
+        for name in ("write_file", "run_code", "append_to_outbox", "git_push"):
             d = gate_tool_call(ctx, task, ctx.tools.get(name),
                                {"path": "work/x.txt", "content": "y"}, phase="plan")
             assert d.verdict == "deny", name

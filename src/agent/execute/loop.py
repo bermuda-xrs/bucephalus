@@ -27,6 +27,7 @@ from ..ledger.artifacts import project, write_artifact
 from ..ledger.compact import compact, enforce_ceiling
 from ..ledger.entries import LedgerEntry, render_tail, sum_tokens
 from ..ledger.prefix import PrefixBuilder, PrefixGuard, SYSTEM_CONTRACT
+from ..ledger.semantic_cache import cached_op
 from ..security.capabilities import gate_tool_call, render_preview
 from ..security.taint import QUARANTINE_PREFIX
 from ..tokens import count_tokens
@@ -418,7 +419,17 @@ def condense_observation(ctx, task, text: str, taint: Taint, aid: str) -> tuple[
     quarantined = taint == Taint.UNTRUSTED
     prefix = QUARANTINE_PREFIX if quarantined else COMPRESS_PREFIX
     question = f"What in this output bears on: {task.contract.goal}"
-    try:
+
+    # M3.5 — zero tokens beats cheap tokens. The same file summarized twice in
+    # a run, or across runs of the same task, is pure waste; on a CPU tier it
+    # is also 30+ seconds. The key covers the operation AND the question, so a
+    # different goal still re-summarizes. cached_op refuses to serve an
+    # untrusted-derived entry into a less-tainted context, so this cannot
+    # launder provenance.
+    op = f"condense:{'quarantine' if quarantined else 'compress'}:{question}"
+    cache_hit = {"v": False}
+
+    def _summarize() -> dict:
         resp = backend.complete(
             prefix,
             f"<question>{question}</question>\n<data>\n{text[:60000]}\n</data>",
@@ -427,6 +438,12 @@ def condense_observation(ctx, task, text: str, taint: Taint, aid: str) -> tuple[
             temperature=0.0,
         )
         ctx.record(task, resp, purpose="compress_tool_output")
+        return {"text": resp.text}
+
+    try:
+        value, hit = cached_op(ctx.conn, op, text, taint, _summarize)
+        cache_hit["v"] = hit
+        summary = value.get("text", "")
     except Exception as e:  # noqa: BLE001 - a down local tier must not fail the task
         ctx.log.append(
             task.id, "model.returned",
@@ -436,9 +453,11 @@ def condense_observation(ctx, task, text: str, taint: Taint, aid: str) -> tuple[
         return project(ctx.conn, aid, mode="summary", max_tokens=400), None
 
     note = "quarantined summary" if quarantined else "compressed"
+    if cache_hit["v"]:
+        note += ", cached"
     body = (
         f"[{note} by {backend.name}; {n:,} tokens of raw output kept in "
-        f'artifact {aid} · expand_artifact("{aid}")]\n{resp.text.strip()}'
+        f'artifact {aid} · expand_artifact("{aid}")]\n{summary.strip()}'
     )
     return body, backend.name
 

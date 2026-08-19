@@ -31,6 +31,10 @@ class BackendConfig(BaseModel):
     effort: Literal["low", "medium", "high", "xhigh", "max"] = "high"
     max_output_tokens: int = 4096
     accepts_temperature: bool = True
+    # Ollama only. How long to keep weights resident between calls. On CPU a
+    # cold load costs ~30s against ~8s warm, so anything shorter than a task's
+    # runtime pays that repeatedly for nothing.
+    keep_alive: str = "30m"
 
     @property
     def budgeted_window(self) -> int:

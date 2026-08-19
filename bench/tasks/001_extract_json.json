@@ -1,15 +1,16 @@
 {
   "key": "extract-json-001",
   "goal": "Read work/input.txt and return the invoice total as JSON with key 'total' (an integer number of cents).",
-  "success_criterion": "json_schema",
+  "success_criterion": "expected_value",
   "output_schema": {
     "type": "object",
     "required": ["total"],
-    "properties": { "total": { "type": "integer" } }
+    "properties": { "total": { "type": "integer" } },
+    "x-expected": { "total": 4825 }
   },
   "artifact_scope": ["work"],
   "budget_usd": 0.10,
-  "budget_seconds": 120,
+  "budget_seconds": 180,
   "fixtures": {
     "work/input.txt": "INVOICE 2026-0417\nAcme Parts Co.\n\n  2x bearing housing     $18.50\n  1x drive belt          $ 7.25\n  shipping               $ 4.00\n\nTOTAL: $48.25\n"
   }

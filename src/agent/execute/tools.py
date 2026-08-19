@@ -9,17 +9,16 @@ cannot be prompted out of walking through.
   | list_dir       | no             | UNTRUSTED     |
   | expand_artifact| no             | UNTRUSTED     |
   | web_fetch      | no             | UNTRUSTED     |
-  | write_file     | yes            | USER          |
-  | run_code       | yes            | USER          |
-  | send_message   | yes            | USER          |
-  | git_push       | yes            | TRUSTED       |
-  | install_skill  | yes            | TRUSTED       |
+  | write_file       | yes          | USER          |
+  | run_code         | yes          | USER          |
+  | append_to_outbox | yes          | USER          |
+  | git_push         | yes          | TRUSTED       |
 """
 
 from __future__ import annotations
 
-import os
-from dataclasses import dataclass, field
+import subprocess
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
@@ -153,29 +152,64 @@ def tool_web_fetch(ctx, task, url: str) -> dict:
     return {"ok": True, "url": url, "content": body}
 
 
-def tool_send_message(ctx, task, to: str, body: str) -> dict:
-    """Stands in for any external send. Side-effecting, so it is receipted."""
+def tool_append_to_outbox(ctx, task, to: str, body: str) -> dict:
+    """Write a message to a LOCAL outbox file. Nothing leaves this machine.
+
+    Named for what it does. It was called `send_message` and returned
+    `delivered: True`, which was a lie the taint tests happened not to care
+    about — an honest name costs nothing and stops the next reader assuming
+    mail went out.
+
+    It is still side-effecting and still receipted, because its job is to be a
+    real target for the capability gate and the idempotency guard. Swap in a
+    real transport here and the surrounding machinery does not change.
+    """
     outbox = Path(ctx.config.root) / "runs" / "outbox.log"
     outbox.parent.mkdir(parents=True, exist_ok=True)
     with outbox.open("a", encoding="utf-8") as f:
         f.write(f"{task.id}\t{to}\t{body!r}\n")
-    return {"ok": True, "to": to, "delivered": True}
+    return {"ok": True, "to": to, "written_to": str(outbox), "sent": False}
 
 
-def tool_git_push(ctx, task, remote: str = "origin", branch: str = "main") -> dict:
+def tool_git_push(ctx, task, remote: str = "origin", branch: str | None = None) -> dict:
+    """Push the current branch. TRUSTED tier, so a human already approved it.
+
+    Real, because the gate makes it safe to be real: `required_capability
+    ="trusted"` means this parks for a human every time, and model-supplied
+    arguments carry USER taint which is above this tool's ceiling — so the
+    only way to reach here is with system-authored arguments and an explicit
+    human approval.
+    """
+    root = Path(ctx.config.root)
+    if not (root / ".git").exists():
+        return {"ok": False, "error": f"{root} is not a git repository"}
+
+    def _git(*args: str) -> subprocess.CompletedProcess:
+        return subprocess.run(  # noqa: S603
+            ["git", *args], cwd=str(root), capture_output=True, text=True, timeout=120
+        )
+
+    if branch is None:
+        head = _git("rev-parse", "--abbrev-ref", "HEAD")
+        if head.returncode != 0:
+            return {"ok": False, "error": head.stderr.strip()[:400]}
+        branch = head.stdout.strip()
+
+    remotes = _git("remote")
+    if remote not in remotes.stdout.split():
+        return {
+            "ok": False,
+            "error": f"no remote named {remote!r}; configured: "
+                     f"{remotes.stdout.split() or 'none'}",
+        }
+
+    proc = _git("push", remote, branch)
     return {
-        "ok": False,
-        "error": "git_push is a trusted-tier action and is not wired up in the alpha",
+        "ok": proc.returncode == 0,
         "remote": remote,
         "branch": branch,
-    }
-
-
-def tool_install_skill(ctx, task, skill_id: str) -> dict:
-    return {
-        "ok": False,
-        "error": "installing a skill requires human approval via the skill gate (M9)",
-        "skill_id": skill_id,
+        "stdout": proc.stdout.strip()[:2000],
+        "stderr": proc.stderr.strip()[:2000],
     }
 
 
@@ -256,13 +290,13 @@ def default_registry() -> ToolRegistry:
     )
     r.register(
         ToolSpec(
-            "send_message",
-            tool_send_message,
+            "append_to_outbox",
+            tool_append_to_outbox,
             _s(to=_STR, body=_STR),
             side_effecting=True,
             max_arg_taint=Taint.USER,
             output_taint=Taint.TRUSTED,
-            description="send a message to an external recipient",
+            description="write a message to the local outbox file (nothing is sent)",
         )
     )
     r.register(
@@ -275,19 +309,10 @@ def default_registry() -> ToolRegistry:
             max_arg_taint=Taint.TRUSTED,
             output_taint=Taint.TRUSTED,
             required_capability="trusted",
-            description="push commits to a remote",
+            description="push commits to a remote (always parks for a human)",
         )
     )
-    r.register(
-        ToolSpec(
-            "install_skill",
-            tool_install_skill,
-            _s(skill_id=_STR),
-            side_effecting=True,
-            max_arg_taint=Taint.TRUSTED,
-            output_taint=Taint.TRUSTED,
-            required_capability="trusted",
-            description="install a skill into the store",
-        )
-    )
+    # `install_skill` is deliberately absent. Skills enter through
+    # `alpha skills --add` and leave candidacy only through the M9 gate with a
+    # human approving; a tool that always returned an error was a decoy.
     return r
