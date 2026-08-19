@@ -20,9 +20,10 @@ routine permission request.
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 from fastapi import FastAPI, Header, HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi.responses import HTMLResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 from ..assure.monitor import flags as monitor_flags
@@ -34,6 +35,7 @@ from ..kernel.tasks import create_task, load_task, set_status
 from ..kernel.types import Budget, TaskContract, TaskStatus
 from ..plan.planner import approve_plan, draft_plan, load_plan
 from ..plan.review import decisions as review_decisions
+from ..userdata.store import SuiteTask, ValidationError
 from .events import stream_events
 
 
@@ -57,6 +59,41 @@ class Steer(BaseModel):
 
 class Decide(BaseModel):
     decision: str  # "approve" | "deny"
+
+
+class NewSuite(BaseModel):
+    name: str
+    description: str = ""
+
+
+class TaskIn(BaseModel):
+    key: str
+    goal: str
+    success_criterion: str = "expected_value"
+    output_schema: dict = Field(default_factory=dict)
+    artifact_scope: list[str] = Field(default_factory=lambda: ["work"])
+    fixtures: dict[str, str] = Field(default_factory=dict)
+    budget_usd: float | None = None
+    budget_seconds: int | None = None
+    catastrophic: bool = False
+
+
+class ImportIn(BaseModel):
+    folder: str = "bench/tasks"
+
+
+class PolicyIn(BaseModel):
+    body: str
+
+
+class DocIn(BaseModel):
+    body: str
+
+
+class SkillIn(BaseModel):
+    name: str
+    body: str
+    applies_when: str = ""
 
 
 def create_app(ctx: AgentContext) -> FastAPI:
@@ -190,6 +227,166 @@ def create_app(ctx: AgentContext) -> FastAPI:
             "backends": sorted(ctx.backends),
             "router": ctx.router.health(),
         }
+
+    # ------------------------------------------------------------------
+    # USER-AUTHORED CONTENT
+    #
+    # Suites, policy, grounding, and skills are written by a person here
+    # rather than by editing files. The suite in particular cannot ship as
+    # repo files: it differs per person and it is the denominator of every
+    # number the system reports.
+    # ------------------------------------------------------------------
+
+    def _verifiers() -> set[str]:
+        return set(ctx.mesh.registry)
+
+    @app.get("/suites")
+    def list_suites() -> dict:
+        return {"suites": ctx.userdata.list_suites(),
+                "min_paired_trials": ctx.config.gate.min_paired_trials}
+
+    @app.post("/suites")
+    def create_suite(body: NewSuite) -> dict:
+        try:
+            s = ctx.userdata.create_suite(body.name, body.description)
+        except ValidationError as e:
+            raise HTTPException(400, str(e)) from None
+        return {"id": s.id, "name": s.name}
+
+    @app.get("/suites/{suite_id}")
+    def get_suite(suite_id: str) -> dict:
+        s = ctx.userdata.get_suite(suite_id)
+        if s is None:
+            raise HTTPException(404, "no such suite")
+        return {
+            "id": s.id, "name": s.name, "description": s.description,
+            "n_tasks": len(s.tasks),
+            "min_paired_trials": ctx.config.gate.min_paired_trials,
+            "verifiers": sorted(_verifiers()),
+            "tasks": [
+                {"id": t.id, "key": t.task_key, "goal": t.goal,
+                 "success_criterion": t.success_criterion,
+                 "output_schema": t.output_schema,
+                 "artifact_scope": t.artifact_scope, "fixtures": t.fixtures,
+                 "budget_usd": t.budget_usd, "budget_seconds": t.budget_seconds,
+                 "catastrophic": t.catastrophic}
+                for t in s.tasks
+            ],
+        }
+
+    @app.delete("/suites/{suite_id}")
+    def delete_suite(suite_id: str) -> dict:
+        ctx.userdata.delete_suite(suite_id)
+        return {"deleted": suite_id}
+
+    @app.post("/suites/{suite_id}/tasks")
+    def upsert_task(suite_id: str, body: TaskIn) -> dict:
+        t = SuiteTask(
+            task_key=body.key, goal=body.goal,
+            success_criterion=body.success_criterion,
+            output_schema=body.output_schema, artifact_scope=body.artifact_scope,
+            fixtures=body.fixtures, budget_usd=body.budget_usd,
+            budget_seconds=body.budget_seconds, catastrophic=body.catastrophic,
+        )
+        try:
+            saved = ctx.userdata.upsert_task(suite_id, t, _verifiers())
+        except ValidationError as e:
+            raise HTTPException(400, str(e)) from None
+        return {"id": saved.id, "key": saved.task_key}
+
+    @app.delete("/suites/{suite_id}/tasks/{task_id}")
+    def delete_task(suite_id: str, task_id: str) -> dict:
+        ctx.userdata.delete_task(suite_id, task_id)
+        return {"deleted": task_id}
+
+    @app.post("/suites/{suite_id}/import")
+    def import_tasks(suite_id: str, body: ImportIn) -> dict:
+        s = ctx.userdata.get_suite(suite_id)
+        if s is None:
+            raise HTTPException(404, "no such suite")
+        try:
+            out = ctx.userdata.import_suite_from_dir(s.name, ctx.config.resolve(body.folder))
+        except ValidationError as e:
+            raise HTTPException(400, str(e)) from None
+        return {"id": out.id, "n_tasks": len(out.tasks)}
+
+    @app.get("/policy")
+    def get_policy() -> dict:
+        from ..plan.review import load_policy
+
+        doc = ctx.userdata.get_document("policy", "default")
+        return {
+            "body": doc["body"] if doc else load_policy(ctx),
+            "stored": doc is not None,
+            "effective_source": "database" if doc else "file or default",
+        }
+
+    @app.put("/policy")
+    def put_policy(body: PolicyIn) -> dict:
+        try:
+            ctx.userdata.set_policy(body.body)
+        except ValidationError as e:
+            raise HTTPException(400, str(e)) from None
+        return {"saved": True}
+
+    @app.get("/grounding")
+    def list_grounding() -> dict:
+        return {"documents": ctx.userdata.list_documents("grounding")}
+
+    @app.put("/grounding/{name}")
+    def put_grounding(name: str, body: DocIn) -> dict:
+        try:
+            return ctx.userdata.put_document("grounding", name, body.body)
+        except ValidationError as e:
+            raise HTTPException(400, str(e)) from None
+
+    @app.get("/grounding/{name}")
+    def get_grounding(name: str) -> dict:
+        doc = ctx.userdata.get_document("grounding", name)
+        if doc is None:
+            raise HTTPException(404, "no such document")
+        return doc
+
+    @app.delete("/grounding/{name}")
+    def delete_grounding(name: str) -> dict:
+        ctx.userdata.delete_document("grounding", name)
+        return {"deleted": name}
+
+    @app.get("/skills")
+    def list_skills() -> dict:
+        rows = ctx.conn.execute(
+            "SELECT id,name,version,status FROM skills ORDER BY name,version"
+        ).fetchall()
+        return {"skills": [
+            {"id": r[0], "name": r[1], "version": r[2], "status": r[3]} for r in rows
+        ]}
+
+    @app.post("/skills")
+    def add_skill(body: SkillIn) -> dict:
+        """Paste a skill. It lands as a candidate; only the gate promotes."""
+        try:
+            sid = ctx.skills.store(
+                name=body.name, body=body.body,
+                contract={"applies_when": body.applies_when},
+                provenance={"drafted_by": "human", "source": "ui"},
+                status="candidate",
+            )
+        except ValueError as e:
+            raise HTTPException(400, str(e)) from None
+        return {"id": sid, "status": "candidate"}
+
+    @app.get("/gate/{skill_id}")
+    def gate_status(skill_id: str) -> dict:
+        from ..skills.gate import evaluate_skill
+
+        d = evaluate_skill(ctx, skill_id)
+        return {"verdict": d.verdict, "reason": d.reason, "detail": d.detail}
+
+    # The operator console. Served from the same process as the API so there
+    # is nothing to build and nothing to deploy separately.
+    @app.get("/", response_class=HTMLResponse)
+    def index() -> str:
+        return (Path(__file__).parent / "ui.html").read_text(encoding="utf-8")
 
     return app
 

@@ -93,11 +93,26 @@ class ReviewDecision(BaseModel):
 
 
 def load_policy(ctx) -> str:
+    """The reviewer's rule book, authored in the UI.
+
+    Order: the active policy document, then policy.md as an import-era
+    fallback, then a refusal. Rule 4 all the way down — every miss makes the
+    reviewer more restrictive, never less.
+    """
+    store = getattr(ctx, "userdata", None)
+    if store is not None:
+        body = store.get_active_policy()
+        if body and body.strip():
+            return body
+
     p = Path(ctx.config.resolve(ctx.config.autonomy.auto_review_policy))
-    if not p.exists():
-        # Rule 4: a missing policy denies everything. It never opens the gate.
-        return "NO POLICY FILE FOUND. Deny every action and say the policy is missing."
-    return p.read_text(encoding="utf-8")
+    if p.exists():
+        text = p.read_text(encoding="utf-8")
+        if text.strip():
+            return text
+
+    # A missing policy denies everything. It never opens the gate.
+    return "NO POLICY FOUND. Deny every action and say the policy is missing."
 
 
 def tier_of(ctx, tool_name: str) -> str:

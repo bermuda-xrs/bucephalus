@@ -46,7 +46,24 @@ CAVEATS = [
 ]
 
 
-def load_suite(path: Path) -> list[dict]:
+def load_suite(spec: str | Path, ctx=None) -> list[dict]:
+    """Load a suite by name from the database, or from files.
+
+    `--suite mine` reads the suite authored in the UI; anything that looks like
+    a path still reads files, so existing folders keep working.
+    """
+    text = str(spec)
+    if ctx is not None and not Path(text).exists():
+        name = text.split("suite:", 1)[-1]
+        s = ctx.userdata.get_suite_by_name(name)
+        if s is not None:
+            return s.to_specs()
+        raise SystemExit(
+            f"no suite named {name!r} and no such path. Suites: "
+            f"{[x['name'] for x in ctx.userdata.list_suites()] or 'none yet'}"
+        )
+
+    path = Path(text)
     if path.is_dir():
         return [
             json.loads(p.read_text(encoding="utf-8"))
@@ -127,7 +144,7 @@ def run_arm(ctx, suite: list[dict], arm: str, skills_on: bool) -> dict:
 
 def cmd_arms(args) -> int:
     ctx = AgentContext.open(args.config)
-    suite = load_suite(Path(args.suite))
+    suite = load_suite(args.suite, ctx)
     out = {}
 
     if args.executor:
@@ -167,7 +184,7 @@ def cmd_arms(args) -> int:
 
 def cmd_paired(args) -> int:
     ctx = AgentContext.open(args.config)
-    suite = load_suite(Path(args.suite))
+    suite = load_suite(args.suite, ctx)
     specs = [
         TaskSpec(
             key=s.get("key", s["goal"][:40]),

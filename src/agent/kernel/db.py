@@ -192,6 +192,63 @@ CREATE TABLE IF NOT EXISTS plans (
 );
 CREATE INDEX IF NOT EXISTS idx_plans_task ON plans(task_id);
 
+-- ---------------------------------------------------------------------
+-- USER-AUTHORED CONTENT
+--
+-- Everything a person writes lives here rather than in files they hand-edit:
+-- eval suites, the reviewer's policy, grounding notes. Files are still
+-- importable, but they are an import path, not the source of truth.
+--
+-- `owner` is on every table from the start and defaults to 'local'. This is
+-- single-user today; adding the column later would mean migrating live rows,
+-- and it costs nothing now.
+-- ---------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS suites (
+    id          TEXT PRIMARY KEY,
+    name        TEXT NOT NULL,
+    owner       TEXT NOT NULL DEFAULT 'local',
+    description TEXT NOT NULL DEFAULT '',
+    created_at  REAL NOT NULL,
+    updated_at  REAL NOT NULL,
+    UNIQUE(owner, name)
+);
+
+CREATE TABLE IF NOT EXISTS suite_tasks (
+    id             TEXT PRIMARY KEY,
+    suite_id       TEXT NOT NULL REFERENCES suites(id) ON DELETE CASCADE,
+    task_key       TEXT NOT NULL,
+    goal           TEXT NOT NULL,
+    success_criterion TEXT NOT NULL DEFAULT 'expected_value',
+    output_schema_json TEXT NOT NULL DEFAULT '{}',
+    artifact_scope_json TEXT NOT NULL DEFAULT '["work"]',
+    fixtures_json  TEXT NOT NULL DEFAULT '{}',
+    budget_usd     REAL,
+    budget_seconds INTEGER,
+    -- A regression here vetoes promotion outright (M9.2).
+    catastrophic   INTEGER NOT NULL DEFAULT 0,
+    position       INTEGER NOT NULL DEFAULT 0,
+    created_at     REAL NOT NULL,
+    updated_at     REAL NOT NULL,
+    UNIQUE(suite_id, task_key)
+);
+CREATE INDEX IF NOT EXISTS idx_suite_tasks ON suite_tasks(suite_id, position);
+
+-- Policy text and grounding notes. `kind` keeps them in one table because
+-- they have identical lifecycles: authored, versioned by edit, activated.
+CREATE TABLE IF NOT EXISTS documents (
+    id         TEXT PRIMARY KEY,
+    kind       TEXT NOT NULL,          -- policy | grounding
+    name       TEXT NOT NULL,
+    owner      TEXT NOT NULL DEFAULT 'local',
+    body       TEXT NOT NULL,
+    active     INTEGER NOT NULL DEFAULT 1,
+    created_at REAL NOT NULL,
+    updated_at REAL NOT NULL,
+    UNIQUE(owner, kind, name)
+);
+CREATE INDEX IF NOT EXISTS idx_documents_kind ON documents(kind, active);
+
 -- M13.4: deviations, so a high deviation rate is measurable.
 CREATE TABLE IF NOT EXISTS deviations (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,

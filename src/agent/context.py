@@ -29,6 +29,7 @@ from .models.registry import build_backends, cloud_backend_names
 from .router.cascade import Router
 from .security.taint import TaintTracker
 from .skills.store import SkillStore
+from .userdata.store import UserStore
 
 
 class AgentContext:
@@ -46,6 +47,7 @@ class AgentContext:
         self.backends = backends if backends is not None else build_backends(config)
         self.tools = tools or default_registry()
         self.skills = SkillStore(self.conn, config.resolve(config.skills_path))
+        self.userdata = UserStore(self.conn)
         self.telemetry = Telemetry(self.conn, cloud_backend_names(config))
         self.mesh = VerificationMesh(self)
         self.router = Router(self)
@@ -178,6 +180,14 @@ class AgentContext:
         sources: list[Source] = []
         today = time.strftime("%Y-%m-%d")
 
+        # Grounding notes authored in the UI come first — they are the ones
+        # someone deliberately chose for this.
+        for name, body in self.userdata.grounding_sources(query, k=k):
+            sources.append(Source(url=f"grounding://{name}", content=body,
+                                  retrieved=today))
+        if len(sources) >= k:
+            return sources[:k]
+
         for url in re.findall(r"https?://[^\s)>\]]+", query):
             body = self.web_fetcher(url) if self.web_fetcher else ""
             if body and not body.startswith("[fetch failed]"):
@@ -204,10 +214,10 @@ class AgentContext:
 
         if not sources:
             raise RuntimeError(
-                f"no grounding sources for {query!r}. Put notes in "
-                f"{gdir}, include a URL in the pattern description, or pass "
-                "sources= explicitly. Drafting from model priors is exactly the "
-                "failure mode M9 exists to catch."
+                f"no grounding sources for {query!r}. Add grounding notes in the "
+                f"UI (Grounding tab), put files in {gdir}, include a URL in the "
+                "pattern description, or pass sources= explicitly. Drafting from "
+                "model priors is exactly the failure mode M9 exists to catch."
             )
         return sources
 
