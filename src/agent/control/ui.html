@@ -289,13 +289,24 @@ Imperative, checkable steps. Few of them.</textarea>
 const $ = s => document.querySelector(s);
 let SUITE = null, VERIFIERS = [];
 
+// Injected by the server when it serves this page to a loopback caller. A
+// page on another origin cannot read this response, so it cannot obtain the
+// token — which is what stops a website you happen to have open from driving
+// this console.
+const TOKEN = "__ALPHA_TOKEN__";
+
 function toast(msg, bad) {
   const t = $("#toast"); t.textContent = msg; t.className = bad ? "bad" : "";
   t.style.opacity = "1"; clearTimeout(t._h);
   t._h = setTimeout(() => t.style.opacity = "0", bad ? 6000 : 2600);
 }
 async function api(path, opts) {
-  const r = await fetch(path, {headers:{"Content-Type":"application/json"}, ...opts});
+  const r = await fetch(path, {
+    ...opts,
+    headers: {"Content-Type":"application/json",
+              "Authorization": "Bearer " + TOKEN,
+              ...((opts && opts.headers) || {})},
+  });
   const txt = await r.text();
   let data; try { data = txt ? JSON.parse(txt) : {}; } catch { data = {raw:txt}; }
   if (!r.ok) throw new Error(data.detail || data.raw || r.statusText);
@@ -521,11 +532,27 @@ async function createTask() {
       goal:$("#rGoal").value, artifact_scope:[$("#rScope").value || "work"],
       budget_seconds:Number($("#rSecs").value) || 900, budget_usd:0})});
     out.textContent = `task ${t.task_id} created — running…\n`;
-    const r = await api(`/tasks/${t.task_id}/run`, {method:"POST"});
-    out.textContent += `status: ${r.status}  steps: ${r.steps}\n`
-      + `answer: ${JSON.stringify(r.answer, null, 2)}\n`;
-    const m = await api("/metrics/" + t.task_id);
-    out.textContent += `\nfree tokens ${m.free_tokens} · $${m.cost_usd} · ${m.n_calls} calls`;
+    // Started in the background: a local turn is tens of seconds, so we poll
+    // rather than hold a request open with nothing to show.
+    await api(`/tasks/${t.task_id}/run`, {method:"POST"});
+
+    const started = Date.now();
+    while (true) {
+      await new Promise(r => setTimeout(r, 2000));
+      const s = await api("/tasks/" + t.task_id);
+      const secs = Math.round((Date.now() - started) / 1000);
+      out.textContent = `task ${t.task_id}\nstatus: ${s.status} · step ${s.current_step}`
+        + ` · ${secs}s elapsed · $${(s.budget.spent_usd).toFixed(4)}\n`;
+      if (!["running", "pending"].includes(s.status)) {
+        const m = await api("/metrics/" + t.task_id);
+        out.textContent += `\nfinished: ${s.status}`
+          + `\nfree tokens ${m.free_tokens} · $${m.cost_usd} · ${m.n_calls} calls`;
+        if (s.status === "paused")
+          out.textContent += `\nparked for approval — see the approvals list.`;
+        break;
+      }
+      if (secs > 3600) { out.textContent += "\nstopped watching after an hour."; break; }
+    }
   } catch (e) { out.textContent += "\nerror: " + e.message; toast(e.message, true); }
 }
 

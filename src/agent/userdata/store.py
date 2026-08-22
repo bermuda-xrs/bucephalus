@@ -321,7 +321,8 @@ class UserStore:
         )
         self.conn.commit()
 
-    def put_document(self, kind: str, name: str, body: str) -> dict:
+    def put_document(self, kind: str, name: str, body: str,
+                     actor: str = "local") -> dict:
         if kind not in VALID_KINDS:
             raise ValidationError(f"kind must be one of {VALID_KINDS}")
         name = name.strip()
@@ -329,6 +330,21 @@ class UserStore:
             raise ValidationError("Name is required.")
         now = time.time()
         did = "d_" + uuid.uuid4().hex[:12]
+
+        # Keep the outgoing version before overwriting it. The policy governs
+        # what an unattended agent may do; being unable to reconstruct what it
+        # said during a given run would make the runs unauditable.
+        prior = self.get_document(kind, name)
+        if prior is not None and prior["body"] != body:
+            import hashlib
+
+            self.conn.execute(
+                "INSERT INTO document_history(document_id,kind,name,owner,body,"
+                "body_sha256,actor,replaced_at) VALUES (?,?,?,?,?,?,?,?)",
+                (prior["id"], kind, name, self.owner, prior["body"],
+                 hashlib.sha256(prior["body"].encode("utf-8")).hexdigest(),
+                 actor, now),
+            )
         self.conn.execute(
             "INSERT INTO documents(id,kind,name,owner,body,active,created_at,updated_at) "
             "VALUES (?,?,?,?,?,1,?,?) "
@@ -365,6 +381,16 @@ class UserStore:
             (self.owner, kind, name),
         )
         self.conn.commit()
+
+    def document_history(self, kind: str, name: str, limit: int = 50) -> list[dict]:
+        """Prior versions, newest first. Append-only; nothing here is edited."""
+        rows = self.conn.execute(
+            "SELECT body_sha256, actor, replaced_at, length(body) FROM document_history "
+            "WHERE owner=? AND kind=? AND name=? ORDER BY replaced_at DESC LIMIT ?",
+            (self.owner, kind, name, limit),
+        ).fetchall()
+        return [{"sha256": r[0][:12], "actor": r[1], "replaced_at": r[2],
+                 "bytes": r[3]} for r in rows]
 
     def grounding_sources(self, query: str, k: int = 5) -> list[tuple[str, str]]:
         """(name, body) for grounding docs overlapping the query, best first."""

@@ -249,6 +249,25 @@ CREATE TABLE IF NOT EXISTS documents (
 );
 CREATE INDEX IF NOT EXISTS idx_documents_kind ON documents(kind, active);
 
+-- Every prior version of an authored document, kept forever.
+--
+-- The reviewer policy decides what an unattended agent may do. A security
+-- control that can be silently overwritten is not much of a control: you
+-- need to be able to answer "what did it say when that run happened, and who
+-- changed it since". Append-only, like the event log and for the same reason.
+CREATE TABLE IF NOT EXISTS document_history (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    document_id TEXT NOT NULL,
+    kind        TEXT NOT NULL,
+    name        TEXT NOT NULL,
+    owner       TEXT NOT NULL DEFAULT 'local',
+    body        TEXT NOT NULL,
+    body_sha256 TEXT NOT NULL,
+    actor       TEXT NOT NULL DEFAULT 'local',
+    replaced_at REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_dochist ON document_history(kind, name, replaced_at);
+
 -- M13.4: deviations, so a high deviation rate is measurable.
 CREATE TABLE IF NOT EXISTS deviations (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,

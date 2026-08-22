@@ -20,6 +20,9 @@ routine permission request.
 from __future__ import annotations
 
 import json
+import os
+import threading
+import uuid
 from pathlib import Path
 
 from fastapi import FastAPI, Header, HTTPException
@@ -37,6 +40,7 @@ from ..plan.planner import approve_plan, draft_plan, load_plan
 from ..plan.review import decisions as review_decisions
 from ..userdata.store import SuiteTask, ValidationError
 from .events import stream_events
+from .guard import ALLOW_REMOTE_ENV, AccessGuard, resolve_token
 
 
 class CreateTask(BaseModel):
@@ -100,6 +104,13 @@ def create_app(ctx: AgentContext) -> FastAPI:
     app = FastAPI(title="alpha test 1", version="0.1.0")
     app.state.ctx = ctx
 
+    # This service can rewrite the reviewer's policy and start runs. Loopback
+    # alone is not a boundary when a browser is open — see control/guard.py.
+    token = resolve_token(ctx.config.root)
+    allow_remote = os.environ.get(ALLOW_REMOTE_ENV, "") == "1"
+    app.state.token = token
+    app.add_middleware(AccessGuard, token=token, allow_remote=allow_remote)
+
     @app.post("/tasks")
     def post_task(body: CreateTask) -> dict:
         contract = TaskContract(
@@ -158,18 +169,43 @@ def create_app(ctx: AgentContext) -> FastAPI:
         return {"plan_id": plan.id, "status": "approved"}
 
     @app.post("/tasks/{task_id}/run")
-    def post_run(task_id: str) -> dict:
+    def post_run(task_id: str, background: bool = True) -> dict:
+        """Start a run. Returns immediately by default.
+
+        A local turn costs tens of seconds, so a synchronous run leaves the
+        caller holding an open request for minutes with nothing to show. The
+        console starts it and polls `GET /tasks/{id}` instead.
+
+        `?background=false` keeps the blocking behaviour for scripts that
+        want the answer in the response.
+        """
         task = load_task(ctx.conn, task_id)
         if ctx.config.autonomy.plan_required and ctx.approved_plan(task) is None:
             raise HTTPException(409, "autonomy.plan_required: approve a plan first")
-        result = run_task(ctx, task_id)
-        return {
-            "task_id": result.task_id,
-            "status": result.status,
-            "answer": result.answer,
-            "steps": result.steps,
-            "approval_id": result.approval_id,
-        }
+
+        if not background:
+            result = run_task(ctx, task_id)
+            return {
+                "task_id": result.task_id, "status": result.status,
+                "answer": result.answer, "steps": result.steps,
+                "approval_id": result.approval_id,
+            }
+
+        with _runs_lock:
+            if _runs.get(task_id) and _runs[task_id].is_alive():
+                raise HTTPException(409, "this task is already running")
+
+            def _work() -> None:
+                try:
+                    run_task(ctx, task_id)
+                except Exception as e:  # noqa: BLE001 - surfaced via task status
+                    ctx.log.append(task_id, "task.status_changed",
+                                   {"status": "failed", "reason": f"{type(e).__name__}: {e}"})
+
+            th = threading.Thread(target=_work, name=f"run-{task_id}", daemon=True)
+            _runs[task_id] = th
+            th.start()
+        return {"task_id": task_id, "status": "running", "background": True}
 
     @app.post("/tasks/{task_id}/steer")
     def post_steer(task_id: str, body: Steer) -> dict:
@@ -327,7 +363,13 @@ def create_app(ctx: AgentContext) -> FastAPI:
             ctx.userdata.set_policy(body.body)
         except ValidationError as e:
             raise HTTPException(400, str(e)) from None
-        return {"saved": True}
+        return {"saved": True,
+                "history": ctx.userdata.document_history("policy", "default")}
+
+    @app.get("/policy/history")
+    def policy_history() -> dict:
+        """Prior versions of the rule book, so a run can be audited later."""
+        return {"history": ctx.userdata.document_history("policy", "default")}
 
     @app.get("/grounding")
     def list_grounding() -> dict:
@@ -383,12 +425,23 @@ def create_app(ctx: AgentContext) -> FastAPI:
         return {"verdict": d.verdict, "reason": d.reason, "detail": d.detail}
 
     # The operator console. Served from the same process as the API so there
-    # is nothing to build and nothing to deploy separately.
+    # is nothing to build and nothing to deploy separately. The session token
+    # is injected here: a cross-origin page cannot read this response, so this
+    # is how the token reaches the JS without ever being guessable from
+    # outside.
     @app.get("/", response_class=HTMLResponse)
-    def index() -> str:
-        return (Path(__file__).parent / "ui.html").read_text(encoding="utf-8")
+    def index() -> HTMLResponse:
+        html = (Path(__file__).parent / "ui.html").read_text(encoding="utf-8")
+        html = html.replace("__ALPHA_TOKEN__", token)
+        return HTMLResponse(html, headers={"Cache-Control": "no-store"})
 
     return app
+
+
+# Background runs, keyed by task. A local run takes minutes; the console
+# starts one and polls rather than holding a request open.
+_runs: dict[str, threading.Thread] = {}
+_runs_lock = threading.Lock()
 
 
 def serve(config_path: str = "config.yaml", host: str = "127.0.0.1", port: int = 8901) -> None:
