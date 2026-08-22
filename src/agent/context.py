@@ -147,6 +147,18 @@ class AgentContext:
             )
         return chosen
 
+    def record_skill_invocations(self, task_id: str, success: bool) -> None:
+        """Record that each frozen skill was used, and whether the task worked.
+
+        M9.5's decay pass demotes skills that go unused or regress. It reads
+        `skill_invocations`, so a system that never writes there demotes every
+        skill it has the first time decay runs.
+        """
+        for s in self._frozen_skills.get(task_id, []):
+            sid = s.get("id")
+            if sid:
+                self.skills.record_invocation(sid, task_id, success)
+
     def enqueue_for_gate(self, skill_id: str) -> None:
         self._gate_queue.append(skill_id)
 

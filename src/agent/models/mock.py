@@ -67,8 +67,9 @@ class MockBackend(BackendBase):
         )
         return self._response(text, usage, t0, {"mock": True})
 
-    def measure_throughput(self) -> float:
-        return 500.0
+    # measure_throughput is deliberately NOT overridden. It used to return a
+    # hardcoded 500 tok/s, which quietly hid the router's real fallback path
+    # from every test that used a mock backend.
 
     def queue(self, *texts: str) -> None:
         self._script.extend(texts)

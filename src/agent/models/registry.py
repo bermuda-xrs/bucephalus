@@ -37,8 +37,15 @@ def build_backends(config: Config) -> dict[str, Backend]:
     return {name: build_backend(name, cfg) for name, cfg in config.backends.items()}
 
 
-def cost_vector(backend: Backend) -> CostVector:
+def cost_vector(backend: Backend, probe: bool = False) -> CostVector:
+    """Describe a backend. `probe=True` measures throughput for real.
+
+    Off by default: building a cost vector should not cost a model call, and
+    on a CPU tier that call is a cold load measured in tens of seconds.
+    """
     cfg = backend.cfg
+    if probe:
+        backend.probe_throughput()  # type: ignore[attr-defined]
     return CostVector(
         input_cost_per_mtok=cfg.input_cost_per_mtok,
         output_cost_per_mtok=cfg.output_cost_per_mtok,

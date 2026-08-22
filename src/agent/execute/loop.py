@@ -188,6 +188,12 @@ def run_task(ctx, task_id: str) -> TaskResult:
     plan = ctx.approved_plan(task)
     started = time.time()
 
+    # The ratchet's memory. best_answer survives a run that never passes, so
+    # the caller gets the best thing produced rather than nothing at all.
+    best_answer: Any = None
+    best_score: float = -1.0
+    score_history: list[float] = []
+
     try:
         for step in range(ctx.config.limits.max_steps):
             if task.budget.exhausted():
@@ -268,6 +274,34 @@ def run_task(ctx, task_id: str) -> TaskResult:
                 ok, report = _verify(ctx, task, artifact_text)
                 if ok:
                     return finish(ctx, task, "done", answer=result, steps=step + 1)
+
+                # M7.2 — THE RATCHET, at runtime and not only in tests.
+                # Keep a candidate only if it scores strictly better. Without
+                # this the loop discards everything it produced and returns
+                # nothing on max_steps, even after reaching 0.9.
+                if report.score > best_score:
+                    best_score, best_answer = report.score, result
+                score_history.append(best_score)
+
+                # A plateau means more turns buy nothing. On a CPU tier each
+                # wasted turn is tens of seconds, so stopping is the whole
+                # difference between a slow answer and no answer.
+                if len(score_history) >= 3 and (
+                    max(score_history[-3:]) - min(score_history[-3:]) < 1e-9
+                ):
+                    return finish(ctx, task, "plateau", answer=best_answer,
+                                  steps=step + 1)
+
+                # M13.4 — is this a surprise the plan did not anticipate?
+                if plan is not None:
+                    from ..plan.deviation import on_deviation
+
+                    step_id = plan.steps[0].id if plan.steps else "1"
+                    dev = on_deviation(ctx, task, plan, step_id, report.observation)
+                    if dev.action == "park_for_replan":
+                        return finish(ctx, task, "needs_replan", answer=best_answer,
+                                      steps=step + 1)
+
                 # external observation, not "try again"
                 entries.append(
                     LedgerEntry.observation(
@@ -290,7 +324,8 @@ def run_task(ctx, task_id: str) -> TaskResult:
             obs = execute_action(ctx, task, parsed, step, plan)
             entries.append(obs)
 
-        return finish(ctx, task, "max_steps", steps=ctx.config.limits.max_steps)
+        return finish(ctx, task, "max_steps", answer=best_answer,
+                      steps=ctx.config.limits.max_steps)
 
     except TaskPaused as p:
         spend(ctx.conn, ctx.log, task, seconds=time.time() - started)
@@ -510,10 +545,18 @@ def finish(
         "done": TaskStatus.DONE,
         "budget_exhausted": TaskStatus.FAILED,
         "max_steps": TaskStatus.FAILED,
+        "plateau": TaskStatus.FAILED,
+        # A material departure from the approved plan is a human's call, not
+        # a failure (M13.4). It parks rather than dying.
+        "needs_replan": TaskStatus.PAUSED,
         "failed": TaskStatus.FAILED,
     }
     set_status(ctx.conn, ctx.log, task, mapping.get(status, TaskStatus.FAILED), status)
     checkpoint(ctx.log, ctx.anchor, task.id)
+
+    # M9.5 needs this or decay has no data: without invocation records every
+    # promoted skill looks unused and the next decay pass demotes all of them.
+    ctx.record_skill_invocations(task.id, success=status == "done")
     if answer is not None:
         write_artifact(
             ctx.conn,

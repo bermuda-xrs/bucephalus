@@ -35,7 +35,7 @@ def execute_once(
     receipt and both perform the effect — the exact duplicate-send this
     function exists to prevent.
     """
-    with chain_lock():
+    with chain_lock(conn):
         cur = conn.cursor()
         cur.execute("SELECT result_json FROM receipts WHERE idempotency_key=?", (key,))
         row = cur.fetchone()

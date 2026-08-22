@@ -11,16 +11,31 @@ from pathlib import Path
 
 # Serializes the chain-critical read-then-write sections: appending an event
 # reads the current head to compute prev_hash, and execute_once checks for a
-# receipt before running a side effect. Two threads interleaving either one
+# receipt before running a side effect. Two writers interleaving either one
 # corrupts the guarantee — a forked chain, or an effect performed twice.
 #
-# A single process-wide lock is deliberate. The control plane serves requests
-# from a threadpool, so "one connection, one thread" is not achievable; what
-# IS achievable is one writer at a time, which is all the chain needs.
+# Two layers, because threads and processes are different problems:
+#
+#   * an RLock serializes threads inside this process — the control plane
+#     serves from a threadpool, so this is the case that actually occurs, and
+#     being reentrant lets append() nest inside execute_once() safely.
+#
+# ONE PROCESS ONLY. This lock does not cross process boundaries, so a second
+# uvicorn worker, or a CLI run against the same database while the server is
+# up, can still fork the chain.
+#
+# Doing better needs more than a longer transaction. `BEGIN IMMEDIATE` around
+# execute_once would hold SQLite's write lock across an arbitrary side effect
+# — a 30-second tool call would stall every other writer — so the correct
+# shape is claim-then-execute: insert the receipt row first and let the
+# PRIMARY KEY on idempotency_key reject the loser of a race, then fill in the
+# result. That is a real change to the receipt protocol and is deliberately
+# not smuggled in here; the single-worker constraint is documented instead.
 _CHAIN_LOCK = threading.RLock()
 
 
-def chain_lock() -> threading.RLock:
+def chain_lock(conn: sqlite3.Connection | None = None) -> threading.RLock:
+    """`conn` is accepted for call-site symmetry and currently unused."""
     return _CHAIN_LOCK
 
 SCHEMA_SQL = """

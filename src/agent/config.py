@@ -35,6 +35,10 @@ class BackendConfig(BaseModel):
     # cold load costs ~30s against ~8s warm, so anything shorter than a task's
     # runtime pays that repeatedly for nothing.
     keep_alive: str = "30m"
+    # What the router assumes until real work gives it something better. Only
+    # used before any call to this backend has been recorded; measured rates
+    # from the `calls` table win as soon as they exist.
+    assumed_tokens_per_sec: float = 5.0
 
     @property
     def budgeted_window(self) -> int:

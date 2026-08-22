@@ -87,7 +87,7 @@ class EventLog:
         """
         if etype not in EVENT_TYPES:
             raise ValueError(f"unknown event type {etype!r}")
-        with chain_lock():
+        with chain_lock(self.conn):
             cur = self.conn.cursor()
             cur.execute(
                 "SELECT seq, hash FROM events WHERE task_id=? ORDER BY seq DESC LIMIT 1",

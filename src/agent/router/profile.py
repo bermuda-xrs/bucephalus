@@ -48,7 +48,10 @@ def estimate_seconds(ctx, tier: str, purpose: str) -> float:
     """
     p50_out = ctx.telemetry.median_output_tokens(tier, purpose) or DEFAULT_OUTPUT_TOKENS
     backend = ctx.backends[tier]
-    tps = backend.measure_throughput()
+    # Rates from real work first; the configured assumption only until some
+    # exists. Deliberately never probes — routing must not cost a model call.
+    tps = ctx.telemetry.observed_tokens_per_sec(tier, purpose) \
+        or backend.measure_throughput()
     if tps <= 0:
         return float("inf")  # unreachable backend: never route to it
     return p50_out / tps

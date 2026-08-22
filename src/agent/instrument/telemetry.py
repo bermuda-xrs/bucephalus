@@ -160,6 +160,27 @@ class Telemetry:
             return None
         return float(rows[len(rows) // 2])
 
+    def observed_tokens_per_sec(self, backend: str, purpose: str | None = None) -> float | None:
+        """Throughput from work actually done, not from a probe.
+
+        Prefers this purpose's own history — a model that thinks before
+        answering has a very different effective rate per purpose — and falls
+        back to the backend's overall rate.
+        """
+        for where, args in (
+            ("AND purpose=?", (backend, purpose)) if purpose else ("", (backend,)),
+            ("", (backend,)),
+        ):
+            row = self.conn.execute(
+                f"SELECT COALESCE(SUM(output_tokens),0), COALESCE(SUM(wall_ms),0) "  # noqa: S608
+                f"FROM calls WHERE backend=? {where}",
+                args,
+            ).fetchone()
+            tokens, wall_ms = row[0] or 0, row[1] or 0
+            if tokens > 0 and wall_ms > 0:
+                return tokens / (wall_ms / 1000.0)
+        return None
+
     def totals(self) -> dict:
         row = self.conn.execute(
             "SELECT COUNT(*), COALESCE(SUM(cost_usd),0), COALESCE(SUM(wall_ms),0) FROM calls"

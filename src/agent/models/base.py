@@ -53,27 +53,41 @@ class BackendBase:
         return self.cfg.max_output_tokens
 
     def measure_throughput(self) -> float:
-        """Observed tokens/sec.
+        """Tokens/sec, WITHOUT calling the model.
 
-        Measured at startup because it varies wildly with quantization, context
-        length, and thermal throttling. Cached for the process lifetime.
+        This used to fire a real completion the first time the router asked.
+        Three things wrong with that: the call bypassed `ctx.record`, so it
+        never appeared in `calls` and quietly broke invariant 12; on a CPU
+        tier it triggered a cold model load (~58s measured) purely to decide
+        where to route; and it charged a paid backend for a routing decision.
+
+        The router now prefers rates observed from real work (see
+        `Telemetry.observed_tokens_per_sec`) and falls back to the configured
+        assumption. Use `probe_throughput()` when you actually want to measure.
         """
         if self._tokens_per_sec is not None:
             return self._tokens_per_sec
-        probe = "Reply with exactly the word: ready."
+        return self.cfg.assumed_tokens_per_sec
+
+    def probe_throughput(self) -> float:
+        """Measure for real, by making one small call. Explicit, never implicit.
+
+        Used by `alpha bench-local`. Still not recorded in `calls` — it is a
+        benchmark of the backend, not work done for a task — so it is kept out
+        of the routing path where that distinction would matter.
+        """
         t0 = time.time()
         try:
             resp = self.complete(  # type: ignore[attr-defined]
                 prefix="You are a latency probe. Answer in one word.",
-                tail=probe,
+                tail="Reply with exactly the word: ready.",
                 tools=None,
                 max_tokens=16,
                 temperature=0.0,
             )
             elapsed = max(1e-3, time.time() - t0)
-            out = max(1, resp.usage.output_tokens)
-            self._tokens_per_sec = out / elapsed
-        except Exception:  # noqa: BLE001 - an unreachable backend is not fatal here
+            self._tokens_per_sec = max(1, resp.usage.output_tokens) / elapsed
+        except Exception:  # noqa: BLE001 - an unreachable backend is not fatal
             self._tokens_per_sec = 0.0
         return self._tokens_per_sec
 

@@ -184,12 +184,58 @@ def evaluate_skill(ctx, skill_id: str, catastrophic_keys: set[str] | None = None
             )
 
     if lift_pp >= cfg.min_lift_pp and p < cfg.max_p_value:
+        # M7.4 rule 4 — a skill that shines on the checks it could see and
+        # not on the ones it could not is the signature of fitting the
+        # checker rather than doing the task. Refuse rather than warn: this
+        # is the failure mode the whole gate exists to catch.
+        gap = _holdout_gap(ctx, skill_id)
+        if gap is not None:
+            suspicion = ctx.mesh.suspicion_signal(*gap)
+            if suspicion:
+                return GateDecision.reject(
+                    f"suspected gaming — {suspicion}",
+                    lift_pp=round(lift_pp, 2), p=round(p, 5), n=n,
+                    visible_pass=gap[0], holdout_pass=gap[1],
+                )
         return GateDecision.promote(lift_pp=round(lift_pp, 2), p=round(p, 5), n=n, b=b, c=c_)
 
     return GateDecision.reject(
         f"lift={lift_pp:.1f}pp p={p:.3f} n={n}",
         lift_pp=round(lift_pp, 2), p=round(p, 5), n=n,
     )
+
+
+def _holdout_gap(ctx, skill_id: str) -> tuple[float, float] | None:
+    """(visible_pass_rate, holdout_pass_rate), or None if not measured.
+
+    Recorded by whatever runs the checks; absent it, the gate simply has no
+    gaming signal to act on and says so rather than inventing one.
+    """
+    row = ctx.conn.execute(
+        "SELECT value_json FROM semantic_cache WHERE key=?",
+        (f"holdout_gap:{skill_id}",),
+    ).fetchone()
+    if not row:
+        return None
+    try:
+        d = json.loads(row[0])
+        return float(d["visible"]), float(d["holdout"])
+    except (KeyError, ValueError, TypeError):
+        return None
+
+
+def record_holdout_gap(ctx, skill_id: str, visible: float, holdout: float) -> None:
+    """Store the visible/held-out pass rates so the gate can see the gap."""
+    import time as _t
+
+    ctx.conn.execute(
+        "INSERT OR REPLACE INTO semantic_cache(key,value_json,taint,source_hash,"
+        "created_at,hits) VALUES (?,?,?,?,?,0)",
+        (f"holdout_gap:{skill_id}",
+         json.dumps({"visible": visible, "holdout": holdout}),
+         "trusted", skill_id, _t.time()),
+    )
+    ctx.conn.commit()
 
 
 def promote(ctx, skill_id: str, decision: GateDecision, human_approved: bool) -> None:
