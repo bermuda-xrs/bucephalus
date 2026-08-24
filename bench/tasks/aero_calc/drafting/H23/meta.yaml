@@ -1,0 +1,4 @@
+tier: hard
+trap: degrees to radians; a combined burn is not the sum
+split: drafting
+tolerance: 0.01

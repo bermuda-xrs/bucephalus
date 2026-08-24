@@ -1,0 +1,6 @@
+{
+  "cutoff_s": 150,
+  "accel_limit_m_s2": 60.0,
+  "body": "earth",
+  "energy_tol_rel": 1e-06
+}

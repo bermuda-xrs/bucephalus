@@ -519,6 +519,7 @@ def _adjudicate(ctx, task, tool, args, decision: GateDecision, step: int, plan) 
             arg_taint=arg_taint,
             compact_transcript=ctx.compact_transcript(task.id),
             plan_step=plan.steps[0] if plan and plan.steps else None,
+            artifact_scope=list(task.contract.artifact_scope),
         )
         d = auto_review(ctx, req)
         if d.verdict == "approve":

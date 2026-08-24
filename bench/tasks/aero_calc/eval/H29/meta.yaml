@@ -1,0 +1,4 @@
+tier: hard
+trap: work backwards from dry mass
+split: eval
+tolerance: 0.01

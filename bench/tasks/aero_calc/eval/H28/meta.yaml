@@ -1,0 +1,4 @@
+tier: hard
+trap: degrees; the planet's own velocity is a distractor
+split: eval
+tolerance: 0.01

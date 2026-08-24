@@ -1,0 +1,4 @@
+tier: easy
+trap: radius, and seconds to minutes
+split: drafting
+tolerance: 0.005

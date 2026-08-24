@@ -1,0 +1,13 @@
+id: H26
+family: aero_calc
+split: drafting
+tier: hard
+objective: |
+  Read input/params.json and constants.json. Compute the requested value.
+  Write output/answer.json containing exactly these keys: days_to_next_window, days_to_arrival.
+  All outputs in SI base units unless the key name says otherwise.
+  
+  Launch window arithmetic. Compute the synodic period from the two orbital periods, then the Hohmann transfer time from the two orbital radii. days_to_arrival is measured from the next window.
+output_keys: [days_to_next_window, days_to_arrival]
+budget: {usd: 0.0, seconds: 900}
+artifact_scope: ["input/", "output/", "constants.json"]

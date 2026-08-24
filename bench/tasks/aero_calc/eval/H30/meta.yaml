@@ -1,0 +1,4 @@
+tier: hard
+trap: hyperbolic excess; both bodies' constants
+split: eval
+tolerance: 0.02

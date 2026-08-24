@@ -108,7 +108,10 @@ def run_code_action(
     ctx, task, code: str, timeout_s: int = 30, step: int = 0, live_tools: bool = True
 ) -> dict:
     """Execute a code action with the tool bridge wired to the capability gate."""
-    scope = [str(ctx.config.resolve(s)) for s in task.contract.artifact_scope]
+    # Pass the relative names too, so `work/E01` appears inside the sandbox as
+    # `work/E01` and not as `E01`. The agent is told to use the former.
+    scope = [(str(ctx.config.resolve(s)), s.replace("\\", "/").strip("/"))
+             for s in task.contract.artifact_scope]
     handler = make_tool_handler(ctx, task, step) if live_tools else None
     result = run_sandboxed(
         code,

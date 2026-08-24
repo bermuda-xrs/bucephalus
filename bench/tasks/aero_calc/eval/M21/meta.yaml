@@ -1,0 +1,4 @@
+tier: medium
+trap: exponent is 2/5
+split: eval
+tolerance: 0.01

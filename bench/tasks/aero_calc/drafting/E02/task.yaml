@@ -1,0 +1,13 @@
+id: E02
+family: aero_calc
+split: drafting
+tier: easy
+objective: |
+  Read input/params.json and constants.json. Compute the requested value.
+  Write output/answer.json containing exactly these keys: period_minutes.
+  All outputs in SI base units unless the key name says otherwise.
+  
+  Orbital period, reported in minutes.
+output_keys: [period_minutes]
+budget: {usd: 0.0, seconds: 600}
+artifact_scope: ["input/", "output/", "constants.json"]

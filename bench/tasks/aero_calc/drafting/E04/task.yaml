@@ -1,0 +1,13 @@
+id: E04
+family: aero_calc
+split: drafting
+tier: easy
+objective: |
+  Read input/params.json and constants.json. Compute the requested value.
+  Write output/answer.json containing exactly these keys: delta_v_m_s.
+  All outputs in SI base units unless the key name says otherwise.
+  
+  Ideal delta-v of a single stage by the Tsiolkovsky equation.
+output_keys: [delta_v_m_s]
+budget: {usd: 0.0, seconds: 600}
+artifact_scope: ["input/", "output/", "constants.json"]

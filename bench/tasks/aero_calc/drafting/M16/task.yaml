@@ -1,0 +1,13 @@
+id: M16
+family: aero_calc
+split: drafting
+tier: medium
+objective: |
+  Read input/params.json and constants.json. Compute the requested value.
+  Write output/answer.json containing exactly these keys: v_apogee_m_s.
+  All outputs in SI base units unless the key name says otherwise.
+  
+  Velocity at apogee of a transfer orbit, by vis-viva.
+output_keys: [v_apogee_m_s]
+budget: {usd: 0.0, seconds: 600}
+artifact_scope: ["input/", "output/", "constants.json"]

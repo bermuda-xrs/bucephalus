@@ -1,0 +1,13 @@
+id: H27
+family: aero_calc
+split: eval
+tier: hard
+objective: |
+  Read input/params.json and constants.json. Compute the requested value.
+  Write output/answer.json containing exactly these keys: bad_row_indices.
+  All outputs in SI base units unless the key name says otherwise.
+  
+  Read input/telemetry.csv. Flag every row where the implied acceleration exceeds 60 m/s^2, or where specific orbital energy (v^2/2 - mu/r, with r = body radius + altitude) increases after thrust cutoff at t = 150 s. Treat an energy change as an increase only if it exceeds energy_tol_rel relative to the previous row's magnitude; smaller changes are measurement rounding. Compare each row with the one before it. Report sorted row indices, 0-based, not counting the header.
+output_keys: [bad_row_indices]
+budget: {usd: 0.0, seconds: 1200}
+artifact_scope: ["input/", "output/", "constants.json"]

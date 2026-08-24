@@ -1,0 +1,9 @@
+{
+  "depart_body": "earth",
+  "depart_altitude_km": 400,
+  "capture_body": "mars",
+  "capture_altitude_km": 400,
+  "r1_m": 149600000000.0,
+  "r2_m": 227900000000.0,
+  "primary": "sun"
+}

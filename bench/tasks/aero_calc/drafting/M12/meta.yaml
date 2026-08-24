@@ -1,0 +1,4 @@
+tier: medium
+trap: one radius from altitude, one given directly
+split: drafting
+tolerance: 0.01

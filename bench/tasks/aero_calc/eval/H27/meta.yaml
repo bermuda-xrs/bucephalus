@@ -1,0 +1,4 @@
+tier: hard
+trap: non-uniform timesteps; energy needs altitude and velocity
+split: eval
+tolerance: 0.0

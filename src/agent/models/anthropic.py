@@ -1,5 +1,21 @@
 """M4.2 — the Anthropic adapter.
 
+    ┌──────────────────────────────────────────────────────────────────┐
+    │  UNVERIFIED. This adapter has NEVER been exercised against the   │
+    │  live API. It is written and unit-tested against a mock; not one │
+    │  request has left this machine.                                  │
+    │                                                                  │
+    │  Do not describe it as working. Do not publish a number produced │
+    │  through it without first making a real call and saying so.      │
+    │  The request shape below follows the current API contract as     │
+    │  documented, which is a different claim from "this works".       │
+    │                                                                  │
+    │  To verify: set ANTHROPIC_API_KEY, run one trivial task with     │
+    │  --profile mixed, and confirm the temperature omission and the   │
+    │  thinking/effort handling are accepted rather than 400'd.        │
+    └──────────────────────────────────────────────────────────────────┘
+
+
 The cache breakpoint goes on the last system block, and nothing else. The tail
 goes in the user turn, after it.
 

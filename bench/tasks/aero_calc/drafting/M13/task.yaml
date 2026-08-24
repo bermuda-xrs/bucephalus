@@ -1,0 +1,13 @@
+id: M13
+family: aero_calc
+split: drafting
+tier: medium
+objective: |
+  Read input/params.json and constants.json. Compute the requested value.
+  Write output/answer.json containing exactly these keys: delta_v_total_m_s.
+  All outputs in SI base units unless the key name says otherwise.
+  
+  Total delta-v of a two-stage vehicle. Stage 2 ignites after stage 1 separates; discarded structure does not travel with stage 2.
+output_keys: [delta_v_total_m_s]
+budget: {usd: 0.0, seconds: 600}
+artifact_scope: ["input/", "output/", "constants.json"]

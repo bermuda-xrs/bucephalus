@@ -78,6 +78,14 @@ class AutonomyConfig(BaseModel):
     auto_review_policy: str = "./policy.md"
     deviation_tolerance: float = 0.25
     human_only_tiers: list[str] = Field(default_factory=lambda: ["trusted"])
+    # Treat the CODE gate as sufficient for a side-effecting action whose
+    # arguments are inside artifact_scope and at or below USER taint — no
+    # deputy, no human. Trusted-tier actions still park regardless.
+    #
+    # For benchmark runs, where the alternative is parking on every write or
+    # putting a nondeterministic LLM in the measurement path. NOT a default:
+    # unattended production work should keep a reviewer.
+    approve_scoped_writes: bool = False
 
 
 class UIConfig(BaseModel):
@@ -89,6 +97,9 @@ class UIConfig(BaseModel):
 
 
 class Config(BaseModel):
+    # What this run is allowed to touch. Enforced before any work starts, and
+    # recorded on every artifact — see agent/profiles.py.
+    profile: Literal["local", "mixed"] = "mixed"
     db_path: str = "./agent.db"
     anchor_path: str = "./anchor/chain.anchor"
     skills_path: str = "./skills_store"
@@ -102,6 +113,8 @@ class Config(BaseModel):
     autonomy: AutonomyConfig = Field(default_factory=AutonomyConfig)
     ui: UIConfig = Field(default_factory=UIConfig)
     root: str = "."
+    # Filled by load_config after enforcement; travels into every report.
+    profile_provenance: dict[str, Any] = Field(default_factory=dict)
 
     def resolve(self, relative: str) -> Path:
         p = Path(relative)
@@ -116,12 +129,24 @@ class Config(BaseModel):
             )
 
 
-def load_config(path: str | Path = "config.yaml") -> Config:
+def load_config(path: str | Path = "config.yaml",
+                profile: str | None = None) -> Config:
+    """Load and validate. `profile` overrides the file and is then ENFORCED.
+
+    Enforcement raises rather than repairing: silently dropping a cloud
+    backend would be its own lie about what ran.
+    """
     path = Path(path)
     raw: dict[str, Any] = yaml.safe_load(path.read_text(encoding="utf-8"))
     raw["root"] = str(path.parent.resolve())
+    if profile is not None:
+        raw["profile"] = profile
     cfg = Config.model_validate(raw)
     cfg.validate_autonomy()
+
+    from .profiles import enforce
+
+    cfg.profile_provenance = enforce(cfg, cfg.profile)
     return cfg
 
 

@@ -1,0 +1,4 @@
+tier: easy
+trap: Moon mu and radius
+split: eval
+tolerance: 0.005

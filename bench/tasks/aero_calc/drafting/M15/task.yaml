@@ -1,0 +1,13 @@
+id: M15
+family: aero_calc
+split: drafting
+tier: medium
+objective: |
+  Read input/params.json and constants.json. Compute the requested value.
+  Write output/answer.json containing exactly these keys: semi_major_axis_m.
+  All outputs in SI base units unless the key name says otherwise.
+  
+  Semi-major axis of an Earth orbit with the given period.
+output_keys: [semi_major_axis_m]
+budget: {usd: 0.0, seconds: 600}
+artifact_scope: ["input/", "output/", "constants.json"]

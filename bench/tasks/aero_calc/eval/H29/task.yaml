@@ -1,0 +1,13 @@
+id: H29
+family: aero_calc
+split: eval
+tier: hard
+objective: |
+  Read input/params.json and constants.json. Compute the requested value.
+  Write output/answer.json containing exactly these keys: propellant_mass_kg.
+  All outputs in SI base units unless the key name says otherwise.
+  
+  Propellant mass for a sequence of burns, given the DRY mass.
+output_keys: [propellant_mass_kg]
+budget: {usd: 0.0, seconds: 900}
+artifact_scope: ["input/", "output/", "constants.json"]

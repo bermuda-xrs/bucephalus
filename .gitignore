@@ -18,3 +18,4 @@ anchor/chain.local.anchor
 agent.local.db-wal
 agent.local.db-shm
 .alpha_token
+bench/tasks/aero_calc/**/output/answer.json

@@ -1,0 +1,4 @@
+tier: easy
+trap: none
+split: eval
+tolerance: 0.005

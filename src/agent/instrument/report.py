@@ -16,17 +16,22 @@ from .. import __version__
 from .telemetry import Telemetry
 
 
-def run_report(conn: sqlite3.Connection, telemetry: Telemetry, task_id: str) -> dict:
+def run_report(conn: sqlite3.Connection, telemetry: Telemetry, task_id: str,
+               config=None) -> dict:
     m = telemetry.metrics(task_id).as_dict()
     row = conn.execute("SELECT status FROM tasks WHERE id=?", (task_id,)).fetchone()
     m["status"] = row[0] if row else "unknown"
     m["cache_alarm"] = telemetry.cache_alarm(task_id)
-    m["provenance"] = provenance(conn, task_id)
+    m["provenance"] = provenance(conn, task_id, config)
     return m
 
 
-def provenance(conn: sqlite3.Connection, task_id: str) -> dict:
-    """Every number gets reported with date, model version, scaffold version."""
+def provenance(conn: sqlite3.Connection, task_id: str, config=None) -> dict:
+    """Every number gets reported with date, model version, scaffold version.
+
+    The backend profile travels with every record so no later chart can blend
+    a local-only run with a mixed-tier one and present the average.
+    """
     backends = sorted(
         {
             r[0]
@@ -35,14 +40,19 @@ def provenance(conn: sqlite3.Connection, task_id: str) -> dict:
             ).fetchall()
         }
     )
-    return {
+    out = {
         "reported_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
         "scaffold_version": __version__,
         "backends_used": backends,
         "python": platform.python_version(),
         "platform": platform.system(),
         "token_counts": "estimated locally; see src/agent/tokens.py for the caveat",
+        "profile": "unrecorded",
     }
+    if config is not None:
+        out["profile"] = config.profile
+        out["profile_provenance"] = config.profile_provenance
+    return out
 
 
 def write_run_json(path: str | Path, report: dict) -> Path:

@@ -69,9 +69,10 @@ class AgentContext:
     # -- construction ------------------------------------------------------
 
     @classmethod
-    def open(cls, config_path: str | Path = "config.yaml") -> "AgentContext":
+    def open(cls, config_path: str | Path = "config.yaml",
+             profile: str | None = None) -> "AgentContext":
         load_dotenv(Path(config_path).parent / ".env")
-        return cls(load_config(config_path))
+        return cls(load_config(config_path, profile=profile))
 
     def close(self) -> None:
         try:

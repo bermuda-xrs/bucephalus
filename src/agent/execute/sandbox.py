@@ -52,8 +52,13 @@ def _posix_limits(timeout_s: int):  # pragma: no cover - not reachable on Window
     return apply
 
 
-def link_into(workdir: str, path: str) -> dict | None:
+def link_into(workdir: str, path: str, rel: str | None = None) -> dict | None:
     """Expose one allowed path inside the sandbox workdir.
+
+    `rel` preserves the path the agent was told to use. Flattening
+    `work/E01` to `E01` means code written against the documented path finds
+    nothing, writes its answer into a directory that is never copied back, and
+    the task fails for a reason that has nothing to do with the task.
 
     Symlink where the platform allows it; copy otherwise, recording the copy so
     changes can be written back. Only artifact_scope paths ever get here.
@@ -61,7 +66,8 @@ def link_into(workdir: str, path: str) -> dict | None:
     src = Path(path).resolve()
     if not src.exists():
         return None
-    dest = Path(workdir) / src.name
+    dest = Path(workdir) / (rel or src.name)
+    dest.parent.mkdir(parents=True, exist_ok=True)
     try:
         os.symlink(src, dest, target_is_directory=src.is_dir())
         return {"mode": "symlink", "src": str(src), "dest": str(dest)}
@@ -214,12 +220,16 @@ def run_sandboxed(
     with tempfile.TemporaryDirectory(prefix="alpha_sbx_") as workdir:
         links = []
         for p in allowed_paths:  # artifact_scope only
-            entry = link_into(workdir, p)
+            # Accept either a bare path or (absolute, relative-name) so the
+            # caller can preserve the layout the agent was told to expect.
+            src, rel = p if isinstance(p, (tuple, list)) else (p, None)
+            entry = link_into(workdir, src, rel)
             if entry:
                 links.append(entry)
 
         guard = _GUARD_TEMPLATE.format(
-            roots=[str(Path(p).resolve()) for p in allowed_paths],
+            roots=[str(Path(p[0] if isinstance(p, (tuple, list)) else p).resolve())
+                   for p in allowed_paths],
             workdir=str(Path(workdir).resolve()),
         )
         script = Path(workdir) / "_run.py"

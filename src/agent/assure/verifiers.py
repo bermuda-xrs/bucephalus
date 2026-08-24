@@ -394,6 +394,88 @@ class ContainsAllVerifier:
         )
 
 
+class VerifyProgramVerifier:
+    """Run the task's own `verify.py` against what the agent left on disk.
+
+    The strongest verifier in the set, and the one a real eval suite should
+    use. It judges files rather than the model's closing message, so an agent
+    that announces success without producing the artifact fails — and the
+    check is a deterministic program, so nothing about the grader varies
+    between arms of a paired trial.
+
+    `verify.py` prints one JSON object: {"passed": bool, "score": float}.
+    Binary `passed` feeds McNemar (M9.2); continuous `score` feeds the
+    ratchet (M7.2), which needs to know that 0.9 beat 0.4.
+    """
+
+    kind = "verify_program"
+    SCRIPT = "verify.py"
+
+    def check(self, artifact: str, contract: TaskContract) -> VerifyResult:
+        from ..execute.sandbox import run_sandboxed
+
+        scope = contract.artifact_scope or ["."]
+        script = None
+        for base in scope:
+            candidate = Path(base) / self.SCRIPT
+            if candidate.exists():
+                script = candidate
+                break
+        if script is None and Path(self.SCRIPT).exists():
+            script = Path(self.SCRIPT)
+        if script is None:
+            return VerifyResult(
+                passed=False, score=0.0,
+                observation=f"no {self.SCRIPT} found in {scope}",
+                verifier_id=self.kind,
+            )
+
+        # verify.py addresses its files relatively ("output/answer.json"), but
+        # the sandbox links the task directory in under its own name and runs
+        # with the workdir as cwd — so without this chdir every check looks in
+        # the wrong place and reports a missing answer that is actually there.
+        harness = (
+            f"import os as _os\n_os.chdir({script.parent.name!r})\n\n"
+            + script.read_text(encoding="utf-8")
+            + "\n\nimport json as _j, sys as _s\n"
+            "try:\n"
+            "    _p, _sc = check()\n"
+            "    _s.stdout.write('\\x02RESULT' + _j.dumps("
+            "{'passed': bool(_p), 'score': float(_sc)}))\n"
+            "except Exception as _e:\n"
+            "    _s.stdout.write('\\x02RESULT' + _j.dumps("
+            "{'passed': False, 'score': 0.0, 'error': type(_e).__name__ + ': ' + str(_e)}))\n"
+        )
+        r = run_sandboxed(harness, allowed_paths=[str(script.parent)], timeout_s=60)
+
+        out = r.get("stdout", "")
+        marker = "\x02RESULT"
+        if marker not in out:
+            return VerifyResult(
+                passed=False, score=0.0,
+                observation=(f"{self.SCRIPT} produced no verdict.\n"
+                             f"stdout: {out[-800:]}\nstderr: {r.get('stderr','')[-800:]}"),
+                verifier_id=self.kind,
+            )
+        try:
+            payload = json.loads(out.split(marker, 1)[1].strip().splitlines()[0])
+        except (json.JSONDecodeError, IndexError) as e:
+            return VerifyResult(passed=False, score=0.0,
+                                observation=f"unparseable verdict: {e}",
+                                verifier_id=self.kind)
+
+        note = payload.get("error", "")
+        return VerifyResult(
+            passed=bool(payload.get("passed")),
+            score=float(payload.get("score", 0.0)),
+            observation=(f"{self.SCRIPT}: passed={payload.get('passed')} "
+                         f"score={payload.get('score')}"
+                         + (f" · {note}" if note else "")
+                         + (f"\n{r.get('stderr','')[-400:]}" if r.get("stderr") else "")),
+            verifier_id=self.kind,
+        )
+
+
 def default_verifiers(ctx=None) -> dict[str, Verifier]:
     reg: dict[str, Verifier] = {
         "always_pass": AlwaysPass(),
@@ -402,6 +484,7 @@ def default_verifiers(ctx=None) -> dict[str, Verifier]:
         "json_schema": JsonSchemaVerifier(),
         "expected_value": ExpectedValueVerifier(),
         "contains_all": ContainsAllVerifier(),
+        "verify_program": VerifyProgramVerifier(),
         "execution": ExecutionVerifier(),
         "citation_check": CitationCheckVerifier(),
     }

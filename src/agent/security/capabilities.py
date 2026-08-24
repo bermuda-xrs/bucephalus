@@ -96,6 +96,18 @@ def gate_tool_call(ctx, task, tool, args: dict, phase: str = "execute") -> GateD
         )
 
     if tool.side_effecting and arg_taint != Taint.TRUSTED:
+        # Everything above already passed in code: the tool's taint ceiling,
+        # protected paths, and artifact_scope. When that is declared
+        # sufficient, a scoped USER-taint write proceeds without a deputy or a
+        # human. Untrusted arguments never qualify — those are the injection
+        # case and they were refused by the taint ceiling above.
+        if (getattr(ctx.config.autonomy, "approve_scoped_writes", False)
+                and arg_taint.level <= Taint.USER.level
+                and task.contract.artifact_scope):
+            return GateDecision.allow_(
+                "code gate sufficient: in scope, taint <= user, "
+                "approve_scoped_writes is on"
+            )
         return GateDecision.needs_approval(
             f"{tool.name} with {arg_taint.value} arguments",
             preview=render_preview(tool, args),

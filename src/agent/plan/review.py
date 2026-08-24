@@ -19,6 +19,7 @@ This one is visible and blocking. Two tables, two read paths, no joins.
 
 from __future__ import annotations
 
+import json
 import re
 import time
 from pathlib import Path
@@ -48,6 +49,15 @@ You cannot widen anything. You cannot grant access to a new path, enable a
 network route, or relax a protected path. You answer yes or no about an action
 that already required approval.
 
+Some checks have already run in code before you were asked, and re-deciding
+them is not your job:
+  * every path argument has been verified to lie inside artifact_scope
+  * protected paths and out-of-scope writes are already refused
+  * argument taint has been checked against the tool's ceiling
+So a path shown to you inside artifact_scope IS in scope — do not deny it as
+out of scope. Judge intent and consequence: is this action doing what the task
+needs, or something the human would not expect?
+
 DEFAULT IS DENY. Approve only if a rule in the policy explicitly permits it.
 
 Answer in exactly this form, two lines:
@@ -72,6 +82,11 @@ class ReviewRequest(BaseModel):
     compact_transcript: str = ""  # user msgs, surfaced updates, relevant tool
     #                               calls and outputs. NOT hidden reasoning.
     plan_step: PlanStep | None = None  # what the approved plan said should happen
+    # What the task is permitted to touch. Without it the reviewer cannot tell
+    # an in-scope path from an out-of-scope one, so it guesses — and rule 4
+    # turns every guess into a denial. Measured: a reviewer refusing to let a
+    # task read a file that was inside its own scope.
+    artifact_scope: list[str] = Field(default_factory=list)
 
 
 class ReviewDecision(BaseModel):
@@ -152,12 +167,14 @@ def auto_review(ctx, req: ReviewRequest) -> ReviewDecision:
     tools = [
         s for s in ctx.tools.schemas() if s["name"] in READ_ONLY_TOOL_NAMES
     ]  # may verify, may not act
+    constrain = backend.cfg.kind == "ollama"
     resp = backend.complete(
         prefix=REVIEW_PREFIX + "\n\n<policy>\n" + load_policy(ctx) + "\n</policy>",
-        tail=render_review_request(req),
+        tail=render_review_request(req) + (REVIEW_SCHEMA_HINT if constrain else ""),
         tools=tools,
         max_tokens=512,
         temperature=0.0,
+        schema=REVIEW_SCHEMA if constrain else None,
     )
     d = parse_decision(resp.text, backend=reviewer_name)
     _record(ctx, req, d)
@@ -174,6 +191,7 @@ def render_review_request(req: ReviewRequest) -> str:
     args = "\n".join(f"  {k} = {str(v)[:400]!r}" for k, v in sorted(req.args.items()))
     return (
         f"<approved_plan_step>{step}</approved_plan_step>\n"
+        f"<artifact_scope>{req.artifact_scope or '(none declared)'}</artifact_scope>\n"
         f"<action tool=\"{req.tool}\" arg_taint=\"{req.arg_taint.value}\">\n{args}\n</action>\n"
         f"<evidence>\n{req.compact_transcript[-4000:]}\n</evidence>"
     )
@@ -182,12 +200,51 @@ def render_review_request(req: ReviewRequest) -> str:
 _VERDICT_RX = re.compile(r"VERDICT:\s*(approve|deny|escalate)", re.I)
 _BECAUSE_RX = re.compile(r"BECAUSE:\s*(.+)", re.I)
 
+# M5.4 again, and it matters more here than anywhere else. A small reviewer
+# that cannot hit the text format has every reply read as unparseable, and
+# rule 4 turns each one into a denial — so the agent is refused permission for
+# everything and no task can complete. Measured: a 100% denial rate against
+# granite4.1:8b, which would have made a 7-hour benchmark run report 0% on
+# every task and look like a suite that was too hard.
+REVIEW_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "verdict": {"type": "string", "enum": ["approve", "deny", "escalate"]},
+        "because": {"type": "string"},
+    },
+    "required": ["verdict", "because"],
+}
+
+REVIEW_SCHEMA_HINT = """
+
+Answer with a single JSON object and nothing else:
+  {"verdict": "approve", "because": "one sentence naming the rule you applied"}"""
+
 
 def parse_decision(text: str, backend: str = "") -> ReviewDecision:
-    m = _VERDICT_RX.search(text or "")
-    # Rule 4: anything unparseable is a denial. Never a default approve.
+    """Accept the JSON shape (constrained decoding) or the tag shape.
+
+    Rule 4 still holds underneath both: anything unparseable is a denial,
+    never a default approve.
+    """
+    raw = (text or "").strip()
+
+    if raw.startswith("{"):
+        try:
+            obj = json.loads(raw)
+            v = str(obj.get("verdict", "")).lower()
+            if v in ("approve", "deny", "escalate"):
+                return ReviewDecision(
+                    verdict=v,  # type: ignore[arg-type]
+                    rationale=str(obj.get("because", ""))[:500] or "(no reason given)",
+                    policy_rule=None, backend=backend,
+                )
+        except json.JSONDecodeError:
+            pass
+
+    m = _VERDICT_RX.search(raw)
     verdict: Verdict = m.group(1).lower() if m else "deny"  # type: ignore[assignment]
-    b = _BECAUSE_RX.search(text or "")
+    b = _BECAUSE_RX.search(raw)
     rationale = (
         b.group(1).strip()
         if b

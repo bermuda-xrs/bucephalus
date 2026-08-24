@@ -1,0 +1,4 @@
+tier: easy
+trap: Moon constants
+split: eval
+tolerance: 0.005

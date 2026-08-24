@@ -1,0 +1,13 @@
+id: M22
+family: aero_calc
+split: eval
+tier: medium
+objective: |
+  Read input/params.json and constants.json. Compute the requested value.
+  Write output/answer.json containing exactly these keys: transfer_days.
+  All outputs in SI base units unless the key name says otherwise.
+  
+  Hohmann transfer time from Earth's orbit to Mars's orbit, in days.
+output_keys: [transfer_days]
+budget: {usd: 0.0, seconds: 600}
+artifact_scope: ["input/", "output/", "constants.json"]

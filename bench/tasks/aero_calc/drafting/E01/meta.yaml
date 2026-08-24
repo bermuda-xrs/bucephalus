@@ -1,0 +1,4 @@
+tier: easy
+trap: altitude is not orbital radius
+split: drafting
+tolerance: 0.005

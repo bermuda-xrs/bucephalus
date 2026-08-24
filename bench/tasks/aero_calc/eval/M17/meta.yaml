@@ -1,0 +1,4 @@
+tier: medium
+trap: reciprocals, not a difference
+split: eval
+tolerance: 0.005
