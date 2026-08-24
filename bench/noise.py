@@ -37,6 +37,13 @@ from agent.kernel.types import Budget, TaskContract  # noqa: E402
 
 TARGET_BAND = (0.35, 0.65)   # mean pass rate where measurement has power
 
+# The baseline arm carries no skills. `--skill` swaps in exactly one, which
+# turns this script into a cheap sighting shot: before committing hours to a
+# full paired gate, run the same handful of tasks both ways and see whether
+# the skill moves anything at all. A skill that shifts nothing on five tasks
+# will not suddenly find signal on thirty.
+SKILLS_FOR_ARM: list = []
+
 
 def provision(ctx, fixtures: dict) -> None:
     for rel, content in (fixtures or {}).items():
@@ -59,7 +66,7 @@ def run_once(ctx, spec: dict, run_ix: int) -> dict:
                 or ctx.config.limits.default_task_budget_seconds,
     )
     task = create_task(ctx.conn, ctx.log, contract, budget)
-    ctx.set_frozen_skills(task.id, [])          # baseline: no skills
+    ctx.set_frozen_skills(task.id, SKILLS_FOR_ARM)
     t0 = time.time()
     result = run_task(ctx, task.id)
     m = ctx.telemetry.metrics(task.id)
@@ -95,9 +102,24 @@ def main() -> int:
     ap.add_argument("--out", default="runs/noise-floor.json")
     ap.add_argument("--auto-review", action="store_true",
                     help="keep the LLM deputy in the loop (adds variance)")
+    ap.add_argument("--skill", help="run WITH this skill (name or id) instead of bare")
     args = ap.parse_args()
 
     ctx = AgentContext.open(args.config, profile=args.profile)
+
+    global SKILLS_FOR_ARM
+    if args.skill:
+        row = ctx.conn.execute(
+            "SELECT id FROM skills WHERE id=? OR name=? ORDER BY version DESC LIMIT 1",
+            (args.skill, args.skill),
+        ).fetchone()
+        if not row:
+            print(f"no skill named {args.skill!r}")
+            return 2
+        SKILLS_FOR_ARM = [ctx.skills.load(row[0])]
+        print(f"arm: WITH skill {args.skill!r}")
+    else:
+        print("arm: baseline (no skills)")
 
     # The deputy is an LLM, and an LLM in the decision path is a source of
     # variance in exactly the signal this suite exists to measure. Observed on
