@@ -312,6 +312,7 @@ def main() -> int:
     mean_rate = sum(r["passes"] for r in rows) / max(1, sum(r["runs"] for r in rows))
 
     report = {
+        "date": time.strftime("%Y-%m-%d"),
         "profile": ctx.config.profile,
         "profile_provenance": ctx.config.profile_provenance,
         "suite": args.suite, "split": args.split, "runs_per_task": args.runs,

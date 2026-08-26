@@ -139,20 +139,52 @@ and the lock protecting it is process-wide.
 
 ## Measuring a skill, start to finish
 
-This is the M9 loop the whole project exists to test:
+This is the M9 loop the whole project exists to test. The order is not
+optional: **the noise floor comes first**, because a lift is only meaningful
+relative to how much the same tasks move on their own.
 
-```bat
-alpha.cmd skills --add my-skill.md --name tidy --when "cleaning a messy csv"
-python bench\run.py paired <skill_id> --suite bench\tasks
-alpha.cmd skills --gate <skill_id>          REM verdict + lift + p-value
-alpha.cmd skills --gate <skill_id> --yes    REM promote, requires a human
+```powershell
+# 1. how noisy is the suite? Baseline arm, no skill loaded.
+#    Pass 1 first, then read it before spending the rest.
+python bench\noise.py --config config.local.yaml --profile local --runs 1 --out runs\noise-floor.json
+python bench\noise.py --config config.local.yaml --profile local --runs 3 --resume --out runs\noise-floor.json
+
+# 2. the calibration skill - a POSITIVE CONTROL on the instrument
+.\alpha.ps1 --config config.local.yaml skills --add examples\skills\aero_units_discipline.md ^
+    --name aero_units_discipline --when "aerospace calculation with units"
+python bench\run.py --config config.local.yaml --profile local paired <skill_id> ^
+    --suite aero_calc --out runs\calibration.json
+
+# 3. the verdict, and promotion, which requires a human
+.\alpha.ps1 --config config.local.yaml skills --gate <skill_id>
+.\alpha.ps1 --config config.local.yaml skills --gate <skill_id> --yes
+
+# 4. the run sheet, with the caveats attached to the numbers
+python bench\report.py --out docs\run-sheet.md
 ```
 
 Nothing added by `--add` is ever live: it lands as a `candidate`, and only the
-gate promotes, only after 30 paired trials clear all four conditions, and only
-with a human saying yes. A 4-task starter suite is in `bench/tasks/` — it will
-correctly report `insufficient`, because 4 is not 30. Write your own 30; that
-suite is the denominator of every number this system reports.
+gate promotes, only after the paired trials clear all four conditions, and
+only with a human saying yes.
+
+**Both long runs are resumable.** They append each completed run to a
+`.partial.jsonl` ledger (noise floor) or to `skill_trials` (calibration), so a
+kill costs at most one task. `--resume` picks up where it stopped and refuses
+to blend results from a different suite, split, or profile.
+
+**Which conditions actually bind.** `min_discordant_pairs` is the real guard
+— McNemar reads only discordant pairs, and roughly 75-80% of disagreements
+must favour the skill at any n. `min_paired_trials` is a floor on the pool,
+not a statistical guard. `min_lift_pp` is **inert** below n=160 at these
+settings and is not protection. See the annotated `gate:` block in
+`config.local.yaml`.
+
+**Contamination.** The eval split never enters a drafting prompt. A
+*generated* skill is evaluated with `--split eval`, always. The hand-written
+calibration skill runs on all 30 because it is a positive control on the
+detector rather than a claim about generalization — and its author saw the
+whole suite, so no split is clean with respect to the author anyway. That
+caveat is printed next to its number, not in a footnote.
 
 `demo.py` runs the whole flow with a scripted model — no API key, no network.
 
