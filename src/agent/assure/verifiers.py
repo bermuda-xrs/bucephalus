@@ -220,7 +220,8 @@ class SelfConsistencyVerifier:
         self.k = k
 
     def check(self, artifact: str, contract: TaskContract) -> VerifyResult:
-        from ..router.cascade import max_cluster_fraction, normalize
+        from ..router.cascade import (
+            DEFAULT_AGREEMENT, max_cluster_fraction, normalize)
 
         backend = self.ctx.backends[self.ctx.active_local_tier() or "cloud"]
         prompt = (
@@ -232,8 +233,12 @@ class SelfConsistencyVerifier:
             for _ in range(self.k)
         ]
         agreement = max_cluster_fraction([normalize(s) for s in samples])
+        # DEFAULT_AGREEMENT, not the literal 0.67. Two of three is 0.6667,
+        # which is LESS than 0.67, so the literal rejects exactly the case it
+        # was written to accept. CORRECTIONS.md 1.5 records this fix being
+        # made in cascade.py; this copy was missed.
         return VerifyResult(
-            passed=agreement >= 0.67,
+            passed=agreement >= DEFAULT_AGREEMENT,
             score=agreement,
             observation=f"agreement across {self.k} samples = {agreement:.2f}",
             verifier_id=self.kind,
