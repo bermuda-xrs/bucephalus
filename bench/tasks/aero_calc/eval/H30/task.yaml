@@ -7,7 +7,7 @@ objective: |
   Write output/answer.json containing exactly these keys: delta_v_departure_m_s, delta_v_capture_m_s, delta_v_total_m_s.
   All outputs in SI base units unless the key name says otherwise.
   
-  Full delta-v budget: depart LEO, Hohmann to Mars, capture into a circular Mars orbit at the given altitude.
+  Full delta-v budget: depart LEO, Hohmann to Mars, capture into a circular Mars orbit at the given altitude. Model both planetary orbits as circular at r1_m and r2_m: take each planet's heliocentric speed as sqrt(mu_sun / r), NOT the orbital_v entry in constants.json.
 output_keys: [delta_v_departure_m_s, delta_v_capture_m_s, delta_v_total_m_s]
 budget: {usd: 0.0, seconds: 1200}
 artifact_scope: ["input/", "output/", "constants.json"]

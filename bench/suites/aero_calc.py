@@ -210,14 +210,30 @@ EVAL = [
          {"dry_mass_kg": 2000, "isp_s": 320, "burns_m_s": [1200, 450, 800]},
          {"propellant_mass_kg": 2366.1}, 0.01, "work backwards from dry mass",
          seconds=900),
+    # The heliocentric speed convention is PINNED in the objective, and it has
+    # to be. constants.json carries mars.orbital_v = 24077, Mars's true mean
+    # orbital speed, while a circular orbit at r2 = 2.279e11 moves at
+    # sqrt(mu_sun/r2) = 24131.5 — they differ by 0.23% because Mars's orbit is
+    # eccentric (e = 0.0934; mean speed = sqrt(mu/a)(1 - e^2/4) recovers 24079).
+    # Both numbers are correct facts about different models, and the 0.23% in
+    # planet speed amplifies to 2.1% in v_inf and 1.27% in the capture burn.
+    # Left unstated, two competent solvers answered 2054.1 and 2080.2 and the
+    # continuous scorer ranked one of them at 0.37 — the suite was measuring
+    # which convention the model guessed, not whether it can do the physics.
+    # A Hohmann transfer is defined between CIRCULAR orbits, so the internally
+    # consistent choice is the one derived from the same r1/r2 that give the
+    # transfer ellipse; orbital_v is a distractor here and is not used by any
+    # other task's answer.
     Task("H30", "eval", "hard",
          "Full delta-v budget: depart LEO, Hohmann to Mars, capture into a "
-         "circular Mars orbit at the given altitude.",
+         "circular Mars orbit at the given altitude. Model both planetary "
+         "orbits as circular at r1_m and r2_m: take each planet's heliocentric "
+         "speed as sqrt(mu_sun / r), NOT the orbital_v entry in constants.json.",
          {"depart_body": "earth", "depart_altitude_km": 400,
           "capture_body": "mars", "capture_altitude_km": 400,
           "r1_m": 1.496e11, "r2_m": 2.279e11, "primary": "sun"},
-         {"delta_v_departure_m_s": 3569.9, "delta_v_capture_m_s": 2054.1,
-          "delta_v_total_m_s": 5624.0}, 0.02,
+         {"delta_v_departure_m_s": 3570.2, "delta_v_capture_m_s": 2080.2,
+          "delta_v_total_m_s": 5650.4}, 0.02,
          "hyperbolic excess; both bodies' constants", seconds=1200),
 ]
 

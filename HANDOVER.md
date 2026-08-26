@@ -2,7 +2,7 @@
 
 **Everything a new engineer needs to take this over. Read this file alone.**
 
-Version 0.1.0 · 19 commits · 183 tests passing · built from `spec/BUILD-SPEC.md`
+Version 0.1.0 · 22 commits · 188 tests passing · built from `spec/BUILD-SPEC.md`
 
 ---
 
@@ -69,7 +69,7 @@ cd "C:\Users\char1\OneDrive\Desktop\Βουκεφάλας\alpha-test-1"
 ```
 
 That creates the virtualenv, installs dependencies, and runs the test suite.
-You should see `183 passed`.
+You should see `188 passed`.
 
 ### Start the model server (leave this window open)
 
@@ -128,7 +128,7 @@ closes, every local model call fails with a connection refusal.
     ├── policy.md           the deputy's rule book (also editable in the console)
     ├── demo.py             end-to-end with a scripted model, no network
     ├── src/agent/          the system (64 files, see §3)
-    ├── tests/              183 tests (19 files, see §6)
+    ├── tests/              188 tests (20 files, see §6)
     ├── bench/              benchmark harness + the aero_calc suite
     ├── examples/skills/    the hand-written calibration skill
     ├── docs/               published benchmark report
@@ -336,7 +336,7 @@ $env:PYTHONUTF8="1"
 ..\..\..\.alpha-test-1-venv\Scripts\python.exe -m pytest tests -q
 ```
 
-183 tests, all offline — no API key, no GPU, no network. A `mock` backend
+188 tests, all offline — no API key, no GPU, no network. A `mock` backend
 replays scripted turns so the whole loop is exercised without spending
 anything.
 
@@ -351,6 +351,7 @@ anything.
 | `test_m9_gate.py` | Gate calibration, contamination, catastrophic veto |
 | `test_m12_serve.py` | HTTP, auth, CSRF, DNS rebinding, concurrency |
 | `test_wired_invariants.py` | That the runtime actually *calls* the machinery |
+| `test_bench_suite.py` | The suite's own answers, recomputed independently |
 | `test_routing_costs_nothing.py` | Routing makes no model calls |
 
 **`test_wired_invariants.py` deserves special mention.** An audit found seven
@@ -418,11 +419,19 @@ it. If you add a component, add a test that the runtime calls it.
    (defaults `'local'`) and user-content queries are owner-scoped, so adding
    accounts is wiring an identity provider, not a migration.
 7. **No TUI.** The CLI and web console cover it.
-8. **`H30b` disagreement.** The suite expects 2054.1 for Mars capture Δv; an
-   independent computation gives **2080.2** (1.27% apart). It passes at
-   tol 2%, but a *correct* answer scores 0.37 on the continuous scale, so the
-   ratchet would rank right answers as mediocre. **Decide which number is
-   right before running the gate.**
+8. ~~**`H30b` disagreement.**~~ **SETTLED.** Neither number was an
+   arithmetic error: the task did not say which heliocentric speed to use.
+   `constants.json` carries `mars.orbital_v = 24077` (Mars's true mean speed,
+   whose orbit is eccentric at e = 0.0934) while a *circular* orbit at
+   r2 = 2.279e11 moves at `sqrt(mu_sun/r2)` = 24131.5. The 0.23% gap amplifies
+   to 2.1% in v_inf and 1.27% in the capture burn. Fixed by **pinning the
+   convention in the objective** rather than by touching the tolerance: a
+   Hohmann transfer is defined between circular orbits, so the internally
+   consistent choice is the one derived from the same r1/r2 that give the
+   transfer ellipse. Expected values are now 3570.2 / 2080.2 / 5650.4 and a
+   spec-following solver scores 0.999 instead of 0.37. Tolerance is unchanged
+   at 2%. Guarded by `tests/test_bench_suite.py`, which recomputes H30 from an
+   independent solver and fails if the emitted tree drifts from the table.
 9. **Baseline is 0% on easy tasks**, where the suite design predicted ~80%.
    With the calibration skill it is 100%. For McNemar this is maximum
    discordance (ideal), but if medium/hard are also 0% with *and* without the
@@ -432,8 +441,10 @@ it. If you add a component, add a test that the runtime calls it.
 
 ## 9. The next three things to do
 
-**1. Settle H30b** (5 minutes). Recompute the Mars capture Δv and fix either
-the expected value or the tolerance. Everything downstream inherits this.
+**1. ~~Settle H30b~~ — done.** See §8.8. The ambiguity was in the task text,
+not the arithmetic; the objective now pins the heliocentric speed convention.
+Regenerate after any table edit (`--out` for the tree, `--load` for the DB) —
+`test_emitted_tree_matches_the_table` fails if you forget.
 
 **2. Run the eval-split noise floor** (~7h, overnight).
 ```powershell

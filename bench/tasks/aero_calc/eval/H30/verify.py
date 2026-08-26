@@ -1,7 +1,7 @@
 """Deterministic verification for H30. No model in the loop."""
 import json, pathlib
 
-EXPECTED = {'delta_v_departure_m_s': 3569.9, 'delta_v_capture_m_s': 2054.1, 'delta_v_total_m_s': 5624.0}
+EXPECTED = {'delta_v_departure_m_s': 3570.2, 'delta_v_capture_m_s': 2080.2, 'delta_v_total_m_s': 5650.4}
 TOL = 0.02            # relative
 EXACT_KEYS = ()   # compared exactly rather than by tolerance
 
