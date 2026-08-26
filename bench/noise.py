@@ -35,6 +35,7 @@ from agent.context import AgentContext  # noqa: E402
 from agent.execute.loop import run_task  # noqa: E402
 from agent.kernel.tasks import create_task  # noqa: E402
 from agent.kernel.types import Budget, TaskContract  # noqa: E402
+from agent.runlock import RunLock, RunLockBusy  # noqa: E402
 from agent.workspace import reset_workspace  # noqa: E402
 
 TARGET_BAND = (0.35, 0.65)   # mean pass rate where measurement has power
@@ -197,6 +198,17 @@ def main() -> int:
                          "beside --out; a killed pass restarts where it stopped")
     args = ap.parse_args()
 
+    # One measurement process at a time. Two concurrent runs measure their
+    # tasks under CPU contention, which can manufacture `budget_exhausted` on
+    # a task that would otherwise finish - the suite then looks harder than it
+    # is, for reasons that have nothing to do with the tasks.
+    try:
+        lock = RunLock(Path(args.out).parent / ".measurement.lock",
+                       "noise floor").acquire()
+    except RunLockBusy as e:
+        print(f"REFUSING TO START.\n{e}")
+        return 2
+
     ctx = AgentContext.open(args.config, profile=args.profile)
 
     global SKILLS_FOR_ARM
@@ -243,6 +255,7 @@ def main() -> int:
         specs = specs[: args.limit]
     if not specs:
         print("no tasks matched")
+        lock.release()
         return 2
 
     print(f"noise floor · {len(specs)} tasks x {args.runs} runs = "
@@ -385,6 +398,7 @@ def main() -> int:
     if verdict == 0:
         print("\nSuite looks usable. Next: the calibration skill through the gate.")
     ctx.close()
+    lock.release()
     return verdict
 
 

@@ -33,6 +33,7 @@ from agent.instrument.report import pareto_points, write_calls_csv  # noqa: E402
 from agent.kernel.tasks import create_task  # noqa: E402
 from agent.kernel.types import Budget, TaskContract  # noqa: E402
 from agent.models.registry import build_backends  # noqa: E402
+from agent.runlock import RunLock, RunLockBusy  # noqa: E402
 from agent.workspace import reset_workspace  # noqa: E402
 from agent.skills.gate import TaskSpec, evaluate_skill, run_paired_trial  # noqa: E402
 
@@ -183,6 +184,16 @@ def cmd_arms(args) -> int:
 
 
 def cmd_paired(args) -> int:
+    # Shares the lock file with the noise floor deliberately: a calibration
+    # racing a noise-floor pass corrupts both, and they are the same kind of
+    # measurement competing for the same CPU.
+    try:
+        lock = RunLock(Path(args.out or "runs/x").parent / ".measurement.lock",
+                       "calibration").acquire()
+    except RunLockBusy as e:
+        print(f"REFUSING TO START.\n{e}")
+        return 2
+
     ctx = AgentContext.open(args.config, profile=args.profile)
     suite = load_suite(args.suite, ctx)
 
@@ -196,6 +207,7 @@ def cmd_paired(args) -> int:
                  if (s.get("output_schema") or {}).get("x-split") == args.split]
         if not suite:
             print(f"no tasks in split {args.split!r}")
+            lock.release()
             return 2
     specs = [
         TaskSpec(
@@ -296,6 +308,7 @@ def cmd_paired(args) -> int:
         print("\ngate passed. Promotion still needs a human: "
               f"alpha skills --gate {args.skill_id} --yes")
     ctx.close()
+    lock.release()
     return 0
 
 
