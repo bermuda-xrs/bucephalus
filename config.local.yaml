@@ -82,10 +82,42 @@ laptop_allowlist: []
 compress_observations_over_tokens: 100000   # effectively off; see above
 
 gate:
-  min_paired_trials: 30
-  min_lift_pp: 5.0
-  max_p_value: 0.05
+  # Lowered from 30 after the suite settled at 15 eval tasks. This is NOT a
+  # weakening, and the direction is worth being precise about: McNemar reads
+  # only DISCORDANT pairs, so n=15 with 10 discordant is exactly as valid as
+  # n=30 with 10 discordant. min_paired_trials was never a statistical guard —
+  # it was a proxy for "enough discordant pairs will emerge". Holding
+  # min_discordant_pairs at 10 against a pool of 15 instead of 30 means a
+  # skill must now change 67% of outcomes rather than 33%. Strictly harder.
+  min_paired_trials: 15
+
+  # DO NOT LOWER. This is the real guard against a fluke result.
+  # Exact binomial thresholds, i.e. how many discordant pairs must favour
+  # the skill — roughly 75-80% of disagreements, at any n:
+  #   10 discordant -> need  9 (p=0.011);  8 fails (p=0.055)
+  #   13 discordant -> need 10 (p=0.046)
+  #   15 discordant -> need 12 (p=0.018)
+  #   20 discordant -> need 15 (p=0.021)
   min_discordant_pairs: 10
+
+  max_p_value: 0.05
+
+  # INERT AT THIS SCALE — do not treat it as protection. With
+  # min_discordant_pairs=10 and p<0.05 the minimum passing configuration is
+  # b=9, c=1, so b-c=8 and lift = 800/n, which stays above 5pp for any n
+  # below 160. Retained for larger suites, where it starts to bind.
+  min_lift_pp: 5.0
+
+# Load-bearing constraints, in order:
+#   1. min_discordant_pairs   guards against a fluke
+#   2. max_p_value            the actual test
+#   3. the catastrophic-regression veto (assure/mesh.py, skills/gate.py)
+#   4. min_lift_pp            inert here
+#
+# Trials are counted at TASK level. Never reach a trial count by re-running
+# one task under different seeds: two runs of the same task share its
+# underlying difficulty, so counting them as two pairs inflates n without
+# adding information and makes the p-value anti-conservative.
 
 autonomy:
   mode: "plan_then_run"

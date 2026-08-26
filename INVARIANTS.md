@@ -57,6 +57,24 @@ tampering on a database nobody tampered with.
 process-wide, so a second process would not see it. `src/agent/control/asgi.py`
 says so at the top.
 
+## Measurement runs
+
+26. ☐ A completed benchmark run is on disk before the next one starts
+       — `test_each_completed_run_is_on_disk_before_the_next_one_starts`,
+         `test_a_real_kill_mid_pass_loses_at_most_one_task`
+27. ☐ A resumed pass never blends two different measurements
+       — `test_resume_refuses_a_ledger_from_a_different_configuration`,
+         `test_resume_refuses_a_ledger_from_a_different_profile`
+28. ☐ Trials are counted at task level, never by re-seeding one task
+       — two runs of one task share its difficulty, so counting them as two
+         pairs inflates n without adding information and makes the p-value
+         anti-conservative. See the note in `config.local.yaml`.
+
+`noise.py` held every result in memory and wrote once at the end, so a kill
+at hour three of a four-hour pass lost all of it. Results now append to a
+`.partial.jsonl` ledger with an fsync per row, and `--resume` restarts where
+a killed pass stopped.
+
 ## Five more this build added
 
 18. ☐ A cache hit never launders taint

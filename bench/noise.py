@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import statistics
 import sys
 import time
@@ -89,6 +90,88 @@ def classify(passes: list[bool]) -> str:
     return "flaky"
 
 
+def ledger_path(out: str | Path) -> Path:
+    """Sidecar beside the report: one JSON line per completed run."""
+    p = Path(out)
+    return p.with_suffix(p.suffix + ".partial.jsonl")
+
+
+def run_signature(args, n_specs: int) -> dict:
+    """What a ledger must agree with before its rows may be reused.
+
+    Resuming across a changed suite, split, run count, or PROFILE would
+    silently blend two different measurements into one report — the same
+    class of error `profiles.py` exists to prevent. The profile belongs here
+    for the same reason it is on the report: half a pass measured local and
+    half measured mixed is not a measurement, and nothing downstream could
+    tell.
+    """
+    # `runs` is deliberately NOT part of the signature. Each row is keyed
+    # (run_index, task_key), so rows from a --runs 1 pass are the same work
+    # as rows 0 of a --runs 3 pass. Excluding it is what lets a pass-1-then-
+    # decide plan resume into passes 2 and 3 without repeating pass 1 —
+    # hours, on this hardware. Everything that would change WHAT is being
+    # measured is included.
+    return {"suite": args.suite, "split": args.split,
+            "limit": args.limit, "skill": args.skill,
+            "profile": args.profile, "n_specs": n_specs}
+
+
+def append_run(path: Path, sig: dict, record: dict) -> None:
+    """Append one completed run and flush it to the OS immediately.
+
+    A multi-hour pass that holds every result in memory and writes once at
+    the end loses ALL of it to a kill at hour three. One line per task, and
+    at most one task's work is ever at risk.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    first = not path.exists()
+    with path.open("a", encoding="utf-8") as fh:
+        if first:
+            fh.write(json.dumps({"_signature": sig}) + "\n")
+        fh.write(json.dumps(record) + "\n")
+        fh.flush()
+        os.fsync(fh.fileno())
+
+
+def load_completed(path: Path, sig: dict) -> dict[tuple[int, str], dict]:
+    """Rows from a previous attempt, keyed (run_index, task_key).
+
+    A truncated final line — the signature of a kill mid-write — is dropped
+    rather than guessed at.
+    """
+    if not path.exists():
+        return {}
+    done: dict[tuple[int, str], dict] = {}
+    for i, line in enumerate(path.read_text(encoding="utf-8").splitlines()):
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            row = json.loads(line)
+        except json.JSONDecodeError:
+            print(f"  ledger: dropping truncated line {i + 1}")
+            continue
+        if "_signature" in row:
+            if row["_signature"] != sig:
+                raise SystemExit(
+                    f"{path} was written by a different run configuration:\n"
+                    f"  ledger: {row['_signature']}\n  now:    {sig}\n"
+                    "Refusing to blend two measurements. Delete it or change --out."
+                )
+            continue
+        done[(row["run"], row["key"])] = row
+    return done
+
+
+def write_report(dest: Path, report: dict) -> None:
+    """Atomic: a kill during the write must not leave a half-parsed report."""
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    tmp = dest.with_suffix(dest.suffix + ".tmp")
+    tmp.write_text(json.dumps(report, indent=2), encoding="utf-8")
+    os.replace(tmp, dest)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="measure the suite's noise floor")
     ap.add_argument("--config", default="config.local.yaml")
@@ -103,6 +186,9 @@ def main() -> int:
     ap.add_argument("--auto-review", action="store_true",
                     help="keep the LLM deputy in the loop (adds variance)")
     ap.add_argument("--skill", help="run WITH this skill (name or id) instead of bare")
+    ap.add_argument("--resume", action="store_true",
+                    help="reuse completed runs from the .partial.jsonl ledger "
+                         "beside --out; a killed pass restarts where it stopped")
     args = ap.parse_args()
 
     ctx = AgentContext.open(args.config, profile=args.profile)
@@ -157,13 +243,37 @@ def main() -> int:
           f"{len(specs) * args.runs} runs · profile={ctx.config.profile}")
     print(f"backends: {ctx.config.profile_provenance.get('backends')}\n")
 
+    dest = Path(ctx.config.resolve(args.out))
+    ledger = ledger_path(dest)
+    sig = run_signature(args, len(specs))
+    done = load_completed(ledger, sig) if args.resume else {}
+    if args.resume:
+        print(f"resuming: {len(done)} of {len(specs) * args.runs} runs already "
+              f"in {ledger.name}")
+    elif ledger.exists():
+        # Never silently extend someone else's ledger.
+        raise SystemExit(
+            f"{ledger} already exists. Pass --resume to continue that pass, "
+            "or delete it / choose another --out to start fresh."
+        )
+
     results: dict[str, list[dict]] = {}
     started = time.time()
     for r in range(args.runs):
         for i, spec in enumerate(specs, 1):
             key = spec["key"]
+            cached = done.get((r, key))
+            if cached is not None:
+                results.setdefault(key, []).append(cached)
+                print(f"  run {r + 1}/{args.runs}  {i:>2}/{len(specs)}  {key:<6} "
+                      f"{cached['status']:<16} {cached['wall_s']:>6.1f}s  (resumed)",
+                      flush=True)
+                continue
             out = run_once(ctx, spec, r)
+            out["key"] = key
             results.setdefault(key, []).append(out)
+            # Before the print, so a kill between them loses nothing.
+            append_run(ledger, sig, out)
             print(f"  run {r + 1}/{args.runs}  {i:>2}/{len(specs)}  {key:<6} "
                   f"{out['status']:<16} {out['wall_s']:>6.1f}s", flush=True)
 
@@ -197,9 +307,7 @@ def main() -> int:
         "wall_s_total": round(time.time() - started, 1),
         "tasks": sorted(rows, key=lambda r: r["key"]),
     }
-    dest = Path(ctx.config.resolve(args.out))
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    dest.write_text(json.dumps(report, indent=2), encoding="utf-8")
+    write_report(dest, report)
 
     print(f"\n{'':-<58}")
     print(f"stable pass {len(stable_pass):>3}   stable fail {len(stable_fail):>3}   "

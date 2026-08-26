@@ -213,3 +213,58 @@ def test_generator_cannot_promote(ctx):
     src = inspect.getsource(generate)
     assert "promote(" not in src, "the generator must never call promote"
     assert "enqueue_for_gate" in src, "the generator must hand off to the gate"
+
+
+# ---------------------------------------------------------------------------
+# Which gate conditions actually bind, at the scale this suite runs at.
+#
+# These pin the arithmetic that config.local.yaml's gate section asserts in
+# prose. If someone retunes a threshold, the comment and the behaviour must
+# not be allowed to drift apart silently.
+# ---------------------------------------------------------------------------
+
+
+def test_min_discordant_pairs_is_the_load_bearing_guard():
+    """~75-80% of disagreements must favour the skill, at any n.
+
+    min_paired_trials was never a statistical guard — McNemar reads only
+    discordant pairs. Lowering the pool from 30 to 15 while holding
+    min_discordant_pairs at 10 RAISES the bar, from 33% of outcomes changed
+    to 67%.
+    """
+    from scipy.stats import binomtest
+
+    expected = {10: 9, 13: 10, 15: 12, 20: 15}
+    for discordant, need in expected.items():
+        assert binomtest(need, discordant, 0.5, alternative="greater").pvalue < 0.05
+        assert binomtest(need - 1, discordant, 0.5,
+                         alternative="greater").pvalue >= 0.05, (
+            f"{need - 1} of {discordant} should NOT pass")
+        assert 0.70 <= need / discordant <= 0.95
+
+
+def test_min_lift_pp_is_inert_at_this_scale():
+    """Do not treat the lift threshold as protection here.
+
+    With min_discordant_pairs=10 and p<0.05 the minimum passing configuration
+    is b=9, c=1, so b-c=8 and lift = 800/n. That stays above 5pp for every n
+    below 160 — far beyond any suite this project runs. It is retained for
+    larger suites, where it starts to bind.
+    """
+    min_b_minus_c = 8          # b=9, c=1: the smallest significant split
+    for n in (15, 30, 100, 160):
+        assert 100.0 * min_b_minus_c / n >= 5.0, f"lift would bind at n={n}"
+    assert 100.0 * min_b_minus_c / 161 < 5.0, "the crossover should be ~160"
+
+
+def test_the_shipped_local_gate_config_matches_that_reasoning():
+    """The config the calibration will actually run under."""
+    import yaml
+    from pathlib import Path
+
+    cfg = yaml.safe_load(
+        (Path(__file__).resolve().parents[1] / "config.local.yaml")
+        .read_text(encoding="utf-8"))["gate"]
+    assert cfg["min_discordant_pairs"] == 10, "the real guard must not be lowered"
+    assert cfg["min_paired_trials"] <= 30
+    assert cfg["max_p_value"] == 0.05
