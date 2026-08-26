@@ -65,7 +65,15 @@ says so at the top.
 27. ☐ A resumed pass never blends two different measurements
        — `test_resume_refuses_a_ledger_from_a_different_configuration`,
          `test_resume_refuses_a_ledger_from_a_different_profile`
-28. ☐ Trials are counted at task level, never by re-seeding one task
+28. ☐ Every arm of every run starts from identical bytes on disk
+       — `test_a_previous_answer_does_not_survive_into_the_next_run`,
+         `test_both_arms_of_a_pair_start_from_identical_bytes`
+       `verify_program` grades files, so a run that produces no answer is
+       graded against the PREVIOUS run's answer. In a paired trial the two
+       arms share one workspace, so the control arm could be graded against
+       the answer the skill arm just wrote — manufacturing the very lift the
+       gate exists to detect.
+29. ☐ Trials are counted at task level, never by re-seeding one task
        — two runs of one task share its difficulty, so counting them as two
          pairs inflates n without adding information and makes the p-value
          anti-conservative. See the note in `config.local.yaml`.

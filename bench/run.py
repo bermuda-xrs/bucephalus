@@ -33,6 +33,7 @@ from agent.instrument.report import pareto_points, write_calls_csv  # noqa: E402
 from agent.kernel.tasks import create_task  # noqa: E402
 from agent.kernel.types import Budget, TaskContract  # noqa: E402
 from agent.models.registry import build_backends  # noqa: E402
+from agent.workspace import reset_workspace  # noqa: E402
 from agent.skills.gate import TaskSpec, evaluate_skill, run_paired_trial  # noqa: E402
 
 CAVEATS = [
@@ -92,10 +93,8 @@ def provision(ctx, spec: dict) -> None:
     reruns. Each task declares its own inputs under `fixtures`, so the suite is
     self-contained and every arm starts from identical bytes.
     """
-    for rel, content in (spec.get("fixtures") or {}).items():
-        path = ctx.config.resolve(rel)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(content, encoding="utf-8")
+    reset_workspace(ctx.config.root, spec.get("artifact_scope") or [],
+                    spec.get("fixtures") or {})
 
 
 def run_arm(ctx, suite: list[dict], arm: str, skills_on: bool) -> dict:
@@ -205,9 +204,17 @@ def cmd_paired(args) -> int:
             success_criterion=s.get("success_criterion", "always_pass"),
             output_schema=s.get("output_schema", {}),
             artifact_scope=s.get("artifact_scope", []),
+            # Without these the trial runs against whatever the last run left
+            # on disk: no input files, or worse, the previous arm's answer.
+            fixtures=s.get("fixtures") or {},
         )
         for s in suite
     ]
+    missing = [sp.key for sp in specs if sp.artifact_scope and not sp.fixtures]
+    if missing:
+        print(f"warning: {len(missing)} tasks declare a scope but no fixtures "
+              f"({', '.join(missing[:5])}...); they will run against whatever "
+              "is already on disk")
     if len(specs) < ctx.config.gate.min_paired_trials:
         print(
             f"warning: {len(specs)} tasks is below gate.min_paired_trials="

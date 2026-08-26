@@ -35,6 +35,7 @@ from agent.context import AgentContext  # noqa: E402
 from agent.execute.loop import run_task  # noqa: E402
 from agent.kernel.tasks import create_task  # noqa: E402
 from agent.kernel.types import Budget, TaskContract  # noqa: E402
+from agent.workspace import reset_workspace  # noqa: E402
 
 TARGET_BAND = (0.35, 0.65)   # mean pass rate where measurement has power
 
@@ -46,15 +47,20 @@ TARGET_BAND = (0.35, 0.65)   # mean pass rate where measurement has power
 SKILLS_FOR_ARM: list = []
 
 
-def provision(ctx, fixtures: dict) -> None:
-    for rel, content in (fixtures or {}).items():
-        path = ctx.config.resolve(rel)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(content, encoding="utf-8")
+def provision(ctx, spec: dict) -> None:
+    """Rebuild the task workspace from its declared fixtures.
+
+    Writing the fixtures over the top is not enough: `verify_program` grades
+    files on disk, so run 2 of a repeat pass would be scored against run 1's
+    `output/answer.json` whenever run 2 fails to produce one. A flaky task
+    then reads as stable, which is the one thing this script exists to detect.
+    """
+    reset_workspace(ctx.config.root, spec.get("artifact_scope") or [],
+                    spec.get("fixtures") or {})
 
 
 def run_once(ctx, spec: dict, run_ix: int) -> dict:
-    provision(ctx, spec.get("fixtures"))
+    provision(ctx, spec)
     contract = TaskContract(
         goal=spec["goal"],
         success_criterion=spec.get("success_criterion", "verify_program"),

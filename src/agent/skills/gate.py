@@ -23,6 +23,7 @@ from dataclasses import dataclass, field
 from scipy.stats import binomtest
 
 from ..kernel.types import Budget, GateDecision, TaskContract
+from ..workspace import reset_workspace
 
 
 @dataclass
@@ -35,6 +36,11 @@ class TaskSpec:
     output_schema: dict = field(default_factory=dict)
     artifact_scope: list[str] = field(default_factory=list)
     catastrophic: bool = False  # a regression here is a veto, not a data point
+    # The task's declared input files. Both arms are rebuilt from these before
+    # they run: the two arms of a pair share one workspace, so without a reset
+    # the CONTROL arm can be graded against the answer the SKILL arm just
+    # wrote — manufacturing precisely the lift this gate exists to detect.
+    fixtures: dict = field(default_factory=dict)
 
 
 class ContaminationError(RuntimeError):
@@ -101,6 +107,10 @@ def run_task_isolated(ctx, task_spec: TaskSpec, skills: list[dict]) -> TrialOutc
     """One arm of one pair, in its own task with its own frozen skill set."""
     from ..execute.loop import run_task
     from ..kernel.tasks import create_task
+
+    # Identical bytes for both arms. Must happen INSIDE the arm, not once per
+    # pair, or the second arm inherits the first arm's output.
+    reset_workspace(ctx.config.root, task_spec.artifact_scope, task_spec.fixtures)
 
     contract = TaskContract(
         goal=task_spec.goal,
