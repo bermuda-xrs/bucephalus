@@ -38,6 +38,7 @@ noise = _load_noise()
 class _Args:
     suite, split, runs, limit, skill = "aero_calc", None, 3, None, None
     profile = "local"
+    tier = None
 
 
 def test_each_completed_run_is_on_disk_before_the_next_one_starts(tmp_path):
@@ -205,3 +206,35 @@ def test_a_resumed_report_does_not_understate_the_cost():
     all_runs = round(sum(x["wall_s"] for r in results.values() for x in r), 1)
     assert all_runs == 607.3
     assert all_runs > 268.3, "resumed work must be counted in the total"
+
+
+def test_a_tier_filtered_run_cannot_resume_a_full_one(tmp_path):
+    """--tier changes WHICH tasks are measured, so it belongs in the signature.
+
+    Without it a medium/hard sighting shot would happily reuse rows from the
+    full pass and report a pass rate over a set of tasks nobody selected.
+    """
+    led = noise.ledger_path(tmp_path / "nf.json")
+
+    class Full(_Args):
+        tier = None
+
+    class HardOnly(_Args):
+        tier = ["hard", "medium"]
+
+    noise.append_run(led, noise.run_signature(Full(), 30),
+                     {"run": 0, "key": "E01", "status": "done",
+                      "passed": True, "wall_s": 1.0})
+    with pytest.raises(SystemExit, match="different run configuration"):
+        noise.load_completed(led, noise.run_signature(HardOnly(), 12))
+
+
+def test_the_tier_signature_is_order_independent(tmp_path):
+    """--tier hard --tier medium and the reverse are the same measurement."""
+    class A(_Args):
+        tier = ["hard", "medium"]
+
+    class B(_Args):
+        tier = ["medium", "hard"]
+
+    assert noise.run_signature(A(), 12) == noise.run_signature(B(), 12)

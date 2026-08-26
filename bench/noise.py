@@ -120,7 +120,8 @@ def run_signature(args, n_specs: int) -> dict:
     # hours, on this hardware. Everything that would change WHAT is being
     # measured is included.
     return {"suite": args.suite, "split": args.split,
-            "limit": args.limit, "skill": args.skill,
+            "limit": args.limit, "tier": sorted(args.tier) if args.tier else None,
+            "skill": args.skill,
             "profile": args.profile, "n_specs": n_specs}
 
 
@@ -189,6 +190,11 @@ def main() -> int:
     ap.add_argument("--max-flaky", type=int, default=8)
     ap.add_argument("--split", choices=["drafting", "eval"])
     ap.add_argument("--limit", type=int, help="first N tasks only (for a smoke check)")
+    ap.add_argument("--tier", choices=["easy", "medium", "hard"], action="append",
+                    help="restrict to these tiers; repeatable. --limit alone "
+                         "takes the FIRST N tasks, which are all easy, so a "
+                         "sighting shot aimed at where the signal is in doubt "
+                         "needs this instead")
     ap.add_argument("--out", default="runs/noise-floor.json")
     ap.add_argument("--auto-review", action="store_true",
                     help="keep the LLM deputy in the loop (adds variance)")
@@ -253,6 +259,9 @@ def main() -> int:
     if args.split:
         specs = [s for s in specs
                  if (s.get("output_schema") or {}).get("x-split") == args.split]
+    if args.tier:
+        specs = [s for s in specs
+                 if (s.get("output_schema") or {}).get("x-tier") in set(args.tier)]
     if args.limit:
         specs = specs[: args.limit]
     if not specs:
