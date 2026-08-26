@@ -437,6 +437,16 @@ it. If you add a component, add a test that the runtime calls it.
    project. Making it `pip install`-able means shipping those as package
    data with a resource loader, or an `alpha init` that materializes them.
 9. **No LICENSE.** A deliberate omission - the author's call, not a default.
+9b. **`work/` lives under OneDrive**, whose sync client holds file handles.
+   `shutil.rmtree` on a task workspace fails with `PermissionError [WinError
+   5]` mid-run because of it, which killed a noise-floor pass. The workspace
+   reset deletes FILES and leaves directories for this reason. Excluding
+   `work/` from OneDrive sync would remove the class of problem entirely.
+9c. **The bare-model arm has never been measured.** Only "model + scaffold"
+   (the baseline arm) and "full system" (the skill arm) exist, so nothing
+   yet separates what the scaffold contributes from what the model already
+   does. The run sheet names this rather than omitting it, and it bounds
+   every claim to "a skill moves the scaffolded model".
 10. ~~**`H30b` disagreement.**~~ **SETTLED.** Neither number was an
    arithmetic error: the task did not say which heliocentric speed to use.
    `constants.json` carries `mars.orbital_v = 24077` (Mars's true mean speed,

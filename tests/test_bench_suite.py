@@ -211,7 +211,7 @@ def _fake_specs():
     ]
 
 
-def test_paired_enforces_the_declared_profile(monkeypatch, capsys):
+def test_paired_enforces_the_declared_profile(monkeypatch, capsys, tmp_path):
     """It defaulted to profile=mixed while every other entry point ran local.
 
     `Config.profile` defaults to "mixed" and config.local.yaml does not set the
@@ -238,12 +238,13 @@ def test_paired_enforces_the_declared_profile(monkeypatch, capsys):
 
     args = type("A", (), {"config": "config.local.yaml", "profile": "local",
                           "suite": "aero_calc", "split": None,
-                          "skill_id": "abc", "out": None, "resume": False})()
+                          "skill_id": "abc", "resume": False,
+                          "out": str(tmp_path / "cal.json")})()
     assert mod.cmd_paired(args) == 0
     assert seen["profile"] == "local", "the declared profile never reached the context"
 
 
-def test_paired_split_filter_keeps_the_contamination_boundary(monkeypatch, capsys):
+def test_paired_split_filter_keeps_the_contamination_boundary(monkeypatch, capsys, tmp_path):
     """--split eval must actually drop the drafting tasks.
 
     check_contamination only catches a task named in the skill's provenance,
@@ -270,7 +271,8 @@ def test_paired_split_filter_keeps_the_contamination_boundary(monkeypatch, capsy
 
     args = type("A", (), {"config": "config.local.yaml", "profile": "local",
                           "suite": "aero_calc", "split": "eval",
-                          "skill_id": "abc", "out": None, "resume": False})()
+                          "skill_id": "abc", "resume": False,
+                          "out": str(tmp_path / "cal.json")})()
     assert mod.cmd_paired(args) == 0
     assert ran == ["E06", "E07"], f"drafting tasks leaked into the trial: {ran}"
     capsys.readouterr()

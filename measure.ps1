@@ -40,16 +40,23 @@ $log = Join-Path $runs "measure.log"
 
 function Get-RunningStep {
     # A held lock means a live measurement: the OS drops it when the process
-    # dies, so a stale file is not mistaken for a running job.
+    # dies, so a stale file is never mistaken for a running job.
+    #
+    # The exclusive Open() failing IS the answer. Reading the PID out of the
+    # file can fail too - Windows refuses to read a byte range another
+    # process holds - and an earlier version treated that failed read as
+    # "nobody is running", which is the most dangerous way to be wrong here.
     if (-not (Test-Path $lock)) { return $null }
-    $held = $null
     try {
         $fs = [System.IO.File]::Open($lock, 'Open', 'ReadWrite', 'None')
-        $fs.Close()          # opened exclusively => nobody holds it
+        $fs.Close()
+        return $null              # opened exclusively => nobody holds it
     } catch {
-        $held = (Get-Content $lock -ErrorAction SilentlyContinue).Trim()
+        $pid_ = "unknown"
+        try { $pid_ = (Get-Content $lock -ErrorAction Stop).Trim() } catch { }
+        if (-not $pid_) { $pid_ = "unknown" }
+        return $pid_              # always truthy: something holds the lock
     }
-    return $held
 }
 
 function Show-Status {
@@ -79,6 +86,11 @@ switch ($Command) {
     "stop" {
         $running = Get-RunningStep
         if (-not $running) { Write-Host "nothing running"; exit 0 }
+        if ($running -eq "unknown") {
+            Write-Host "A run holds the lock but its PID is unreadable." -ForegroundColor Yellow
+            Write-Host "Find it with: Get-CimInstance Win32_Process -Filter \"Name like '%python%'\""
+            exit 1
+        }
         Write-Host "stopping PID $running - completed tasks stay in the ledger" -ForegroundColor Yellow
         Stop-Process -Id ([int]$running) -Force -ErrorAction SilentlyContinue
         exit 0

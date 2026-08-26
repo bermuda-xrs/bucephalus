@@ -50,10 +50,9 @@ State it in this shape, or not at all:
 > **X points** at **Y%** of the cost of a frontier model, measured on **N**
 > tasks, on **DATE**, model **VERSION**, profile **local**.
 
-- [ ] Reported three ways — bare model, model + scaffold, full system
-- [ ] Contamination caveats in the **same paragraph** as the number
-- [ ] Anything unverified is called unverified. The Anthropic adapter has
-      **never made a live call**; it must not be described as working
+- [~] Reported three ways — the run sheet renders the table and **names the bare-model arm as never measured**, which bounds the claim to "a skill moves the scaffolded model". Running that arm is still outstanding
+- [x] Contamination caveats in the **same paragraph** as the number — enforced by `bench/report.py` and asserted by a test that scans the rendered line
+- [x] Anything unverified is called unverified. The Anthropic adapter's module docstring carries `UNVERIFIED ... NEVER been exercised`
 
 ## 4. Packaging — known state
 
@@ -77,7 +76,26 @@ State it in this shape, or not at all:
       claims more than was verified
 - [ ] `HANDOVER.md` §8 (the honest list) matches reality
 - [ ] `runs/` artifacts worth keeping copied into `docs/evidence/`
-- [ ] The version in `pyproject.toml` and `src/agent/__init__.py` agree
+- [x] The version in `pyproject.toml` and `src/agent/__init__.py` agree (both 0.1.0)
+
+## 6. Running a measurement, operationally
+
+Learned the hard way, each after it went wrong:
+
+- Drive every long run through `.\measure.ps1 next`. It runs detached
+  (session teardown kills foreground jobs mid-run), refuses to start while
+  another holds the lock, and refuses to chain past a decision gate.
+- **Never start a second measurement.** Two overlapping passes measured three
+  tasks under 2x CPU load, and `budget_exhausted` is a time limit, so
+  contention can manufacture that outcome. `src/agent/runlock.py` now makes
+  this impossible rather than discouraged.
+- Nothing else on the machine during a pass. The same task takes 162s idle
+  and 339-360s with a test suite alongside.
+- `work/` sits under OneDrive, whose sync client holds handles. The workspace
+  reset deletes files rather than directories because of it. Excluding
+  `work/` from sync would remove the whole class of problem.
+- `.\measure.ps1 status` is the source of truth for what may run next; the
+  gates live in `bench/nextstep.py`, not in anyone's memory.
 
 ---
 

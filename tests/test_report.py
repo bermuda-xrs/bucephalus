@@ -114,3 +114,24 @@ def test_the_profile_is_on_the_sheet():
     out = report.render(_noise(), _cal())
     assert "local" in out
     assert "cloud backends []" in out
+
+
+def test_the_report_names_the_arms_that_were_never_measured():
+    """Part 13 wants three ways. Omitting the missing ones would make the one
+    that ran look like the whole picture."""
+    out = report.render(_noise(), _cal())
+    assert "three ways" in out.lower()
+    assert "bare model" in out
+    assert "never measured" in out
+    assert "not supported yet" in out or "is supported yet" in out
+
+
+def test_the_missing_bare_arm_bounds_the_claim():
+    """Without a bare arm you cannot separate the scaffold from the model."""
+    out = report.render(_noise(), _cal())
+    assert "separates what the scaffold contributes" in out
+
+
+def test_three_ways_still_renders_with_nothing_measured():
+    out = report.render(None, None)
+    assert "Nothing to report" in out

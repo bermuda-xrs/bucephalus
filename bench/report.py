@@ -165,6 +165,36 @@ def render(noise: dict | None, cal: dict | None) -> str:
                 f"{d.get('caveat', '')}")
             add("")
 
+    # ------------------------------------------------------------ three ways
+    # Part 13 requires bare model / model + scaffold / full system. Omitting
+    # the arms that were not measured would make the one that was look like
+    # the whole picture, so the missing ones are named.
+    add("## The three ways, and which of them exist")
+    add("")
+    add("| arm | what it is | measured? |")
+    add("|---|---|---|")
+    bare = "**no** — never measured"
+    scaffold = "**no**"
+    if noise is not None:
+        scaffold = (f"yes — {_pct(noise.get('mean_pass_rate', 0))} over "
+                    f"{noise.get('n_tasks')} tasks x "
+                    f"{noise.get('runs_per_task')} runs")
+    full = "**no**"
+    if cal is not None:
+        d = cal.get("primary") or {}
+        b, n = d.get("b"), d.get("n")
+        full = f"yes — paired against the scaffold arm, n={n}, b={b}"
+    add(f"| bare model | the model answering with no agent loop | {bare} |")
+    add(f"| model + scaffold | the loop, no skills — the baseline arm | {scaffold} |")
+    add(f"| full system | the loop with the skill — the skill arm | {full} |")
+    add("")
+    add("The **bare model** arm has not been run. Without it, nothing here "
+        "separates what the scaffold contributes from what the model already "
+        "does, so no claim of the form \"the system makes a small model "
+        "competent\" is supported yet — only the narrower claim that a skill "
+        "moves the scaffolded model.")
+    add("")
+
     # -------------------------------------------------------------- caveats
     add("## Caveats that travel with every number above")
     add("")

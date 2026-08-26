@@ -203,8 +203,10 @@ def main() -> int:
     # a task that would otherwise finish - the suite then looks harder than it
     # is, for reasons that have nothing to do with the tasks.
     try:
-        lock = RunLock(Path(args.out).parent / ".measurement.lock",
-                       "noise floor").acquire()
+        _out = Path(args.out)
+        if not _out.is_absolute():
+            _out = Path(args.config).resolve().parent / _out
+        lock = RunLock(_out.parent / ".measurement.lock", "noise floor").acquire()
     except RunLockBusy as e:
         print(f"REFUSING TO START.\n{e}")
         return 2

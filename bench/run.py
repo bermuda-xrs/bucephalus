@@ -188,8 +188,14 @@ def cmd_paired(args) -> int:
     # racing a noise-floor pass corrupts both, and they are the same kind of
     # measurement competing for the same CPU.
     try:
-        lock = RunLock(Path(args.out or "runs/x").parent / ".measurement.lock",
-                       "calibration").acquire()
+        # Anchored beside the OUT file, resolved against the config's own
+        # directory. A bare `--out calibration.json` would otherwise put the
+        # lock in whatever the current directory happens to be, so two runs
+        # started from different places would not see each other.
+        _out = Path(args.out or "runs/x")
+        if not _out.is_absolute():
+            _out = Path(args.config).resolve().parent / _out
+        lock = RunLock(_out.parent / ".measurement.lock", "calibration").acquire()
     except RunLockBusy as e:
         print(f"REFUSING TO START.\n{e}")
         return 2
