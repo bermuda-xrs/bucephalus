@@ -135,9 +135,23 @@ closes, every local model call fails with a connection refusal.
     └── runs/               run records, git-ignored
 ```
 
-**The original specification is in `spec/`.** When this document and the spec
-disagree, `INVARIANTS.md` §"Where the build spec and its own acceptance tests
-disagreed" explains why.
+### Reading order, if you are picking this up
+
+1. **`HANDOVER.md`** — this file. What exists, how to run it, what to do next.
+2. **`spec/CORRECTIONS.md`** — **read before opening the spec.** The original
+   contains factually wrong instructions (a model that does not exist, the
+   wrong tokenizer, an API parameter that now 400s, an inverted comparison, a
+   config that violates its own invariant). This lists every one, plus what is
+   merely incomplete and what is still valid.
+3. **`spec/BUILD-SPEC.md`** and **`spec/EXPLAINER.md`** — the reasoning behind
+   every design decision, preserved unedited. Read when you need to know *why*
+   an invariant exists before changing code near it. The reasoning is sound;
+   the specific commands and constants are not all reliable.
+4. **`INVARIANTS.md`** — the pre-commit checklist.
+
+Send all four to a coding agent, in that order. The spec carries the evidence
+that justifies the invariants — without it an agent follows the rules without
+knowing which are load-bearing, and will "simplify" one of them.
 
 ---
 

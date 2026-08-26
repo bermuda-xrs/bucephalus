@@ -1,3 +1,17 @@
+> ## ⚠ READ `CORRECTIONS.md` FIRST
+>
+> This document is **preserved unedited** as the record of what was specified
+> and why. Building it surfaced things in it that are **factually wrong** —
+> a model that does not exist, a tokenizer for the wrong provider, an API
+> parameter that now returns 400, an inverted comparison, a config that
+> violates its own invariant, and a sandbox that cannot pass its own test.
+>
+> Following those literally will cost you hours. **`spec/CORRECTIONS.md`**
+> lists every one, plus what is merely incomplete and what is still valid.
+>
+> The reasoning in this document is sound and worth reading. The specific
+> commands and constants are not all reliable.
+
 # The Project, Explained Simply
 
 *A plain-language guide to what I'm building and why. No AI background needed.*
