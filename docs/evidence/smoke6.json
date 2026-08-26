@@ -1,0 +1,72 @@
+{
+  "profile": "local",
+  "profile_provenance": {
+    "profile": "local",
+    "cloud_backends": [],
+    "credentials_present": [],
+    "backends": {
+      "cloud": {
+        "kind": "ollama",
+        "model": "granite4.1:3b",
+        "tier": "local"
+      },
+      "local": {
+        "kind": "ollama",
+        "model": "granite4.1:3b",
+        "tier": "local"
+      },
+      "review": {
+        "kind": "ollama",
+        "model": "granite4.1:8b",
+        "tier": "local"
+      }
+    }
+  },
+  "suite": "aero_calc",
+  "split": null,
+  "runs_per_task": 1,
+  "n_tasks": 3,
+  "mean_pass_rate": 0.0,
+  "stable_pass": 0,
+  "stable_fail": 3,
+  "flaky": 0,
+  "wall_s_total": 628.6,
+  "tasks": [
+    {
+      "key": "E01",
+      "tier": "easy",
+      "split": "drafting",
+      "classification": "stable_fail",
+      "passes": 0,
+      "runs": 1,
+      "mean_wall_s": 331.7,
+      "statuses": [
+        "max_steps"
+      ]
+    },
+    {
+      "key": "E02",
+      "tier": "easy",
+      "split": "drafting",
+      "classification": "stable_fail",
+      "passes": 0,
+      "runs": 1,
+      "mean_wall_s": 129.0,
+      "statuses": [
+        "plateau"
+      ]
+    },
+    {
+      "key": "E03",
+      "tier": "easy",
+      "split": "drafting",
+      "classification": "stable_fail",
+      "passes": 0,
+      "runs": 1,
+      "mean_wall_s": 167.8,
+      "statuses": [
+        "max_steps"
+      ]
+    }
+  ]
+}

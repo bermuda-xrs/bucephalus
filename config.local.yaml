@@ -93,6 +93,16 @@ autonomy:
   auto_review: true
   auto_review_backend: "review"     # granite4.1:8b, different from the executor
   auto_review_policy: "./policy.md"
+
+  # Treat the CODE gate as sufficient for a side-effecting action already
+  # inside artifact_scope and at or below USER taint: no deputy, no human.
+  # Untrusted arguments never qualify — the taint ceiling refuses those first,
+  # which is the injection case — and trusted-tier actions still park.
+  #
+  # Turn this ON for benchmark runs. The alternative is either parking on
+  # every file write, or putting a nondeterministic LLM inside the thing you
+  # are trying to measure. Leave it OFF for unattended real work.
+  approve_scoped_writes: false
   deviation_tolerance: 0.25
   human_only_tiers: ["trusted"]
 
