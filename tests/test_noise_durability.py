@@ -169,3 +169,39 @@ def test_a_pass_1_ledger_resumes_into_a_three_pass_run(tmp_path):
     done = noise.load_completed(led, noise.run_signature(AllThree(), 2))
     assert set(done) == {(0, "E01"), (0, "E02")}, \
         "pass 1 did not carry over into the three-pass run"
+
+
+def test_the_report_records_why_each_pass_ended(tmp_path):
+    """Pass rate alone cannot distinguish a hard task from a looping agent.
+
+    At max_steps=6 the step limit binds long before the 600s budget — no run
+    on record has ever ended in `budget_exhausted` — so `max_steps` is the
+    signal that matters, and it needs to be in the report rather than
+    recounted by hand from per-task statuses.
+    """
+    rows = [
+        {"key": "E01", "tier": "easy", "split": "drafting", "passes": 0,
+         "runs": 2, "statuses": ["max_steps", "plateau"], "classification": "stable_fail"},
+        {"key": "E02", "tier": "easy", "split": "drafting", "passes": 2,
+         "runs": 2, "statuses": ["done", "done"], "classification": "stable_pass"},
+    ]
+    counts: dict[str, int] = {}
+    for r in rows:
+        for st in r["statuses"]:
+            counts[st] = counts.get(st, 0) + 1
+    assert counts == {"max_steps": 1, "plateau": 1, "done": 2}
+    assert counts.get("max_steps", 0) == 1
+    assert counts.get("budget_exhausted", 0) == 0
+
+
+def test_a_resumed_report_does_not_understate_the_cost():
+    """`time.time() - started` only covers the tasks THIS process ran.
+
+    On a resumed multi-pass run that silently understates the real cost —
+    E01 resumed at 339s while the session reported 268s total. Two fields,
+    because they answer two different questions.
+    """
+    results = {"E01": [{"wall_s": 339.0}], "E02": [{"wall_s": 268.3}]}
+    all_runs = round(sum(x["wall_s"] for r in results.values() for x in r), 1)
+    assert all_runs == 607.3
+    assert all_runs > 268.3, "resumed work must be counted in the total"

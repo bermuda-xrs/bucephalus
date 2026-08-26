@@ -291,6 +291,21 @@ def main() -> int:
             "statuses": [x["status"] for x in runs],
         })
 
+    # Why a pass ended matters as much as whether it passed. At max_steps=6
+    # the step limit binds long before the 600s budget — no run on record has
+    # ever ended in `budget_exhausted` — so `max_steps` is the real "the agent
+    # is looping rather than the task being hard" signal, and `plateau` means
+    # three identical scores, i.e. more turns bought nothing.
+    #
+    # Note what `budget_exhausted` would actually mean: Budget.spent_seconds
+    # accumulates MODEL wall time only (context.record -> spend), not sandbox
+    # or verification time, so a task's wall_s can exceed its budget without
+    # tripping it.
+    status_counts: dict[str, int] = {}
+    for r in rows:
+        for st in r["statuses"]:
+            status_counts[st] = status_counts.get(st, 0) + 1
+
     flaky = [r for r in rows if r["classification"] == "flaky"]
     stable_pass = [r for r in rows if r["classification"] == "stable_pass"]
     stable_fail = [r for r in rows if r["classification"] == "stable_fail"]
@@ -304,7 +319,21 @@ def main() -> int:
         "mean_pass_rate": round(mean_rate, 4),
         "stable_pass": len(stable_pass), "stable_fail": len(stable_fail),
         "flaky": len(flaky),
-        "wall_s_total": round(time.time() - started, 1),
+        # Two different numbers, and conflating them understates the cost of
+        # a resumed run: this process only ran the tasks it did not resume.
+        "wall_s_this_session": round(time.time() - started, 1),
+        "wall_s_all_runs": round(
+            sum(x["wall_s"] for runs in results.values() for x in runs), 1),
+        "status_counts": status_counts,
+        "ended_at_step_limit": status_counts.get("max_steps", 0),
+        "ended_budget_exhausted": status_counts.get("budget_exhausted", 0),
+        "tier_pass_rates": {
+            tier: round(
+                sum(r["passes"] for r in rows if r["tier"] == tier)
+                / max(1, sum(r["runs"] for r in rows if r["tier"] == tier)), 4)
+            for tier in ("easy", "medium", "hard")
+            if any(r["tier"] == tier for r in rows)
+        },
         "tasks": sorted(rows, key=lambda r: r["key"]),
     }
     write_report(dest, report)
@@ -318,6 +347,9 @@ def main() -> int:
         if t:
             rate = sum(r["passes"] for r in t) / sum(r["runs"] for r in t)
             print(f"  {tier:<7} {rate:>6.1%}  ({len(t)} tasks)")
+    if status_counts:
+        print("  ended: " + "  ".join(f"{k}={v}" for k, v in
+                                      sorted(status_counts.items())))
     print(f"written to {dest}")
 
     verdict = 0

@@ -446,21 +446,89 @@ not the arithmetic; the objective now pins the heliocentric speed convention.
 Regenerate after any table edit (`--out` for the tree, `--load` for the DB) —
 `test_emitted_tree_matches_the_table` fails if you forget.
 
-**2. Run the eval-split noise floor** (~7h, overnight).
-```powershell
-python bench\noise.py --config config.local.yaml --profile local --split eval --runs 3
-```
-Read `runs/noise-floor.json`. Check: how many flaky? Is the mean in the
-35–65% band? If >8 flaky, tighten specs before going further.
+**2. Run the noise floor on ALL 30 TASKS — not the eval 15.** Staged, with
+a decision point, rather than one long block.
 
-**3. Run the calibration skill through the full gate** (~5h).
+The eval-only rule exists to stop a *skill* being scored on tasks it was
+derived from. The noise floor runs the baseline arm with **no skill loaded**,
+so there is no contamination surface — it is pure task-difficulty
+measurement. It must also match the calibration scope: calibration runs on
+all 30, so restricting the noise floor to 15 would leave half those tasks
+with no stability data and no contribution to the band, and the two runs
+would not be comparable.
+
+The `--max-flaky 8` stop rule is written against 30 tasks (~27%). Against 15
+it would mean >53% flaky before stopping, far too permissive. At the 30-task
+scope the default is correct as written.
+
+*Pass 1 first, then stop and read it:*
 ```powershell
-.\alpha.ps1 --config config.local.yaml skills --add examples\skills\aero_units_discipline.md --name aero_units_discipline --when "aerospace calculation with units, body constants, or Isp"
-python bench\run.py paired <skill_id> --suite aero_calc --config config.local.yaml
+python bench\noise.py --config config.local.yaml --profile local --runs 1 --out runs\noise-floor.json
+```
+Report the mean pass rate, the per-tier breakdown, `ended_at_step_limit`, and
+the wall clock. **Do not chain into passes 2–3.**
+
+| pass 1 result | what to do |
+|---|---|
+| mean outside 25–75% | **STOP.** Rebalance difficulty before spending more compute. One pass of 30 is roughly ±9pp at 1 SE, so this net only catches gross miscalibration — which is what it is for. |
+| mean inside 25–75% | proceed to passes 2 and 3 |
+| many at the step limit | investigate first. A task ending in `max_steps` is usually the agent looping, not the task being hard, and it inflates every later estimate. |
+
+*Then passes 2 and 3, resuming the same ledger — pass 1 is not repeated:*
+```powershell
+python bench\noise.py --config config.local.yaml --profile local --runs 3 --resume --out runs\noise-floor.json
+```
+
+Then classify each of the 30: 3/3 stable-pass, 0/3 stable-fail, 1–2/3 flaky.
+**More than 8 of 30 flaky means tighten task specs before anything else.**
+
+Keep 3 runs, not 2. With 2 runs a task at a true 70% pass rate shows 2/2 about
+half the time and is misclassified as stable; with 3 runs it shows 3/3 about a
+third of the time. Separating stable from flaky *is* the deliverable, and 90
+observations give a usable mean for the band check where 60 does not. The
+saving from dropping a pass is ~2h; the cost is a weaker answer to the only
+question the noise floor exists to answer.
+
+**Never run the calibration before the noise floor completes.** If the suite
+needs rebalancing, any calibration computed on the old task set is void and
+the compute is wasted.
+
+**3. Run the calibration skill through the gate — on ALL 30.**
+```powershell
+python bench\run.py --config config.local.yaml --profile local paired <skill_id> --suite aero_calc
 .\alpha.ps1 --config config.local.yaml skills --gate <skill_id>
 ```
-Interpret with the table in §4. **If it is rejected, the instrument is broken
-and every later rejection is meaningless. Fix that before anything else.**
+
+All 30, not eval-only, and the reasoning matters. This is a **positive
+control on the instrument**, not a test of a skill: the question is *does the
+detector fire when a real effect exists?* For that, power matters and
+generalization is not being claimed. The calibration skill's author saw the
+entire suite, so the eval split is not clean *with respect to the author*
+whichever half you run — eval-only buys nothing here while costing half the
+power. Contamination discipline exists to stop a **generated** skill being
+scored on tasks it was derived from; it does not apply to a hand-written
+positive control.
+
+**Generated skills stay eval-only. That split is not negotiable.**
+
+Report both numbers from the same run — no extra compute, since the eval 15
+are a subset of the 30:
+
+* **PRIMARY** — n=30, b/c/lift/p, with the contamination caveat in the *same
+  paragraph* as the number, never a footnote.
+* **SECONDARY** — the n=15 eval subset, b/c/lift/p. Contamination-clean but
+  underpowered. Label it as such.
+
+| calibration result | meaning | next |
+|---|---|---|
+| Promoted, lift > 10pp | instrument works | proceed to generated skills |
+| Promoted, lift 5–10pp | works, low power | note it, proceed cautiously |
+| Rejected, few discordant | suite insensitive | rebalance toward a 50% baseline **before** any generated-skill run |
+| Rejected, many discordant, wrong direction | the skill genuinely hurts | **do not dismiss** — investigate which tasks and why. That is a finding. |
+
+**Do not proceed to generated skills on a rejected calibration.** A gate that
+rejects everything and a gate that works produce identical output until this
+passes.
 
 A cheap sighting shot first — 15 minutes instead of 5 hours:
 ```powershell
