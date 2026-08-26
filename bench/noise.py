@@ -121,6 +121,7 @@ def run_signature(args, n_specs: int) -> dict:
     # measured is included.
     return {"suite": args.suite, "split": args.split,
             "limit": args.limit, "tier": sorted(args.tier) if args.tier else None,
+            "only": sorted(args.only) if args.only else None,
             "skill": args.skill,
             "profile": args.profile, "n_specs": n_specs}
 
@@ -190,6 +191,12 @@ def main() -> int:
     ap.add_argument("--max-flaky", type=int, default=8)
     ap.add_argument("--split", choices=["drafting", "eval"])
     ap.add_argument("--limit", type=int, help="first N tasks only (for a smoke check)")
+    ap.add_argument("--only", action="append", metavar="KEY",
+                    help="run exactly these task keys; repeatable. The precise "
+                         "form of a sighting shot: a task can only become a "
+                         "discordant pair if the skill addresses its trap, so "
+                         "spending turns on tasks it says nothing about buys "
+                         "no information")
     ap.add_argument("--tier", choices=["easy", "medium", "hard"], action="append",
                     help="restrict to these tiers; repeatable. --limit alone "
                          "takes the FIRST N tasks, which are all easy, so a "
@@ -259,6 +266,14 @@ def main() -> int:
     if args.split:
         specs = [s for s in specs
                  if (s.get("output_schema") or {}).get("x-split") == args.split]
+    if args.only:
+        wanted = set(args.only)
+        specs = [s for s in specs if s["key"] in wanted]
+        missing = wanted - {s["key"] for s in specs}
+        if missing:
+            print(f"no such task(s): {', '.join(sorted(missing))}")
+            lock.release()
+            return 2
     if args.tier:
         specs = [s for s in specs
                  if (s.get("output_schema") or {}).get("x-tier") in set(args.tier)]

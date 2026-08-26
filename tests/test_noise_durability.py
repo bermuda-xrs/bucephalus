@@ -39,6 +39,7 @@ class _Args:
     suite, split, runs, limit, skill = "aero_calc", None, 3, None, None
     profile = "local"
     tier = None
+    only = None
 
 
 def test_each_completed_run_is_on_disk_before_the_next_one_starts(tmp_path):
@@ -238,3 +239,30 @@ def test_the_tier_signature_is_order_independent(tmp_path):
         tier = ["medium", "hard"]
 
     assert noise.run_signature(A(), 12) == noise.run_signature(B(), 12)
+
+
+def test_an_only_filtered_run_cannot_resume_a_full_one(tmp_path):
+    """--only changes WHICH tasks are measured, so it belongs in the signature."""
+    led = noise.ledger_path(tmp_path / "nf.json")
+
+    class Full(_Args):
+        only = None
+
+    class Six(_Args):
+        only = ["H23", "M11", "M12", "M14", "M15", "M16"]
+
+    noise.append_run(led, noise.run_signature(Full(), 30),
+                     {"run": 0, "key": "E01", "status": "done",
+                      "passed": True, "wall_s": 1.0})
+    with pytest.raises(SystemExit, match="different run configuration"):
+        noise.load_completed(led, noise.run_signature(Six(), 6))
+
+
+def test_the_only_signature_is_order_independent(tmp_path):
+    class A(_Args):
+        only = ["M11", "H23"]
+
+    class B(_Args):
+        only = ["H23", "M11"]
+
+    assert noise.run_signature(A(), 2) == noise.run_signature(B(), 2)
