@@ -163,3 +163,102 @@ def test_every_eval_task_can_fail():
             os.chdir(cwd)
         assert not passed, f"{t.id} passed a deliberately wrong answer"
         assert score == 0.0 or score < 0.5, f"{t.id} scored {score} on garbage"
+
+
+# ---------------------------------------------------------------------------
+# The paired-trial harness. Flags that exist but are not honoured are worse
+# than no flags: the run still happens and the label on it is wrong.
+# ---------------------------------------------------------------------------
+
+
+def _load_bench_run():
+    spec = importlib.util.spec_from_file_location(
+        "bench_run", ROOT / "bench" / "run.py"
+    )
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = mod
+    spec.loader.exec_module(mod)
+    return mod
+
+
+class _FakeCtx:
+    """Just enough context for cmd_paired's control flow."""
+
+    def __init__(self, profile):
+        self.config = type("C", (), {"profile": profile,
+                                     "gate": type("G", (), {"min_paired_trials": 30})()})()
+        self.closed = False
+
+    def close(self):
+        self.closed = True
+
+
+def _fake_specs():
+    return [
+        {"key": k, "goal": f"goal {k}", "success_criterion": "verify_program",
+         "output_schema": {"x-split": split}, "artifact_scope": [f"work/{k}"]}
+        for k, split in (("E01", "drafting"), ("E02", "drafting"),
+                         ("E06", "eval"), ("E07", "eval"))
+    ]
+
+
+def test_paired_enforces_the_declared_profile(monkeypatch, capsys):
+    """It defaulted to profile=mixed while every other entry point ran local.
+
+    `Config.profile` defaults to "mixed" and config.local.yaml does not set the
+    key, so the most important measurement in the project was the one not
+    checking what it was allowed to touch — and it recorded "mixed" in the
+    provenance of a run that was in fact local.
+    """
+    mod = _load_bench_run()
+    seen: dict = {}
+
+    class FakeAgentContext:
+        @staticmethod
+        def open(config, profile=None):
+            seen["config"], seen["profile"] = config, profile
+            return _FakeCtx(profile or "mixed")
+
+    monkeypatch.setattr(mod, "AgentContext", FakeAgentContext)
+    monkeypatch.setattr(mod, "load_suite", lambda spec, ctx=None: _fake_specs())
+    monkeypatch.setattr(mod, "run_paired_trial", lambda *a, **k: None)
+    monkeypatch.setattr(mod, "evaluate_skill", lambda ctx, sid: type(
+        "D", (), {"verdict": "insufficient", "reason": "stub", "detail": {}})())
+
+    args = type("A", (), {"config": "config.local.yaml", "profile": "local",
+                          "suite": "aero_calc", "split": None,
+                          "skill_id": "abc"})()
+    assert mod.cmd_paired(args) == 0
+    assert seen["profile"] == "local", "the declared profile never reached the context"
+    assert '"profile": "local"' in capsys.readouterr().out
+
+
+def test_paired_split_filter_keeps_the_contamination_boundary(monkeypatch, capsys):
+    """--split eval must actually drop the drafting tasks.
+
+    check_contamination only catches a task named in the skill's provenance,
+    and a hand-written skill names none — so for anything that could have been
+    informed by the drafting half, the split filter is the only thing standing
+    between the gate and a manufactured lift.
+    """
+    mod = _load_bench_run()
+    ran: list[str] = []
+
+    class FakeAgentContext:
+        @staticmethod
+        def open(config, profile=None):
+            return _FakeCtx(profile or "mixed")
+
+    monkeypatch.setattr(mod, "AgentContext", FakeAgentContext)
+    monkeypatch.setattr(mod, "load_suite", lambda spec, ctx=None: _fake_specs())
+    monkeypatch.setattr(mod, "run_paired_trial",
+                        lambda ctx, sid, spec, seed=None: ran.append(spec.key))
+    monkeypatch.setattr(mod, "evaluate_skill", lambda ctx, sid: type(
+        "D", (), {"verdict": "insufficient", "reason": "stub", "detail": {}})())
+
+    args = type("A", (), {"config": "config.local.yaml", "profile": "local",
+                          "suite": "aero_calc", "split": "eval",
+                          "skill_id": "abc"})()
+    assert mod.cmd_paired(args) == 0
+    assert ran == ["E06", "E07"], f"drafting tasks leaked into the trial: {ran}"
+    capsys.readouterr()

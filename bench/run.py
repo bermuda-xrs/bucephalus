@@ -143,7 +143,7 @@ def run_arm(ctx, suite: list[dict], arm: str, skills_on: bool) -> dict:
 
 
 def cmd_arms(args) -> int:
-    ctx = AgentContext.open(args.config)
+    ctx = AgentContext.open(args.config, profile=args.profile)
     suite = load_suite(args.suite, ctx)
     out = {}
 
@@ -183,8 +183,20 @@ def cmd_arms(args) -> int:
 
 
 def cmd_paired(args) -> int:
-    ctx = AgentContext.open(args.config)
+    ctx = AgentContext.open(args.config, profile=args.profile)
     suite = load_suite(args.suite, ctx)
+
+    # The contamination rule is a property of WHICH tasks run, so it has to be
+    # expressible here. Without --split the gate runs on all 30 and a skill
+    # drafted from the drafting half is scored on tasks it was drafted from —
+    # `check_contamination` only catches that when provenance names them, and
+    # a hand-written skill names nothing.
+    if args.split:
+        suite = [s for s in suite
+                 if (s.get("output_schema") or {}).get("x-split") == args.split]
+        if not suite:
+            print(f"no tasks in split {args.split!r}")
+            return 2
     specs = [
         TaskSpec(
             key=s.get("key", s["goal"][:40]),
@@ -207,7 +219,9 @@ def cmd_paired(args) -> int:
 
     decision = evaluate_skill(ctx, args.skill_id)
     print(json.dumps({"verdict": decision.verdict, "reason": decision.reason,
-                      "detail": decision.detail}, indent=2))
+                      "detail": decision.detail,
+                      "profile": ctx.config.profile, "split": args.split,
+                      "n_tasks": len(specs)}, indent=2))
     if decision.verdict == "promote":
         print("\ngate passed. promotion still needs a human: alpha skills --gate "
               f"{args.skill_id} --yes")
@@ -218,6 +232,13 @@ def cmd_paired(args) -> int:
 def main() -> int:
     p = argparse.ArgumentParser(description="alpha test 1 benchmark harness")
     p.add_argument("--config", default="config.yaml")
+    # Declared, enforced before any work starts, and recorded on the result.
+    # Without it these two commands defaulted to profile=mixed while the rest
+    # of the harness ran local, so the most important measurement in the
+    # project was the one not checking what it was allowed to touch.
+    p.add_argument("--profile", choices=["local", "mixed"],
+                   help="enforced backend profile; 'local' forbids cloud "
+                        "backends and provider credentials")
     sub = p.add_subparsers(dest="cmd", required=True)
 
     a = sub.add_parser("arms", help="cost-vs-pass-rate across configurations")
@@ -231,6 +252,9 @@ def main() -> int:
     q = sub.add_parser("paired", help="M9 paired trials for one skill")
     q.add_argument("skill_id")
     q.add_argument("--suite", default="bench/tasks")
+    q.add_argument("--split", choices=["drafting", "eval"],
+                   help="restrict trials to one split; use 'eval' for any "
+                        "skill that could have been informed by the drafting half")
     q.set_defaults(fn=cmd_paired)
 
     args = p.parse_args()
