@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -213,20 +214,107 @@ def cmd_paired(args) -> int:
             f"{ctx.config.gate.min_paired_trials}; the gate will report "
             "insufficient, which is the gate working."
         )
-    for i, spec in enumerate(specs):
-        run_paired_trial(ctx, args.skill_id, spec, seed=i)
-        print(f"  {i + 1}/{len(specs)} {spec.key}")
+    ledger = Path(ctx.config.resolve(args.out)) if args.out else None
+    done = _completed_trials(ctx, args.skill_id) if args.resume else set()
+    if args.resume:
+        print(f"resuming: {len(done)} of {len(specs)} pairs already in the "
+              "skill_trials table")
 
-    decision = evaluate_skill(ctx, args.skill_id)
-    print(json.dumps({"verdict": decision.verdict, "reason": decision.reason,
-                      "detail": decision.detail,
-                      "profile": ctx.config.profile, "split": args.split,
-                      "n_tasks": len(specs)}, indent=2))
-    if decision.verdict == "promote":
-        print("\ngate passed. promotion still needs a human: alpha skills --gate "
-              f"{args.skill_id} --yes")
+    for i, spec in enumerate(specs):
+        if spec.key in done:
+            print(f"  {i + 1}/{len(specs)} {spec.key}  (resumed)", flush=True)
+            continue
+        t0 = time.time()
+        run_paired_trial(ctx, args.skill_id, spec, seed=i)
+        print(f"  {i + 1}/{len(specs)} {spec.key}  {time.time() - t0:6.1f}s",
+              flush=True)
+
+    # PRIMARY - every task that ran.
+    primary = evaluate_skill(ctx, args.skill_id)
+
+    # SECONDARY - the eval subset, from the SAME trials. No extra compute:
+    # the eval tasks are a subset of the ones already run. Contamination-clean
+    # but underpowered, and labelled as such wherever it is reported.
+    eval_keys = {sp.get("key") for sp in suite
+                 if (sp.get("output_schema") or {}).get("x-split") == "eval"}
+    secondary = (evaluate_skill(ctx, args.skill_id, task_keys=eval_keys)
+                 if eval_keys else None)
+
+    report = {
+        "skill_id": args.skill_id,
+        "date": time.strftime("%Y-%m-%d"),
+        "profile": ctx.config.profile,
+        "profile_provenance": ctx.config.profile_provenance,
+        "models": {n: b.cfg.model for n, b in ctx.backends.items()},
+        "split_run": args.split,
+        "primary": {
+            "scope": f"all {len(specs)} tasks that ran",
+            "verdict": primary.verdict, "reason": primary.reason,
+            **primary.detail,
+            "caveat": (
+                "The calibration skill was written by an author who saw the "
+                "entire suite, so no split is clean with respect to the "
+                "author. This is a POSITIVE CONTROL on the instrument - does "
+                "the detector fire when a real effect exists - not a claim "
+                "that the skill generalizes."
+            ),
+        },
+        "caveats": CAVEATS,
+    }
+    if secondary is not None:
+        report["secondary"] = {
+            "scope": f"eval subset, {secondary.detail.get('n', 0)} tasks",
+            "verdict": secondary.verdict, "reason": secondary.reason,
+            **secondary.detail,
+            "caveat": (
+                "Contamination-clean with respect to the drafting split, but "
+                "UNDERPOWERED at this n. Report alongside the primary, never "
+                "instead of it."
+            ),
+        }
+
+    print()
+    _print_arm("PRIMARY", report["primary"])
+    if secondary is not None:
+        _print_arm("SECONDARY", report["secondary"])
+
+    if ledger is not None:
+        ledger.parent.mkdir(parents=True, exist_ok=True)
+        tmp = ledger.with_suffix(ledger.suffix + ".tmp")
+        tmp.write_text(json.dumps(report, indent=2), encoding="utf-8")
+        os.replace(tmp, ledger)
+        print(f"\nwritten to {ledger}")
+
+    if primary.verdict == "promote":
+        print("\ngate passed. Promotion still needs a human: "
+              f"alpha skills --gate {args.skill_id} --yes")
     ctx.close()
     return 0
+
+
+def _completed_trials(ctx, skill_id: str) -> set[str]:
+    """Task keys with BOTH arms already recorded.
+
+    A half-finished pair is not resumable: `fetch_paired_outcomes` drops any
+    pair missing an arm, so the task must be re-run rather than counted.
+    """
+    rows = ctx.conn.execute(
+        "SELECT task_key, arm FROM skill_trials WHERE skill_id=?", (skill_id,)
+    ).fetchall()
+    arms: dict[str, set[str]] = {}
+    for key, arm in rows:
+        arms.setdefault(key, set()).add(arm)
+    return {k for k, a in arms.items() if {"control", "skill"} <= a}
+
+
+def _print_arm(label: str, d: dict) -> None:
+    print(f"{label} - {d['scope']}")
+    print(f"  verdict     {d['verdict']}  ({d['reason']})")
+    print(f"  n={d.get('n')}  b={d.get('b')} (skill wins)  "
+          f"c={d.get('c')} (control wins)  discordant={d.get('discordant')}")
+    print(f"  lift        {d.get('lift_pp')}pp     p={d.get('p')}")
+    print(f"  caveat      {d['caveat']}")
+    print()
 
 
 def main() -> int:
@@ -252,6 +340,11 @@ def main() -> int:
     q = sub.add_parser("paired", help="M9 paired trials for one skill")
     q.add_argument("skill_id")
     q.add_argument("--suite", default="bench/tasks")
+    q.add_argument("--out", default="runs/calibration.json",
+                   help="write the two-number report here")
+    q.add_argument("--resume", action="store_true",
+                   help="skip pairs already recorded in skill_trials; a killed "
+                        "calibration restarts where it stopped")
     q.add_argument("--split", choices=["drafting", "eval"],
                    help="restrict trials to one split; use 'eval' for any "
                         "skill that could have been informed by the drafting half")

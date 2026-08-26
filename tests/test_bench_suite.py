@@ -184,9 +184,18 @@ def _load_bench_run():
 class _FakeCtx:
     """Just enough context for cmd_paired's control flow."""
 
-    def __init__(self, profile):
-        self.config = type("C", (), {"profile": profile,
-                                     "gate": type("G", (), {"min_paired_trials": 30})()})()
+    def __init__(self, profile, tmp_path=None):
+        self.config = type("C", (), {
+            "profile": profile, "profile_provenance": {},
+            "gate": type("G", (), {"min_paired_trials": 30,
+                                   "min_discordant_pairs": 10,
+                                   "min_lift_pp": 5.0,
+                                   "max_p_value": 0.05})(),
+            "resolve": staticmethod(
+                lambda x: str((tmp_path or Path(".")) / Path(x).name)),
+        })()
+        self.backends = {"cloud": type("B", (), {
+            "cfg": type("BC", (), {"model": "mock"})()})()}
         self.closed = False
 
     def close(self):
@@ -222,15 +231,16 @@ def test_paired_enforces_the_declared_profile(monkeypatch, capsys):
     monkeypatch.setattr(mod, "AgentContext", FakeAgentContext)
     monkeypatch.setattr(mod, "load_suite", lambda spec, ctx=None: _fake_specs())
     monkeypatch.setattr(mod, "run_paired_trial", lambda *a, **k: None)
-    monkeypatch.setattr(mod, "evaluate_skill", lambda ctx, sid: type(
-        "D", (), {"verdict": "insufficient", "reason": "stub", "detail": {}})())
+    monkeypatch.setattr(mod, "evaluate_skill",
+                        lambda ctx, sid, task_keys=None: type(
+                            "D", (), {"verdict": "insufficient",
+                                      "reason": "stub", "detail": {}})())
 
     args = type("A", (), {"config": "config.local.yaml", "profile": "local",
                           "suite": "aero_calc", "split": None,
-                          "skill_id": "abc"})()
+                          "skill_id": "abc", "out": None, "resume": False})()
     assert mod.cmd_paired(args) == 0
     assert seen["profile"] == "local", "the declared profile never reached the context"
-    assert '"profile": "local"' in capsys.readouterr().out
 
 
 def test_paired_split_filter_keeps_the_contamination_boundary(monkeypatch, capsys):
@@ -253,12 +263,14 @@ def test_paired_split_filter_keeps_the_contamination_boundary(monkeypatch, capsy
     monkeypatch.setattr(mod, "load_suite", lambda spec, ctx=None: _fake_specs())
     monkeypatch.setattr(mod, "run_paired_trial",
                         lambda ctx, sid, spec, seed=None: ran.append(spec.key))
-    monkeypatch.setattr(mod, "evaluate_skill", lambda ctx, sid: type(
-        "D", (), {"verdict": "insufficient", "reason": "stub", "detail": {}})())
+    monkeypatch.setattr(mod, "evaluate_skill",
+                        lambda ctx, sid, task_keys=None: type(
+                            "D", (), {"verdict": "insufficient",
+                                      "reason": "stub", "detail": {}})())
 
     args = type("A", (), {"config": "config.local.yaml", "profile": "local",
                           "suite": "aero_calc", "split": "eval",
-                          "skill_id": "abc"})()
+                          "skill_id": "abc", "out": None, "resume": False})()
     assert mod.cmd_paired(args) == 0
     assert ran == ["E06", "E07"], f"drafting tasks leaked into the trial: {ran}"
     capsys.readouterr()

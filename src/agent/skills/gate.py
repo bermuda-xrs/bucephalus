@@ -127,8 +127,22 @@ def run_task_isolated(ctx, task_spec: TaskSpec, skills: list[dict]) -> TrialOutc
     )
 
 
-def fetch_paired_outcomes(conn, skill_id: str) -> list[tuple[str, int, int]]:
-    """[(task_key, control_success, skill_success)] for complete pairs only."""
+def fetch_paired_outcomes(
+    conn, skill_id: str, task_keys: set[str] | None = None
+) -> list[tuple[str, int, int]]:
+    """[(task_key, control_success, skill_success)] for complete pairs only.
+
+    `task_keys` restricts to a subset of the trials ALREADY RUN. That is how
+    a contamination-clean sub-analysis is reported without spending the
+    compute twice: the eval tasks are a subset of the full suite, so the same
+    stored trials answer both questions.
+
+    Note what this does NOT do: it never counts one task twice. Rows are
+    collapsed by task_key, so re-running a task under another seed replaces
+    its outcome rather than adding a pair. Two runs of one task share its
+    underlying difficulty; counting them as two pairs would inflate n without
+    adding information and make the p-value anti-conservative.
+    """
     rows = conn.execute(
         """SELECT task_key, arm, success FROM skill_trials
            WHERE skill_id=? ORDER BY task_key""",
@@ -136,6 +150,8 @@ def fetch_paired_outcomes(conn, skill_id: str) -> list[tuple[str, int, int]]:
     ).fetchall()
     by_key: dict[str, dict[str, int]] = {}
     for key, arm, success in rows:
+        if task_keys is not None and key not in task_keys:
+            continue
         by_key.setdefault(key, {})[arm] = success
     return [
         (k, v["control"], v["skill"])
@@ -144,43 +160,53 @@ def fetch_paired_outcomes(conn, skill_id: str) -> list[tuple[str, int, int]]:
     ]
 
 
-def evaluate_skill(ctx, skill_id: str, catastrophic_keys: set[str] | None = None) -> GateDecision:
+def evaluate_skill(
+    ctx,
+    skill_id: str,
+    catastrophic_keys: set[str] | None = None,
+    task_keys: set[str] | None = None,
+) -> GateDecision:
     """All four conditions must hold: enough pairs, enough discordant pairs,
     lift above threshold, and significance.
 
     Statistical significance alone is not enough — a +0.5pp result that is
     significant is not worth the context tokens the skill occupies.
     """
-    pairs = fetch_paired_outcomes(ctx.conn, skill_id)
+    pairs = fetch_paired_outcomes(ctx.conn, skill_id, task_keys)
     n = len(pairs)
     cfg = ctx.config.gate
     catastrophic_keys = catastrophic_keys or set()
 
+    # Computed before any early return. A verdict of "insufficient" that
+    # reports nothing but n leaves the reader unable to see WHICH way an
+    # underpowered result pointed, which is most of its remaining value.
+    b = sum(1 for _, c, s in pairs if s == 1 and c == 0)   # skill wins
+    c_ = sum(1 for _, c, s in pairs if s == 0 and c == 1)  # control wins
+    discordant = b + c_
+    lift_pp = 100.0 * (b - c_) / n if n else 0.0
+    p = (binomtest(b, discordant, 0.5, alternative="greater").pvalue
+         if discordant else 1.0)
+    stats = {"n": n, "b": b, "c": c_, "discordant": discordant,
+             "lift_pp": round(lift_pp, 2), "p": round(p, 5)}
+
     if n < cfg.min_paired_trials:
         return GateDecision.insufficient(
-            f"only {n} paired trials, need {cfg.min_paired_trials}", n=n
+            f"only {n} paired trials, need {cfg.min_paired_trials}", **stats
         )
 
-    # McNemar: only discordant pairs carry information
-    b = sum(1 for _, c, s in pairs if s == 1 and c == 0)  # skill wins
-    c_ = sum(1 for _, c, s in pairs if s == 0 and c == 1)  # control wins
-
-    lift_pp = 100.0 * (b - c_) / n
-
-    if b + c_ < cfg.min_discordant_pairs:
+    if discordant < cfg.min_discordant_pairs:
         return GateDecision.insufficient(
-            f"only {b + c_} discordant pairs, need {cfg.min_discordant_pairs}",
-            discordant=b + c_, n=n,
+            f"only {discordant} discordant pairs, need "
+            f"{cfg.min_discordant_pairs}",
+            **stats,
         )
-
-    p = binomtest(b, b + c_, 0.5, alternative="greater").pvalue
 
     # A task the control passed and the skill failed is worse than a task
     # neither passed. Veto on any severe case.
     for key, cc, ss in pairs:
         if cc == 1 and ss == 0 and key in catastrophic_keys:
             return GateDecision.reject(
-                f"catastrophic regression on {key}", n=n, lift_pp=lift_pp
+                f"catastrophic regression on {key}", **stats
             )
 
     if lift_pp >= cfg.min_lift_pp and p < cfg.max_p_value:
@@ -194,14 +220,12 @@ def evaluate_skill(ctx, skill_id: str, catastrophic_keys: set[str] | None = None
             if suspicion:
                 return GateDecision.reject(
                     f"suspected gaming — {suspicion}",
-                    lift_pp=round(lift_pp, 2), p=round(p, 5), n=n,
-                    visible_pass=gap[0], holdout_pass=gap[1],
+                    visible_pass=gap[0], holdout_pass=gap[1], **stats,
                 )
-        return GateDecision.promote(lift_pp=round(lift_pp, 2), p=round(p, 5), n=n, b=b, c=c_)
+        return GateDecision.promote(**stats)
 
     return GateDecision.reject(
-        f"lift={lift_pp:.1f}pp p={p:.3f} n={n}",
-        lift_pp=round(lift_pp, 2), p=round(p, 5), n=n,
+        f"lift={lift_pp:.1f}pp p={p:.3f} n={n}", **stats
     )
 
 
