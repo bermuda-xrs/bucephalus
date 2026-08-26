@@ -19,3 +19,6 @@ agent.local.db-wal
 agent.local.db-shm
 .alpha_token
 bench/tasks/aero_calc/**/output/answer.json
+.measurement.lock
+*.partial.jsonl
+*.contended-backup
