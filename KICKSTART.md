@@ -8,7 +8,7 @@ files attached, only pointing at.
 
 You are picking up an in-progress research project at
 `C:\Users\char1\OneDrive\Desktop\Βουκεφάλας\alpha-test-1`. It is a working
-system, not a greenfield build — 21 commits, 183 passing tests. Your job is to
+system, not a greenfield build — 40+ commits, 257 passing tests. Your job is to
 continue it, not to redesign it.
 
 ## Read these first, in this order, before writing any code
@@ -78,7 +78,7 @@ measurement.
 ## Verify the system works before changing anything
 
 ```powershell
-.\setup.ps1                      # expect: 183 passed
+.\setup.ps1                      # expect: 257 passed
 .\ollama-serve.ps1               # separate window, leave open
 python demo.py                   # scripted model, no network — end-to-end
 ```
@@ -88,52 +88,68 @@ chain. If it does not, stop and fix that before anything else.
 
 ## Your first task
 
-**Settle H30b, then run the eval-split noise floor.** Details are in
-`HANDOVER.md` §9, but in short:
-
-1. `bench/tasks/aero_calc/eval/H30` expects `delta_v_capture_m_s = 2054.1`.
-   An independent computation gives **2080.2** — 1.27% apart. It passes at
-   tolerance 2%, but a *correct* answer scores 0.37 on the continuous scale,
-   so the M7 ratchet would rank right answers as mediocre. Recompute it,
-   decide which number is right, and fix either the expected value or the
-   tolerance in `bench/suites/aero_calc.py`, then regenerate the suite.
-
-2. Run the noise floor on the eval split — 15 tasks × 3 baseline runs, roughly
-   7 hours, overnight-shaped:
-
-   ```powershell
-   python bench\noise.py --config config.local.yaml --profile local --split eval --runs 3
-   ```
-
-   Then classify: each task is `3/3`, `0/3`, or flaky. **If more than 8 of the
-   15 are flaky, stop and tighten the task specifications** rather than
-   proceeding — a lift measured against that much noise cannot be interpreted.
-   Report the mean pass rate and whether it lands in the 35–65% band.
-
-**Before spending 7 hours, do the 15-minute version first.** This pattern
-caught four separate blockers in one session:
+**Drive the measurement to a decision point.** Everything is staged behind
+gates that live in code, so the job is mostly to start the next step and read
+what comes back.
 
 ```powershell
-python bench\noise.py --config config.local.yaml --profile local --runs 1 --limit 3
-python bench\noise.py --config config.local.yaml --profile local --runs 1 --limit 3 --skill aero_units_discipline
+.\measure.ps1 status     # where things stand, and what may run next
+.\measure.ps1 next       # run that step, detached, if the gates allow
+.\measure.ps1 watch      # follow it
 ```
 
-Expected from the record in `docs/evidence/`: 0/3 baseline, 3/3 with the
-skill. If you do not reproduce that, something regressed — find it before
-starting the long run.
+`bench/nextstep.py` owns the gates; `measure.ps1` only obeys them. It runs
+every step detached (session teardown kills foreground jobs mid-run), refuses
+to start while another measurement holds the lock, and refuses to chain past
+a decision point - those are yours to make.
 
-## After the noise floor
+### The three gates, and what each protects
 
-Run the hand-written calibration skill through the full gate, on the **eval
-split only** (contamination rule). If the gate **rejects** it, the instrument
-is broken and every later rejection is uninterpretable — fix that before
-evaluating anything else. Do not accept "expect rejection, that's the gate
-working" as sufficient: a gate that rejects everything and a gate that works
-look identical until the calibration skill passes.
+1. **After pass 1 of the noise floor** - is the mean pass rate inside
+   25-75%? One pass of 30 is about +/-9pp at 1 SE, so this only catches
+   gross miscalibration. Read the counter-argument the gate prints before
+   acting on it: the noise floor measures the BASELINE arm only, and a low
+   baseline with a working skill arm is near-maximum discordance, which is
+   ideal for McNemar. The cheap discriminator is a skill-arm sighting shot
+   on a few medium/hard tasks, not a rebalance.
+2. **After all three passes** - more than 8 of 30 flaky means stop and
+   tighten task specifications. A lift measured against that much noise
+   cannot be interpreted.
+3. **After the calibration** - if the hand-written skill is REJECTED, the
+   instrument is broken and every later rejection is uninterpretable. Do not
+   accept "expect rejection, that's the gate working": a gate that rejects
+   everything and a gate that works look identical until this one passes.
+
+### Before committing hours
+
+```powershell
+python bench\coverage.py --skill examples\skills\aero_units_discipline.md
+```
+
+An upper bound on discordant pairs. Only discordant pairs carry information
+in McNemar's test, so a skill whose topics touch fewer tasks than
+`min_discordant_pairs` cannot clear the gate however good it is. Currently
+20 of 30 against a floor of 10 - reachable, not comfortable.
+
+### The calibration runs on ALL 30, not the eval split
+
+It is a **positive control on the instrument** - does the detector fire when
+a real effect exists - not a claim that the skill generalizes. Its author saw
+the whole suite, so no split is clean with respect to the author; eval-only
+would buy nothing and cost half the power. The run reports PRIMARY (all 30)
+and SECONDARY (the eval 15, contamination-clean but underpowered) from the
+same trials, with the caveat printed beside the number.
+
+**Generated skills stay eval-only. That split is not negotiable.**
 
 ## What not to do
 
-- Do not run the full 7-hour benchmark before the 15-minute sighting shot.
+- Do not start a second measurement. Two overlapping passes measure their
+  tasks under 2x CPU load, and `budget_exhausted` is a TIME limit, so
+  contention can manufacture that outcome. The lock enforces this now,
+  but do not work around it.
+- Do not run anything else on the machine during a pass. The same task
+  takes 162s idle and 339-360s with a test suite alongside.
 - Do not add an API key or cloud backend without being asked. The local path
   is the deliverable right now.
 - Do not "clean up" the spec documents — they are a preserved record, and
