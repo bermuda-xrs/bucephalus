@@ -51,10 +51,16 @@ end to end; what was missing was the ability to trust a number it produced.
   half-finished pair is deliberately re-run, because the analysis drops any
   pair missing an arm.
 * `status_counts`, `ended_at_step_limit`, `ended_budget_exhausted` and
-  `tier_pass_rates` on the noise report. `budget_exhausted` has never fired
-  and largely cannot — `Budget.spent_seconds` accumulates model wall time
-  only, and `max_steps: 6` binds long before 600s — so `max_steps` is the
-  real "the agent is looping rather than the task being hard" signal.
+  `tier_pass_rates` on the noise report, so a run records *why* it ended.
+  `max_steps` means the agent burned all six turns; `plateau` means more
+  turns bought nothing; `budget_exhausted` means it ran out of **time**, and
+  may not have been failed on the physics at all.
+
+  **Corrected same-day:** this was first documented as "`budget_exhausted`
+  has never fired and largely cannot", on the reasoning that `max_steps: 6`
+  binds before the 600s budget. M16 then ended `budget_exhausted` at 705.6s
+  in pass 1 — six slow turns on a medium task cross 600s of model time before
+  the step limit. Both limits bind, and which one does is itself a signal.
 * `tests/test_calibration_path.py` — the hours-long calibration driven end to
   end on scripted outcomes, including the case where the skill **hurts**.
 * `tests/test_noise_durability.py` — including a real subprocess killed

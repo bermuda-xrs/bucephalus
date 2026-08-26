@@ -297,16 +297,26 @@ def main() -> int:
             "statuses": [x["status"] for x in runs],
         })
 
-    # Why a pass ended matters as much as whether it passed. At max_steps=6
-    # the step limit binds long before the 600s budget — no run on record has
-    # ever ended in `budget_exhausted` — so `max_steps` is the real "the agent
-    # is looping rather than the task being hard" signal, and `plateau` means
-    # three identical scores, i.e. more turns bought nothing.
+    # Why a pass ended matters as much as whether it passed, and the three
+    # terminal statuses mean genuinely different things:
     #
-    # Note what `budget_exhausted` would actually mean: Budget.spent_seconds
-    # accumulates MODEL wall time only (context.record -> spend), not sandbox
-    # or verification time, so a task's wall_s can exceed its budget without
-    # tripping it.
+    #   max_steps         burned all 6 turns. Usually the agent looping,
+    #                     rather than the task being hard.
+    #   plateau           three identical scores; more turns bought nothing.
+    #   budget_exhausted  ran out of TIME, not attempts. The task may not
+    #                     have been failed on the physics at all.
+    #
+    # That last one matters for interpretation and was mis-documented here
+    # earlier: an initial reading of the record said budget_exhausted had
+    # never fired and largely could not, on the reasoning that max_steps=6
+    # binds first. M16 then ended budget_exhausted at 705.6s against its 600s
+    # budget on 2026-08-27 — six slow turns on a medium task cross 600s of
+    # model time before the step limit is reached. Both limits bind, and
+    # which one does is itself a signal.
+    #
+    # Budget.spent_seconds accumulates MODEL wall time only (context.record ->
+    # spend), not sandbox or verification time, so a task's reported wall_s
+    # still runs ahead of the budget it is checked against.
     status_counts: dict[str, int] = {}
     for r in rows:
         for st in r["statuses"]:
