@@ -2,7 +2,7 @@
 
 **Everything a new engineer needs to take this over. Read this file alone.**
 
-Version 0.1.0 · 22 commits · 188 tests passing · built from `spec/BUILD-SPEC.md`
+Version 0.1.0 · 27 commits · 215 tests passing · built from `spec/BUILD-SPEC.md`
 
 ---
 
@@ -69,7 +69,7 @@ cd "C:\Users\char1\OneDrive\Desktop\Βουκεφάλας\alpha-test-1"
 ```
 
 That creates the virtualenv, installs dependencies, and runs the test suite.
-You should see `188 passed`.
+You should see `215 passed`.
 
 ### Start the model server (leave this window open)
 
@@ -128,7 +128,7 @@ closes, every local model call fails with a connection refusal.
     ├── policy.md           the deputy's rule book (also editable in the console)
     ├── demo.py             end-to-end with a scripted model, no network
     ├── src/agent/          the system (64 files, see §3)
-    ├── tests/              188 tests (20 files, see §6)
+    ├── tests/              215 tests (24 files, see §6)
     ├── bench/              benchmark harness + the aero_calc suite
     ├── examples/skills/    the hand-written calibration skill
     ├── docs/               published benchmark report
@@ -336,7 +336,7 @@ $env:PYTHONUTF8="1"
 ..\..\..\.alpha-test-1-venv\Scripts\python.exe -m pytest tests -q
 ```
 
-188 tests, all offline — no API key, no GPU, no network. A `mock` backend
+215 tests, all offline — no API key, no GPU, no network. A `mock` backend
 replays scripted turns so the whole loop is exercised without spending
 anything.
 
@@ -393,18 +393,27 @@ it. If you add a component, add a test that the runtime calls it.
 
 ### Blocking the research claim
 
-1. **The full noise floor has never run.** 30 tasks × 3 baseline runs ≈ 7h.
-   Classify each task 3/3, 0/3, or flaky. **If more than 8 of 30 are flaky,
-   stop and tighten task specs** — a lift measured against that much noise
-   cannot be interpreted.
+1. **The noise floor is at pass 1 of 3.** All 30 tasks, baseline arm.
+   Measured pace on this hardware is ~220s/task with nothing else running,
+   so a pass is ~1.9h and all three come to roughly 6h. Passes 2-3 resume
+   the same ledger and do **not** repeat pass 1. See 9.2 for the staging
+   and the stop rule.
    ```powershell
-   python bench\noise.py --config config.local.yaml --profile local --split eval --runs 3
+   python bench\noise.py --config config.local.yaml --profile local --runs 3 --resume --out runs\noise-floor.json
    ```
-2. **The calibration skill has never been through the full gate.** 30 paired
-   trials ≈ 5h, on the **eval split only**.
+2. **The calibration skill has never produced a real gate verdict.** The
+   path is now dry-run tested end to end on scripted outcomes
+   (`tests/test_calibration_path.py`), including the case where the skill
+   *hurts*, and `run_paired_trial` is integration-tested against a real
+   `AgentContext` with a mock responder (`tests/test_m9_gate.py`). What has
+   never happened is 30 pairs x 2 arms on real models - roughly 4-5h.
+   ```powershell
+   python bench\run.py --config config.local.yaml --profile local paired <skill_id> --suite aero_calc --out runs\calibration.json
+   ```
 3. **No generated skill has ever been produced or evaluated.** M11 works but
-   needs grounding notes; expect a 10–30% promotion rate if the instrument is
-   healthy.
+   needs grounding notes; expect a 10-30% promotion rate if the instrument
+   is healthy. **Generated skills stay eval-only** - that split is not
+   negotiable, unlike the calibration positive control.
 
 ### Known gaps
 
@@ -419,7 +428,16 @@ it. If you add a component, add a test that the runtime calls it.
    (defaults `'local'`) and user-content queries are owner-scoped, so adding
    accounts is wiring an identity provider, not a migration.
 7. **No TUI.** The CLI and web console cover it.
-8. ~~**`H30b` disagreement.**~~ **SETTLED.** Neither number was an
+8. **The wheel is code-complete but not runnable standalone.** `pip wheel .`
+   succeeds at this path - the Greek-character problem affects only
+   *editable* installs, which write a `.pth` in the ANSI codepage - but the
+   wheel carries all 64 modules and **none** of `policy.md`, `themes/`,
+   `assets/`, or the config files, which the runtime resolves relative to
+   the config's parent. Today this is a clone-and-run-from-the-directory
+   project. Making it `pip install`-able means shipping those as package
+   data with a resource loader, or an `alpha init` that materializes them.
+9. **No LICENSE.** A deliberate omission - the author's call, not a default.
+10. ~~**`H30b` disagreement.**~~ **SETTLED.** Neither number was an
    arithmetic error: the task did not say which heliocentric speed to use.
    `constants.json` carries `mars.orbital_v = 24077` (Mars's true mean speed,
    whose orbit is eccentric at e = 0.0934) while a *circular* orbit at
@@ -432,10 +450,14 @@ it. If you add a component, add a test that the runtime calls it.
    spec-following solver scores 0.999 instead of 0.37. Tolerance is unchanged
    at 2%. Guarded by `tests/test_bench_suite.py`, which recomputes H30 from an
    independent solver and fails if the emitted tree drifts from the table.
-9. **Baseline is 0% on easy tasks**, where the suite design predicted ~80%.
-   With the calibration skill it is 100%. For McNemar this is maximum
-   discordance (ideal), but if medium/hard are also 0% with *and* without the
-   skill, there will be no signal. The noise floor will tell you.
+11. **Baseline on easy tasks is low but NOT 0%**, where the suite design
+   predicted ~80%. The 0/3 figure was one sample: re-run on 2026-08-26 the
+   same three tasks gave 1/3, and E03 has now passed bare twice in four
+   baseline observations. With the calibration skill it is 3/3 on both dates.
+   For McNemar a low baseline is close to maximum discordance, which is
+   ideal — but if medium and hard are also near 0% with *and* without the
+   skill, there is no signal to find. Pass 1 of the noise floor answers this
+   and is the reason for the 25–75% decision gate in §9.2.
 
 ---
 
