@@ -66,3 +66,30 @@ Same task, same model, CPU-only:
 A task roughly doubles under CPU contention. Any duration in this directory is
 comparable only against another measured the same way, and the noise floor is
 run with nothing else on the machine.
+
+## What CPU contention does to a measurement (2026-08-27)
+
+Two `noise.py` passes overlapped for 36 minutes because a process that looked
+dead was not. Three tasks were measured during the window, and the same tasks
+were re-measured afterwards with the machine to themselves:
+
+| task | contended | clean | |
+|---|---|---|---|
+| M16 | `budget_exhausted` 705.6s | `max_steps` 488.6s | different failure mode |
+| H23 | `budget_exhausted` 931.3s | `plateau` 127.7s | **7.3x** wall clock |
+| H24 | `budget_exhausted` 1152.1s | **`done`** 280.9s | **recorded a PASS as a failure** |
+
+H24 is the one that matters. `budget_exhausted` is a **time** limit, so
+contention did not merely slow the task down — it manufactured a failure on a
+task the model solves correctly in 281 seconds. A noise floor built from that
+window would have reported the suite as harder than it is, and the tasks it
+mislabelled would have been the ones a skill is later asked to lift.
+
+The contaminated rows were discarded, not corrected, and `src/agent/runlock.py`
+now makes a second concurrent measurement impossible rather than discouraged.
+
+**The general rule this is evidence for:** every wall-clock number in this
+directory is only comparable to another measured under the same load, and any
+outcome derived from a time limit is only as trustworthy as the machine was
+quiet. The same easy task takes 162s idle and 339–360s with a test suite
+running alongside.
