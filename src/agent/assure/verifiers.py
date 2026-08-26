@@ -412,6 +412,16 @@ class VerifyProgramVerifier:
     SCRIPT = "verify.py"
 
     def check(self, artifact: str, contract: TaskContract) -> VerifyResult:
+        """
+        CWD-SENSITIVE. `artifact_scope` entries are relative, and they are
+        resolved against the PROCESS working directory rather than
+        `config.root`. The harnesses run from the project root so this is
+        correct there — but run from anywhere else and no `verify.py` is
+        found, every task fails with "no verify.py found", and the result
+        looks exactly like a suite that is simply too hard. That is a silent
+        0% rather than an error, so check the observation text before
+        concluding a model cannot do the work.
+        """
         from ..execute.sandbox import run_sandboxed
 
         scope = contract.artifact_scope or ["."]

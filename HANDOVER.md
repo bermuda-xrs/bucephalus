@@ -584,7 +584,14 @@ the reasoning is worth carrying.
 7. **Verify the benchmark's own answers.** H27 was unsolvable as first
    generated — a correct solver found 13 bad rows against an expected 4,
    because the synthetic telemetry did not conserve energy.
-8. **`.cmd` files cannot carry non-ASCII paths.** `cmd.exe` reads batch files
+8. **`verify_program` resolves paths against the process CWD**, not
+   `config.root`. Run a harness from anywhere but the project root and every
+   task fails with "no verify.py found" — a silent 0% that is indistinguishable
+   from a suite that is too hard. It also makes tests whose workspace is under
+   `tmp_path` pass *vacuously*: they assert failure, and get failure for the
+   wrong reason. `tests/test_paired_trial_isolation.py` chdirs for exactly
+   this, and carries a negative control so it cannot go vacuous unnoticed.
+9. **`.cmd` files cannot carry non-ASCII paths.** `cmd.exe` reads batch files
    in the OEM codepage and `cd /d` fails silently. Use `.ps1`.
 
 ---
