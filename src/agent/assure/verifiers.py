@@ -26,13 +26,15 @@ from ..kernel.types import TaskContract, VerifyResult
 class Verifier(Protocol):
     kind: str
 
-    def check(self, artifact: str, contract: TaskContract) -> VerifyResult: ...
+    def check(self, artifact: str, contract: TaskContract,
+              root: str | None = None) -> VerifyResult: ...
 
 
 class AlwaysPass:
     kind = "always_pass"
 
-    def check(self, artifact: str, contract: TaskContract) -> VerifyResult:
+    def check(self, artifact: str, contract: TaskContract,
+              root: str | None = None) -> VerifyResult:
         return VerifyResult(
             passed=True, score=1.0, observation="no criterion set", verifier_id=self.kind
         )
@@ -45,7 +47,8 @@ class PytestVerifier:
         self.test_path = test_path
         self.cwd = cwd
 
-    def check(self, artifact: str, contract: TaskContract) -> VerifyResult:
+    def check(self, artifact: str, contract: TaskContract,
+              root: str | None = None) -> VerifyResult:
         proc = subprocess.run(  # noqa: S603
             [sys.executable, "-m", "pytest", self.test_path, "-q", "--no-header"],
             capture_output=True,
@@ -72,7 +75,8 @@ def _pytest_score(output: str) -> float:
 class RuffVerifier:
     kind = "ruff"
 
-    def check(self, artifact: str, contract: TaskContract) -> VerifyResult:
+    def check(self, artifact: str, contract: TaskContract,
+              root: str | None = None) -> VerifyResult:
         if shutil.which("ruff") is None:
             return VerifyResult(
                 passed=True, score=1.0, observation="ruff not installed; skipped",
@@ -94,7 +98,8 @@ class RuffVerifier:
 class JsonSchemaVerifier:
     kind = "json_schema"
 
-    def check(self, artifact: str, contract: TaskContract) -> VerifyResult:
+    def check(self, artifact: str, contract: TaskContract,
+              root: str | None = None) -> VerifyResult:
         try:
             data = json.loads(artifact)
         except json.JSONDecodeError as e:
@@ -144,7 +149,8 @@ class ExecutionVerifier:
     def __init__(self, script_path: str | None = None):
         self.script_path = script_path
 
-    def check(self, artifact: str, contract: TaskContract) -> VerifyResult:
+    def check(self, artifact: str, contract: TaskContract,
+              root: str | None = None) -> VerifyResult:
         from ..execute.sandbox import run_sandboxed
 
         code = Path(self.script_path).read_text(encoding="utf-8") if self.script_path else artifact
@@ -169,7 +175,8 @@ class CitationCheckVerifier:
     def __init__(self, sources: dict[str, str] | None = None):
         self.sources = sources or {}
 
-    def check(self, artifact: str, contract: TaskContract) -> VerifyResult:
+    def check(self, artifact: str, contract: TaskContract,
+              root: str | None = None) -> VerifyResult:
         cites = re.findall(r"\[([^\]]+)\]\(([^)]+)\)|<cite src=\"([^\"]+)\">([^<]*)</cite>", artifact)
         if not cites:
             return VerifyResult(
@@ -219,7 +226,8 @@ class SelfConsistencyVerifier:
         self.ctx = ctx
         self.k = k
 
-    def check(self, artifact: str, contract: TaskContract) -> VerifyResult:
+    def check(self, artifact: str, contract: TaskContract,
+              root: str | None = None) -> VerifyResult:
         from ..router.cascade import (
             DEFAULT_AGREEMENT, max_cluster_fraction, normalize)
 
@@ -257,7 +265,8 @@ class CheckerProgramVerifier:
     def __init__(self, program: str):
         self.program = program
 
-    def check(self, artifact: str, contract: TaskContract) -> VerifyResult:
+    def check(self, artifact: str, contract: TaskContract,
+              root: str | None = None) -> VerifyResult:
         from ..execute.sandbox import run_sandboxed
 
         harness = (
@@ -294,7 +303,8 @@ class ExpectedValueVerifier:
 
     kind = "expected_value"
 
-    def check(self, artifact: str, contract: TaskContract) -> VerifyResult:
+    def check(self, artifact: str, contract: TaskContract,
+              root: str | None = None) -> VerifyResult:
         schema = contract.output_schema or {}
         expected = schema.get("x-expected")
         if expected is None:
@@ -381,7 +391,8 @@ class ContainsAllVerifier:
 
     kind = "contains_all"
 
-    def check(self, artifact: str, contract: TaskContract) -> VerifyResult:
+    def check(self, artifact: str, contract: TaskContract,
+              root: str | None = None) -> VerifyResult:
         needles = (contract.output_schema or {}).get("x-contains") or []
         if not needles:
             return VerifyResult(
@@ -416,7 +427,8 @@ class VerifyProgramVerifier:
     kind = "verify_program"
     SCRIPT = "verify.py"
 
-    def check(self, artifact: str, contract: TaskContract) -> VerifyResult:
+    def check(self, artifact: str, contract: TaskContract,
+              root: str | None = None) -> VerifyResult:
         """
         CWD-SENSITIVE. `artifact_scope` entries are relative, and they are
         resolved against the PROCESS working directory rather than
@@ -429,19 +441,38 @@ class VerifyProgramVerifier:
         """
         from ..execute.sandbox import run_sandboxed
 
+        base = Path(root) if root else Path.cwd()
         scope = contract.artifact_scope or ["."]
+        workdir = base / scope[0]
+
+        # The grader is looked up OUTSIDE artifact_scope. A verify.py the
+        # agent can read is one it can copy EXPECTED out of, and a generated
+        # skill that said "read verify.py" would score 100% and look like a
+        # result. Only the grader's TEXT enters the sandbox below - never as
+        # a file the task could open.
+        #
+        # `base` also fixes a second bug: this used to resolve against the
+        # process working directory, so a harness run from anywhere but the
+        # project root reported "no verify.py found" on every task - a silent
+        # 0% indistinguishable from a suite that is simply too hard.
         script = None
-        for base in scope:
-            candidate = Path(base) / self.SCRIPT
-            if candidate.exists():
-                script = candidate
-                break
-        if script is None and Path(self.SCRIPT).exists():
-            script = Path(self.SCRIPT)
+        if contract.grader_dir:
+            cand = base / contract.grader_dir / self.SCRIPT
+            if cand.exists():
+                script = cand
+        if script is None:
+            # Legacy suites shipping the grader beside the work. Kept so old
+            # records replay; the leak test fails for any suite relying on it.
+            for s_ in scope:
+                cand = base / s_ / self.SCRIPT
+                if cand.exists():
+                    script, workdir = cand, base / s_
+                    break
         if script is None:
             return VerifyResult(
                 passed=False, score=0.0,
-                observation=f"no {self.SCRIPT} found in {scope}",
+                observation=(f"no {self.SCRIPT} found. grader_dir="
+                             f"{contract.grader_dir!r} scope={scope} root={base}"),
                 verifier_id=self.kind,
             )
 
@@ -450,7 +481,7 @@ class VerifyProgramVerifier:
         # with the workdir as cwd — so without this chdir every check looks in
         # the wrong place and reports a missing answer that is actually there.
         harness = (
-            f"import os as _os\n_os.chdir({script.parent.name!r})\n\n"
+            f"import os as _os\n_os.chdir({workdir.name!r})\n\n"
             + script.read_text(encoding="utf-8")
             + "\n\nimport json as _j, sys as _s\n"
             "try:\n"
@@ -461,7 +492,7 @@ class VerifyProgramVerifier:
             "    _s.stdout.write('\\x02RESULT' + _j.dumps("
             "{'passed': False, 'score': 0.0, 'error': type(_e).__name__ + ': ' + str(_e)}))\n"
         )
-        r = run_sandboxed(harness, allowed_paths=[str(script.parent)], timeout_s=60)
+        r = run_sandboxed(harness, allowed_paths=[str(workdir)], timeout_s=60)
 
         out = r.get("stdout", "")
         marker = "\x02RESULT"

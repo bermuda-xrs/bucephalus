@@ -25,7 +25,7 @@ class DescendingVerifier:
         self.scores = list(scores)
         self.i = 0
 
-    def check(self, artifact, contract):
+    def check(self, artifact, contract, root=None):
         s = self.scores[min(self.i, len(self.scores) - 1)]
         self.i += 1
         return VerifyResult(passed=False, score=s,
@@ -119,7 +119,7 @@ def test_deviation_parks_a_materially_changed_task(ctx, workspace):
     class Deviating:
         kind = "deviating"
 
-        def check(self, artifact, contract):
+        def check(self, artifact, contract, root=None):
             return VerifyResult(
                 passed=False, score=0.1,
                 observation=("permission denied and the config does not exist; "

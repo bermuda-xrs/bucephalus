@@ -91,7 +91,8 @@ class VerificationMesh:
             )
         else:
             try:
-                r = verifier.check(artifact, task.contract)
+                r = verifier.check(artifact, task.contract,
+                                   root=self.ctx.config.root)
             except Exception as e:  # noqa: BLE001 - a broken verifier is a failed check
                 r = VerifyResult(
                     passed=False, score=0.0,
@@ -114,7 +115,7 @@ class VerificationMesh:
         other = self.registry.get(second)
         if other is None:
             return a, None
-        b = other.check(artifact, task.contract)
+        b = other.check(artifact, task.contract, root=self.ctx.config.root)
         if a.passed != b.passed:
             return a, (
                 f"isomorphic disagreement: {a.verifier_id}={a.passed} "

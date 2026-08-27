@@ -66,6 +66,7 @@ def run_once(ctx, spec: dict, run_ix: int) -> dict:
     contract = TaskContract(
         goal=spec["goal"],
         success_criterion=spec.get("success_criterion", "verify_program"),
+        grader_dir=spec.get("grader_dir"),
         output_schema=spec.get("output_schema", {}),
         artifact_scope=spec.get("artifact_scope", []),
     )

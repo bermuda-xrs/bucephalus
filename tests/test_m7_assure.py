@@ -22,7 +22,8 @@ class ScriptedVerifier:
         self.scores = list(scores)
         self.i = 0
 
-    def check(self, artifact: str, contract: TaskContract) -> VerifyResult:
+    def check(self, artifact: str, contract: TaskContract,
+              root: str | None = None) -> VerifyResult:
         s = self.scores[min(self.i, len(self.scores) - 1)]
         self.i += 1
         return VerifyResult(
@@ -66,7 +67,7 @@ def test_no_refinement_without_observation(ctx, task):
     class SilentVerifier:
         kind = "silent"
 
-        def check(self, artifact, contract):
+        def check(self, artifact, contract, root=None):
             return VerifyResult(passed=False, score=0.0, observation="", verifier_id="silent")
 
     ctx.mesh.registry["silent"] = SilentVerifier()

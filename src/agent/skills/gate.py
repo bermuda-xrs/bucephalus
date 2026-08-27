@@ -41,6 +41,8 @@ class TaskSpec:
     # the CONTROL arm can be graded against the answer the SKILL arm just
     # wrote — manufacturing precisely the lift this gate exists to detect.
     fixtures: dict = field(default_factory=dict)
+    # Outside artifact_scope. See TaskContract.grader_dir.
+    grader_dir: str | None = None
 
 
 class ContaminationError(RuntimeError):
@@ -116,6 +118,7 @@ def run_task_isolated(ctx, task_spec: TaskSpec, skills: list[dict]) -> TrialOutc
         goal=task_spec.goal,
         output_schema=task_spec.output_schema,
         success_criterion=task_spec.success_criterion,
+        grader_dir=task_spec.grader_dir,
         artifact_scope=task_spec.artifact_scope,
     )
     budget = Budget(
@@ -230,9 +233,27 @@ def evaluate_skill(
             if suspicion:
                 return GateDecision.reject(
                     f"suspected gaming — {suspicion}",
-                    visible_pass=gap[0], holdout_pass=gap[1], **stats,
+                    visible_pass=gap[0], holdout_pass=gap[1],
+                    gaming_check="ran", **stats,
                 )
-        return GateDecision.promote(**stats)
+            return GateDecision.promote(gaming_check="ran", **stats)
+
+        # M7.4 rule 4 DID NOT RUN, and a promotion must say so rather than
+        # look like it passed a check that never happened.
+        #
+        # The holdout-gap recorder below has no callers. The only code that
+        # partitions visible/held-out checks is the M11 generator
+        # (holdout_frac=0.30), which has never run. A `verify_program` suite
+        # has one grader per task and no partition at all, so there is no gap
+        # to compute and the veto is inoperative for it.
+        #
+        # That matters most for exactly the suites it cannot check: the
+        # grader holds the answer, and until it moved outside artifact_scope
+        # a skill reading it would have scored 100% with nothing watching.
+        return GateDecision.promote(
+            gaming_check="NOT MEASURED — no visible/held-out partition "
+                         "exists for this suite, so M7.4 rule 4 was skipped",
+            **stats)
 
     return GateDecision.reject(
         f"lift={lift_pp:.1f}pp p={p:.3f} n={n}", **stats

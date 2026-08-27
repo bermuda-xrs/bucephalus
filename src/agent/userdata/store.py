@@ -86,6 +86,9 @@ class SuiteTask:
             "success_criterion": self.success_criterion,
             "output_schema": self.output_schema,
             "artifact_scope": self.artifact_scope,
+            # Derived, not stored: the grader location is a convention
+            # (grading/<key>), and it MUST stay outside artifact_scope.
+            "grader_dir": f"grading/{self.task_key}",
             "fixtures": self.fixtures,
             "catastrophic": self.catastrophic,
         }

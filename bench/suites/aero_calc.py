@@ -385,7 +385,10 @@ def as_suite_tasks(split: str | None = None) -> list:
         fixtures = {
             f"work/{t.id}/input/params.json": json.dumps(t.params, indent=2),
             f"work/{t.id}/constants.json": json.dumps(CONSTANTS, indent=2),
-            f"work/{t.id}/verify.py": VERIFY_TEMPLATE.format(
+            # OUTSIDE artifact_scope (which is work/<id>). The grader holds
+            # EXPECTED in plaintext; leaving it where the agent can read it
+            # makes "read verify.py" a 100% strategy that looks like success.
+            f"grading/{t.id}/verify.py": VERIFY_TEMPLATE.format(
                 tid=t.id, expected=t.expected, tol=t.tol or 1e-9, exact=t.exact_keys),
             # The output directory must exist. Without it the answer write
             # dies with FileNotFoundError and the task measures whether the

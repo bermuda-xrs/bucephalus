@@ -249,6 +249,7 @@ def cmd_paired(args) -> int:
             # Without these the trial runs against whatever the last run left
             # on disk: no input files, or worse, the previous arm's answer.
             fixtures=s.get("fixtures") or {},
+            grader_dir=s.get("grader_dir"),
         )
         for s in suite
     ]

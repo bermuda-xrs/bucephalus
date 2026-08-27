@@ -71,6 +71,11 @@ class TaskContract(BaseModel):
     success_criterion: str = "always_pass"  # names a registered verifier
     artifact_scope: list[str] = Field(default_factory=list)  # readable paths
     max_taint_in: Taint = Taint.UNTRUSTED
+    # Where the grader lives. MUST be outside artifact_scope: a verify.py the
+    # agent can read is a verify.py it can copy the expected value out of, and
+    # a generated skill that said "read verify.py" would score 100% and look
+    # like success. None keeps the legacy in-scope search for older suites.
+    grader_dir: str | None = None
 
 
 class TokenUsage(BaseModel):
