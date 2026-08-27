@@ -70,6 +70,8 @@ class _Ctx:
             "cfg": type("BC", (), {"model": "mock-3b"})()})()}
         self.mesh = type("M", (), {
             "suspicion_signal": staticmethod(lambda v, h: None)})()
+        self.config.autonomy = type("A", (), {"auto_review": True,
+                                              "approve_scoped_writes": False})()
         self.closed = False
 
     def close(self):
@@ -90,7 +92,7 @@ def _args(skill_id, split=None, resume=False):
     return type("A", (), {"config": "config.local.yaml", "profile": "local",
                           "suite": "aero_calc", "split": split,
                           "skill_id": skill_id, "out": "calibration.json",
-                          "resume": resume})()
+                          "resume": resume, "auto_review": False})()
 
 
 def _wire(mod, monkeypatch, ctx, suite, on_trial):
@@ -209,3 +211,77 @@ def test_split_eval_restricts_the_trials_that_run(tmp_path, monkeypatch):
     assert mod.cmd_paired(_args("sk5", split="eval")) == 0
     assert all(k.startswith("V") for k in ran), f"drafting tasks leaked: {ran}"
     assert len(ran) == 15
+
+
+def test_the_calibration_takes_the_deputy_out_like_the_noise_floor(tmp_path, monkeypatch, capsys):
+    """The arms must measure the same system.
+
+    noise.py sets auto_review=False for the baseline arm. cmd_paired did not,
+    so the calibration would have run WITH an LLM deputy in the decision path
+    while the baseline ran without one - and any lift would then be partly
+    attributable to the deputy rather than the skill.
+
+    On this hardware it also loaded a second model beside the executor, which
+    is what produced `500 Internal Server Error ... timed out waiting for
+    llama-server` and killed the first calibration attempt.
+    """
+    mod = _load_bench_run()
+    suite = _suite(1, 1)
+    ctx = _Ctx(tmp_path, min_paired=1, min_discordant=1)
+
+    class Autonomy:
+        auto_review = True
+        approve_scoped_writes = False
+
+    ctx.config.autonomy = Autonomy()
+    _wire(mod, monkeypatch, ctx, suite, lambda c, sid, spec, seed=None: None)
+
+    args = _args("sk-deputy")
+    args.auto_review = False
+    assert mod.cmd_paired(args) == 0
+
+    assert ctx.config.autonomy.auto_review is False, \
+        "the deputy was left in the loop; the arms would not be comparable"
+    assert ctx.config.autonomy.approve_scoped_writes is True
+    assert "auto-review OFF" in capsys.readouterr().out
+
+
+def test_a_backend_error_skips_the_pair_rather_than_half_recording_it(tmp_path, monkeypatch, capsys):
+    """A five-hour run must not die on one 500, and must not fabricate a pair.
+
+    An incomplete pair is dropped by fetch_paired_outcomes anyway, so the task
+    is left unrecorded and --resume re-runs it. Skipping beats fabricating.
+    """
+    from agent.models.base import BackendError
+
+    mod = _load_bench_run()
+    suite = _suite(2, 1)
+    ctx = _Ctx(tmp_path, min_paired=1, min_discordant=1)
+
+    class Autonomy:
+        auto_review = False
+        approve_scoped_writes = True
+
+    ctx.config.autonomy = Autonomy()
+
+    attempted = []
+
+    def sometimes(c, sid, spec, seed=None):
+        attempted.append(spec.key)
+        if spec.key == "D00":
+            raise BackendError("ollama call failed: 500")
+        _seed(c, sid, {spec.key: (0, 1)})
+
+    _wire(mod, monkeypatch, ctx, suite, sometimes)
+    monkeypatch.setattr(mod.time, "sleep", lambda s: None)
+
+    args = _args("sk-boom")
+    args.auto_review = False
+    assert mod.cmd_paired(args) == 0
+
+    out = capsys.readouterr().out
+    assert "SKIPPED" in out and "D00" in out
+    assert attempted.count("D00") == 2, "the pair should be retried once"
+    assert "D01" in attempted, "one failure must not end the run"
+    # D00 must not appear in the analysis
+    assert "V00" in attempted

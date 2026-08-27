@@ -32,6 +32,7 @@ from agent.execute.loop import run_task  # noqa: E402
 from agent.instrument.report import pareto_points, write_calls_csv  # noqa: E402
 from agent.kernel.tasks import create_task  # noqa: E402
 from agent.kernel.types import Budget, TaskContract  # noqa: E402
+from agent.models.base import BackendError  # noqa: E402
 from agent.models.registry import build_backends  # noqa: E402
 from agent.runlock import RunLock, RunLockBusy  # noqa: E402
 from agent.workspace import reset_workspace  # noqa: E402
@@ -201,6 +202,29 @@ def cmd_paired(args) -> int:
         return 2
 
     ctx = AgentContext.open(args.config, profile=args.profile)
+
+    # The deputy comes OUT, exactly as it does for the noise floor. Two
+    # reasons, and the first is fatal to the comparison:
+    #
+    #   * the noise floor measured the baseline arm with auto_review OFF. If
+    #     the calibration runs with it ON, the two arms are not measuring the
+    #     same system and the lift is not attributable to the skill.
+    #   * an LLM in the decision path is a source of variance in exactly the
+    #     signal this run exists to measure, and on this hardware it loads a
+    #     SECOND model beside the executor - which is what produced
+    #     "500 Internal Server Error ... timed out waiting for llama-server"
+    #     on a 15.5 GB machine.
+    #
+    # Nothing about safety is relaxed: the capability gate is code - scope,
+    # taint ceilings, protected paths, trusted-tier parking - and still runs
+    # on every action.
+    if not args.auto_review:
+        ctx.config.autonomy.auto_review = False
+        ctx.config.autonomy.approve_scoped_writes = True
+        print("auto-review OFF for measurement, matching the noise floor "
+              "(code gate still enforced). Pass --auto-review to include the "
+              "deputy - but then the baseline arm must be re-measured too.")
+
     suite = load_suite(args.suite, ctx)
 
     # The contamination rule is a property of WHICH tasks run, so it has to be
@@ -245,14 +269,30 @@ def cmd_paired(args) -> int:
         print(f"resuming: {len(done)} of {len(specs)} pairs already in the "
               "skill_trials table")
 
+    skipped: list[str] = []
     for i, spec in enumerate(specs):
         if spec.key in done:
             print(f"  {i + 1}/{len(specs)} {spec.key}  (resumed)", flush=True)
             continue
         t0 = time.time()
-        run_paired_trial(ctx, args.skill_id, spec, seed=i)
+        try:
+            _paired_with_retry(ctx, args.skill_id, spec, seed=i)
+        except BackendError as e:
+            # Leave the pair UNRECORDED rather than half-recorded: the
+            # analysis drops any pair missing an arm, and --resume re-runs a
+            # task whose pair is incomplete. Skipping beats fabricating.
+            print(f"  {i + 1}/{len(specs)} {spec.key}  SKIPPED - backend "
+                  f"error twice: {e}", flush=True)
+            skipped.append(spec.key)
+            continue
         print(f"  {i + 1}/{len(specs)} {spec.key}  {time.time() - t0:6.1f}s",
               flush=True)
+
+    if skipped:
+        print(f"\n{len(skipped)} task(s) SKIPPED on backend errors: "
+              f"{', '.join(skipped)}")
+        print("Their pairs are incomplete and excluded from the analysis. "
+              "Re-run with --resume before reporting.")
 
     # PRIMARY - every task that ran.
     primary = evaluate_skill(ctx, args.skill_id)
@@ -318,6 +358,19 @@ def cmd_paired(args) -> int:
     return 0
 
 
+def _paired_with_retry(ctx, skill_id: str, spec, seed: int, attempts: int = 2):
+    """One retry on a model-server failure before giving up on the pair."""
+    for attempt in range(1, attempts + 1):
+        try:
+            return run_paired_trial(ctx, skill_id, spec, seed=seed)
+        except BackendError as e:
+            if attempt == attempts:
+                raise
+            print(f"    {spec.key}: backend error, retrying once - {e}",
+                  flush=True)
+            time.sleep(15)
+
+
 def _completed_trials(ctx, skill_id: str) -> set[str]:
     """Task keys with BOTH arms already recorded.
 
@@ -368,6 +421,10 @@ def main() -> int:
     q.add_argument("--suite", default="bench/tasks")
     q.add_argument("--out", default="runs/calibration.json",
                    help="write the two-number report here")
+    q.add_argument("--auto-review", action="store_true",
+                   help="keep the LLM deputy in the loop. Adds variance to the "
+                        "signal being measured, and the baseline arm must be "
+                        "re-measured the same way or the arms differ")
     q.add_argument("--resume", action="store_true",
                    help="skip pairs already recorded in skill_trials; a killed "
                         "calibration restarts where it stopped")

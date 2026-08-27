@@ -194,6 +194,8 @@ class _FakeCtx:
             "resolve": staticmethod(
                 lambda x: str((tmp_path or Path(".")) / Path(x).name)),
         })()
+        self.config.autonomy = type("A", (), {
+            "auto_review": True, "approve_scoped_writes": False})()
         self.backends = {"cloud": type("B", (), {
             "cfg": type("BC", (), {"model": "mock"})()})()}
         self.closed = False
@@ -238,7 +240,7 @@ def test_paired_enforces_the_declared_profile(monkeypatch, capsys, tmp_path):
 
     args = type("A", (), {"config": "config.local.yaml", "profile": "local",
                           "suite": "aero_calc", "split": None,
-                          "skill_id": "abc", "resume": False,
+                          "skill_id": "abc", "resume": False, "auto_review": False,
                           "out": str(tmp_path / "cal.json")})()
     assert mod.cmd_paired(args) == 0
     assert seen["profile"] == "local", "the declared profile never reached the context"
@@ -271,7 +273,7 @@ def test_paired_split_filter_keeps_the_contamination_boundary(monkeypatch, capsy
 
     args = type("A", (), {"config": "config.local.yaml", "profile": "local",
                           "suite": "aero_calc", "split": "eval",
-                          "skill_id": "abc", "resume": False,
+                          "skill_id": "abc", "resume": False, "auto_review": False,
                           "out": str(tmp_path / "cal.json")})()
     assert mod.cmd_paired(args) == 0
     assert ran == ["E06", "E07"], f"drafting tasks leaked into the trial: {ran}"
