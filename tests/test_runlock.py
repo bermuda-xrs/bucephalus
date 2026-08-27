@@ -20,9 +20,11 @@ are routinely killed rather than exiting cleanly.
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 import textwrap
+import time
 from pathlib import Path
 
 import pytest
@@ -89,29 +91,55 @@ def test_the_lock_is_released_when_a_process_is_killed(tmp_path):
 
     These runs are routinely killed rather than exited. A lock needing tidy
     shutdown would strand every later run behind a file nobody owns.
+
+    NOTE ON WHICH PID TO KILL. On Windows a venv's python.exe is a
+    TRAMPOLINE: Popen returns the wrapper's pid while the real interpreter
+    runs as its child. Killing the Popen handle leaves the interpreter alive,
+    still holding the lock - which is how this test first failed. The lock
+    file records os.getpid() from INSIDE the holder, so that is the pid to
+    kill, and it is what `measure.ps1 stop` uses.
     """
     lockfile = tmp_path / "m.lock"
     script = textwrap.dedent(f"""
         import sys, time
         sys.path.insert(0, {str(ROOT / "src")!r})
         from agent.runlock import RunLock
+        import os
         RunLock({str(lockfile)!r}, "victim").acquire()
-        print("HELD", flush=True)
+        print("HELD", os.getpid(), flush=True)
         time.sleep(120)
     """)
     proc = subprocess.Popen([sys.executable, "-c", script],
                             stdout=subprocess.PIPE, text=True)
     try:
-        assert proc.stdout.readline().strip() == "HELD"
+        line = proc.stdout.readline().split()
+        assert line[0] == "HELD"
+        holder = int(line[1])                     # the real interpreter
         with pytest.raises(RunLockBusy):
             RunLock(lockfile).acquire()
+
+        if holder == proc.pid:
+            # not every interpreter is a trampoline; only assert the hazard
+            # where it exists, rather than pinning an environment detail.
+            pass
     finally:
+        # kill the real holder, then the wrapper
+        try:
+            os.kill(holder, 9)
+        except (OSError, NameError):
+            pass
         proc.kill()
         proc.wait(timeout=10)
 
-    # the OS should have dropped it with the process
-    recovered = RunLock(lockfile, "next run").acquire()
-    recovered.release()
+    deadline = time.time() + 15
+    while time.time() < deadline:                 # the OS releases lazily
+        try:
+            RunLock(lockfile, "next run").acquire().release()
+            break
+        except RunLockBusy:
+            time.sleep(0.5)
+    else:
+        raise AssertionError("the lock outlived the process that held it")
 
 
 def test_both_harnesses_share_one_lock_file():

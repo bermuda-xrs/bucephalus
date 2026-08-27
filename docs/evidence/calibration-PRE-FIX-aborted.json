@@ -1,0 +1,53 @@
+{
+  "LABEL": "PRE-FIX, ABORTED AT 10/30, HARNESS DEFECTS PRESENT, RETAINED FOR COMPARISON ONLY",
+  "do_not_report": "The lift number from this run must not be reported. It was produced by a harness with two known output-contract defects live, so it measures output plumbing as much as any effect of the skill.",
+  "defects_live_during_this_run": [
+    "params.json input keys were NOT named in the objective template, so the agent guessed them (mass_flow_rate vs mdot_kg_s, thrust vs thrust_n, Isp vs isp_s, dry_mass vs dry_mass_kg). 8 of 30 pass-1 tasks died on a KeyError from this.",
+    "A stray closing brace leaked into generated code, producing a byte-identical `SyntaxError: unmatched '}'` on `print('Answer written to', output_path)}` across unrelated tasks. 10 of 30 pass-1 tasks hit a SyntaxError."
+  ],
+  "aborted_after_pairs": 10,
+  "of_planned": 30,
+  "complete_pairs": {
+    "E01": {
+      "control": 0,
+      "skill": 1
+    },
+    "E02": {
+      "control": 0,
+      "skill": 1
+    },
+    "E03": {
+      "control": 1,
+      "skill": 1
+    },
+    "E04": {
+      "control": 0,
+      "skill": 0
+    },
+    "E05": {
+      "control": 0,
+      "skill": 1
+    },
+    "M11": {
+      "control": 0,
+      "skill": 1
+    },
+    "M12": {
+      "control": 0,
+      "skill": 0
+    },
+    "M13": {
+      "control": 0,
+      "skill": 0
+    },
+    "M14": {
+      "control": 0,
+      "skill": 1
+    },
+    "M15": {
+      "control": 0,
+      "skill": 0
+    }
+  },
+  "partial_pairs": []
+}

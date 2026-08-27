@@ -399,14 +399,25 @@ def as_suite_tasks(split: str | None = None) -> list:
         # inputs live spends its turns guessing filenames instead of doing the
         # calculation, and a task that measures path-guessing is not measuring
         # what this suite is for.
+        # The INPUT keys are spelled out, not just the file path. Measured
+        # in the pass-1 traces: 8 of 30 tasks died on a KeyError because the
+        # agent guessed a plausible name instead of the real one -
+        # `mass_flow_rate` for `mdot_kg_s`, `thrust` for `thrust_n`, `Isp`
+        # for `isp_s`, `dry_mass` for `dry_mass_kg`. The suite already spells
+        # out the paths and the constants.json layout for exactly this reason;
+        # params.json was the one gap left, and it turned a physics benchmark
+        # into a name-guessing benchmark.
+        param_keys = ", ".join(t.params)
         goal = (
             f"{t.detail}\n\n"
             f"Input file:     work/{t.id}/input/params.json\n"
             f"Constants file: work/{t.id}/constants.json\n"
             f"Write answer:   work/{t.id}/output/answer.json\n\n"
+            f"params.json contains exactly these keys, spelled exactly as "
+            f"shown - do not guess or rename them:\n  {param_keys}\n\n"
             f"The answer file must be a JSON object containing exactly these "
-            f"keys: {', '.join(t.keys)}. Values in SI base units unless the "
-            f"key name says otherwise.\n\n"
+            f"keys, spelled exactly as shown: {', '.join(t.keys)}. Values in "
+            f"SI base units unless the key name says otherwise.\n\n"
             # The layout, not the values. Guessing a key name is not the skill
             # under test, and a wrong guess silently yields 0 and then a
             # ZeroDivisionError — a failure that says nothing about physics.

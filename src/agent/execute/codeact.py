@@ -112,6 +112,40 @@ def run_code_action(
     # `work/E01` and not as `E01`. The agent is told to use the former.
     scope = [(str(ctx.config.resolve(s)), s.replace("\\", "/").strip("/"))
              for s in task.contract.artifact_scope]
+    # Refuse to execute code that is not Python, and say so distinctly.
+    #
+    # Measured in the pass-1 traces: 10 of 30 tasks emitted a stray closing
+    # brace at the END of the `code` field -
+    #     print('Answer written to', output_path)}
+    # byte-identical across unrelated tasks. Constrained decoding guarantees
+    # the JSON ENVELOPE is valid, so that brace is content the model put
+    # inside the string; the wrapper does not add it.
+    #
+    # This is NOT parsed leniently. Stripping the brace would let a malformed
+    # code block score like a wrong answer, and that confusion is exactly what
+    # produced a 10% pass rate that read as task difficulty. Instead the code
+    # is compiled first and a syntax error becomes its own outcome, named as
+    # a malformed action rather than buried in a subprocess stderr.
+    try:
+        compile(code, "<action>", "exec")
+    except SyntaxError as e:
+        return {
+            "ok": False,
+            "malformed_action": True,
+            "returncode": None,
+            "stdout": "",
+            "stderr": "",
+            "error": (
+                f"Your `code` field is not valid Python: {e.msg} at line "
+                f"{e.lineno}. Nothing was executed.\n"
+                f"  offending line: {(e.text or '').strip()!r}\n"
+                "The `code` field must contain ONLY the Python program. Do "
+                "not put a closing brace after the last statement - the JSON "
+                "object's own brace goes outside the string, and the decoder "
+                "adds it for you."
+            ),
+        }
+
     handler = make_tool_handler(ctx, task, step) if live_tools else None
     result = run_sandboxed(
         code,
