@@ -1,0 +1,23 @@
+{
+  "LABEL": "D1 - direct prompt, no agent loop, no file I/O, no JSON envelope",
+  "model": "granite4.1:3b (3.4B, Q4_K_M)",
+  "samples": 5,
+  "temperature": 0.0,
+  "determinism": "all 5 responses byte-identical",
+  "result": {
+    "orbital_radius_used": 6771000,
+    "radius_correct": true,
+    "final_answer_m_s": 7668,
+    "expected_m_s": 7672.6,
+    "relative_error": 0.0006,
+    "tolerance": 0.005,
+    "passes": true
+  },
+  "in_harness_same_task": {
+    "answer_written": 7909544.1,
+    "passes": false,
+    "runs": "0/5",
+    "failure": "radius trap + ~1000x scale"
+  },
+  "conclusion": "The model can do this physics. It computes r = R + altitude correctly and lands within 0.06% of the expected value, 8x inside tolerance. The same model in the agent loop fails 5/5 on the same question. The harness is consuming the model, not the difficulty of the task."
+}
