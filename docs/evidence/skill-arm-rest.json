@@ -1,0 +1,185 @@
+{
+  "date": "2026-08-27",
+  "profile": "local",
+  "profile_provenance": {
+    "profile": "local",
+    "cloud_backends": [],
+    "credentials_present": [],
+    "backends": {
+      "cloud": {
+        "kind": "ollama",
+        "model": "granite4.1:3b",
+        "tier": "local"
+      },
+      "local": {
+        "kind": "ollama",
+        "model": "granite4.1:3b",
+        "tier": "local"
+      },
+      "review": {
+        "kind": "ollama",
+        "model": "granite4.1:8b",
+        "tier": "local"
+      }
+    }
+  },
+  "suite": "aero_calc",
+  "split": null,
+  "runs_per_task": 1,
+  "n_tasks": 11,
+  "mean_pass_rate": 0.3636,
+  "stable_pass": 4,
+  "stable_fail": 7,
+  "flaky": 0,
+  "wall_s_this_session": 2390.1,
+  "wall_s_all_runs": 2389.2,
+  "status_counts": {
+    "max_steps": 2,
+    "done": 4,
+    "plateau": 5
+  },
+  "unmeasured": 0,
+  "unmeasured_keys": [],
+  "partially_unmeasured_keys": [],
+  "ended_at_step_limit": 2,
+  "ended_budget_exhausted": 0,
+  "tier_pass_rates": {
+    "easy": 0.5,
+    "medium": 0.2,
+    "hard": 0.5
+  },
+  "tasks": [
+    {
+      "key": "E06",
+      "tier": "easy",
+      "split": "eval",
+      "classification": "stable_pass",
+      "passes": 1,
+      "runs": 1,
+      "mean_wall_s": 79.3,
+      "statuses": [
+        "done"
+      ]
+    },
+    {
+      "key": "E08",
+      "tier": "easy",
+      "split": "eval",
+      "classification": "stable_fail",
+      "passes": 0,
+      "runs": 1,
+      "mean_wall_s": 145.2,
+      "statuses": [
+        "plateau"
+      ]
+    },
+    {
+      "key": "H24",
+      "tier": "hard",
+      "split": "drafting",
+      "classification": "stable_pass",
+      "passes": 1,
+      "runs": 1,
+      "mean_wall_s": 366.2,
+      "statuses": [
+        "done"
+      ]
+    },
+    {
+      "key": "H25",
+      "tier": "hard",
+      "split": "drafting",
+      "classification": "stable_pass",
+      "passes": 1,
+      "runs": 1,
+      "mean_wall_s": 90.0,
+      "statuses": [
+        "done"
+      ]
+    },
+    {
+      "key": "H26",
+      "tier": "hard",
+      "split": "drafting",
+      "classification": "stable_fail",
+      "passes": 0,
+      "runs": 1,
+      "mean_wall_s": 159.7,
+      "statuses": [
+        "plateau"
+      ]
+    },
+    {
+      "key": "H29",
+      "tier": "hard",
+      "split": "eval",
+      "classification": "stable_fail",
+      "passes": 0,
+      "runs": 1,
+      "mean_wall_s": 118.2,
+      "statuses": [
+        "plateau"
+      ]
+    },
+    {
+      "key": "M13",
+      "tier": "medium",
+      "split": "drafting",
+      "classification": "stable_fail",
+      "passes": 0,
+      "runs": 1,
+      "mean_wall_s": 426.9,
+      "statuses": [
+        "max_steps"
+      ]
+    },
+    {
+      "key": "M17",
+      "tier": "medium",
+      "split": "eval",
+      "classification": "stable_pass",
+      "passes": 1,
+      "runs": 1,
+      "mean_wall_s": 168.9,
+      "statuses": [
+        "done"
+      ]
+    },
+    {
+      "key": "M18",
+      "tier": "medium",
+      "split": "eval",
+      "classification": "stable_fail",
+      "passes": 0,
+      "runs": 1,
+      "mean_wall_s": 546.5,
+      "statuses": [
+        "max_steps"
+      ]
+    },
+    {
+      "key": "M19",
+      "tier": "medium",
+      "split": "eval",
+      "classification": "stable_fail",
+      "passes": 0,
+      "runs": 1,
+      "mean_wall_s": 153.4,
+      "statuses": [
+        "plateau"
+      ]
+    },
+    {
+      "key": "M21",
+      "tier": "medium",
+      "split": "eval",
+      "classification": "stable_fail",
+      "passes": 0,
+      "runs": 1,
+      "mean_wall_s": 134.9,
+      "statuses": [
+        "plateau"
+      ]
+    }
+  ]
+}

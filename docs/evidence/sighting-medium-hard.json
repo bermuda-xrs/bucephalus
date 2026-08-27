@@ -1,0 +1,122 @@
+{
+  "date": "2026-08-27",
+  "profile": "local",
+  "profile_provenance": {
+    "profile": "local",
+    "cloud_backends": [],
+    "credentials_present": [],
+    "backends": {
+      "cloud": {
+        "kind": "ollama",
+        "model": "granite4.1:3b",
+        "tier": "local"
+      },
+      "local": {
+        "kind": "ollama",
+        "model": "granite4.1:3b",
+        "tier": "local"
+      },
+      "review": {
+        "kind": "ollama",
+        "model": "granite4.1:8b",
+        "tier": "local"
+      }
+    }
+  },
+  "suite": "aero_calc",
+  "split": null,
+  "runs_per_task": 1,
+  "n_tasks": 6,
+  "mean_pass_rate": 0.1667,
+  "stable_pass": 1,
+  "stable_fail": 5,
+  "flaky": 0,
+  "wall_s_this_session": 2029.2,
+  "wall_s_all_runs": 2028.6,
+  "status_counts": {
+    "done": 1,
+    "budget_exhausted": 1,
+    "plateau": 3,
+    "max_steps": 1
+  },
+  "ended_at_step_limit": 1,
+  "ended_budget_exhausted": 1,
+  "tier_pass_rates": {
+    "medium": 0.25,
+    "hard": 0.0
+  },
+  "tasks": [
+    {
+      "key": "H23",
+      "tier": "hard",
+      "split": "drafting",
+      "classification": "stable_fail",
+      "passes": 0,
+      "runs": 1,
+      "mean_wall_s": 135.3,
+      "statuses": [
+        "plateau"
+      ]
+    },
+    {
+      "key": "H30",
+      "tier": "hard",
+      "split": "eval",
+      "classification": "stable_fail",
+      "passes": 0,
+      "runs": 1,
+      "mean_wall_s": 430.7,
+      "statuses": [
+        "max_steps"
+      ]
+    },
+    {
+      "key": "M11",
+      "tier": "medium",
+      "split": "drafting",
+      "classification": "stable_pass",
+      "passes": 1,
+      "runs": 1,
+      "mean_wall_s": 149.8,
+      "statuses": [
+        "done"
+      ]
+    },
+    {
+      "key": "M12",
+      "tier": "medium",
+      "split": "drafting",
+      "classification": "stable_fail",
+      "passes": 0,
+      "runs": 1,
+      "mean_wall_s": 938.7,
+      "statuses": [
+        "budget_exhausted"
+      ]
+    },
+    {
+      "key": "M15",
+      "tier": "medium",
+      "split": "drafting",
+      "classification": "stable_fail",
+      "passes": 0,
+      "runs": 1,
+      "mean_wall_s": 179.2,
+      "statuses": [
+        "plateau"
+      ]
+    },
+    {
+      "key": "M22",
+      "tier": "medium",
+      "split": "eval",
+      "classification": "stable_fail",
+      "passes": 0,
+      "runs": 1,
+      "mean_wall_s": 194.9,
+      "statuses": [
+        "plateau"
+      ]
+    }
+  ]
+}

@@ -93,3 +93,75 @@ directory is only comparable to another measured under the same load, and any
 outcome derived from a time limit is only as trustworthy as the machine was
 quiet. The same easy task takes 162s idle and 339–360s with a test suite
 running alongside.
+
+---
+
+# The noise floor, pass 1 of 3 (2026-08-27)
+
+All 30 tasks, baseline arm, `granite4.1:3b`, `profile=local`, one run each.
+
+| | |
+|---|---|
+| mean pass rate | **10.0%** (3/30) |
+| easy | 20.0% (2/10) |
+| medium | **0.0% (0/12)** |
+| hard | 12.5% (1/8) |
+| ended | plateau 14 · max_steps 11 · done 3 · budget_exhausted 2 |
+
+`runs/noise-floor.json`, preserved here as `noise-floor-pass1.json`.
+
+**This trips the difficulty gate** — 10% is far outside the 25–75% band that a
+single pass is meant to catch gross miscalibration against. The gate's own
+counter-argument is that the noise floor measures the *baseline arm only*, and
+a low baseline with a working skill arm is near-maximum discordance, which is
+ideal for McNemar. So the discriminator was run rather than rebalancing blind.
+
+# The skill arm, all 30 tasks (2026-08-27)
+
+Measured in three runs (`sighting-medium-hard`, `skill-arm-headroom`,
+`skill-arm-rest`) so that every task has both arms.
+
+| | baseline | with skill |
+|---|---|---|
+| easy | 2/10 | **7/10** |
+| medium | **0/12** | **3/12** |
+| hard | 1/8 | 2/8 |
+| **all** | **3/30 (10%)** | **12/30 (40%)** |
+
+Paired outcome:
+
+| | n | tasks |
+|---|---|---|
+| **b** skill wins | **10** | E01 E02 E05 E06 E09 E10 H25 M11 M14 M17 |
+| **c** control wins | **1** | **E08** |
+| concordant pass | 2 | E03 H24 |
+| concordant fail | 17 | |
+
+**discordant 11 · lift 30.0pp · p = 0.00586**
+
+Against the shipped gate: n≥15 ✓ · discordant≥10 ✓ · lift≥5pp ✓ · p<0.05 ✓.
+
+## What this is, and what it is not
+
+**It is not the gate's verdict.** These are two arms measured *separately* —
+the baseline from the noise-floor pass, the skill arm from three later runs.
+`run_paired_trial` runs both arms per task with randomized order in one
+session, and writes `skill_trials`, which is what `evaluate_skill` reads.
+Treat this as a well-grounded prediction that the calibration will pass, not
+as the result.
+
+**Single run per arm.** The noise floor is at pass 1 of 3, so per-task
+flakiness is unmeasured. E03 has already passed 2 of 4 baseline observations,
+so at least one of these 30 cells is known to be unstable. Some of the 11
+discordant pairs could flip on a repeat.
+
+**E08 is the interesting one.** It passes bare and fails with the skill — a
+skill-caused regression on a task the skill's module 2 was written to help
+(Moon surface gravity, "identify the body"). The literature reports human
+written procedures hurting on 16 of 84 tasks; this is one. It is not flagged
+`catastrophic` in the suite, so it costs a `c` rather than triggering a veto.
+
+**The coverage heuristic under-counted.** `bench/coverage.py` marked E06 and
+H25 as outside the skill's scope, and both lifted. The upper bound was
+conservative in the useful direction, but it is a keyword match over a
+one-line trap description, not a model of what the skill does.

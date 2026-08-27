@@ -1,0 +1,411 @@
+{
+  "date": "2026-08-27",
+  "profile": "local",
+  "profile_provenance": {
+    "profile": "local",
+    "cloud_backends": [],
+    "credentials_present": [],
+    "backends": {
+      "cloud": {
+        "kind": "ollama",
+        "model": "granite4.1:3b",
+        "tier": "local"
+      },
+      "local": {
+        "kind": "ollama",
+        "model": "granite4.1:3b",
+        "tier": "local"
+      },
+      "review": {
+        "kind": "ollama",
+        "model": "granite4.1:8b",
+        "tier": "local"
+      }
+    }
+  },
+  "suite": "aero_calc",
+  "split": null,
+  "runs_per_task": 1,
+  "n_tasks": 30,
+  "mean_pass_rate": 0.1,
+  "stable_pass": 3,
+  "stable_fail": 27,
+  "flaky": 0,
+  "wall_s_this_session": 9044.6,
+  "wall_s_all_runs": 11792.3,
+  "status_counts": {
+    "plateau": 14,
+    "done": 3,
+    "max_steps": 11,
+    "budget_exhausted": 2
+  },
+  "ended_at_step_limit": 11,
+  "ended_budget_exhausted": 2,
+  "tier_pass_rates": {
+    "easy": 0.2,
+    "medium": 0.0,
+    "hard": 0.125
+  },
+  "tasks": [
+    {
+      "key": "E01",
+      "tier": "easy",
+      "split": "drafting",
+      "classification": "stable_fail",
+      "passes": 0,
+      "runs": 1,
+      "mean_wall_s": 186.0,
+      "statuses": [
+        "plateau"
+      ]
+    },
+    {
+      "key": "E02",
+      "tier": "easy",
+      "split": "drafting",
+      "classification": "stable_fail",
+      "passes": 0,
+      "runs": 1,
+      "mean_wall_s": 259.4,
+      "statuses": [
+        "plateau"
+      ]
+    },
+    {
+      "key": "E03",
+      "tier": "easy",
+      "split": "drafting",
+      "classification": "stable_pass",
+      "passes": 1,
+      "runs": 1,
+      "mean_wall_s": 245.8,
+      "statuses": [
+        "done"
+      ]
+    },
+    {
+      "key": "E04",
+      "tier": "easy",
+      "split": "drafting",
+      "classification": "stable_fail",
+      "passes": 0,
+      "runs": 1,
+      "mean_wall_s": 188.6,
+      "statuses": [
+        "plateau"
+      ]
+    },
+    {
+      "key": "E05",
+      "tier": "easy",
+      "split": "drafting",
+      "classification": "stable_fail",
+      "passes": 0,
+      "runs": 1,
+      "mean_wall_s": 172.1,
+      "statuses": [
+        "plateau"
+      ]
+    },
+    {
+      "key": "E06",
+      "tier": "easy",
+      "split": "eval",
+      "classification": "stable_fail",
+      "passes": 0,
+      "runs": 1,
+      "mean_wall_s": 370.7,
+      "statuses": [
+        "max_steps"
+      ]
+    },
+    {
+      "key": "E07",
+      "tier": "easy",
+      "split": "eval",
+      "classification": "stable_fail",
+      "passes": 0,
+      "runs": 1,
+      "mean_wall_s": 331.6,
+      "statuses": [
+        "max_steps"
+      ]
+    },
+    {
+      "key": "E08",
+      "tier": "easy",
+      "split": "eval",
+      "classification": "stable_pass",
+      "passes": 1,
+      "runs": 1,
+      "mean_wall_s": 77.4,
+      "statuses": [
+        "done"
+      ]
+    },
+    {
+      "key": "E09",
+      "tier": "easy",
+      "split": "eval",
+      "classification": "stable_fail",
+      "passes": 0,
+      "runs": 1,
+      "mean_wall_s": 1345.0,
+      "statuses": [
+        "budget_exhausted"
+      ]
+    },
+    {
+      "key": "E10",
+      "tier": "easy",
+      "split": "eval",
+      "classification": "stable_fail",
+      "passes": 0,
+      "runs": 1,
+      "mean_wall_s": 1938.3,
+      "statuses": [
+        "budget_exhausted"
+      ]
+    },
+    {
+      "key": "H23",
+      "tier": "hard",
+      "split": "drafting",
+      "classification": "stable_fail",
+      "passes": 0,
+      "runs": 1,
+      "mean_wall_s": 127.7,
+      "statuses": [
+        "plateau"
+      ]
+    },
+    {
+      "key": "H24",
+      "tier": "hard",
+      "split": "drafting",
+      "classification": "stable_pass",
+      "passes": 1,
+      "runs": 1,
+      "mean_wall_s": 280.9,
+      "statuses": [
+        "done"
+      ]
+    },
+    {
+      "key": "H25",
+      "tier": "hard",
+      "split": "drafting",
+      "classification": "stable_fail",
+      "passes": 0,
+      "runs": 1,
+      "mean_wall_s": 114.6,
+      "statuses": [
+        "plateau"
+      ]
+    },
+    {
+      "key": "H26",
+      "tier": "hard",
+      "split": "drafting",
+      "classification": "stable_fail",
+      "passes": 0,
+      "runs": 1,
+      "mean_wall_s": 560.8,
+      "statuses": [
+        "max_steps"
+      ]
+    },
+    {
+      "key": "H27",
+      "tier": "hard",
+      "split": "eval",
+      "classification": "stable_fail",
+      "passes": 0,
+      "runs": 1,
+      "mean_wall_s": 615.2,
+      "statuses": [
+        "max_steps"
+      ]
+    },
+    {
+      "key": "H28",
+      "tier": "hard",
+      "split": "eval",
+      "classification": "stable_fail",
+      "passes": 0,
+      "runs": 1,
+      "mean_wall_s": 457.6,
+      "statuses": [
+        "max_steps"
+      ]
+    },
+    {
+      "key": "H29",
+      "tier": "hard",
+      "split": "eval",
+      "classification": "stable_fail",
+      "passes": 0,
+      "runs": 1,
+      "mean_wall_s": 329.8,
+      "statuses": [
+        "max_steps"
+      ]
+    },
+    {
+      "key": "H30",
+      "tier": "hard",
+      "split": "eval",
+      "classification": "stable_fail",
+      "passes": 0,
+      "runs": 1,
+      "mean_wall_s": 620.1,
+      "statuses": [
+        "max_steps"
+      ]
+    },
+    {
+      "key": "M11",
+      "tier": "medium",
+      "split": "drafting",
+      "classification": "stable_fail",
+      "passes": 0,
+      "runs": 1,
+      "mean_wall_s": 282.2,
+      "statuses": [
+        "plateau"
+      ]
+    },
+    {
+      "key": "M12",
+      "tier": "medium",
+      "split": "drafting",
+      "classification": "stable_fail",
+      "passes": 0,
+      "runs": 1,
+      "mean_wall_s": 426.7,
+      "statuses": [
+        "plateau"
+      ]
+    },
+    {
+      "key": "M13",
+      "tier": "medium",
+      "split": "drafting",
+      "classification": "stable_fail",
+      "passes": 0,
+      "runs": 1,
+      "mean_wall_s": 164.9,
+      "statuses": [
+        "plateau"
+      ]
+    },
+    {
+      "key": "M14",
+      "tier": "medium",
+      "split": "drafting",
+      "classification": "stable_fail",
+      "passes": 0,
+      "runs": 1,
+      "mean_wall_s": 619.9,
+      "statuses": [
+        "max_steps"
+      ]
+    },
+    {
+      "key": "M15",
+      "tier": "medium",
+      "split": "drafting",
+      "classification": "stable_fail",
+      "passes": 0,
+      "runs": 1,
+      "mean_wall_s": 204.0,
+      "statuses": [
+        "plateau"
+      ]
+    },
+    {
+      "key": "M16",
+      "tier": "medium",
+      "split": "drafting",
+      "classification": "stable_fail",
+      "passes": 0,
+      "runs": 1,
+      "mean_wall_s": 488.6,
+      "statuses": [
+        "max_steps"
+      ]
+    },
+    {
+      "key": "M17",
+      "tier": "medium",
+      "split": "eval",
+      "classification": "stable_fail",
+      "passes": 0,
+      "runs": 1,
+      "mean_wall_s": 139.3,
+      "statuses": [
+        "plateau"
+      ]
+    },
+    {
+      "key": "M18",
+      "tier": "medium",
+      "split": "eval",
+      "classification": "stable_fail",
+      "passes": 0,
+      "runs": 1,
+      "mean_wall_s": 433.6,
+      "statuses": [
+        "max_steps"
+      ]
+    },
+    {
+      "key": "M19",
+      "tier": "medium",
+      "split": "eval",
+      "classification": "stable_fail",
+      "passes": 0,
+      "runs": 1,
+      "mean_wall_s": 117.7,
+      "statuses": [
+        "plateau"
+      ]
+    },
+    {
+      "key": "M20",
+      "tier": "medium",
+      "split": "eval",
+      "classification": "stable_fail",
+      "passes": 0,
+      "runs": 1,
+      "mean_wall_s": 290.5,
+      "statuses": [
+        "max_steps"
+      ]
+    },
+    {
+      "key": "M21",
+      "tier": "medium",
+      "split": "eval",
+      "classification": "stable_fail",
+      "passes": 0,
+      "runs": 1,
+      "mean_wall_s": 112.2,
+      "statuses": [
+        "plateau"
+      ]
+    },
+    {
+      "key": "M22",
+      "tier": "medium",
+      "split": "eval",
+      "classification": "stable_fail",
+      "passes": 0,
+      "runs": 1,
+      "mean_wall_s": 291.1,
+      "statuses": [
+        "plateau"
+      ]
+    }
+  ]
+}
