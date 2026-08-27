@@ -35,6 +35,7 @@ from agent.context import AgentContext  # noqa: E402
 from agent.execute.loop import run_task  # noqa: E402
 from agent.kernel.tasks import create_task  # noqa: E402
 from agent.kernel.types import Budget, TaskContract  # noqa: E402
+from agent.models.base import BackendError  # noqa: E402
 from agent.runlock import RunLock, RunLockBusy  # noqa: E402
 from agent.workspace import reset_workspace  # noqa: E402
 
@@ -87,6 +88,36 @@ def run_once(ctx, spec: dict, run_ix: int) -> dict:
         "free_tokens": m.free_tokens,
         "cost_usd": m.cost_usd,
     }
+
+
+def run_with_backend_retry(ctx, spec: dict, run_ix: int, key: str) -> dict:
+    """A model-server failure is NOT a task failure.
+
+    An ollama ReadTimeout on H27 killed a ten-task pass outright: one slow
+    call, and every remaining task was lost. In a five-hour calibration that
+    is the difference between a result and a wasted night.
+
+    But the fix must not be to swallow it. Recording a backend error as
+    `passed=False` would count a network problem as evidence the model cannot
+    do the task - the same silent-0% trap as a verifier that cannot find its
+    script. So it gets its own status, is excluded from the pass rate, and is
+    reported loudly.
+    """
+    for attempt in (1, 2):
+        try:
+            return run_once(ctx, spec, run_ix)
+        except BackendError as e:
+            if attempt == 1:
+                print(f"    {key}: backend error, retrying once - {e}", flush=True)
+                time.sleep(10)
+                continue
+            print(f"    {key}: backend error again, recording as UNMEASURED",
+                  flush=True)
+            return {
+                "run": run_ix, "task_id": None, "status": "backend_error",
+                "passed": False, "unmeasured": True, "wall_s": 0.0,
+                "free_tokens": 0, "cost_usd": 0.0, "error": str(e),
+            }
 
 
 def classify(passes: list[bool]) -> str:
@@ -314,7 +345,7 @@ def main() -> int:
                       f"{cached['status']:<16} {cached['wall_s']:>6.1f}s  (resumed)",
                       flush=True)
                 continue
-            out = run_once(ctx, spec, r)
+            out = run_with_backend_retry(ctx, spec, r, key)
             out["key"] = key
             results.setdefault(key, []).append(out)
             # Before the print, so a kill between them loses nothing.
@@ -323,7 +354,26 @@ def main() -> int:
                   f"{out['status']:<16} {out['wall_s']:>6.1f}s", flush=True)
 
     rows = []
+    unmeasured_keys = []
     for key, runs in results.items():
+        # A backend error is not an observation. Counting it would let a model
+        # server hiccup masquerade as task difficulty.
+        measured = [x for x in runs if not x.get("unmeasured")]
+        if len(measured) != len(runs):
+            unmeasured_keys.append(key)
+        if not measured:
+            rows.append({
+                "key": key,
+                "tier": (next(s for s in specs if s["key"] == key)
+                         .get("output_schema") or {}).get("x-tier", "?"),
+                "split": (next(s for s in specs if s["key"] == key)
+                          .get("output_schema") or {}).get("x-split", "?"),
+                "classification": "unmeasured", "passes": 0, "runs": 0,
+                "mean_wall_s": 0.0,
+                "statuses": [x["status"] for x in runs],
+            })
+            continue
+        runs = measured
         passes = [x["passed"] for x in runs]
         spec = next(s for s in specs if s["key"] == key)
         rows.append({
@@ -364,7 +414,9 @@ def main() -> int:
     flaky = [r for r in rows if r["classification"] == "flaky"]
     stable_pass = [r for r in rows if r["classification"] == "stable_pass"]
     stable_fail = [r for r in rows if r["classification"] == "stable_fail"]
+    # denominator counts only real observations
     mean_rate = sum(r["passes"] for r in rows) / max(1, sum(r["runs"] for r in rows))
+    unmeasured = [r for r in rows if r["classification"] == "unmeasured"]
 
     report = {
         "date": time.strftime("%Y-%m-%d"),
@@ -381,6 +433,9 @@ def main() -> int:
         "wall_s_all_runs": round(
             sum(x["wall_s"] for runs in results.values() for x in runs), 1),
         "status_counts": status_counts,
+        "unmeasured": len(unmeasured),
+        "unmeasured_keys": [r["key"] for r in unmeasured],
+        "partially_unmeasured_keys": unmeasured_keys,
         "ended_at_step_limit": status_counts.get("max_steps", 0),
         "ended_budget_exhausted": status_counts.get("budget_exhausted", 0),
         "tier_pass_rates": {
@@ -403,6 +458,11 @@ def main() -> int:
         if t:
             rate = sum(r["passes"] for r in t) / sum(r["runs"] for r in t)
             print(f"  {tier:<7} {rate:>6.1%}  ({len(t)} tasks)")
+    if unmeasured:
+        print(f"\n{len(unmeasured)} task(s) UNMEASURED - the model server "
+              f"failed twice: {', '.join(r['key'] for r in unmeasured)}")
+        print("These are excluded from the pass rate. They are not evidence "
+              "the model cannot do them; re-run them before reporting.")
     if status_counts:
         print("  ended: " + "  ".join(f"{k}={v}" for k, v in
                                       sorted(status_counts.items())))
