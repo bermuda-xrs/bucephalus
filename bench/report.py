@@ -238,6 +238,35 @@ def render(noise: dict | None, cal: dict | None) -> str:
             add("| *(no arms recorded yet)* | | | |")
     add("")
 
+    # --------------------------------------------- budget censoring per arm
+    arms = [a for a in ((noise or {}).get("arms") or []) if a]
+    if len(arms) >= 2:
+        add("### Budget censoring")
+        add("")
+        add("The arms run under different time budgets, so a ceiling hit "
+            "censors them differently. A pass rate is only comparable across "
+            "arms if the ceiling-hit counts are comparable too.")
+        add("")
+        add("| arm | budget/task | ceiling hits | of tasks | pass rate |")
+        add("|---|---|---|---|---|")
+        for a in arms:
+            hits = a.get("ceiling_hits", 0)
+            add(f"| {a.get('name')} | {a.get('budget_s', 'n/a')}s | {hits} | "
+                f"{a.get('n_tasks', 0)} | {_pct(a.get('pass_rate', 0))} |")
+        add("")
+        worst = max(arms, key=lambda a: a.get("ceiling_hits", 0))
+        best = min(arms, key=lambda a: a.get("ceiling_hits", 0))
+        gap = worst.get("ceiling_hits", 0) - best.get("ceiling_hits", 0)
+        if gap >= max(1, 0.2 * max(1, worst.get("n_tasks", 1))):
+            add(f"> **CONFOUNDED.** `{worst.get('name')}` hit its ceiling "
+                f"{worst.get('ceiling_hits')} times against "
+                f"{best.get('ceiling_hits')} for `{best.get('name')}`. The "
+                "pass-rate difference between these arms is not attributable "
+                "to model quality: the slower arm was cut off more often. "
+                "Report the ceiling counts wherever the rates are quoted, and "
+                "do not plot them as a clean frontier.")
+            add("")
+
     # -------------------------------------------------------------- caveats
     add("## Caveats that travel with every number above")
     add("")

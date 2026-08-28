@@ -161,3 +161,32 @@ def test_a_scaled_budget_is_disclosed():
     out = report.render(_noise(budget_scale=3.0), None)
     assert "budgets scaled" in out
     assert "x3" in out
+
+
+def _arms(hits_a=1, hits_b=1, n=10):
+    return {"arms": [
+        {"name": "arm_3b", "budget_s": 600, "ceiling_hits": hits_a,
+         "n_tasks": n, "pass_rate": 0.1, "median_wall_s": 200},
+        {"name": "arm_8b", "budget_s": 1800, "ceiling_hits": hits_b,
+         "n_tasks": n, "pass_rate": 0.4, "median_wall_s": 800},
+    ]}
+
+
+def test_ceiling_hits_are_reported_next_to_every_pass_rate():
+    out = report.render(_noise(**_arms()), None)
+    assert "Budget censoring" in out
+    assert "ceiling hits" in out
+
+
+def test_a_lopsided_ceiling_count_is_called_confounded():
+    """The comparison is not attributable to model quality if one arm was
+    cut off far more often. Easy to miss, so the generator says it."""
+    out = report.render(_noise(**_arms(hits_a=0, hits_b=7)), None)
+    assert "CONFOUNDED" in out
+    assert "not attributable" in out
+    assert "do not plot them as a clean frontier" in out
+
+
+def test_comparable_ceilings_are_not_flagged():
+    out = report.render(_noise(**_arms(hits_a=1, hits_b=1)), None)
+    assert "CONFOUNDED" not in out
