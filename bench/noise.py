@@ -91,7 +91,9 @@ def run_once(ctx, spec: dict, run_ix: int) -> dict:
         "run": run_ix,
         "task_id": task.id,
         "status": result.status,
-        "passed": result.status == "done",
+        # done_unannounced is a PASS: the artifact verified, the model
+        # just never said <final>. Counted separately in the report.
+        "passed": result.status in ("done", "done_unannounced"),
         "wall_s": round(time.time() - t0, 1),
         "free_tokens": m.free_tokens,
         "cost_usd": m.cost_usd,

@@ -219,7 +219,8 @@ def run_task(ctx, task_id: str) -> TaskResult:
                 spend(ctx.conn, ctx.log, task, seconds=elapsed - charged_s)
                 charged_s = elapsed
             if task.budget.exhausted():
-                return finish(ctx, task, "budget_exhausted", steps=step)
+                return _final_sweep(ctx, task, "budget_exhausted",
+                                    best_answer, step)
 
             if plan is not None:
                 # Invariant 17: verify the pinned plan hash before EVERY step.
@@ -354,8 +355,8 @@ def run_task(ctx, task_id: str) -> TaskResult:
             obs = execute_action(ctx, task, parsed, step, plan)
             entries.append(obs)
 
-        return finish(ctx, task, "max_steps", answer=best_answer,
-                      steps=ctx.config.limits.max_steps)
+        return _final_sweep(ctx, task, "max_steps", best_answer,
+                            ctx.config.limits.max_steps)
 
     except TaskPaused as p:
         spend(ctx.conn, ctx.log, task, seconds=time.time() - started)
@@ -366,6 +367,42 @@ def run_task(ctx, task_id: str) -> TaskResult:
         )
     finally:
         ctx.executing_backend = None
+
+
+def _final_sweep(ctx, task, status: str, best_answer, steps: int) -> TaskResult:
+    """Grade what the task PRODUCED before giving up on it.
+
+    Verification used to run only inside the `<final>` branch, so a task that
+    wrote a correct `output/answer.json` and never announced completion was
+    recorded as a failure and never graded at all.
+
+    Measured: granite4.1:8b on E01 wrote 7672.598648385013 against an expected
+    7672.6 - correct to eleven significant figures - then emitted no <final>
+    across nine steps and was scored `budget_exhausted`. The suite was
+    measuring whether the model says it is done, not whether the work is done.
+
+    The contract says "write output/answer.json". `verify_program` grades
+    files. So the artifact is graded on every terminal path.
+
+    A pass found this way is recorded as `done_unannounced`, NOT as `done`:
+    the work is correct and the pass rate should say so, but failing to
+    terminate is a real behavioural deficiency and the report must be able to
+    count it separately.
+    """
+    # A sweep grades a produced ARTIFACT. `always_pass` grades nothing, so
+    # sweeping it would turn every budget exhaustion into a pass - handing out
+    # exactly the free credit this change must not create.
+    if task.contract.success_criterion == "always_pass":
+        return finish(ctx, task, status, answer=best_answer, steps=steps)
+
+    ok, report = _verify(ctx, task, best_answer if isinstance(best_answer, str)
+                         else json.dumps(best_answer or {}, indent=2))
+    if ok:
+        ctx.log.append(task.id, "verify.unannounced_pass",
+                       {"prior_status": status, "score": report.score})
+        return finish(ctx, task, "done_unannounced",
+                      answer=best_answer, steps=steps)
+    return finish(ctx, task, status, answer=best_answer, steps=steps)
 
 
 def _verify(ctx, task, artifact: str):
@@ -574,6 +611,8 @@ def finish(
 ) -> TaskResult:
     mapping = {
         "done": TaskStatus.DONE,
+        # Correct work, no <final>. A pass, counted separately.
+        "done_unannounced": TaskStatus.DONE,
         "budget_exhausted": TaskStatus.FAILED,
         "max_steps": TaskStatus.FAILED,
         "plateau": TaskStatus.FAILED,
@@ -587,7 +626,8 @@ def finish(
 
     # M9.5 needs this or decay has no data: without invocation records every
     # promoted skill looks unused and the next decay pass demotes all of them.
-    ctx.record_skill_invocations(task.id, success=status == "done")
+    ctx.record_skill_invocations(
+        task.id, success=status in ("done", "done_unannounced"))
     if answer is not None:
         write_artifact(
             ctx.conn,

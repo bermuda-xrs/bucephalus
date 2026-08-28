@@ -131,8 +131,8 @@ def run_task_isolated(ctx, task_spec: TaskSpec, skills: list[dict]) -> TrialOutc
     result = run_task(ctx, task.id)
     m = ctx.telemetry.metrics(task.id)
     return TrialOutcome(
-        success=result.status == "done",
-        score=1.0 if result.status == "done" else 0.0,
+        success=result.status in ("done", "done_unannounced"),
+        score=1.0 if result.status in ("done", "done_unannounced") else 0.0,
         paid_tokens=m.paid_tokens,
         free_tokens=m.free_tokens,
         wall_ms=int((time.time() - t0) * 1000),

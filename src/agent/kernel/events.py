@@ -51,6 +51,10 @@ EVENT_TYPES = frozenset(
         "verify.attempted",
         "verify.passed",
         "verify.failed",
+        # The artifact verified on a terminal path without the model
+        # ever emitting <final>. A pass, recorded distinctly so
+        # "did the work" and "said it was done" stay separable.
+        "verify.unannounced_pass",
         "human.approved",
         "human.denied",
         "human.steered",
