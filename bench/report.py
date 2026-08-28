@@ -89,6 +89,17 @@ def render(noise: dict | None, cal: dict | None) -> str:
     prov = (src or {}).get("profile_provenance", {})
     models = prov.get("backends") or (cal or {}).get("models") or {}
     add(f"* **date** {(cal or {}).get('date', noise and noise.get('date') or 'n/a')}")
+    prov_all = (src or {}).get("profile_provenance", {}) or {}
+    disabled = []
+    if prov_all.get("escalation"):
+        disabled.append("escalation-by-disagreement (M6.3) — " + prov_all["escalation"])
+    if (src or {}).get("auto_review") is False or (src or {}).get("deputy") == "off":
+        disabled.append("the M13.3 deputy (auto_review) — off for measurement")
+    if prov_all.get("executor_override"):
+        add(f"* **executor override** {prov_all['executor_override']}")
+    if (src or {}).get("budget_scale", 1.0) != 1.0:
+        add(f"* **time budgets scaled** x{(src or {}).get('budget_scale')} "
+            "(so a slower executor is compared on models, not step budgets)")
     add(f"* **profile** `{(src or {}).get('profile', 'unknown')}` — "
         f"cloud backends {prov.get('cloud_backends', 'n/a')}, "
         f"provider credentials {prov.get('credentials_present', 'n/a')}")
@@ -97,6 +108,13 @@ def render(noise: dict | None, cal: dict | None) -> str:
             f"{k}={v.get('model', v) if isinstance(v, dict) else v}"
             for k, v in sorted(models.items()))
         add(f"* **models** {rendered}")
+    add("")
+
+    if disabled:
+        add("")
+        add("**The measured system is not the shipped system.** Disabled here:")
+        for d in disabled:
+            add(f"  * {d}")
     add("")
 
     # ---------------------------------------------------------------- noise
@@ -193,6 +211,31 @@ def render(noise: dict | None, cal: dict | None) -> str:
         "does, so no claim of the form \"the system makes a small model "
         "competent\" is supported yet — only the narrower claim that a skill "
         "moves the scaffolded model.")
+    add("")
+
+    # ----------------------------------------------------------- cost axis
+    add("## Cost versus quality")
+    add("")
+    add("**The cost axis is SECONDS, not dollars.** On an all-local rig every "
+        "call costs $0.0000, so a dollar axis collapses the chart to a single "
+        "point and says nothing. Wall clock is the real constraint on this "
+        "hardware, and the spec's own laptop-tier reasoning already says "
+        "output tokens are the budget when the machine is the bottleneck.")
+    add("")
+    add("| arm | median s/task | pass rate | USD/task |")
+    add("|---|---|---|---|")
+    for pt in (cal or {}).get("pareto", []) or (noise or {}).get("pareto", []) or []:
+        add(f"| {pt.get('arm')} | {pt.get('median_wall_s', 'n/a')} | "
+            f"{_pct(pt.get('pass_rate', 0))} | "
+            f"{pt.get('usd_per_task', 0):.4f} (n/a under local profile) |")
+    if not ((cal or {}).get("pareto") or (noise or {}).get("pareto")):
+        med = (noise or {}).get("median_wall_s")
+        if med is not None:
+            add(f"| baseline, single tier | {med} | "
+                f"{_pct((noise or {}).get('mean_pass_rate', 0))} | "
+                "0.0000 (n/a under local profile) |")
+        else:
+            add("| *(no arms recorded yet)* | | | |")
     add("")
 
     # -------------------------------------------------------------- caveats

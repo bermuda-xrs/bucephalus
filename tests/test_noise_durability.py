@@ -38,6 +38,7 @@ noise = _load_noise()
 class _Args:
     suite, split, runs, limit, skill = "aero_calc", None, 3, None, None
     profile = "local"
+    executor = None
     tier = None
     only = None
 

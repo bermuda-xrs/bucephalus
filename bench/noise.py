@@ -47,6 +47,7 @@ TARGET_BAND = (0.35, 0.65)   # mean pass rate where measurement has power
 # the skill moves anything at all. A skill that shifts nothing on five tasks
 # will not suddenly find signal on thirty.
 SKILLS_FOR_ARM: list = []
+BUDGET_SCALE: float = 1.0
 
 
 def provision(ctx, spec: dict) -> None:
@@ -70,10 +71,15 @@ def run_once(ctx, spec: dict, run_ix: int) -> dict:
         output_schema=spec.get("output_schema", {}),
         artifact_scope=spec.get("artifact_scope", []),
     )
+    # The suite's time budgets were written against granite4.1:3b. A model
+    # ~3x slower hits them before it can finish, so an unscaled comparison
+    # measures the budget rather than the model. Scaling is controlling a
+    # variable; it does not change what counts as a pass.
     budget = Budget(
         usd=spec.get("budget_usd", 0.0) or 0.0,
-        seconds=spec.get("budget_seconds")
-                or ctx.config.limits.default_task_budget_seconds,
+        seconds=int((spec.get("budget_seconds")
+                     or ctx.config.limits.default_task_budget_seconds)
+                    * BUDGET_SCALE),
     )
     task = create_task(ctx.conn, ctx.log, contract, budget)
     ctx.set_frozen_skills(task.id, SKILLS_FOR_ARM)
@@ -152,6 +158,7 @@ def run_signature(args, n_specs: int) -> dict:
     # hours, on this hardware. Everything that would change WHAT is being
     # measured is included.
     return {"suite": args.suite, "split": args.split,
+            "executor": args.executor,
             "limit": args.limit, "tier": sorted(args.tier) if args.tier else None,
             "only": sorted(args.only) if args.only else None,
             "skill": args.skill,
@@ -237,6 +244,15 @@ def main() -> int:
     ap.add_argument("--out", default="runs/noise-floor.json")
     ap.add_argument("--auto-review", action="store_true",
                     help="keep the LLM deputy in the loop (adds variance)")
+    ap.add_argument("--budget-scale", type=float, default=1.0,
+                    help="multiply every task's TIME budget. Use it when the "
+                         "executor is slower than the one the budgets were "
+                         "written for, so the comparison is between models "
+                         "rather than between step budgets. Recorded in the "
+                         "report.")
+    ap.add_argument("--executor",
+                    help="override the executor model, making this a MODEL "
+                         "arm rather than a skill arm (e.g. granite4.1:8b)")
     ap.add_argument("--skill", help="run WITH this skill (name or id) instead of bare")
     ap.add_argument("--resume", action="store_true",
                     help="reuse completed runs from the .partial.jsonl ledger "
@@ -258,7 +274,20 @@ def main() -> int:
 
     ctx = AgentContext.open(args.config, profile=args.profile)
 
-    global SKILLS_FOR_ARM
+    if args.executor:
+        # Same suite, same harness, different model: that is what makes the
+        # error SIGNATURE comparable between executors.
+        from agent.models.registry import build_backends
+
+        ctx.config.backends["cloud"].model = args.executor
+        ctx.backends = build_backends(ctx.config)
+        ctx.config.profile_provenance["executor_override"] = args.executor
+        print(f"executor overridden -> {args.executor}")
+
+    global SKILLS_FOR_ARM, BUDGET_SCALE
+    BUDGET_SCALE = args.budget_scale
+    if args.budget_scale != 1.0:
+        print(f"time budgets scaled x{args.budget_scale}")
     if args.skill:
         row = ctx.conn.execute(
             "SELECT id FROM skills WHERE id=? OR name=? ORDER BY version DESC LIMIT 1",
@@ -421,6 +450,7 @@ def main() -> int:
 
     report = {
         "date": time.strftime("%Y-%m-%d"),
+        "budget_scale": args.budget_scale,
         "profile": ctx.config.profile,
         "profile_provenance": ctx.config.profile_provenance,
         "suite": args.suite, "split": args.split, "runs_per_task": args.runs,

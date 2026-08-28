@@ -135,3 +135,29 @@ def test_the_missing_bare_arm_bounds_the_claim():
 def test_three_ways_still_renders_with_nothing_measured():
     out = report.render(None, None)
     assert "Nothing to report" in out
+
+
+def test_the_cost_axis_is_seconds_and_says_why():
+    """Dollars are zero on an all-local rig; a dollar axis is one point."""
+    out = report.render(_noise(median_wall_s=214), None)
+    assert "SECONDS, not dollars" in out
+    assert "n/a under local profile" in out, "keep the dollar column, labelled"
+    assert "median s/task" in out
+
+
+def test_the_header_names_every_disabled_component():
+    """"The measured system is not the shipped system" must be visible."""
+    n = _noise()
+    n["profile_provenance"]["escalation"] = "NOT WIRED - no call site"
+    n["auto_review"] = False
+    out = report.render(n, None)
+    assert "measured system is not the shipped system" in out
+    assert "escalation-by-disagreement" in out
+    assert "deputy" in out
+
+
+def test_a_scaled_budget_is_disclosed():
+    """Scaling budgets for a slower executor must not be silent."""
+    out = report.render(_noise(budget_scale=3.0), None)
+    assert "budgets scaled" in out
+    assert "x3" in out
