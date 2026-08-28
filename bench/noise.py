@@ -135,6 +135,45 @@ def classify(passes: list[bool]) -> str:
     return "flaky"
 
 
+def free_memory_gb() -> float | None:
+    """Physical memory free, or None if it cannot be read.
+
+    Measured the hard way: an orphaned `llama-server` holding 5.9GB (Ollama's
+    child, left behind when its parent was killed) put a 15.5GB machine at
+    0.9GB free and 24.4GB committed. One model call then took 1499.8s for
+    2223 input / 195 output tokens - the call before it, essentially
+    identical, took 81.9s. An 18x slowdown, and the task died
+    budget_exhausted having produced nothing.
+
+    Wall clock is the cost axis, so paging silently rewrites the measurement.
+    """
+    try:
+        if sys.platform == "win32":
+            import ctypes
+
+            class _MS(ctypes.Structure):
+                _fields_ = [("dwLength", ctypes.c_ulong),
+                            ("dwMemoryLoad", ctypes.c_ulong),
+                            ("ullTotalPhys", ctypes.c_ulonglong),
+                            ("ullAvailPhys", ctypes.c_ulonglong),
+                            ("ullTotalPageFile", ctypes.c_ulonglong),
+                            ("ullAvailPageFile", ctypes.c_ulonglong),
+                            ("ullTotalVirtual", ctypes.c_ulonglong),
+                            ("ullAvailVirtual", ctypes.c_ulonglong),
+                            ("ullAvailExtendedVirtual", ctypes.c_ulonglong)]
+            m = _MS()
+            m.dwLength = ctypes.sizeof(_MS)
+            ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(m))
+            return m.ullAvailPhys / 1024 ** 3
+        with open("/proc/meminfo", encoding="utf-8") as fh:
+            for line in fh:
+                if line.startswith("MemAvailable:"):
+                    return int(line.split()[1]) / 1024 ** 2
+    except Exception:  # noqa: BLE001 - a missing metric must not stop a run
+        return None
+    return None
+
+
 def ledger_path(out: str | Path) -> Path:
     """Sidecar beside the report: one JSON line per completed run."""
     p = Path(out)
@@ -272,6 +311,15 @@ def main() -> int:
         print(f"REFUSING TO START.\n{e}")
         return 2
 
+    free_gb = free_memory_gb()
+    if free_gb is not None:
+        print(f"free memory at start: {free_gb:.1f} GB")
+        if free_gb < 2.0:
+            print("WARNING: under 2 GB free. Wall clock is the cost axis here, "
+                  "and paging rewrites it - one call has been measured 18x "
+                  "slower under pressure. Check for an orphaned llama-server: "
+                  "killing ollama does not kill its child.")
+
     ctx = AgentContext.open(args.config, profile=args.profile)
 
     if args.executor:
@@ -282,6 +330,12 @@ def main() -> int:
         ctx.config.backends["cloud"].model = args.executor
         ctx.backends = build_backends(ctx.config)
         ctx.config.profile_provenance["executor_override"] = args.executor
+        # profile_provenance["backends"] was captured at config load, BEFORE
+        # this override, so the report header named the wrong model while the
+        # run used the right one. Refresh it, or every 8B result reads as 3B.
+        for name, b in ctx.config.backends.items():
+            ctx.config.profile_provenance.setdefault("backends", {})[name] = {
+                "kind": b.kind, "model": b.model, "tier": b.trust_tier}
         print(f"executor overridden -> {args.executor}")
 
     global SKILLS_FOR_ARM, BUDGET_SCALE
@@ -451,6 +505,7 @@ def main() -> int:
     report = {
         "date": time.strftime("%Y-%m-%d"),
         "budget_scale": args.budget_scale,
+        "free_memory_gb_at_start": free_gb,
         "profile": ctx.config.profile,
         "profile_provenance": ctx.config.profile_provenance,
         "suite": args.suite, "split": args.split, "runs_per_task": args.runs,

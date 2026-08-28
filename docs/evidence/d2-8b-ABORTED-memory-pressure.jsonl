@@ -1,0 +1,2 @@
+{"_signature": {"suite": "aero_calc", "split": null, "executor": "granite4.1:8b", "limit": null, "tier": ["easy"], "only": null, "skill": null, "profile": "local", "n_specs": 10}}
+{"run": 0, "task_id": "t_db0ff92020274361", "status": "budget_exhausted", "passed": false, "wall_s": 1911.7, "free_tokens": 13717, "cost_usd": 0.0, "key": "E01"}

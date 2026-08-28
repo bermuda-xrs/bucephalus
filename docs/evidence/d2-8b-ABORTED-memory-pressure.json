@@ -1,0 +1,16 @@
+{
+  "LABEL": "D2 FIRST ATTEMPT - ABORTED AT 1/10, MEMORY PRESSURE, NOT A RESULT",
+  "why_superseded": "granite4.1:8b is 7.72GB resident with num_ctx=16384. Total RAM 15.5GB, free 1.4GB with it alone. granite4.1:3b was still resident from earlier runs (keep_alive 30m), so the machine was in memory pressure.",
+  "evidence": {
+    "task": "E01",
+    "wall_s": 1911.7,
+    "status": "budget_exhausted",
+    "step_6_call": "1499.8s for 2223 input / 195 output tokens",
+    "step_5_call": "81.9s for 2074 input / 193 output tokens",
+    "slowdown": "18x for an essentially identical call"
+  },
+  "defects_live": [
+    "profile_provenance[backends] was stale so the header named granite4.1:3b while the run used 8b (fixed)"
+  ],
+  "do_not_report": "No error signature can be read from this. The single completed task ended budget_exhausted having produced no answer."
+}
