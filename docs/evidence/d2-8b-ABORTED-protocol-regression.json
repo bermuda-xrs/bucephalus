@@ -1,0 +1,14 @@
+{
+  "LABEL": "D2 SECOND ATTEMPT - ABORTED AT 8/10, PROTOCOL REGRESSION, NOT A RESULT",
+  "why_superseded": "Phase 1.3 switched ollama backends to the <code> tag protocol. granite4.1:8b never emitted a parseable <final> under it: 10 model calls, 6 parseable actions, 0 verifications, on every one of 8 tasks. No answer artifact was produced by any task, so there is NO error signature to classify as clustered or unstructured. D2 measured a harness change I made in the same session, not the model.",
+  "isolation": {
+    "3B + JSON (pass 1)": "reached <final> 3x",
+    "3B + tags (smoke)": "reached <final> 3x",
+    "8B + tags": "0 of 10 calls reached <final>",
+    "8B + JSON": "untested at abort"
+  },
+  "precedent": "CORRECTIONS 2.3 - an 8B reviewer could not produce the VERDICT text format at all, and denied 100% of actions. Same class.",
+  "fix": "BackendConfig.action_protocol, per backend, default json. tags is opt-in.",
+  "also_live": "memory pressure recurred (E08 took 5403.7s); the running process predated the reap preflight",
+  "do_not_report": "0/10 here is protocol adherence, not physics. It must not be read as an 8B capability result."
+}

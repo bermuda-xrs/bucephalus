@@ -29,6 +29,7 @@ from pathlib import Path
 
 import pytest
 
+from agent.proc import kill_tree
 from agent.runlock import RunLock, RunLockBusy
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -124,10 +125,7 @@ def test_the_lock_is_released_when_a_process_is_killed(tmp_path):
             pass
     finally:
         # kill the real holder, then the wrapper
-        try:
-            os.kill(holder, 9)
-        except (OSError, NameError):
-            pass
+        kill_tree(proc.pid)      # the trampoline AND the interpreter
         proc.kill()
         proc.wait(timeout=10)
 
@@ -185,3 +183,75 @@ def test_the_lockfile_names_exactly_one_pid(tmp_path):
     body = lf.read_text(encoding="utf-8").strip()
     assert len(body.split()) == 1, f"lock file accumulated PIDs: {body!r}"
     assert body.isdigit()
+
+
+# ---------------------------------------------------------------------------
+# 1.7 - parent dies, child survives. Two instances in two days is a class.
+# ---------------------------------------------------------------------------
+
+
+def test_kill_tree_kills_the_child_not_just_the_parent(tmp_path):
+    """The bug, twice: a venv trampoline, then Ollama's llama-server.
+
+    A parent that spawns a worker and is killed leaves the worker holding
+    whatever it held - a lock, or 5.9 GB of RAM.
+    """
+    from agent.proc import _alive, kill_tree
+
+    marker = tmp_path / "grandchild.pid"
+    # as_posix(): a Windows path embedded in a doubly-nested string is read
+    # as unicode escapes and fails to compile.
+    inner = ("import time,os,pathlib;"
+             "pathlib.Path(" + repr(marker.as_posix()) + ")"
+             ".write_text(str(os.getpid()));"
+             "time.sleep(120)")
+    script = (
+        "import subprocess, sys, time, os" + chr(10) +
+        "subprocess.Popen([sys.executable, " + repr("-c") + ", " + repr(inner) + "])" + chr(10) +
+        "print(" + repr("SPAWNED") + ", os.getpid(), flush=True)" + chr(10) +
+        "time.sleep(120)" + chr(10)
+    )
+    proc = subprocess.Popen([sys.executable, "-c", script],
+                            stdout=subprocess.PIPE, text=True)
+    try:
+        assert proc.stdout.readline().split()[0] == "SPAWNED"
+        deadline = time.time() + 30
+        while time.time() < deadline and not marker.exists():
+            time.sleep(0.2)
+        assert marker.exists(), "grandchild never started"
+        grandchild = int(marker.read_text(encoding="utf-8"))
+        assert _alive(grandchild)
+
+        kill_tree(proc.pid)
+
+        deadline = time.time() + 20
+        while time.time() < deadline and _alive(grandchild):
+            time.sleep(0.3)
+        assert not _alive(grandchild), (
+            "the grandchild outlived kill_tree - this is the bug that left an "
+            "llama-server holding 5.9 GB and made one model call 18x slower")
+    finally:
+        proc.kill()
+        proc.wait(timeout=10)
+
+
+def test_kill_tree_on_a_dead_pid_is_success():
+    """Idempotent: the caller's intent is 'ensure not running'."""
+    from agent.proc import kill_tree
+
+    assert kill_tree(999999) is True
+    assert kill_tree(-1) is True
+
+
+def test_free_memory_is_readable():
+    """The cost axis is seconds, so paging must be observable."""
+    from agent.proc import free_memory_gb
+
+    gb = free_memory_gb()
+    assert gb is None or 0.0 < gb < 4096.0
+
+
+def test_reap_orphans_is_safe_when_there_are_none():
+    from agent.proc import reap_orphans
+
+    assert isinstance(reap_orphans(("definitely-not-a-real-process",)), list)

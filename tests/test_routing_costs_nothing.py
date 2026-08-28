@@ -12,7 +12,7 @@ from __future__ import annotations
 from agent.router.profile import estimate_seconds
 
 
-def test_routing_makes_no_model_calls(ctx, task):
+def test_routing_makes_no_model_calls(ctx, task, routing_only):
     before = {n: len(getattr(b, "calls", [])) for n, b in ctx.backends.items()}
 
     for purpose in ("summarize", "classify", "extract", "compress_tool_output"):

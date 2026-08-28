@@ -9,7 +9,7 @@ from __future__ import annotations
 from agent.router.cascade import local_with_escalation, max_cluster_fraction, normalize
 
 
-def test_router_respects_allowlist(ctx, task):
+def test_router_respects_allowlist(ctx, task, routing_only):
     """A 'plan' purpose never routes local, whatever the measurements say."""
     assert ctx.router.choose("plan", task).name == "cloud"
     assert ctx.router.choose("review", task).name == "cloud"
@@ -17,7 +17,7 @@ def test_router_respects_allowlist(ctx, task):
     assert ctx.router.choose("summarize", task).name == "local"
 
 
-def test_laptop_tier_is_narrower(ctx, task):
+def test_laptop_tier_is_narrower(ctx, task, routing_only):
     ctx.config.active_local_tier = "laptop"
     assert ctx.router.choose("classify", task).name == "laptop"
     # summarize is on the desktop allowlist but not the laptop one
@@ -83,7 +83,7 @@ def test_escalation_rate_is_a_health_metric(ctx, task):
 # -- the call site ---------------------------------------------------------
 
 
-def test_large_observations_route_to_the_local_tier(ctx, workspace, scripted):
+def test_large_observations_route_to_the_local_tier(ctx, workspace, scripted, routing_only):
     """The loop must actually ISSUE a local-eligible purpose, or the free
     column stays at zero forever no matter how good the router is."""
     from agent.execute.loop import run_task

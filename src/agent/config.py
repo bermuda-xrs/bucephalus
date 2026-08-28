@@ -31,6 +31,18 @@ class BackendConfig(BaseModel):
     effort: Literal["low", "medium", "high", "xhigh", "max"] = "high"
     max_output_tokens: int = 4096
     accepts_temperature: bool = True
+    # "json"  - constrained decoding. The envelope is guaranteed valid, but the
+    #           model can close the object from inside the `code` string,
+    #           costing ~1 step each time (the compile-check catches it).
+    # "tags"  - <code>...</code>. No escaping, so no stray brace, but the model
+    #           must follow a text format unaided.
+    #
+    # MEASURED - do not flip without re-measuring. granite4.1:3b reaches
+    # <final> under BOTH. granite4.1:8b under "tags" produced 10 calls and 6
+    # parseable actions across 8 tasks and NEVER a <final>, the same class of
+    # failure as the 8B deputy that could not emit VERDICT at all. So "json"
+    # is the safe default and "tags" is opt-in per backend.
+    action_protocol: Literal["json", "tags"] = "json"
     # Ollama only. How long to keep weights resident between calls. On CPU a
     # cold load costs ~30s against ~8s warm, so anything shorter than a task's
     # runtime pays that repeatedly for nothing.

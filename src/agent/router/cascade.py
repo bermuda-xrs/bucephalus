@@ -39,7 +39,6 @@ class Router:
     def choose(self, purpose: str, task=None, step: int = 0):
         """Return the backend that should handle this purpose."""
         ctx = self.ctx
-        self._assert_escalation_not_silently_dead()
         if self.user_override:
             return ctx.backends[self.user_override]
 
@@ -56,9 +55,10 @@ class Router:
         est_s = estimate_seconds(ctx, tier, purpose)
         if task is not None and task.budget.remaining_seconds() < est_s:
             return ctx.backends["cloud"]  # free but too slow
+        self._assert_escalation_not_silently_dead(tier)
         return ctx.backends[tier]
 
-    def _assert_escalation_not_silently_dead(self) -> None:
+    def _assert_escalation_not_silently_dead(self, tier: str) -> None:
         """M6.3 escalation-by-disagreement has no call site.
 
         Under a single tier that is harmless - there is nothing to escalate
@@ -80,20 +80,35 @@ class Router:
         suite and never was.
         """
         cfg = self.ctx.config
-        if not cfg.local_allowlist or not cfg.active_local_tier:
-            return                      # single tier: nothing to escalate to
         import agent.router.cascade as _m
 
         if getattr(_m, "_ESCALATION_WIRED", False):
             return
+
+        # Narrowed: raise only where escalation SHOULD be reachable - a real
+        # second tier AND a non-empty allowlist AND an active local tier. That
+        # keeps a single-tier config (and a two-arm comparison) unblocked while
+        # making the gap un-ignorable the moment it actually matters.
+        if tier in cfg.backends:
+            raise RuntimeError(
+                "escalation-by-disagreement (M6.3) is reachable but unwired: "
+                f"active_local_tier={cfg.active_local_tier!r} exists as a "
+                f"backend and {len(cfg.local_allowlist)} purposes are "
+                "allowlisted to it, yet the escalation helper has no call "
+                "site. Routing would look active while the escalation path "
+                "never runs, which produces numbers nobody can interpret. "
+                "Wire it and set _ESCALATION_WIRED = True, or clear "
+                "active_local_tier."
+            )
+
+        # Configured but the tier does not resolve to a backend: record it
+        # rather than raising, since nothing can route there anyway.
         prov = getattr(cfg, "profile_provenance", None)
         if isinstance(prov, dict) and "escalation" not in prov:
             prov["escalation"] = (
-                "NOT WIRED - a second tier is configured "
-                f"(active_local_tier={cfg.active_local_tier!r}, "
-                f"{len(cfg.local_allowlist)} allowlisted purposes) but "
-                "the escalation helper has no call site, so "
-                "escalation-by-disagreement did not run in this measurement."
+                f"NOT WIRED - active_local_tier={cfg.active_local_tier!r} is "
+                "configured but is not a resolvable backend, so no purpose "
+                "routes there and escalation-by-disagreement did not run."
             )
 
     def health(self) -> dict:

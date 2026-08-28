@@ -255,21 +255,18 @@ def run_task(ctx, task_id: str) -> TaskResult:
             # M5.4: constrain decoding where format adherence is weakest.
             # The cloud tier keeps the tag protocol — it follows it reliably,
             # and forcing a schema there would fight with extended thinking.
-            # 1.3 - the code path uses the TAG protocol, not Python inside a
-            # JSON string. Constrained decoding guarantees the ENVELOPE is
-            # valid JSON but says nothing about the string contents, and the
-            # model reliably closed the object from inside the code field:
-            #     print('Answer written to', output_path)}
-            #     SyntaxError: unmatched '}'
-            # in 10 of 30 tasks, then 2 of 5 again after the compile-check
-            # landed. Detecting it costs a step (~44s median); not creating
-            # it costs nothing. parse_action still accepts a JSON action, so
-            # this is strictly more permissive - it only stops FORCING the
-            # shape that produced the bug.
+            # Action protocol is per backend and MEASURED, not assumed. The
+            # tag form removes the stray-brace bug at source (no escaping),
+            # but granite4.1:8b never emitted a <final> under it across 8
+            # tasks, so it cannot be the universal default.
+            # See BackendConfig.action_protocol.
             step_schema = None
             if backend.cfg.kind == "ollama":
-                tail = tail + "\n" + ACTION_TAG_HINT
-
+                if getattr(backend.cfg, "action_protocol", "json") == "tags":
+                    tail = tail + "\n" + ACTION_TAG_HINT
+                else:
+                    step_schema = ACTION_SCHEMA
+                    tail = tail + "\n" + ACTION_SCHEMA_HINT
             # Write-before-act: the intent is committed before the call.
             ctx.log.append(
                 task.id,

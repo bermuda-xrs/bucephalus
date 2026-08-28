@@ -82,7 +82,7 @@ def test_injection_blocked_end_to_end(ctx, workspace, scripted):
     assert result.status in {"done", "max_steps"}
 
 
-def test_untrusted_content_is_quarantine_summarized(ctx, workspace, scripted):
+def test_untrusted_content_is_quarantine_summarized(ctx, workspace, scripted, routing_only):
     """M8.1 rule 4 — a big untrusted observation goes through a TOOL-LESS call.
 
     The quarantine prefix must be the one used, and no tools may be passed:

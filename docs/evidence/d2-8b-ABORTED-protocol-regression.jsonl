@@ -1,0 +1,9 @@
+{"_signature": {"suite": "aero_calc", "split": null, "executor": "granite4.1:8b", "limit": null, "tier": ["easy"], "only": null, "skill": null, "profile": "local", "n_specs": 10}}
+{"run": 0, "task_id": "t_d7ab97c60dd146da", "status": "max_steps", "passed": false, "wall_s": 3343.2, "free_tokens": 21624, "cost_usd": 0.0, "key": "E01"}
+{"run": 0, "task_id": "t_a5c7710f6cf040f9", "status": "max_steps", "passed": false, "wall_s": 967.6, "free_tokens": 21567, "cost_usd": 0.0, "key": "E02"}
+{"run": 0, "task_id": "t_67add0f3dcc94ab8", "status": "budget_exhausted", "passed": false, "wall_s": 2832.8, "free_tokens": 4872, "cost_usd": 0.0, "key": "E03"}
+{"run": 0, "task_id": "t_d845a087ad274963", "status": "max_steps", "passed": false, "wall_s": 710.0, "free_tokens": 21140, "cost_usd": 0.0, "key": "E04"}
+{"run": 0, "task_id": "t_98cb0c56e79e4c68", "status": "max_steps", "passed": false, "wall_s": 559.4, "free_tokens": 20471, "cost_usd": 0.0, "key": "E05"}
+{"run": 0, "task_id": "t_8604c12cb022495f", "status": "max_steps", "passed": false, "wall_s": 561.6, "free_tokens": 19745, "cost_usd": 0.0, "key": "E06"}
+{"run": 0, "task_id": "t_96dcc68103d64512", "status": "max_steps", "passed": false, "wall_s": 1345.2, "free_tokens": 20338, "cost_usd": 0.0, "key": "E07"}
+{"run": 0, "task_id": "t_dee283dfebbf4f82", "status": "budget_exhausted", "passed": false, "wall_s": 5403.7, "free_tokens": 8814, "cost_usd": 0.0, "key": "E08"}
