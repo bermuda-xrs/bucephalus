@@ -227,6 +227,65 @@ See `tests/test_wired_invariants.py`.
 
 ---
 
+## 2.8 M7.4 rule 4 (the anti-gaming veto) is INOPERATIVE for this suite
+
+Not ambiguous, not "wired but quiet": it cannot fire.
+
+`record_holdout_gap` has no callers. The only code that partitions checks
+into visible and held-out is the M11 generator (`holdout_frac=0.30`), which
+has never run. A `verify_program` suite has **one grader per task and no
+partition at all**, so there is no visible/held-out gap to compute and
+`_holdout_gap` always returns `None`.
+
+The gate previously skipped the veto silently, which made a promotion that
+never ran the check look identical to one that passed it. Every promotion now
+carries `gaming_check`, either `"ran"` or `"NOT MEASURED — no visible/held-out
+partition exists for this suite, so M7.4 rule 4 was skipped"`.
+
+This mattered more than it looks. Until 2026-08-27 the grader lived at
+`work/<key>/verify.py` — **inside `artifact_scope`** — with `EXPECTED` in
+plaintext. A generated skill whose procedure was "read verify.py and echo the
+expected value" would have scored 100% on every task and presented as the
+largest lift ever measured, with the one guard designed to catch it unable to
+run. The grader now lives at `grading/<key>/`, outside every path the agent
+can reach.
+
+## 2.9 Three corrections the author retracted after seeing the data
+
+Recorded here because they are errors in the original documents, not drift:
+
+1. **`cache_hit_ratio` as a monitored invariant.** It is a cloud-billing
+   metric with no local equivalent. `cache_read_tokens` is populated only by
+   the mock backend; across 566 real local calls it is 0. The acceptance test
+   passed only because the mock fabricates a hit. Report `n/a` under
+   `--profile local` and drive the assertion from `PrefixGuard` fingerprint
+   stability instead.
+
+2. **The difficulty tiering** ("Easy ~80%, Medium ~50%, Hard ~20%, mean
+   ~50%"). Written for an unspecified model. The sensitivity band is a
+   property of *suite × executor*, not of the suite. On `granite4.1:3b` Q4,
+   10% may be the honest number.
+
+3. **The scorer, `max(0.0, 1 - rel/TOL)`.** A step function outside
+   tolerance, which is where 14 of 15 wrong-number tasks live. Every wrong
+   answer scores exactly 0.0, so the M7 ratchet has no gradient to climb and
+   `plateau` fires after three identical zeros. See §2.10.
+
+## 2.10 The ratchet has no gradient, and faking one would be worse
+
+Given the choice between making the scorer monotonic in `log(rel)` and
+declaring M7 unexercised, the honest answer is **both, in that order**: the
+scorer is now `1/(1 + log10(rel/TOL))` outside the band, which is monotonic
+and gives the ratchet a real ordering — a 3% miss now scores above a 300%
+miss instead of both scoring 0.
+
+But that gradient does **not** make M7 exercised by this suite, and the
+report must not imply it does. The agent is told only a scalar; it is not
+told which key was wrong, in which direction, or by how much. A monotonic
+score lets the *ratchet* keep the better of two candidates. It does not give
+the *model* an external observation it can act on, which is what refinement
+needs. Measured on pass 1: of 30 tasks, exactly one ever moved its score.
+
 ## 3. Still valid — NOT corrections
 
 Follow the spec on all of these. They are not errors and nothing here

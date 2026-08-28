@@ -39,6 +39,7 @@ class Router:
     def choose(self, purpose: str, task=None, step: int = 0):
         """Return the backend that should handle this purpose."""
         ctx = self.ctx
+        self._assert_escalation_not_silently_dead()
         if self.user_override:
             return ctx.backends[self.user_override]
 
@@ -56,6 +57,44 @@ class Router:
         if task is not None and task.budget.remaining_seconds() < est_s:
             return ctx.backends["cloud"]  # free but too slow
         return ctx.backends[tier]
+
+    def _assert_escalation_not_silently_dead(self) -> None:
+        """M6.3 escalation-by-disagreement has no call site.
+
+        Under a single tier that is harmless - there is nothing to escalate
+        TO, and `choose` returns the one backend on its first branch. It stops
+        being harmless the moment a real second tier is configured: routing
+        then looks active while the escalation helper below still never runs, which
+        is the exact shape of the seven components this project already found
+        dead with green tests.
+
+        This does NOT raise. Two-tier routing is meaningful without
+        escalation - purposes still route by allowlist - so refusing to run
+        would block a configuration that is otherwise sound. Instead the fact
+        is recorded on `profile_provenance`, which lands in every run record
+        and every report header, so a two-tier number can never be read
+        without seeing that escalation-by-disagreement did not run.
+
+        Discovered by this check: the TEST fixture config has configured two
+        tiers all along, so escalation should have been exercised in the test
+        suite and never was.
+        """
+        cfg = self.ctx.config
+        if not cfg.local_allowlist or not cfg.active_local_tier:
+            return                      # single tier: nothing to escalate to
+        import agent.router.cascade as _m
+
+        if getattr(_m, "_ESCALATION_WIRED", False):
+            return
+        prov = getattr(cfg, "profile_provenance", None)
+        if isinstance(prov, dict) and "escalation" not in prov:
+            prov["escalation"] = (
+                "NOT WIRED - a second tier is configured "
+                f"(active_local_tier={cfg.active_local_tier!r}, "
+                f"{len(cfg.local_allowlist)} allowlisted purposes) but "
+                "the escalation helper has no call site, so "
+                "escalation-by-disagreement did not run in this measurement."
+            )
 
     def health(self) -> dict:
         totals = self.ctx.conn.execute(

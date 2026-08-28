@@ -113,7 +113,11 @@ class AgentContext:
             escalated=escalated,
             thinking=backend.cfg.thinking,
         )
-        spend(self.conn, self.log, task, usd=cost, seconds=resp.wall_ms / 1000.0)
+        # Money only. Seconds are charged by the LOOP against wall clock:
+        # summing model time undercounts sandbox and verification time, and
+        # made `budget_exhausted` contention-sensitive - two processes on one
+        # CPU could manufacture that outcome on a task that would finish.
+        spend(self.conn, self.log, task, usd=cost)
         return cost
 
     # -- taint -------------------------------------------------------------

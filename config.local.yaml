@@ -74,7 +74,10 @@ limits:
   default_task_budget_usd: 0.0      # nothing here costs money
   default_task_budget_seconds: 1800 # ...but it costs a LOT of wall clock
   max_refinement_iterations: 2
-  max_steps: 6
+  # 6 was a step budget masquerading as difficulty: 11 of 30 tasks never
+  # reached a single verification. Reading inputs, writing a program,
+  # recovering from one syntax error and emitting a final does not fit in 6.
+  max_steps: 10
   delegation_min_isolated_tokens: 1000
 
 local_allowlist: []

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 import time
@@ -149,6 +150,19 @@ def test_db_connection_is_usable_across_threads(ctx):
     assert not err, err
 
 
+def _kill_tree(pid: int) -> None:
+    """Kill a process and its children. See the note in test_kill_and_resume."""
+    if sys.platform == "win32":
+        subprocess.run(["taskkill", "/T", "/F", "/PID", str(pid)],
+                       capture_output=True)
+    else:
+        import signal
+        try:
+            os.killpg(os.getpgid(pid), signal.SIGKILL)
+        except (OSError, AttributeError):
+            os.kill(pid, signal.SIGKILL)
+
+
 def test_kill_and_resume(tmp_path: Path):
     """Start a task, SIGKILL mid-run, resume, verify no duplicate side effects.
 
@@ -171,6 +185,13 @@ def test_kill_and_resume(tmp_path: Path):
         time.sleep(0.05)
     assert marker.exists(), "child never performed the side effect"
     time.sleep(0.2)
+
+    # Kill the REAL interpreter, not the venv trampoline. On Windows a venv's
+    # python.exe is a wrapper: Popen returns its pid while the interpreter
+    # runs as a child. proc.kill() alone therefore left the worker alive, and
+    # this test's claim of "a real kill, no finally block runs" was false -
+    # it passed on the marker file regardless. Found via test_runlock.
+    _kill_tree(proc.pid)
     proc.kill()
     proc.wait(timeout=10)
 

@@ -95,6 +95,20 @@ ACTION_SCHEMA = {
     "required": ["kind"],
 }
 
+ACTION_TAG_HINT = """\
+
+Reply with exactly ONE block, nothing else:
+
+  <action tool="read_file">{"path": "work/x.py"}</action>
+  <code>
+  # plain Python. No JSON, no quotes around it, no closing brace.
+  import json
+  </code>
+  <final>{"answer": "..."}</final>
+
+Inside <code> write ordinary Python exactly as you would in a file."""
+
+
 ACTION_SCHEMA_HINT = """\
 
 Answer with a single JSON object, not the tag syntax:
@@ -193,9 +207,17 @@ def run_task(ctx, task_id: str) -> TaskResult:
     best_answer: Any = None
     best_score: float = -1.0
     score_history: list[float] = []
+    charged_s = 0.0          # wall clock already charged to the budget
 
     try:
         for step in range(ctx.config.limits.max_steps):
+            # Charge WALL CLOCK, not summed model time. The budget is a real
+            # deadline: sandbox execution and verification cost the operator
+            # the same seconds a model call does.
+            elapsed = time.time() - started
+            if elapsed > charged_s:
+                spend(ctx.conn, ctx.log, task, seconds=elapsed - charged_s)
+                charged_s = elapsed
             if task.budget.exhausted():
                 return finish(ctx, task, "budget_exhausted", steps=step)
 
@@ -233,9 +255,20 @@ def run_task(ctx, task_id: str) -> TaskResult:
             # M5.4: constrain decoding where format adherence is weakest.
             # The cloud tier keeps the tag protocol — it follows it reliably,
             # and forcing a schema there would fight with extended thinking.
-            step_schema = ACTION_SCHEMA if backend.cfg.kind == "ollama" else None
-            if step_schema is not None:
-                tail = tail + "\n" + ACTION_SCHEMA_HINT
+            # 1.3 - the code path uses the TAG protocol, not Python inside a
+            # JSON string. Constrained decoding guarantees the ENVELOPE is
+            # valid JSON but says nothing about the string contents, and the
+            # model reliably closed the object from inside the code field:
+            #     print('Answer written to', output_path)}
+            #     SyntaxError: unmatched '}'
+            # in 10 of 30 tasks, then 2 of 5 again after the compile-check
+            # landed. Detecting it costs a step (~44s median); not creating
+            # it costs nothing. parse_action still accepts a JSON action, so
+            # this is strictly more permissive - it only stops FORCING the
+            # shape that produced the bug.
+            step_schema = None
+            if backend.cfg.kind == "ollama":
+                tail = tail + "\n" + ACTION_TAG_HINT
 
             # Write-before-act: the intent is committed before the call.
             ctx.log.append(
