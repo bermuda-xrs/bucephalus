@@ -39,9 +39,28 @@ DEFAULT_THEME = {
 }
 
 
+def _asset(configured: str, ctx) -> Path | None:
+    """The configured file, else the copy shipped inside the package.
+
+    An installed wheel has no project directory, so `./themes/default.toml`
+    resolves to nothing and the agent would silently lose its theme and
+    banner. The package carries its own copies; the configured path still
+    wins so a user can override either.
+    """
+    p = Path(ctx.config.resolve(configured))
+    if p.exists():
+        return p
+    packaged = Path(__file__).parent / Path(configured).name
+    for sub in ("themes", "assets"):
+        cand = Path(__file__).parent / sub / Path(configured).name
+        if cand.exists():
+            return cand
+    return packaged if packaged.exists() else None
+
+
 def load_theme(ctx) -> dict:
-    p = Path(ctx.config.resolve(ctx.config.ui.theme))
-    if not p.exists():
+    p = _asset(ctx.config.ui.theme, ctx)
+    if p is None or not p.exists():
         return DEFAULT_THEME
     try:
         data = tomllib.loads(p.read_text(encoding="utf-8"))
@@ -51,8 +70,8 @@ def load_theme(ctx) -> dict:
 
 
 def banner(ctx, console: Console) -> None:
-    p = Path(ctx.config.resolve(ctx.config.ui.banner_art))
-    if p.exists():
+    p = _asset(ctx.config.ui.banner_art, ctx)
+    if p is not None and p.exists():
         console.print(p.read_text(encoding="utf-8", errors="replace"))
     else:
         console.print("[bold]alpha test 1[/bold]")
@@ -404,7 +423,12 @@ def cmd_monitor(ctx, args, console) -> int:
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="alpha", description="alpha test 1")
-    p.add_argument("--config", default="config.yaml")
+    # An installed package has no ./config.yaml to fall back on, so look in
+    # the user config dir before defaulting to a path that will not exist.
+    from .paths import default_config_path
+
+    p.add_argument("--config",
+                   default=str(default_config_path() or "config.yaml"))
     sub = p.add_subparsers(dest="cmd", required=True)
 
     n = sub.add_parser("new", help="create a task")

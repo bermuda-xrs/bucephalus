@@ -14,6 +14,7 @@ dependencies = [
     "uvicorn>=0.29",
     "scipy>=1.13",            # McNemar / binomtest for the skill gate
     "rich>=13.0",             # readable CLI output
+    "platformdirs>=4.0",      # state paths once installed
 ]
 # NOTE: the build spec listed `tiktoken` for token counting. It is deliberately
 # omitted: tiktoken is OpenAI's tokenizer and undercounts Claude tokens by
@@ -31,6 +32,11 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+# Runtime assets the agent reads. Without these an installed wheel starts and
+# then fails on the first theme or banner lookup.
+[tool.setuptools.package-data]
+agent = ["themes/*.toml", "assets/*.ans", "py.typed"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

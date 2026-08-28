@@ -150,7 +150,14 @@ def load_config(path: str | Path = "config.yaml",
     """
     path = Path(path)
     raw: dict[str, Any] = yaml.safe_load(path.read_text(encoding="utf-8"))
-    raw["root"] = str(path.parent.resolve())
+    # In a checkout this is the project directory, exactly as before. Once
+    # installed there is no project directory, so state goes to platformdirs
+    # rather than beside site-packages or wherever the caller happened to
+    # stand. See agent/paths.py.
+    from .paths import ensure_state_dirs, state_root
+
+    raw["root"] = str(state_root(path))
+    ensure_state_dirs(raw["root"])
     if profile is not None:
         raw["profile"] = profile
     cfg = Config.model_validate(raw)
