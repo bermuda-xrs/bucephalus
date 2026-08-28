@@ -1,7 +1,8 @@
 # alpha test 1
 
-A hybrid local/cloud agent with verified skill learning, built from
-`BUILD-SPEC.md`. You state an objective, review one plan, and do not touch it
+**An agent runtime with verified skill learning.** Not a benchmark harness:
+the harness exists to keep the runtime honest, and the runtime is the
+deliverable. You state an objective, review one plan, and do not touch it
 again until it reports back.
 
 The claim it is built to test is narrower than "ten times cheaper":
@@ -10,6 +11,36 @@ The claim it is built to test is narrower than "ten times cheaper":
 > — and that can be measured rather than asserted.
 
 Everything here exists to keep that measurement honest.
+
+## Install
+
+```bash
+pip install alpha-test-1
+```
+
+State — the database, hash-chain anchor, run records, workspaces, graders and
+skills — goes to your platform's user data directory. Running from a source
+checkout keeps state beside the source instead, which is what `bench/`
+expects. Nothing is ever written next to `site-packages` or into whatever
+directory you happen to be standing in.
+
+Apache 2.0.
+
+## Models
+
+**Local**: any Ollama model. The measurements here used `granite4.1:3b`
+(3.4B, Q4_K_M) and `granite4.1:8b` on an Intel Core Ultra 5 225U, 15.5 GB
+RAM, CPU inference. No API key, no network.
+
+**Cloud**: bring your own API key —
+
+```bash
+export ANTHROPIC_API_KEY=sk-...
+```
+
+**The cloud adapter is UNVERIFIED.** It is written and unit-tested and has
+never made a live call. Do not describe it as working until it has. There is
+no subscription login and none is planned; it is an API key or nothing.
 
 ## Running it
 
