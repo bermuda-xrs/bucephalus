@@ -1,0 +1,117 @@
+{
+  "date": "2026-08-28",
+  "budget_scale": 3.0,
+  "free_memory_gb_at_start": 6.581504821777344,
+  "free_memory_gb_before_reap": 6.601650238037109,
+  "orphans_reaped": [],
+  "free_memory_gb_at_end": 0.9525108337402344,
+  "profile": "local",
+  "profile_provenance": {
+    "profile": "local",
+    "cloud_backends": [],
+    "credentials_present": [],
+    "backends": {
+      "cloud": {
+        "kind": "ollama",
+        "model": "granite4.1:8b",
+        "tier": "local"
+      },
+      "local": {
+        "kind": "ollama",
+        "model": "granite4.1:3b",
+        "tier": "local"
+      },
+      "review": {
+        "kind": "ollama",
+        "model": "granite4.1:8b",
+        "tier": "local"
+      }
+    },
+    "executor_override": "granite4.1:8b"
+  },
+  "suite": "aero_calc",
+  "split": null,
+  "runs_per_task": 1,
+  "n_tasks": 5,
+  "mean_pass_rate": 0.2,
+  "stable_pass": 1,
+  "stable_fail": 4,
+  "flaky": 0,
+  "wall_s_this_session": 4988.5,
+  "wall_s_all_runs": 4987.8,
+  "status_counts": {
+    "budget_exhausted": 1,
+    "max_steps": 3,
+    "done": 1
+  },
+  "unmeasured": 0,
+  "unmeasured_keys": [],
+  "partially_unmeasured_keys": [],
+  "ended_at_step_limit": 3,
+  "ended_budget_exhausted": 1,
+  "tier_pass_rates": {
+    "easy": 0.2
+  },
+  "tasks": [
+    {
+      "key": "E01",
+      "tier": "easy",
+      "split": "drafting",
+      "classification": "stable_fail",
+      "passes": 0,
+      "runs": 1,
+      "mean_wall_s": 1802.1,
+      "statuses": [
+        "budget_exhausted"
+      ]
+    },
+    {
+      "key": "E03",
+      "tier": "easy",
+      "split": "drafting",
+      "classification": "stable_fail",
+      "passes": 0,
+      "runs": 1,
+      "mean_wall_s": 912.4,
+      "statuses": [
+        "max_steps"
+      ]
+    },
+    {
+      "key": "E04",
+      "tier": "easy",
+      "split": "drafting",
+      "classification": "stable_fail",
+      "passes": 0,
+      "runs": 1,
+      "mean_wall_s": 988.0,
+      "statuses": [
+        "max_steps"
+      ]
+    },
+    {
+      "key": "E05",
+      "tier": "easy",
+      "split": "drafting",
+      "classification": "stable_fail",
+      "passes": 0,
+      "runs": 1,
+      "mean_wall_s": 951.7,
+      "statuses": [
+        "max_steps"
+      ]
+    },
+    {
+      "key": "E07",
+      "tier": "easy",
+      "split": "eval",
+      "classification": "stable_pass",
+      "passes": 1,
+      "runs": 1,
+      "mean_wall_s": 333.6,
+      "statuses": [
+        "done"
+      ]
+    }
+  ]
+}
