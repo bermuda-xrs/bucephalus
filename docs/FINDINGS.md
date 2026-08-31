@@ -103,6 +103,46 @@ the documented 8B deputy that could not emit `VERDICT:` at all.
 
 ---
 
+### 1.5 The 8B does the work and does not say it is done — an operational hazard, not a benchmark artifact
+
+D2, `granite4.1:8b`, 5 easy tasks. Four of five artifacts are **correct**:
+
+| task | wrote | expected | ratio | |
+|---|---|---|---|---|
+| E01 | 7672.598648385013 | 7672.6 | 1.000000 | correct |
+| E04 | 4233.875371812499 | 4233.9 | 0.999994 | correct |
+| E05 | 12921.875 | 12922.0 | 0.999990 | correct |
+| E07 | 287.73865345056953 | 287.7 | 1.000134 | correct |
+| E03 | — | 5027.0 | — | no artifact |
+
+**Zero errors.** Not clustered, not unstructured — none. The recorded pass
+rate was **1/5 = 20%**; re-grading the same files under the sweep gives
+**4/5 = 80%**. Three tasks wrote a correct answer and were scored as failures
+purely because the model never emitted `<final>`.
+
+**This is a real operational hazard, not a measurement artifact.** M13's
+two-touch model is: approve a plan, receive a result. An agent that completes
+the work and never announces completion **hangs** — it burns its step budget
+and then reports failure, with the correct answer sitting on disk unread.
+Under the shipped configuration that is a task the user is told failed, and
+they would have to look in the workspace to discover otherwise.
+
+So the sweep is **shipped behaviour, not benchmark-only**. It is in
+`run_task`, which is the same loop the CLI and control plane use — there is
+no benchmark-only code path, and adding one would mean the measured system
+diverging from the shipped system again.
+
+But the sweep treats the symptom. The underlying behaviour — an 8B that does
+not terminate — remains, and it has a second face: the same model could not
+emit `<final>` under the tag protocol *at all* (0 of 10 calls across 8 tasks),
+while the 3B managed it under both protocols. Ruled out as a config artifact:
+`--executor` overrides only `BackendConfig.model`, so temperature, `num_ctx`,
+`num_predict`, thinking and protocol were byte-identical between the two runs.
+
+`done_unannounced` is therefore reported as its own count everywhere, never
+folded into `done`. If it dominates in a full run, the honest headline is not
+"the 8B scores X%" but "the 8B does the work and cannot tell you it has".
+
 ## 2. What these numbers do **not** show
 
 * **Nothing about hybrid routing.** `config.local.yaml` maps the *cloud* slot
