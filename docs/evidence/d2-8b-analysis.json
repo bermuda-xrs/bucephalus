@@ -1,0 +1,65 @@
+{
+  "LABEL": "D2 - granite4.1:8b, 5 easy tasks, error-signature probe",
+  "harness_version": "pre-final-sweep (recorded numbers VOID for charting)",
+  "A1_signature": {
+    "gradeable_artifacts": "4 of 5 (>=3, so not INSUFFICIENT DATA)",
+    "clustered_errors": 0,
+    "unstructured_errors": 0,
+    "correct": 4,
+    "per_task": {
+      "E01": {
+        "wrote": 7672.598648385013,
+        "expected": 7672.6,
+        "ratio": 1.0,
+        "class": "CORRECT"
+      },
+      "E03": {
+        "wrote": null,
+        "expected": 5027.0,
+        "class": "NO ARTIFACT"
+      },
+      "E04": {
+        "wrote": 4233.875371812499,
+        "expected": 4233.9,
+        "ratio": 0.999994,
+        "class": "CORRECT"
+      },
+      "E05": {
+        "wrote": 12921.875,
+        "expected": 12922.0,
+        "ratio": 0.99999,
+        "class": "CORRECT"
+      },
+      "E07": {
+        "wrote": 287.73865345056953,
+        "expected": 287.7,
+        "ratio": 1.000134,
+        "class": "CORRECT"
+      }
+    },
+    "verdict": "NOT COVERED BY THE DECISION TABLE. The table asks whether the 8B's errors are clustered or unstructured. It produced NO errors: 4 of 5 artifacts are correct to 4+ significant figures and the fifth produced nothing. There is no error signature because there are no errors. This is strictly stronger than 'clustered' - the suite's traps are not being hit at all by this executor."
+  },
+  "A2_regrade": {
+    "recorded_pre_fix": "1/5 = 20% (VOID: pre-final-sweep loop)",
+    "regraded_post_fix_same_artifacts": "4/5 = 80%",
+    "why": "Three tasks wrote a correct answer.json and were recorded as max_steps or budget_exhausted because the model never emitted <final>, so the artifact was never graded. Re-grading the same files under the final sweep costs nothing and yields 80%.",
+    "caution": "80% is ABOVE the 25-75% band, but this is the EASY tier only, 5 tasks. It does not license a claim about the full 30."
+  },
+  "A3_config_artifact_ruled_out": {
+    "method": "--executor overrides only BackendConfig.model",
+    "differing_fields": [
+      "model"
+    ],
+    "identical": [
+      "temperature/accepts_temperature",
+      "usable_context_window (num_ctx)",
+      "max_output_tokens (num_predict)",
+      "thinking",
+      "keep_alive",
+      "action_protocol",
+      "endpoint",
+      "context_window"
+    ],
+    "conclusion": "The 8B's inability to emit <final> under the tag protocol is a MODEL PROPERTY, not a config artifact. Both models ran byte-identical backend settings; the 3B reached <final> under tags and the 8B did not, across 8 tasks."
+  }
+}
