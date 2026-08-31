@@ -1,0 +1,72 @@
+{
+  "LABEL": "B1 smoke - E01 x5, arm_3b, harness_version 2 (post all fixes)",
+  "result": "0 of 5. Below the >=4/5 gate. STOP GATE - no full pass started.",
+  "per_run": [
+    {
+      "wall_s": 257.0,
+      "calls": 7,
+      "tool_calls": 4,
+      "verifies": 3,
+      "scores": [
+        0.0924,
+        0.0924,
+        0.0924
+      ]
+    },
+    {
+      "wall_s": 65.7,
+      "calls": 4,
+      "tool_calls": 1,
+      "verifies": 3,
+      "scores": [
+        0.0773,
+        0.0773,
+        0.0773
+      ]
+    },
+    {
+      "wall_s": 65.2,
+      "calls": 4,
+      "tool_calls": 1,
+      "verifies": 3,
+      "scores": [
+        0.0773,
+        0.0773,
+        0.0773
+      ]
+    },
+    {
+      "wall_s": 65.6,
+      "calls": 4,
+      "tool_calls": 1,
+      "verifies": 3,
+      "scores": [
+        0.0773,
+        0.0773,
+        0.0773
+      ]
+    },
+    {
+      "wall_s": 65.3,
+      "calls": 4,
+      "tool_calls": 1,
+      "verifies": 3,
+      "scores": [
+        0.0773,
+        0.0773,
+        0.0773
+      ]
+    }
+  ],
+  "failure_mode": {
+    "bucket": "D - wrong number. NOT A/B: plumbing is clean.",
+    "evidence": "A well-formed answer.json was written every run, with the correct key, parseable, and graded. The params-key and stray-brace defects are gone.",
+    "wrote": 11185784.549998963,
+    "expected": 7672.6,
+    "ratio": 1457.9,
+    "diagnosis": "sqrt(2*mu/R) = 11186.14 is Earth ESCAPE velocity; x1000 gives 11186136, which is what it wrote. Wrong FORMULA (escape instead of circular) plus a x1000 scale error."
+  },
+  "contrast_with_D1": "The same model, same question, asked DIRECTLY answered 7668 against 7672.6 - correct, 5/5. In-harness it computes the wrong formula. The harness tax survived every fix in this session.",
+  "scorer_note": "Scores are 0.0773 rather than 0.0, so the monotonic scorer is working - it now distinguishes this from a near miss. Plateau still fires correctly after three identical scores.",
+  "determinism_finding": "Runs 2-5 are byte-identical (65s, same score). Run 1 differed (257s, 7 calls, score 0.0924) because of the cold model load. Our semantic_cache is NOT the cause - it holds one entry from a previous day. The likely cause is llama.cpp KV-cache reuse changing logits slightly versus a cold computation. CONSEQUENCE: at temperature 0 with a warm cache, repeated runs in one process are deterministic, so a noise floor measures almost no variance after run 1. Flakiness observed earlier (E03) was across process restarts, i.e. cold starts. Passes 2-3 as configured would measure very little."
+}

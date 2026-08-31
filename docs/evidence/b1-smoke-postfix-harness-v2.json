@@ -1,0 +1,73 @@
+{
+  "date": "2026-09-01",
+  "harness_version": 2,
+  "budget_scale": 1.0,
+  "free_memory_gb_at_start": 3.1210899353027344,
+  "free_memory_gb_before_reap": 3.084075927734375,
+  "orphans_reaped": [],
+  "free_memory_gb_at_end": 3.187103271484375,
+  "profile": "local",
+  "profile_provenance": {
+    "profile": "local",
+    "cloud_backends": [],
+    "credentials_present": [],
+    "backends": {
+      "cloud": {
+        "kind": "ollama",
+        "model": "granite4.1:3b",
+        "tier": "local"
+      },
+      "local": {
+        "kind": "ollama",
+        "model": "granite4.1:3b",
+        "tier": "local"
+      },
+      "review": {
+        "kind": "ollama",
+        "model": "granite4.1:8b",
+        "tier": "local"
+      }
+    }
+  },
+  "suite": "aero_calc",
+  "split": null,
+  "runs_per_task": 5,
+  "n_tasks": 1,
+  "mean_pass_rate": 0.0,
+  "stable_pass": 0,
+  "stable_fail": 1,
+  "flaky": 0,
+  "wall_s_this_session": 519.1,
+  "wall_s_all_runs": 518.8,
+  "status_counts": {
+    "plateau": 5
+  },
+  "unmeasured": 0,
+  "unmeasured_keys": [],
+  "partially_unmeasured_keys": [],
+  "done": 0,
+  "done_unannounced": 0,
+  "ended_at_step_limit": 0,
+  "ended_budget_exhausted": 0,
+  "tier_pass_rates": {
+    "easy": 0.0
+  },
+  "tasks": [
+    {
+      "key": "E01",
+      "tier": "easy",
+      "split": "drafting",
+      "classification": "stable_fail",
+      "passes": 0,
+      "runs": 5,
+      "mean_wall_s": 103.8,
+      "statuses": [
+        "plateau",
+        "plateau",
+        "plateau",
+        "plateau",
+        "plateau"
+      ]
+    }
+  ]
+}
