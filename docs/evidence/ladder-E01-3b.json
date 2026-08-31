@@ -1,0 +1,249 @@
+{
+  "task": "E01",
+  "model": "granite4.1:3b",
+  "expected": 7672.6,
+  "tolerance": 0.005,
+  "samples": 5,
+  "rows": [
+    {
+      "rung": "R0",
+      "sample": 1,
+      "correct": true,
+      "answer": 7668.0,
+      "wall_s": 45.7,
+      "chars": 1155,
+      "prompt_chars": 213,
+      "response": "To compute the circular orbital velocity \\(v\\) of a satellite at an altitude of 400\u202fkm above Earth's surface, we use the formula for orbital velocity in a circular orbit:\n\n\\[\nv = \\sqrt{\\frac{\\mu}{r}}\n\\]\n\nwhere  \n\n- \\(\\mu = 3.986004418 \\times 10^{14} \\, \\text{m}^3/\\text{s}^2\\) (Earth\u2019s gravitational parameter),  \n- \\(r\\) is the distance from Earth\u2019s center to the satellite.\n\n**Step 1: Calculate the orbital radius \\(r\\).**\n\nEarth\u2019s radius \\(R_{\\text{Earth}} = 6,371,000 \\, \\text{m}\\).\n\nAltitude of the orbit = 400\u202fkm = 400,000\u202fm.\n\n\\[\nr = R_{\\text{Earth}} + \\text{altitude} = 6,371,000 \\, \\text{m} + 400,000 \\, \\text{m} = 6,771,000 \\, \\text{m}\n\\]\n\n**Step 2: Plug the values into the orbital velocity formula.**\n\n\\[\nv = \\sqrt{\\frac{3.986004418 \\times 10^{14}}{6,771,000}}\n\\]\n\n**Step 3: Perform the division inside the square root.**\n\n\\[\n\\frac{3.986004418 \\times 10^{14}}{6,771,000} \\approx 5.887 \\times 10^{7} \\, \\text{m}^2/\\text{s}^2\n\\]\n\n**Step 4: Take the square root.**\n\n\\[\nv = \\sqrt{5.887 \\times 10^{7}} \\approx 7,668 \\, \\text{m/s}\n\\]\n\nThus, the circular orbital velocity of the satellite at an altitude of 400\u202fkm is approximately:\n\n\\[\n\\boxed{7668}\n\\]"
+    },
+    {
+      "rung": "R0",
+      "sample": 2,
+      "correct": true,
+      "answer": 7668.0,
+      "wall_s": 40.0,
+      "chars": 1155,
+      "prompt_chars": 213,
+      "response": "To compute the circular orbital velocity \\(v\\) of a satellite at an altitude of 400\u202fkm above Earth's surface, we use the formula for orbital velocity in a circular orbit:\n\n\\[\nv = \\sqrt{\\frac{\\mu}{r}}\n\\]\n\nwhere  \n\n- \\(\\mu = 3.986004418 \\times 10^{14} \\, \\text{m}^3/\\text{s}^2\\) (Earth\u2019s gravitational parameter),  \n- \\(r\\) is the distance from Earth\u2019s center to the satellite.\n\n**Step 1: Calculate the orbital radius \\(r\\).**\n\nEarth\u2019s radius \\(R_{\\text{Earth}} = 6,371,000 \\, \\text{m}\\).\n\nAltitude of the orbit = 400\u202fkm = 400,000\u202fm.\n\n\\[\nr = R_{\\text{Earth}} + \\text{altitude} = 6,371,000 \\, \\text{m} + 400,000 \\, \\text{m} = 6,771,000 \\, \\text{m}\n\\]\n\n**Step 2: Plug the values into the orbital velocity formula.**\n\n\\[\nv = \\sqrt{\\frac{3.986004418 \\times 10^{14}}{6,771,000}}\n\\]\n\n**Step 3: Perform the division inside the square root.**\n\n\\[\n\\frac{3.986004418 \\times 10^{14}}{6,771,000} \\approx 5.887 \\times 10^{7} \\, \\text{m}^2/\\text{s}^2\n\\]\n\n**Step 4: Take the square root.**\n\n\\[\nv = \\sqrt{5.887 \\times 10^{7}} \\approx 7,668 \\, \\text{m/s}\n\\]\n\nThus, the circular orbital velocity of the satellite at an altitude of 400\u202fkm is approximately:\n\n\\[\n\\boxed{7668}\n\\]"
+    },
+    {
+      "rung": "R0",
+      "sample": 3,
+      "correct": true,
+      "answer": 7668.0,
+      "wall_s": 39.8,
+      "chars": 1155,
+      "prompt_chars": 213,
+      "response": "To compute the circular orbital velocity \\(v\\) of a satellite at an altitude of 400\u202fkm above Earth's surface, we use the formula for orbital velocity in a circular orbit:\n\n\\[\nv = \\sqrt{\\frac{\\mu}{r}}\n\\]\n\nwhere  \n\n- \\(\\mu = 3.986004418 \\times 10^{14} \\, \\text{m}^3/\\text{s}^2\\) (Earth\u2019s gravitational parameter),  \n- \\(r\\) is the distance from Earth\u2019s center to the satellite.\n\n**Step 1: Calculate the orbital radius \\(r\\).**\n\nEarth\u2019s radius \\(R_{\\text{Earth}} = 6,371,000 \\, \\text{m}\\).\n\nAltitude of the orbit = 400\u202fkm = 400,000\u202fm.\n\n\\[\nr = R_{\\text{Earth}} + \\text{altitude} = 6,371,000 \\, \\text{m} + 400,000 \\, \\text{m} = 6,771,000 \\, \\text{m}\n\\]\n\n**Step 2: Plug the values into the orbital velocity formula.**\n\n\\[\nv = \\sqrt{\\frac{3.986004418 \\times 10^{14}}{6,771,000}}\n\\]\n\n**Step 3: Perform the division inside the square root.**\n\n\\[\n\\frac{3.986004418 \\times 10^{14}}{6,771,000} \\approx 5.887 \\times 10^{7} \\, \\text{m}^2/\\text{s}^2\n\\]\n\n**Step 4: Take the square root.**\n\n\\[\nv = \\sqrt{5.887 \\times 10^{7}} \\approx 7,668 \\, \\text{m/s}\n\\]\n\nThus, the circular orbital velocity of the satellite at an altitude of 400\u202fkm is approximately:\n\n\\[\n\\boxed{7668}\n\\]"
+    },
+    {
+      "rung": "R0",
+      "sample": 4,
+      "correct": true,
+      "answer": 7668.0,
+      "wall_s": 40.3,
+      "chars": 1155,
+      "prompt_chars": 213,
+      "response": "To compute the circular orbital velocity \\(v\\) of a satellite at an altitude of 400\u202fkm above Earth's surface, we use the formula for orbital velocity in a circular orbit:\n\n\\[\nv = \\sqrt{\\frac{\\mu}{r}}\n\\]\n\nwhere  \n\n- \\(\\mu = 3.986004418 \\times 10^{14} \\, \\text{m}^3/\\text{s}^2\\) (Earth\u2019s gravitational parameter),  \n- \\(r\\) is the distance from Earth\u2019s center to the satellite.\n\n**Step 1: Calculate the orbital radius \\(r\\).**\n\nEarth\u2019s radius \\(R_{\\text{Earth}} = 6,371,000 \\, \\text{m}\\).\n\nAltitude of the orbit = 400\u202fkm = 400,000\u202fm.\n\n\\[\nr = R_{\\text{Earth}} + \\text{altitude} = 6,371,000 \\, \\text{m} + 400,000 \\, \\text{m} = 6,771,000 \\, \\text{m}\n\\]\n\n**Step 2: Plug the values into the orbital velocity formula.**\n\n\\[\nv = \\sqrt{\\frac{3.986004418 \\times 10^{14}}{6,771,000}}\n\\]\n\n**Step 3: Perform the division inside the square root.**\n\n\\[\n\\frac{3.986004418 \\times 10^{14}}{6,771,000} \\approx 5.887 \\times 10^{7} \\, \\text{m}^2/\\text{s}^2\n\\]\n\n**Step 4: Take the square root.**\n\n\\[\nv = \\sqrt{5.887 \\times 10^{7}} \\approx 7,668 \\, \\text{m/s}\n\\]\n\nThus, the circular orbital velocity of the satellite at an altitude of 400\u202fkm is approximately:\n\n\\[\n\\boxed{7668}\n\\]"
+    },
+    {
+      "rung": "R0",
+      "sample": 5,
+      "correct": true,
+      "answer": 7668.0,
+      "wall_s": 39.2,
+      "chars": 1155,
+      "prompt_chars": 213,
+      "response": "To compute the circular orbital velocity \\(v\\) of a satellite at an altitude of 400\u202fkm above Earth's surface, we use the formula for orbital velocity in a circular orbit:\n\n\\[\nv = \\sqrt{\\frac{\\mu}{r}}\n\\]\n\nwhere  \n\n- \\(\\mu = 3.986004418 \\times 10^{14} \\, \\text{m}^3/\\text{s}^2\\) (Earth\u2019s gravitational parameter),  \n- \\(r\\) is the distance from Earth\u2019s center to the satellite.\n\n**Step 1: Calculate the orbital radius \\(r\\).**\n\nEarth\u2019s radius \\(R_{\\text{Earth}} = 6,371,000 \\, \\text{m}\\).\n\nAltitude of the orbit = 400\u202fkm = 400,000\u202fm.\n\n\\[\nr = R_{\\text{Earth}} + \\text{altitude} = 6,371,000 \\, \\text{m} + 400,000 \\, \\text{m} = 6,771,000 \\, \\text{m}\n\\]\n\n**Step 2: Plug the values into the orbital velocity formula.**\n\n\\[\nv = \\sqrt{\\frac{3.986004418 \\times 10^{14}}{6,771,000}}\n\\]\n\n**Step 3: Perform the division inside the square root.**\n\n\\[\n\\frac{3.986004418 \\times 10^{14}}{6,771,000} \\approx 5.887 \\times 10^{7} \\, \\text{m}^2/\\text{s}^2\n\\]\n\n**Step 4: Take the square root.**\n\n\\[\nv = \\sqrt{5.887 \\times 10^{7}} \\approx 7,668 \\, \\text{m/s}\n\\]\n\nThus, the circular orbital velocity of the satellite at an altitude of 400\u202fkm is approximately:\n\n\\[\n\\boxed{7668}\n\\]"
+    },
+    {
+      "rung": "R1",
+      "sample": 1,
+      "correct": false,
+      "answer": 6371000.0,
+      "wall_s": 7.7,
+      "chars": 236,
+      "prompt_chars": 456,
+      "response": "v_circular_m_s: 7.784152678\n\nThis is the circular orbital velocity for a satellite at an altitude of 400 km above Earth's surface, calculated using the gravitational parameter (\u03bc = 3.986004418e14 m^3/s^2) and Earth's radius (6371000 m)."
+    },
+    {
+      "rung": "R1",
+      "sample": 2,
+      "correct": false,
+      "answer": 6371000.0,
+      "wall_s": 6.7,
+      "chars": 236,
+      "prompt_chars": 456,
+      "response": "v_circular_m_s: 7.784152678\n\nThis is the circular orbital velocity for a satellite at an altitude of 400 km above Earth's surface, calculated using the gravitational parameter (\u03bc = 3.986004418e14 m^3/s^2) and Earth's radius (6371000 m)."
+    },
+    {
+      "rung": "R1",
+      "sample": 3,
+      "correct": false,
+      "answer": 6371000.0,
+      "wall_s": 7.1,
+      "chars": 236,
+      "prompt_chars": 456,
+      "response": "v_circular_m_s: 7.784152678\n\nThis is the circular orbital velocity for a satellite at an altitude of 400 km above Earth's surface, calculated using the gravitational parameter (\u03bc = 3.986004418e14 m^3/s^2) and Earth's radius (6371000 m)."
+    },
+    {
+      "rung": "R1",
+      "sample": 4,
+      "correct": false,
+      "answer": 6371000.0,
+      "wall_s": 6.6,
+      "chars": 236,
+      "prompt_chars": 456,
+      "response": "v_circular_m_s: 7.784152678\n\nThis is the circular orbital velocity for a satellite at an altitude of 400 km above Earth's surface, calculated using the gravitational parameter (\u03bc = 3.986004418e14 m^3/s^2) and Earth's radius (6371000 m)."
+    },
+    {
+      "rung": "R1",
+      "sample": 5,
+      "correct": false,
+      "answer": 6371000.0,
+      "wall_s": 6.5,
+      "chars": 236,
+      "prompt_chars": 456,
+      "response": "v_circular_m_s: 7.784152678\n\nThis is the circular orbital velocity for a satellite at an altitude of 400 km above Earth's surface, calculated using the gravitational parameter (\u03bc = 3.986004418e14 m^3/s^2) and Earth's radius (6371000 m)."
+    },
+    {
+      "rung": "R2",
+      "sample": 1,
+      "correct": false,
+      "answer": 7.784,
+      "wall_s": 14.3,
+      "chars": 32,
+      "prompt_chars": 1604,
+      "response": "<final>{\"answer\": 7.784</final>}"
+    },
+    {
+      "rung": "R2",
+      "sample": 2,
+      "correct": false,
+      "answer": 7.784,
+      "wall_s": 1.4,
+      "chars": 32,
+      "prompt_chars": 1604,
+      "response": "<final>{\"answer\": 7.784</final>}"
+    },
+    {
+      "rung": "R2",
+      "sample": 3,
+      "correct": false,
+      "answer": 7.784,
+      "wall_s": 1.4,
+      "chars": 32,
+      "prompt_chars": 1604,
+      "response": "<final>{\"answer\": 7.784</final>}"
+    },
+    {
+      "rung": "R2",
+      "sample": 4,
+      "correct": false,
+      "answer": 7.784,
+      "wall_s": 1.6,
+      "chars": 32,
+      "prompt_chars": 1604,
+      "response": "<final>{\"answer\": 7.784</final>}"
+    },
+    {
+      "rung": "R2",
+      "sample": 5,
+      "correct": false,
+      "answer": 7.784,
+      "wall_s": 1.5,
+      "chars": 32,
+      "prompt_chars": 1604,
+      "response": "<final>{\"answer\": 7.784</final>}"
+    },
+    {
+      "rung": "R3",
+      "sample": 1,
+      "correct": false,
+      "answer": 7.7841017306,
+      "wall_s": 13.9,
+      "chars": 61,
+      "prompt_chars": 2423,
+      "response": "{\"kind\": \"final\", \"answer\": {\"v_circular_m_s\": 7.7841017306}}"
+    },
+    {
+      "rung": "R3",
+      "sample": 2,
+      "correct": false,
+      "answer": 7.78489967753972,
+      "wall_s": 2.8,
+      "chars": 65,
+      "prompt_chars": 2423,
+      "response": "{\"kind\": \"final\", \"answer\": {\"v_circular_m_s\": 7.78489967753972}}"
+    },
+    {
+      "rung": "R3",
+      "sample": 3,
+      "correct": false,
+      "answer": 7.78489967753972,
+      "wall_s": 2.8,
+      "chars": 65,
+      "prompt_chars": 2423,
+      "response": "{\"kind\": \"final\", \"answer\": {\"v_circular_m_s\": 7.78489967753972}}"
+    },
+    {
+      "rung": "R3",
+      "sample": 4,
+      "correct": false,
+      "answer": 7.78489967753972,
+      "wall_s": 2.8,
+      "chars": 65,
+      "prompt_chars": 2423,
+      "response": "{\"kind\": \"final\", \"answer\": {\"v_circular_m_s\": 7.78489967753972}}"
+    },
+    {
+      "rung": "R3",
+      "sample": 5,
+      "correct": false,
+      "answer": 7.78489967753972,
+      "wall_s": 2.8,
+      "chars": 65,
+      "prompt_chars": 2423,
+      "response": "{\"kind\": \"final\", \"answer\": {\"v_circular_m_s\": 7.78489967753972}}"
+    },
+    {
+      "rung": "R4",
+      "sample": 1,
+      "correct": false,
+      "answer": 11185784.549998963,
+      "status": "max_steps",
+      "wall_s": 88.3
+    },
+    {
+      "rung": "R4",
+      "sample": 2,
+      "correct": false,
+      "answer": null,
+      "status": "max_steps",
+      "wall_s": 32.7
+    },
+    {
+      "rung": "R4",
+      "sample": 3,
+      "correct": false,
+      "answer": null,
+      "status": "max_steps",
+      "wall_s": 33.2
+    },
+    {
+      "rung": "R4",
+      "sample": 4,
+      "correct": false,
+      "answer": null,
+      "status": "max_steps",
+      "wall_s": 33.3
+    },
+    {
+      "rung": "R4",
+      "sample": 5,
+      "correct": false,
+      "answer": null,
+      "status": "max_steps",
+      "wall_s": 33.7
+    }
+  ]
+}

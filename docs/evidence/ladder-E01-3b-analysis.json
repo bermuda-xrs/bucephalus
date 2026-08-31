@@ -1,0 +1,72 @@
+{
+  "LABEL": "G1 ladder - granite4.1:3b, E01, 5 samples per rung, harness_version 2",
+  "ladder": [
+    {
+      "rung": "R0",
+      "prompt_chars": 213,
+      "correct": "5/5",
+      "answer": 7668.0,
+      "resp_chars": 1155,
+      "wall_s": 45.7,
+      "note": "full worked solution, 4 steps, correct radius 6,771,000"
+    },
+    {
+      "rung": "R1",
+      "prompt_chars": 456,
+      "correct": "0/5",
+      "answer": "7.784152678",
+      "resp_chars": 236,
+      "wall_s": 7.7,
+      "note": "COLLAPSE. No working at all. Answers immediately, in km/s, wrong by 1.45%"
+    },
+    {
+      "rung": "R2",
+      "prompt_chars": 1604,
+      "correct": "0/5",
+      "answer": 7.784,
+      "resp_chars": 32,
+      "wall_s": 14.3,
+      "note": "adopts the agent protocol: <final>{\"answer\": 7.784</final>} - malformed"
+    },
+    {
+      "rung": "R3",
+      "prompt_chars": 2423,
+      "correct": "0/5",
+      "answer": 7.7841017306,
+      "resp_chars": 61,
+      "wall_s": 13.9,
+      "note": "well-formed JSON action, still no reasoning, still wrong"
+    },
+    {
+      "rung": "R4",
+      "prompt_chars": null,
+      "correct": "0/5",
+      "answer": 11185784.549998963,
+      "wall_s": 88.3,
+      "note": "real loop, 1 step: escape velocity x1000"
+    },
+    {
+      "rung": "R5",
+      "correct": "0/5",
+      "answer": 11185784.549998963,
+      "note": "real loop unrestricted (B1)"
+    }
+  ],
+  "collapse_rung": "R1",
+  "G2_diff": "R0 -> R1 adds ONLY the output contract: the answer.json path, the exact key name, 'SI base units', and 'state the final number in your reply as well'. No system prompt, no tools, no loop. 243 characters of I/O contract.",
+  "mechanism": "CHAIN-OF-THOUGHT SUPPRESSION. Response length collapses 1155 -> 236 -> 32 chars and time 45.7s -> 7.7s -> 1.4s. At R0 the model reasons in four steps and gets the radius right (6,771,000). From R1 it emits an answer immediately with no working, and a 3.4B doing this arithmetic in one shot gets it wrong. It is not context dilution (R1's prompt is only 456 chars) and not tool distraction (no tools until R3).",
+  "CONFIRMATORY_PROBE": {
+    "question": "Is R1 a bad prompt of mine, or real reasoning suppression?",
+    "R1_contract_only": {
+      "correct": "0/5",
+      "resp_chars": 236
+    },
+    "R1_plus_step_by_step": {
+      "correct": "4/5",
+      "resp_chars": "882-1022",
+      "answer": 7667.0
+    },
+    "conclusion": "Adding 'work through it step by step ... and only then give the final number' to the SAME contract restores 4/5. The contract was suppressing the reasoning; the capability was never absent. The harness tax is real AND fixable."
+  },
+  "caveat": "R1's contract is a faithful reduction of the suite's goal text, not its verbatim copy - the real goal carries MORE plumbing (constants layout, 'use run_code'), so the deployed harness is at least as suppressive as R1."
+}
