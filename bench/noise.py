@@ -36,6 +36,7 @@ from agent.execute.loop import run_task  # noqa: E402
 from agent.kernel.tasks import create_task  # noqa: E402
 from agent.kernel.types import Budget, TaskContract  # noqa: E402
 from agent.models.base import BackendError  # noqa: E402
+from agent import HARNESS_VERSION  # noqa: E402
 from agent.proc import free_memory_gb, reap_orphans  # noqa: E402
 from agent.runlock import RunLock, RunLockBusy  # noqa: E402
 from agent.workspace import reset_workspace  # noqa: E402
@@ -475,6 +476,7 @@ def main() -> int:
 
     report = {
         "date": time.strftime("%Y-%m-%d"),
+        "harness_version": HARNESS_VERSION,
         "budget_scale": args.budget_scale,
         "free_memory_gb_at_start": free_gb,
         "free_memory_gb_before_reap": before_gb,
@@ -496,6 +498,11 @@ def main() -> int:
         "unmeasured": len(unmeasured),
         "unmeasured_keys": [r["key"] for r in unmeasured],
         "partially_unmeasured_keys": unmeasured_keys,
+        # S1 - never collapsed. A reader must be able to see how much of the
+        # pass rate came from the final sweep rather than from the model
+        # announcing completion.
+        "done": status_counts.get("done", 0),
+        "done_unannounced": status_counts.get("done_unannounced", 0),
         "ended_at_step_limit": status_counts.get("max_steps", 0),
         "ended_budget_exhausted": status_counts.get("budget_exhausted", 0),
         "tier_pass_rates": {
@@ -512,7 +519,9 @@ def main() -> int:
     print(f"\n{'':-<58}")
     print(f"stable pass {len(stable_pass):>3}   stable fail {len(stable_fail):>3}   "
           f"flaky {len(flaky):>3}")
-    print(f"mean pass rate {mean_rate:.1%}")
+    print(f"mean pass rate {mean_rate:.1%}  "
+          f"(done={status_counts.get('done', 0)}, "
+          f"done_unannounced={status_counts.get('done_unannounced', 0)})")
     for tier in ("easy", "medium", "hard"):
         t = [r for r in rows if r["tier"] == tier]
         if t:

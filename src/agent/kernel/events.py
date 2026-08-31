@@ -55,6 +55,7 @@ EVENT_TYPES = frozenset(
         # ever emitting <final>. A pass, recorded distinctly so
         # "did the work" and "said it was done" stay separable.
         "verify.unannounced_pass",
+        "task.crashed",
         "human.approved",
         "human.denied",
         "human.steered",

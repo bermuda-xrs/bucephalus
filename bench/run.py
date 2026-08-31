@@ -34,6 +34,7 @@ from agent.kernel.tasks import create_task  # noqa: E402
 from agent.kernel.types import Budget, TaskContract  # noqa: E402
 from agent.models.base import BackendError  # noqa: E402
 from agent.models.registry import build_backends  # noqa: E402
+from agent import HARNESS_VERSION  # noqa: E402
 from agent.runlock import RunLock, RunLockBusy  # noqa: E402
 from agent.workspace import reset_workspace  # noqa: E402
 from agent.skills.gate import TaskSpec, evaluate_skill, run_paired_trial  # noqa: E402
@@ -80,6 +81,7 @@ def _provenance(ctx, arm: str) -> dict:
     return {
         "arm": arm,
         "date": time.strftime("%Y-%m-%d"),
+        "harness_version": HARNESS_VERSION,
         "models": {n: b.cfg.model for n, b in ctx.backends.items()},
         "scaffold_version": __import__("agent").__version__,
         "local_tier": ctx.config.active_local_tier,

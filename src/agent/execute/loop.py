@@ -19,7 +19,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Any
 
-from ..kernel.integrity import checkpoint
+from ..kernel.integrity import IntegrityError, checkpoint
 from ..kernel.receipts import execute_once, idempotency_key
 from ..kernel.tasks import load_task, set_status, spend
 from ..kernel.types import GateDecision, Taint, TaskStatus
@@ -358,6 +358,14 @@ def run_task(ctx, task_id: str) -> TaskResult:
         return _final_sweep(ctx, task, "max_steps", best_answer,
                             ctx.config.limits.max_steps)
 
+    except IntegrityError:
+        # S2: DELIBERATELY NOT SWEPT. The hash chain is what makes any record
+        # of this task trustworthy; if it is broken, a pass graded from the
+        # workspace is a claim resting on evidence that failed its own
+        # integrity check. Halt and let a human look.
+        set_status(ctx.conn, ctx.log, task, TaskStatus.FAILED, "integrity_halt")
+        raise
+
     except TaskPaused as p:
         spend(ctx.conn, ctx.log, task, seconds=time.time() - started)
         set_status(ctx.conn, ctx.log, task, TaskStatus.PAUSED, p.reason)
@@ -365,6 +373,17 @@ def run_task(ctx, task_id: str) -> TaskResult:
         return TaskResult(
             task.id, "paused", reason=p.reason, approval_id=p.approval_id
         )
+
+    except Exception as e:  # noqa: BLE001 - see below
+        # S2: an unhandled exception used to propagate with the task left
+        # RUNNING forever and its artifact never graded. The work may well be
+        # complete - the crash can come from anywhere in the loop - so the
+        # artifact is swept, and the failure is recorded either way.
+        ctx.log.append(task.id, "task.crashed",
+                       {"error": f"{type(e).__name__}: {e}"})
+        spend(ctx.conn, ctx.log, task, seconds=time.time() - started)
+        return _final_sweep(ctx, task, "crashed", best_answer, 0)
+
     finally:
         ctx.executing_backend = None
 
@@ -620,6 +639,7 @@ def finish(
         # a failure (M13.4). It parks rather than dying.
         "needs_replan": TaskStatus.PAUSED,
         "failed": TaskStatus.FAILED,
+        "crashed": TaskStatus.FAILED,
     }
     set_status(ctx.conn, ctx.log, task, mapping.get(status, TaskStatus.FAILED), status)
     checkpoint(ctx.log, ctx.anchor, task.id)

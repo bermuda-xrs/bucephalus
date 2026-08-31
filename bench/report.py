@@ -100,6 +100,8 @@ def render(noise: dict | None, cal: dict | None) -> str:
     if (src or {}).get("budget_scale", 1.0) != 1.0:
         add(f"* **time budgets scaled** x{(src or {}).get('budget_scale')} "
             "(so a slower executor is compared on models, not step budgets)")
+    add(f"* **harness version** {(src or {}).get('harness_version', 'UNKNOWN')} "
+        "— pass rates are comparable only within one version")
     add(f"* **profile** `{(src or {}).get('profile', 'unknown')}` — "
         f"cloud backends {prov.get('cloud_backends', 'n/a')}, "
         f"provider credentials {prov.get('credentials_present', 'n/a')}")
@@ -222,11 +224,29 @@ def render(noise: dict | None, cal: dict | None) -> str:
         "hardware, and the spec's own laptop-tier reasoning already says "
         "output tokens are the budget when the machine is the bottleneck.")
     add("")
-    add("| arm | median s/task | pass rate | USD/task |")
-    add("|---|---|---|---|")
-    for pt in (cal or {}).get("pareto", []) or (noise or {}).get("pareto", []) or []:
+    # S3 - a chart may not mix harness versions. The final sweep changed what
+    # counts as a pass, so a pre-fix rate and a post-fix rate are answers to
+    # different questions. Refuse rather than plot them together.
+    pts = (cal or {}).get("pareto", []) or (noise or {}).get("pareto", []) or []
+    versions = {p.get("harness_version") for p in pts}
+    if len(versions) > 1:
+        add("> **REFUSING TO PLOT.** These points come from different harness "
+            f"versions ({sorted(v for v in versions if v is not None)}). The "
+            "final sweep changed what counts as a pass, so pre-fix and "
+            "post-fix rates answer different questions and a frontier drawn "
+            "through both is meaningless. Re-run the older arm on the current "
+            "harness.")
+        add("")
+        pts = []
+
+    # S1 - done and done_unannounced are never collapsed. A reader must be
+    # able to see how much of a pass rate came from the sweep.
+    add("| arm | median s/task | pass rate | done | done_unannounced | USD/task |")
+    add("|---|---|---|---|---|---|")
+    for pt in pts:
         add(f"| {pt.get('arm')} | {pt.get('median_wall_s', 'n/a')} | "
-            f"{_pct(pt.get('pass_rate', 0))} | "
+            f"{_pct(pt.get('pass_rate', 0))} | {pt.get('done', 'n/a')} | "
+            f"{pt.get('done_unannounced', 'n/a')} | "
             f"{pt.get('usd_per_task', 0):.4f} (n/a under local profile) |")
     if not ((cal or {}).get("pareto") or (noise or {}).get("pareto")):
         med = (noise or {}).get("median_wall_s")

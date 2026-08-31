@@ -190,3 +190,48 @@ def test_a_lopsided_ceiling_count_is_called_confounded():
 def test_comparable_ceilings_are_not_flagged():
     out = report.render(_noise(**_arms(hits_a=1, hits_b=1)), None)
     assert "CONFOUNDED" not in out
+
+
+def test_mixing_harness_versions_is_refused_not_plotted():
+    """S3. The final sweep changed what counts as a pass, so a pre-fix rate
+    and a post-fix rate answer different questions."""
+    n = _noise(pareto=[
+        {"arm": "old", "harness_version": 1, "pass_rate": 0.1, "median_wall_s": 200},
+        {"arm": "new", "harness_version": 2, "pass_rate": 0.8, "median_wall_s": 800},
+    ])
+    out = report.render(n, None)
+    assert "REFUSING TO PLOT" in out
+    assert "different harness versions" in out
+    assert "| old |" not in out, "the points must not be plotted anyway"
+
+
+def test_one_harness_version_plots_normally():
+    n = _noise(pareto=[
+        {"arm": "arm_3b", "harness_version": 2, "pass_rate": 0.1,
+         "median_wall_s": 200, "done": 2, "done_unannounced": 1},
+        {"arm": "arm_8b", "harness_version": 2, "pass_rate": 0.8,
+         "median_wall_s": 800, "done": 5, "done_unannounced": 19},
+    ])
+    out = report.render(n, None)
+    assert "REFUSING TO PLOT" not in out
+    assert "| arm_8b |" in out
+
+
+def test_done_and_done_unannounced_are_never_collapsed():
+    """S1. A reader must see how much of a pass rate came from the sweep."""
+    n = _noise(pareto=[{"arm": "a", "harness_version": 2, "pass_rate": 0.8,
+                        "median_wall_s": 800, "done": 5, "done_unannounced": 19}])
+    out = report.render(n, None)
+    assert "done_unannounced" in out
+    for line in out.splitlines():
+        if line.startswith("| a |"):
+            assert "| 5 |" in line and "| 19 |" in line
+            break
+    else:
+        raise AssertionError("the arm row was never rendered")
+
+
+def test_the_header_states_the_harness_version():
+    out = report.render(_noise(harness_version=2), None)
+    assert "harness version" in out
+    assert "comparable only within one version" in out
