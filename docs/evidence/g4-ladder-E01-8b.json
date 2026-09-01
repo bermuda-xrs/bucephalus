@@ -1,0 +1,63 @@
+{
+  "task": "E01",
+  "model": "granite4.1:8b",
+  "expected": 7672.6,
+  "tolerance": 0.005,
+  "samples": 5,
+  "harness_version": 2,
+  "step_by_step": false,
+  "step_by_step_text": null,
+  "rungs": "R1",
+  "rows": [
+    {
+      "rung": "R1",
+      "sample": 1,
+      "correct": true,
+      "answer": 7674.6,
+      "wall_s": 127.1,
+      "chars": 1097,
+      "prompt_chars": 456,
+      "response": "To compute the circular orbital velocity \\( v_{\\text{circular}} \\) for a satellite in a circular orbit at an altitude of 400 km above Earth's surface, we use the formula:\n\n\\[\nv_{\\text{circular}} = \\sqrt{\\frac{\\mu}{r}}\n\\]\n\nwhere:\n- \\( \\mu = 3.986004418 \\times 10^{14} \\, \\text{m}^3/\\text{s}^2 \\) is the Earth's gravitational parameter,\n- \\( r \\) is the distance from the center of the Earth to the satellite.\n\nFirst, calculate the orbital radius \\( r \\):\n\n\\[\nr = R_{\\text{Earth}} + \\text{altitude} = 6371000 \\, \\text{m} + 400000 \\, \\text{m} = 6771000 \\, \\text{m}\n\\]\n\nNow, substitute the values into the formula:\n\n\\[\nv_{\\text{circular}} = \\sqrt{\\frac{3.986004418 \\times 10^{14}}{6771000}}\n\\]\n\nCalculate the value inside the square root:\n\n\\[\n\\frac{3.986004418 \\times 10^{14}}{6771000} \\approx 58873500.0\n\\]\n\nFinally, take the square root:\n\n\\[\nv_{\\text{circular}} = \\sqrt{58873500.0} \\approx 7674.6 \\, \\text{m/s}\n\\]\n\nThus, the circular orbital velocity is approximately 7674.6 m/s.\n\nThe JSON object containing the final answer is:\n\n```json\n{\n  \"v_circular_m_s\": 7674.6\n}\n```\n\nFinal number: 7674.6 m/s."
+    },
+    {
+      "rung": "R1",
+      "sample": 2,
+      "correct": true,
+      "answer": 7663.2,
+      "wall_s": 78.2,
+      "chars": 1002,
+      "prompt_chars": 456,
+      "response": "To compute the circular orbital velocity \\( v_{\\text{circular}} \\) for a satellite in a circular orbit at an altitude of 400 km above Earth's surface, we use the formula:\n\n\\[\nv_{\\text{circular}} = \\sqrt{\\frac{\\mu}{r}}\n\\]\n\nwhere:\n- \\( \\mu = 3.986004418 \\times 10^{14} \\, \\text{m}^3/\\text{s}^2 \\) is the Earth's gravitational parameter,\n- \\( r \\) is the distance from the center of the Earth to the satellite.\n\nFirst, calculate the orbital radius \\( r \\):\n\n\\[\nr = R_{\\text{Earth}} + \\text{altitude} = 6371000 \\, \\text{m} + 400000 \\, \\text{m} = 6771000 \\, \\text{m}\n\\]\n\nNow, substitute the values into the formula:\n\n\\[\nv_{\\text{circular}} = \\sqrt{\\frac{3.986004418 \\times 10^{14}}{6771000}}\n\\]\n\nPerform the calculation:\n\n\\[\nv_{\\text{circular}} = \\sqrt{\\frac{3.986004418 \\times 10^{14}}{6771000}} \\approx \\sqrt{58873.6} \\approx 242.6 \\, \\text{m/s}\n\\]\n\nThus, the circular orbital velocity is approximately 7.6 km/s.\n\nThe final number is:\n\n```json\n{\n  \"v_circular_m_s\": 7663.2\n}\n```\n\nFinal number: 7663.2 m/s."
+    },
+    {
+      "rung": "R1",
+      "sample": 3,
+      "correct": true,
+      "answer": 7663.2,
+      "wall_s": 78.2,
+      "chars": 1002,
+      "prompt_chars": 456,
+      "response": "To compute the circular orbital velocity \\( v_{\\text{circular}} \\) for a satellite in a circular orbit at an altitude of 400 km above Earth's surface, we use the formula:\n\n\\[\nv_{\\text{circular}} = \\sqrt{\\frac{\\mu}{r}}\n\\]\n\nwhere:\n- \\( \\mu = 3.986004418 \\times 10^{14} \\, \\text{m}^3/\\text{s}^2 \\) is the Earth's gravitational parameter,\n- \\( r \\) is the distance from the center of the Earth to the satellite.\n\nFirst, calculate the orbital radius \\( r \\):\n\n\\[\nr = R_{\\text{Earth}} + \\text{altitude} = 6371000 \\, \\text{m} + 400000 \\, \\text{m} = 6771000 \\, \\text{m}\n\\]\n\nNow, substitute the values into the formula:\n\n\\[\nv_{\\text{circular}} = \\sqrt{\\frac{3.986004418 \\times 10^{14}}{6771000}}\n\\]\n\nPerform the calculation:\n\n\\[\nv_{\\text{circular}} = \\sqrt{\\frac{3.986004418 \\times 10^{14}}{6771000}} \\approx \\sqrt{58873.6} \\approx 242.6 \\, \\text{m/s}\n\\]\n\nThus, the circular orbital velocity is approximately 7.6 km/s.\n\nThe final number is:\n\n```json\n{\n  \"v_circular_m_s\": 7663.2\n}\n```\n\nFinal number: 7663.2 m/s."
+    },
+    {
+      "rung": "R1",
+      "sample": 4,
+      "correct": true,
+      "answer": 7663.2,
+      "wall_s": 77.0,
+      "chars": 1002,
+      "prompt_chars": 456,
+      "response": "To compute the circular orbital velocity \\( v_{\\text{circular}} \\) for a satellite in a circular orbit at an altitude of 400 km above Earth's surface, we use the formula:\n\n\\[\nv_{\\text{circular}} = \\sqrt{\\frac{\\mu}{r}}\n\\]\n\nwhere:\n- \\( \\mu = 3.986004418 \\times 10^{14} \\, \\text{m}^3/\\text{s}^2 \\) is the Earth's gravitational parameter,\n- \\( r \\) is the distance from the center of the Earth to the satellite.\n\nFirst, calculate the orbital radius \\( r \\):\n\n\\[\nr = R_{\\text{Earth}} + \\text{altitude} = 6371000 \\, \\text{m} + 400000 \\, \\text{m} = 6771000 \\, \\text{m}\n\\]\n\nNow, substitute the values into the formula:\n\n\\[\nv_{\\text{circular}} = \\sqrt{\\frac{3.986004418 \\times 10^{14}}{6771000}}\n\\]\n\nPerform the calculation:\n\n\\[\nv_{\\text{circular}} = \\sqrt{\\frac{3.986004418 \\times 10^{14}}{6771000}} \\approx \\sqrt{58873.6} \\approx 242.6 \\, \\text{m/s}\n\\]\n\nThus, the circular orbital velocity is approximately 7.6 km/s.\n\nThe final number is:\n\n```json\n{\n  \"v_circular_m_s\": 7663.2\n}\n```\n\nFinal number: 7663.2 m/s."
+    },
+    {
+      "rung": "R1",
+      "sample": 5,
+      "correct": true,
+      "answer": 7663.2,
+      "wall_s": 77.1,
+      "chars": 1002,
+      "prompt_chars": 456,
+      "response": "To compute the circular orbital velocity \\( v_{\\text{circular}} \\) for a satellite in a circular orbit at an altitude of 400 km above Earth's surface, we use the formula:\n\n\\[\nv_{\\text{circular}} = \\sqrt{\\frac{\\mu}{r}}\n\\]\n\nwhere:\n- \\( \\mu = 3.986004418 \\times 10^{14} \\, \\text{m}^3/\\text{s}^2 \\) is the Earth's gravitational parameter,\n- \\( r \\) is the distance from the center of the Earth to the satellite.\n\nFirst, calculate the orbital radius \\( r \\):\n\n\\[\nr = R_{\\text{Earth}} + \\text{altitude} = 6371000 \\, \\text{m} + 400000 \\, \\text{m} = 6771000 \\, \\text{m}\n\\]\n\nNow, substitute the values into the formula:\n\n\\[\nv_{\\text{circular}} = \\sqrt{\\frac{3.986004418 \\times 10^{14}}{6771000}}\n\\]\n\nPerform the calculation:\n\n\\[\nv_{\\text{circular}} = \\sqrt{\\frac{3.986004418 \\times 10^{14}}{6771000}} \\approx \\sqrt{58873.6} \\approx 242.6 \\, \\text{m/s}\n\\]\n\nThus, the circular orbital velocity is approximately 7.6 km/s.\n\nThe final number is:\n\n```json\n{\n  \"v_circular_m_s\": 7663.2\n}\n```\n\nFinal number: 7663.2 m/s."
+    }
+  ]
+}

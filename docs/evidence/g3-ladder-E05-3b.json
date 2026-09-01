@@ -1,0 +1,73 @@
+{
+  "task": "E05",
+  "model": "granite4.1:3b",
+  "expected": 12922.0,
+  "tolerance": 0.005,
+  "samples": 3,
+  "harness_version": 2,
+  "step_by_step": false,
+  "step_by_step_text": null,
+  "rungs": "R0,R1",
+  "rows": [
+    {
+      "rung": "R0",
+      "sample": 1,
+      "correct": true,
+      "answer": 12918.75,
+      "wall_s": 27.2,
+      "chars": 626,
+      "prompt_chars": 115,
+      "response": "To compute the dynamic pressure (q) in pascals, we use the formula:\n\n\\[ q = \\frac{1}{2} \\rho v^2 \\]\n\nwhere:\n- \\( \\rho \\) is the air density (0.4135 kg/m\u00b3),\n- \\( v \\) is the speed in meters per second (m/s).\n\nFirst, convert the speed from km/h to m/s:\n\n\\[ 900 \\text{ km/h} = 900 \\times \\frac{1000 \\text{ m}}{3600 \\text{ s}} = 250 \\text{ m/s} \\]\n\nNow plug the values into the formula:\n\n\\[ q = \\frac{1}{2} \\times 0.4135 \\, \\text{kg/m}^3 \\times (250 \\, \\text{m/s})^2 \\]\n\n\\[ q = \\frac{1}{2} \\times 0.4135 \\times 62500 \\]\n\n\\[ q = 0.20675 \\times 62500 \\]\n\n\\[ q = 12918.75 \\, \\text{Pa} \\]\n\nSo, the dynamic pressure is **12918.75 Pa**."
+    },
+    {
+      "rung": "R0",
+      "sample": 2,
+      "correct": true,
+      "answer": 12918.75,
+      "wall_s": 23.1,
+      "chars": 626,
+      "prompt_chars": 115,
+      "response": "To compute the dynamic pressure (q) in pascals, we use the formula:\n\n\\[ q = \\frac{1}{2} \\rho v^2 \\]\n\nwhere:\n- \\( \\rho \\) is the air density (0.4135 kg/m\u00b3),\n- \\( v \\) is the speed in meters per second (m/s).\n\nFirst, convert the speed from km/h to m/s:\n\n\\[ 900 \\text{ km/h} = 900 \\times \\frac{1000 \\text{ m}}{3600 \\text{ s}} = 250 \\text{ m/s} \\]\n\nNow plug the values into the formula:\n\n\\[ q = \\frac{1}{2} \\times 0.4135 \\, \\text{kg/m}^3 \\times (250 \\, \\text{m/s})^2 \\]\n\n\\[ q = \\frac{1}{2} \\times 0.4135 \\times 62500 \\]\n\n\\[ q = 0.20675 \\times 62500 \\]\n\n\\[ q = 12918.75 \\, \\text{Pa} \\]\n\nSo, the dynamic pressure is **12918.75 Pa**."
+    },
+    {
+      "rung": "R0",
+      "sample": 3,
+      "correct": true,
+      "answer": 12918.75,
+      "wall_s": 23.2,
+      "chars": 626,
+      "prompt_chars": 115,
+      "response": "To compute the dynamic pressure (q) in pascals, we use the formula:\n\n\\[ q = \\frac{1}{2} \\rho v^2 \\]\n\nwhere:\n- \\( \\rho \\) is the air density (0.4135 kg/m\u00b3),\n- \\( v \\) is the speed in meters per second (m/s).\n\nFirst, convert the speed from km/h to m/s:\n\n\\[ 900 \\text{ km/h} = 900 \\times \\frac{1000 \\text{ m}}{3600 \\text{ s}} = 250 \\text{ m/s} \\]\n\nNow plug the values into the formula:\n\n\\[ q = \\frac{1}{2} \\times 0.4135 \\, \\text{kg/m}^3 \\times (250 \\, \\text{m/s})^2 \\]\n\n\\[ q = \\frac{1}{2} \\times 0.4135 \\times 62500 \\]\n\n\\[ q = 0.20675 \\times 62500 \\]\n\n\\[ q = 12918.75 \\, \\text{Pa} \\]\n\nSo, the dynamic pressure is **12918.75 Pa**."
+    },
+    {
+      "rung": "R1",
+      "sample": 1,
+      "correct": false,
+      "answer": 8775.75,
+      "wall_s": 15.6,
+      "chars": 362,
+      "prompt_chars": 348,
+      "response": "q_pa: 8775.75\n\nExplanation:\n1. Convert the speed from km/h to m/s: 900 km/h = 900 * (1000 m / 3600 s) = 250 m/s.\n2. Use the dynamic pressure formula: q = 0.5 * \u03c1 * v^2, where \u03c1 is air density (0.4135 kg/m\u00b3) and v is speed (250 m/s).\n3. Calculate: q = 0.5 * 0.4135 kg/m\u00b3 * (250 m/s)\u00b2 = 0.5 * 0.4135 * 62500 = 8775.75 Pa.\n\nThus, the dynamic pressure is 8775.75 Pa."
+    },
+    {
+      "rung": "R1",
+      "sample": 2,
+      "correct": true,
+      "answer": 12918.75,
+      "wall_s": 30.5,
+      "chars": 685,
+      "prompt_chars": 348,
+      "response": "The dynamic pressure \\(q\\) is given by the formula:\n\n\\[\nq = \\frac{1}{2} \\rho v^2\n\\]\n\nwhere  \n- \\(\\rho = 0.4135 \\, \\text{kg/m}^3\\) (air density)  \n- \\(v\\) is the speed in \\(\\text{m/s}\\).\n\nFirst, convert the speed from km/h to m/s:\n\n\\[\nv = 900 \\, \\text{km/h} = \\frac{900 \\times 1000}{3600} \\, \\text{m/s} = 250 \\, \\text{m/s}\n\\]\n\nNow compute \\(v^2\\):\n\n\\[\nv^2 = (250 \\, \\text{m/s})^2 = 62500 \\, \\text{m}^2/\\text{s}^2\n\\]\n\nNow plug the values into the dynamic pressure formula:\n\n\\[\nq = \\frac{1}{2} \\times 0.4135 \\, \\text{kg/m}^3 \\times 62500 \\, \\text{m}^2/\\text{s}^2\n\\]\n\n\\[\nq = 0.20675 \\times 62500 = 12918.75 \\, \\text{Pa}\n\\]\n\nThus, the dynamic pressure in pascals is:\n\n\\[\n\\boxed{12918.75}\n\\]"
+    },
+    {
+      "rung": "R1",
+      "sample": 3,
+      "correct": true,
+      "answer": 12918.75,
+      "wall_s": 33.3,
+      "chars": 685,
+      "prompt_chars": 348,
+      "response": "The dynamic pressure \\(q\\) is given by the formula:\n\n\\[\nq = \\frac{1}{2} \\rho v^2\n\\]\n\nwhere  \n- \\(\\rho = 0.4135 \\, \\text{kg/m}^3\\) (air density)  \n- \\(v\\) is the speed in \\(\\text{m/s}\\).\n\nFirst, convert the speed from km/h to m/s:\n\n\\[\nv = 900 \\, \\text{km/h} = \\frac{900 \\times 1000}{3600} \\, \\text{m/s} = 250 \\, \\text{m/s}\n\\]\n\nNow compute \\(v^2\\):\n\n\\[\nv^2 = (250 \\, \\text{m/s})^2 = 62500 \\, \\text{m}^2/\\text{s}^2\n\\]\n\nNow plug the values into the dynamic pressure formula:\n\n\\[\nq = \\frac{1}{2} \\times 0.4135 \\, \\text{kg/m}^3 \\times 62500 \\, \\text{m}^2/\\text{s}^2\n\\]\n\n\\[\nq = 0.20675 \\times 62500 = 12918.75 \\, \\text{Pa}\n\\]\n\nThus, the dynamic pressure in pascals is:\n\n\\[\n\\boxed{12918.75}\n\\]"
+    }
+  ]
+}

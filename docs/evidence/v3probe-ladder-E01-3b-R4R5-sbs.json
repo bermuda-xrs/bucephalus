@@ -1,0 +1,103 @@
+{
+  "task": "E01",
+  "model": "granite4.1:3b",
+  "expected": 7672.6,
+  "tolerance": 0.005,
+  "samples": 5,
+  "harness_version": 2,
+  "step_by_step": true,
+  "step_by_step_text": "Work through it step by step, showing each step, and only then give the final number.",
+  "rungs": "R4,R5",
+  "rows": [
+    {
+      "rung": "R4",
+      "sample": 1,
+      "correct": false,
+      "answer": 19826.278527769256,
+      "status": "max_steps",
+      "goal_chars": 1006,
+      "wall_s": 102.5
+    },
+    {
+      "rung": "R4",
+      "sample": 2,
+      "correct": false,
+      "answer": null,
+      "status": "max_steps",
+      "goal_chars": 1006,
+      "wall_s": 7.4
+    },
+    {
+      "rung": "R4",
+      "sample": 3,
+      "correct": false,
+      "answer": null,
+      "status": "max_steps",
+      "goal_chars": 1006,
+      "wall_s": 7.5
+    },
+    {
+      "rung": "R4",
+      "sample": 4,
+      "correct": false,
+      "answer": null,
+      "status": "max_steps",
+      "goal_chars": 1006,
+      "wall_s": 7.2
+    },
+    {
+      "rung": "R4",
+      "sample": 5,
+      "correct": false,
+      "answer": null,
+      "status": "max_steps",
+      "goal_chars": 1006,
+      "wall_s": 7.4
+    },
+    {
+      "rung": "R5",
+      "sample": 1,
+      "correct": false,
+      "answer": 7909.544108195981,
+      "status": "plateau",
+      "goal_chars": 1006,
+      "wall_s": 84.4
+    },
+    {
+      "rung": "R5",
+      "sample": 2,
+      "correct": false,
+      "answer": 250.12174635464578,
+      "status": "plateau",
+      "goal_chars": 1006,
+      "wall_s": 174.7
+    },
+    {
+      "rung": "R5",
+      "sample": 3,
+      "correct": false,
+      "answer": 250.12174635464578,
+      "status": "plateau",
+      "goal_chars": 1006,
+      "wall_s": 174.3
+    },
+    {
+      "rung": "R5",
+      "sample": 4,
+      "correct": false,
+      "answer": null,
+      "status": "budget_exhausted",
+      "goal_chars": 1006,
+      "wall_s": 2465.9
+    },
+    {
+      "rung": "R5",
+      "sample": 5,
+      "correct": false,
+      "answer": 7909.544108195981,
+      "status": "plateau",
+      "goal_chars": 1006,
+      "wall_s": 82.7
+    }
+  ]
+}

@@ -1,0 +1,127 @@
+{
+  "LABEL": "Phase 1 - G3 generalization, G4 capacity, v3 probe. harness_version 2, 2026-09-01",
+  "hardware": "Intel Core Ultra 5 225U, 12C/14T, 15.5 GB RAM, CPU inference",
+  "profile": "local",
+  "executors": ["granite4.1:3b (3.4B, Q4_K_M)", "granite4.1:8b (8.8B, Q4_K_M)"],
+  "harness_version": 2,
+  "note_harness_version": "UNCHANGED. v3 was NOT applied. See DECISION below.",
+
+  "G3_does_the_tax_generalize": {
+    "design": "ladder R0/R1, granite4.1:3b, 3 samples per rung, temperature 0",
+    "criterion": "TAX = 'R0 correct, R1 collapsed' reproduces on >=2 of 3 tasks",
+    "result": "1 of 3. TAX IS FALSE.",
+    "per_task": [
+      {"task": "E03", "physics": "Mars escape velocity", "R0": "3/3", "R1": "3/3",
+       "R0_chars": 775, "R1_chars": 694, "R1_wall_s": [28.5, 27.1, 27.2],
+       "answer_position_R1": "last (fenced json after full derivation)",
+       "verdict": "UNAFFECTED"},
+      {"task": "E04", "physics": "Tsiolkovsky delta-v", "R0": "3/3", "R1": "0/3",
+       "R0_chars": [537, 561, 561], "R1_chars": 344, "R1_wall_s": [13.3, 12.0, 11.9],
+       "answer_position_R1": "FIRST (delta_v_m_s: 8860, then post-hoc working)",
+       "verdict": "COLLAPSE"},
+      {"task": "E05", "physics": "dynamic pressure", "R0": "3/3", "R1": "2/3",
+       "R0_chars": 626, "R1_chars": [362, 685, 685], "R1_wall_s": [15.6, 30.5, 33.3],
+       "answer_position_R1": "sample 1 FIRST (wrong); samples 2-3 last (right)",
+       "verdict": "PARTIAL - and the within-task control"}
+    ],
+    "MECHANISM_CORRECTION": {
+      "old": "chain-of-thought suppression, evidenced by response length collapsing 1155 -> 236 -> 32 chars",
+      "new": "ANSWER POSITION. Every failing response emits 'key: value' BEFORE its working; every passing response emits the number LAST. Length is a downstream correlate of position, not the cause.",
+      "why_this_is_better_evidence": "E05 is a within-task, within-rung, same-prompt control. At temperature 0 it produced both behaviours: the 362-char answer-first sample was wrong, the two 685-char answer-last samples were right. That isolates position from task, from rung, and from prompt.",
+      "what_answer_first_looks_like": "E04 R1 emits 'delta_v_m_s: 8860', then writes the CORRECT formula and the CORRECT substitution, and never evaluates it. E05 R1 s1 emits 'q_pa: 8775.75', then writes steps that are individually right and ends with an arithmetic result bent to match the number already committed at the top. The working is post-hoc rationalisation anchored to a token that is already in the context and cannot be revised."
+    }
+  },
+
+  "G4_is_the_tax_capacity_dependent": {
+    "design": "ladder R1, granite4.1:8b, E01, 5 samples",
+    "result": "5/5 CORRECT. The 8B is UNAFFECTED at R1 where the 3B is 0/5.",
+    "comparison": {
+      "3b_R1": {"correct": "0/5", "chars": 236, "wall_s": 7.7, "answer_position": "first"},
+      "8b_R1": {"correct": "5/5", "chars": 1002, "wall_s": [127.1, 78.2, 78.2, 77.0, 77.1],
+                "answer_position": "last", "answers": [7674.6, 7663.2]}
+    },
+    "finding": "CAPACITY THRESHOLD. The R1 harness tax is a property of the 3.4B, not of the scaffold alone. Same task, same rung, same 456-character prompt.",
+    "cost": "The 8B pays 77-127 s for what the 3B does in 7.7 s - 10x to 16x the wall clock, on a benchmark whose only cost axis is seconds.",
+    "CAVEAT_the_working_is_not_a_trace": "The 8B's shown arithmetic is wrong mid-derivation ('sqrt(58873.6) = 242.6 m/s', then 'approximately 7.6 km/s') yet it lands on 7663.2, which is correct. Reasoning PRESENCE predicts correctness; the reasoning SHOWN is not what produced the answer. Anyone later scoring these traces for quality rather than counting them will be measuring something else."
+  },
+
+  "v3_probe_does_the_fix_survive_the_loop": {
+    "design": "ladder R4 and R5 with --step-by-step, granite4.1:3b, E01, 5 samples",
+    "criterion": "FIX = >=3/5",
+    "result": "R4 0/5, R5 0/5. FIX IS FALSE.",
+    "instruction_used": "Work through it step by step, showing each step, and only then give the final number.",
+    "injection_point": "appended to the SUITE GOAL, which is where the real v3 change would land (the goal template in bench/suites/aero_calc.py). Confirmed present in the recorded task contract.",
+
+    "R4_IS_NOT_A_VALID_MEASUREMENT": {
+      "observed": "sample 1 spent its single step on run_code and produced an answer (score 0.1428); samples 2-5 spent their single step on read_file(params.json) and produced NO artifact, in 7.2-7.5 s",
+      "why_it_is_invalid": "R4 sets max_steps=1. It is documented as 'the full agent loop, one step allowed' and read as 'can it deliver this', but what it actually scores is 'did the model happen to spend its one action on run_code'. Reading your input file before computing is correct agent behaviour and scores zero here.",
+      "it_is_biased_against_the_thing_under_test": "'Work through it step by step' is an instruction to take preparatory steps. R4 penalises exactly that. So R4 cannot contribute to the FIX criterion in either direction.",
+      "it_also_weakens_the_v2_ladder": "The published v2 R4 row (0/5, 11185784.5) carries the same defect and should not be read as evidence that the tax survives into the loop.",
+      "bug_class": "Instrument, class 1 - the thing measured is adjacent to the thing claimed. This is the FOURTH in that class. It was found by asking the documented question: what would this check score for an agent that did the work perfectly but behaved slightly unusually?"
+    },
+
+    "R5_is_the_valid_rung": {
+      "max_steps": 10,
+      "correct": "0/5",
+      "answers": [7909.544108195981, 250.12174635464578, 250.12174635464578, null, 7909.544108195981],
+      "end_reasons": ["plateau", "plateau", "plateau", "budget_exhausted", "plateau"],
+      "sample_4_is_contaminated": {
+        "wall_s": 2465.9,
+        "median_of_other_samples_s": 84.4,
+        "ratio": "29x",
+        "what_happened": "a single model call at step 0 took 2465.45 s against a 600 s budget, so the task ended budget_exhausted after one step",
+        "status": "measures the machine, not the model. Excluded from interpretation. Does not change the verdict: 0 correct with or without it.",
+        "precedent": "the documented orphaned-llama-server hazard, 1499.8 s for work that takes 88.1 s"
+      }
+    },
+
+    "WHAT_v3_ACTUALLY_DID": {
+      "summary": "It improved the error STRUCTURE substantially without producing a single pass.",
+      "v2_R5_answer": 11185784.549998963,
+      "v2_R5_relative_error": "145688.71%",
+      "v2_R5_score": 0.0773,
+      "v3_R5_answer": 7909.544108195981,
+      "v3_R5_relative_error": "3.09%",
+      "v3_R5_score": 0.2792,
+      "score_improvement": "3.6x on the monotonic scorer",
+      "pass_rate_change": "0/5 -> 0/5. NONE.",
+      "root_cause_now_legible": "7909.544108195981 is sqrt(mu / (6371000 + 400)) to full float precision. The model reads 'altitude_km: 400' and adds 400 METRES. The second failure family, 250.12174635464578, is the same r = 6371400 with a spurious 1000x unit scale. Both are the suite's designed km-to-m trap.",
+      "why_this_matters": "Under v2 the failure was unstructured and 1458x out. Under v3 it is a single recognisable unit error. FINDINGS section 4 says a working suite should show errors clustered at recognisable factors rather than unstructured ones - by that criterion v3 makes the suite measure what it was built to measure. That is a real effect and it is NOT a pass, and it must not be reported as one."
+    }
+  },
+
+  "TEMPERATURE_ZERO_IS_NOT_DETERMINISTIC": {
+    "claim_it_contradicts": "Phase 2D premise: 'Warm-cache runs at temperature 0 are byte-identical, so within-process variance is near zero.'",
+    "counterexamples": [
+      "E05 R1: sample 1 = 362 chars, WRONG (8775.75); samples 2-3 = 685 chars, RIGHT (12918.75). Identical prompt bytes, identical options.",
+      "E04 R0: sample 1 = 537 chars; samples 2-3 = 561 chars.",
+      "8B E01 R1: sample 1 = 7674.6 / 1097 chars / 127.1 s; samples 2-5 = 7663.2 / 1002 chars / ~78 s.",
+      "3B E01 R5: sample 1 = 7909.54; samples 2-3 = 250.12; sample 5 = 7909.54."
+    ],
+    "pattern": "The FIRST sample of a block diverges; subsequent samples are byte-identical to each other. Divergence is tied to the first call after a model load or a rung change, not to general chaos.",
+    "verified_not_a_prompt_artifact": "ladder.py rebuilds the prompt identically per sample and complete() sends an identical body. The prompt bytes do not vary.",
+    "consequence": "n=1 per task inherits this variance, and the FIRST task of any run is the most exposed. Phase 2D's justification for cutting passes 2-3 does not hold as stated. Phase 2D's own alternative - 3 COLD-START runs of 5 tasks - is the right instrument here, because cold start is precisely the condition that produces the divergence."
+  },
+
+  "REAP_ORPHANS_KILLS_HEALTHY_WORKERS": {
+    "bug_class": "Process, class 2 - FOURTH in that class, and the mirror image of the documented pattern",
+    "documented_pattern": "anything spawned outlives what spawned it",
+    "this_one": "the reaper cannot tell an orphan from a live child and kills healthy ones",
+    "code": "ORPHAN_NAMES = ('llama-server',); reap_orphans() matches on process name alone and kill_tree()s every match",
+    "observed": "killed a live llama-server holding the warm model under keep_alive, between ladder runs, three times today",
+    "consequence": "R0 always runs first in a ladder, so R0's first sample always absorbs a cold load. That systematically inflates the R0-to-R1 wall-clock drop which the original finding cites as evidence of suppression. The drop survives on warm samples (E04: 24.3 s -> 12.0 s) but the published 45.7 s -> 7.7 s for E01 is partly cold-load.",
+    "blast_radius_is_limited": "noise.py calls it ONCE in preflight, not per task, so a full-suite median is not affected - only the first task."
+  },
+
+  "DECISION": {
+    "TAX": false,
+    "FIX": false,
+    "cell": "NOT TAX -> the tax is task-specific, not general. Do not apply v3. Go to Phase 2 on harness v2.",
+    "note_on_the_cell_label": "The table calls this cell 'E01 special'. That is not quite what was found: E01 and E04 both collapse and E05 collapses in 1 of 3 samples, so it is not one special task. The affected set is characterised by answer-first ordering, not by task identity - and E05 shows the same task going both ways at temperature 0. The tax is real, stochastic, and its RATE varies by task.",
+    "v3_applied": false,
+    "HARNESS_VERSION": 2,
+    "independent_corroboration": "FIX is also false, so both the TAX route and the FIX route point the same way. v3 is not applied.",
+    "the_ship_argument_does_not_activate": "The brief noted that a harness suppressing chain-of-thought is not one you would want to ship regardless of pass rates, and that this argues for v3 IF v3 survives Phase 1. It did not survive: 0/5 at the only valid rung. The argument is not available.",
+    "8B_capacity_threshold": "RECORDED regardless of the other cells, per the decision table."
+  }
+}

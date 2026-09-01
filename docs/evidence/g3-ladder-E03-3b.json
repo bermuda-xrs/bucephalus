@@ -1,0 +1,73 @@
+{
+  "task": "E03",
+  "model": "granite4.1:3b",
+  "expected": 5027.0,
+  "tolerance": 0.005,
+  "samples": 3,
+  "harness_version": 2,
+  "step_by_step": false,
+  "step_by_step_text": null,
+  "rungs": "R0,R1",
+  "rows": [
+    {
+      "rung": "R0",
+      "sample": 1,
+      "correct": true,
+      "answer": 5027.0,
+      "wall_s": 44.5,
+      "chars": 775,
+      "prompt_chars": 153,
+      "response": "The escape velocity \\(v_e\\) from a celestial body is given by  \n\n\\[\nv_e = \\sqrt{\\frac{2\\mu}{R}},\n\\]\n\nwhere  \n\n- \\(\\mu = 4.282837 \\times 10^{13}\\ \\text{m}^3\\!/\\text{s}^2\\) (gravitational parameter of Mars),  \n- \\(R = 3.389500 \\times 10^{6}\\ \\text{m}\\) (radius of Mars).\n\n**Step 1: Compute the ratio \\(\\frac{2\\mu}{R}\\).**  \n\n\\[\n2\\mu = 2 \\times 4.282837 \\times 10^{13} = 8.565674 \\times 10^{13}\\ \\text{m}^3\\!/\\text{s}^2.\n\\]\n\n\\[\n\\frac{2\\mu}{R} = \\frac{8.565674 \\times 10^{13}}{3.389500 \\times 10^{6}}\n               = 2.527 \\times 10^{7}\\ \\text{m}^2\\!/\\text{s}^2.\n\\]\n\n**Step 2: Take the square root.**  \n\n\\[\nv_e = \\sqrt{2.527 \\times 10^{7}} \\approx 5.03 \\times 10^{3}\\ \\text{m/s}.\n\\]\n\nThus, the escape velocity at Mars\u2019 surface is approximately  \n\n\\[\n\\boxed{5027\\ \\text{m/s}}.\n\\]"
+    },
+    {
+      "rung": "R0",
+      "sample": 2,
+      "correct": true,
+      "answer": 5027.0,
+      "wall_s": 31.9,
+      "chars": 775,
+      "prompt_chars": 153,
+      "response": "The escape velocity \\(v_e\\) from a celestial body is given by  \n\n\\[\nv_e = \\sqrt{\\frac{2\\mu}{R}},\n\\]\n\nwhere  \n\n- \\(\\mu = 4.282837 \\times 10^{13}\\ \\text{m}^3\\!/\\text{s}^2\\) (gravitational parameter of Mars),  \n- \\(R = 3.389500 \\times 10^{6}\\ \\text{m}\\) (radius of Mars).\n\n**Step 1: Compute the ratio \\(\\frac{2\\mu}{R}\\).**  \n\n\\[\n2\\mu = 2 \\times 4.282837 \\times 10^{13} = 8.565674 \\times 10^{13}\\ \\text{m}^3\\!/\\text{s}^2.\n\\]\n\n\\[\n\\frac{2\\mu}{R} = \\frac{8.565674 \\times 10^{13}}{3.389500 \\times 10^{6}}\n               = 2.527 \\times 10^{7}\\ \\text{m}^2\\!/\\text{s}^2.\n\\]\n\n**Step 2: Take the square root.**  \n\n\\[\nv_e = \\sqrt{2.527 \\times 10^{7}} \\approx 5.03 \\times 10^{3}\\ \\text{m/s}.\n\\]\n\nThus, the escape velocity at Mars\u2019 surface is approximately  \n\n\\[\n\\boxed{5027\\ \\text{m/s}}.\n\\]"
+    },
+    {
+      "rung": "R0",
+      "sample": 3,
+      "correct": true,
+      "answer": 5027.0,
+      "wall_s": 31.8,
+      "chars": 775,
+      "prompt_chars": 153,
+      "response": "The escape velocity \\(v_e\\) from a celestial body is given by  \n\n\\[\nv_e = \\sqrt{\\frac{2\\mu}{R}},\n\\]\n\nwhere  \n\n- \\(\\mu = 4.282837 \\times 10^{13}\\ \\text{m}^3\\!/\\text{s}^2\\) (gravitational parameter of Mars),  \n- \\(R = 3.389500 \\times 10^{6}\\ \\text{m}\\) (radius of Mars).\n\n**Step 1: Compute the ratio \\(\\frac{2\\mu}{R}\\).**  \n\n\\[\n2\\mu = 2 \\times 4.282837 \\times 10^{13} = 8.565674 \\times 10^{13}\\ \\text{m}^3\\!/\\text{s}^2.\n\\]\n\n\\[\n\\frac{2\\mu}{R} = \\frac{8.565674 \\times 10^{13}}{3.389500 \\times 10^{6}}\n               = 2.527 \\times 10^{7}\\ \\text{m}^2\\!/\\text{s}^2.\n\\]\n\n**Step 2: Take the square root.**  \n\n\\[\nv_e = \\sqrt{2.527 \\times 10^{7}} \\approx 5.03 \\times 10^{3}\\ \\text{m/s}.\n\\]\n\nThus, the escape velocity at Mars\u2019 surface is approximately  \n\n\\[\n\\boxed{5027\\ \\text{m/s}}.\n\\]"
+    },
+    {
+      "rung": "R1",
+      "sample": 1,
+      "correct": true,
+      "answer": 5022.0,
+      "wall_s": 28.5,
+      "chars": 694,
+      "prompt_chars": 394,
+      "response": "The escape velocity \\(v_{\\text{escape}}\\) from a celestial body is given by  \n\n\\[\nv_{\\text{escape}} = \\sqrt{\\frac{2\\mu}{R}},\n\\]\n\nwhere  \n\n- \\(\\mu = 4.282837 \\times 10^{13}\\ \\text{m}^3\\!/\\text{s}^2\\) (gravitational parameter of Mars),  \n- \\(R = 3.389500 \\times 10^{6}\\ \\text{m}\\) (radius of Mars).\n\nPlugging in the numbers:\n\n\\[\n\\begin{aligned}\nv_{\\text{escape}} &= \\sqrt{\\frac{2 \\times 4.282837 \\times 10^{13}}{3.389500 \\times 10^{6}}} \\\\\n&= \\sqrt{\\frac{8.565674 \\times 10^{13}}{3.389500 \\times 10^{6}}} \\\\\n&= \\sqrt{2.526 \\times 10^{7}} \\\\\n&\\approx 5.022 \\times 10^{3}\\ \\text{m/s}.\n\\end{aligned}\n\\]\n\nThus, the escape velocity at Mars' surface is **5022\u202fm/s**.\n\n```json\n{\"v_escape_m_s\": 5022}\n```"
+    },
+    {
+      "rung": "R1",
+      "sample": 2,
+      "correct": true,
+      "answer": 5022.0,
+      "wall_s": 27.1,
+      "chars": 694,
+      "prompt_chars": 394,
+      "response": "The escape velocity \\(v_{\\text{escape}}\\) from a celestial body is given by  \n\n\\[\nv_{\\text{escape}} = \\sqrt{\\frac{2\\mu}{R}},\n\\]\n\nwhere  \n\n- \\(\\mu = 4.282837 \\times 10^{13}\\ \\text{m}^3\\!/\\text{s}^2\\) (gravitational parameter of Mars),  \n- \\(R = 3.389500 \\times 10^{6}\\ \\text{m}\\) (radius of Mars).\n\nPlugging in the numbers:\n\n\\[\n\\begin{aligned}\nv_{\\text{escape}} &= \\sqrt{\\frac{2 \\times 4.282837 \\times 10^{13}}{3.389500 \\times 10^{6}}} \\\\\n&= \\sqrt{\\frac{8.565674 \\times 10^{13}}{3.389500 \\times 10^{6}}} \\\\\n&= \\sqrt{2.526 \\times 10^{7}} \\\\\n&\\approx 5.022 \\times 10^{3}\\ \\text{m/s}.\n\\end{aligned}\n\\]\n\nThus, the escape velocity at Mars' surface is **5022\u202fm/s**.\n\n```json\n{\"v_escape_m_s\": 5022}\n```"
+    },
+    {
+      "rung": "R1",
+      "sample": 3,
+      "correct": true,
+      "answer": 5022.0,
+      "wall_s": 27.2,
+      "chars": 694,
+      "prompt_chars": 394,
+      "response": "The escape velocity \\(v_{\\text{escape}}\\) from a celestial body is given by  \n\n\\[\nv_{\\text{escape}} = \\sqrt{\\frac{2\\mu}{R}},\n\\]\n\nwhere  \n\n- \\(\\mu = 4.282837 \\times 10^{13}\\ \\text{m}^3\\!/\\text{s}^2\\) (gravitational parameter of Mars),  \n- \\(R = 3.389500 \\times 10^{6}\\ \\text{m}\\) (radius of Mars).\n\nPlugging in the numbers:\n\n\\[\n\\begin{aligned}\nv_{\\text{escape}} &= \\sqrt{\\frac{2 \\times 4.282837 \\times 10^{13}}{3.389500 \\times 10^{6}}} \\\\\n&= \\sqrt{\\frac{8.565674 \\times 10^{13}}{3.389500 \\times 10^{6}}} \\\\\n&= \\sqrt{2.526 \\times 10^{7}} \\\\\n&\\approx 5.022 \\times 10^{3}\\ \\text{m/s}.\n\\end{aligned}\n\\]\n\nThus, the escape velocity at Mars' surface is **5022\u202fm/s**.\n\n```json\n{\"v_escape_m_s\": 5022}\n```"
+    }
+  ]
+}

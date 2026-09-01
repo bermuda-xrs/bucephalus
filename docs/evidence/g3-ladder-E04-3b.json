@@ -1,0 +1,73 @@
+{
+  "task": "E04",
+  "model": "granite4.1:3b",
+  "expected": 4233.9,
+  "tolerance": 0.005,
+  "samples": 3,
+  "harness_version": 2,
+  "step_by_step": false,
+  "step_by_step_text": null,
+  "rungs": "R0,R1",
+  "rows": [
+    {
+      "rung": "R0",
+      "sample": 1,
+      "correct": true,
+      "answer": 4227.7,
+      "wall_s": 35.2,
+      "chars": 537,
+      "prompt_chars": 211,
+      "response": "The Tsiolkovsky rocket equation relates the change in velocity (\u0394v) to the specific impulse (Isp), the initial mass (mi), and the final mass (mf) of a rocket stage:\n\n\u2003\u2003\u0394v = Isp \u00d7 g\u2080 \u00d7 ln(mi / mf)\n\nGiven:\n\u2003\u2003Isp = 311 s\n\u2003\u2003g\u2080 = 9.80665 m/s\u00b2\n\u2003\u2003mi = 549054 kg\n\u2003\u2003mf = 137000 kg\n\nFirst, compute the mass ratio:\n\u2003\u2003mi / mf = 549054 / 137000 \u2248 4.00073\n\nNow, take the natural logarithm:\n\u2003\u2003ln(4.00073) \u2248 1.38629\n\nThen, calculate \u0394v:\n\u2003\u2003\u0394v = 311 \u00d7 9.80665 \u00d7 1.38629\n\u2003\u2003\u2003\u2003\u2248 311 \u00d7 13.592 \u2248 4227.7 m/s\n\nThus, the ideal delta-v is approximately 4227.7 m/s."
+    },
+    {
+      "rung": "R0",
+      "sample": 2,
+      "correct": true,
+      "answer": 4230.0,
+      "wall_s": 24.3,
+      "chars": 561,
+      "prompt_chars": 211,
+      "response": "The Tsiolkovsky rocket equation relates the change in velocity (\u0394v) to the specific impulse (Isp), the initial mass (mi), and the final mass (mf) of a rocket stage:\n\n\u2003\u2003\u0394v = Isp \u00d7 g\u2080 \u00d7 ln(mi / mf)\n\nGiven:\n\u2003\u2003Isp = 311 s\n\u2003\u2003g\u2080 = 9.80665 m/s\u00b2\n\u2003\u2003mi = 549054 kg\n\u2003\u2003mf = 137000 kg\n\nFirst, compute the mass ratio:\n\u2003\u2003mi / mf = 549054 / 137000 \u2248 4.000\n\nNow, calculate the natural logarithm:\n\u2003\u2003ln(4.000) \u2248 1.386\n\nThen, compute \u0394v:\n\u2003\u2003\u0394v = 311 \u00d7 9.80665 \u00d7 1.386\n\u2003\u2003\u2003\u2003\u2248 311 \u00d7 13.592\n\u2003\u2003\u2003\u2003\u2248 4229.9 m/s\n\nRounding to the nearest whole number, the ideal \u0394v is approximately 4230 m/s."
+    },
+    {
+      "rung": "R0",
+      "sample": 3,
+      "correct": true,
+      "answer": 4230.0,
+      "wall_s": 24.0,
+      "chars": 561,
+      "prompt_chars": 211,
+      "response": "The Tsiolkovsky rocket equation relates the change in velocity (\u0394v) to the specific impulse (Isp), the initial mass (mi), and the final mass (mf) of a rocket stage:\n\n\u2003\u2003\u0394v = Isp \u00d7 g\u2080 \u00d7 ln(mi / mf)\n\nGiven:\n\u2003\u2003Isp = 311 s\n\u2003\u2003g\u2080 = 9.80665 m/s\u00b2\n\u2003\u2003mi = 549054 kg\n\u2003\u2003mf = 137000 kg\n\nFirst, compute the mass ratio:\n\u2003\u2003mi / mf = 549054 / 137000 \u2248 4.000\n\nNow, calculate the natural logarithm:\n\u2003\u2003ln(4.000) \u2248 1.386\n\nThen, compute \u0394v:\n\u2003\u2003\u0394v = 311 \u00d7 9.80665 \u00d7 1.386\n\u2003\u2003\u2003\u2003\u2248 311 \u00d7 13.592\n\u2003\u2003\u2003\u2003\u2248 4229.9 m/s\n\nRounding to the nearest whole number, the ideal \u0394v is approximately 4230 m/s."
+    },
+    {
+      "rung": "R1",
+      "sample": 1,
+      "correct": false,
+      "answer": 8860.0,
+      "wall_s": 13.3,
+      "chars": 344,
+      "prompt_chars": 451,
+      "response": "delta_v_m_s: 8860\n\nThe ideal delta-v is calculated using the Tsiolkovsky rocket equation:\n\n\u0394v = I_sp * g_0 * ln(M_initial / M_final)\n\nWhere:\n- I_sp = 311 s (specific impulse)\n- g_0 = 9.80665 m/s\u00b2 (standard gravity)\n- M_initial = 549054 kg (initial mass)\n- M_final = 137000 kg (final mass)\n\n\u0394v = 311 * 9.80665 * ln(549054 / 137000)\n\u0394v \u2248 8860 m/s"
+    },
+    {
+      "rung": "R1",
+      "sample": 2,
+      "correct": false,
+      "answer": 8860.0,
+      "wall_s": 12.0,
+      "chars": 344,
+      "prompt_chars": 451,
+      "response": "delta_v_m_s: 8860\n\nThe ideal delta-v is calculated using the Tsiolkovsky rocket equation:\n\n\u0394v = I_sp * g_0 * ln(M_initial / M_final)\n\nWhere:\n- I_sp = 311 s (specific impulse)\n- g_0 = 9.80665 m/s\u00b2 (standard gravity)\n- M_initial = 549054 kg (initial mass)\n- M_final = 137000 kg (final mass)\n\n\u0394v = 311 * 9.80665 * ln(549054 / 137000)\n\u0394v \u2248 8860 m/s"
+    },
+    {
+      "rung": "R1",
+      "sample": 3,
+      "correct": false,
+      "answer": 8860.0,
+      "wall_s": 11.9,
+      "chars": 344,
+      "prompt_chars": 451,
+      "response": "delta_v_m_s: 8860\n\nThe ideal delta-v is calculated using the Tsiolkovsky rocket equation:\n\n\u0394v = I_sp * g_0 * ln(M_initial / M_final)\n\nWhere:\n- I_sp = 311 s (specific impulse)\n- g_0 = 9.80665 m/s\u00b2 (standard gravity)\n- M_initial = 549054 kg (initial mass)\n- M_final = 137000 kg (final mass)\n\n\u0394v = 311 * 9.80665 * ln(549054 / 137000)\n\u0394v \u2248 8860 m/s"
+    }
+  ]
+}
