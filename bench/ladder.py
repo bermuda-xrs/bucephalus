@@ -37,6 +37,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
+from agent import HARNESS_VERSION  # noqa: E402
 from agent.context import AgentContext  # noqa: E402
 from agent.execute.loop import ACTION_SCHEMA_HINT, run_task  # noqa: E402
 from agent.kernel.tasks import create_task  # noqa: E402
@@ -56,6 +57,15 @@ OUTPUT_CONTRACT = (
     "Values in SI base units unless the key name says otherwise. "
     "State the final number in your reply as well."
 )
+
+# The v3 candidate fix. Reconstructed from the confirmatory probe recorded in
+# docs/evidence/ladder-E01-3b-analysis.json, which preserved the finding but
+# NOT the prompt - the analysis quotes only "work through it step by step ...
+# and only then give the final number". That gap is why this constant now
+# lives in the source and is echoed into every ladder run record: the next
+# person should not have to reconstruct it a second time.
+STEP_BY_STEP = ("Work through it step by step, showing each step, and only "
+                "then give the final number.")
 
 # R0: the physics, with nothing else. This is the D1 prompt.
 BARE = ("Earth has gravitational parameter mu = 3.986004418e14 m^3/s^2 and "
@@ -131,8 +141,17 @@ def expected_for(key: str) -> tuple[str, float, float]:
     return k, float(exp[k]), tol
 
 
-def run_rung(ctx, rung: str, key: str, model: str, samples: int) -> list[dict]:
-    """One rung, `samples` times. R4/R5 use the real loop and real grader."""
+def run_rung(ctx, rung: str, key: str, model: str, samples: int,
+             step_by_step: bool = False) -> list[dict]:
+    """One rung, `samples` times. R4/R5 use the real loop and real grader.
+
+    `step_by_step` adds STEP_BY_STEP to whatever the rung already sends. At
+    R0-R3 that is the contract; at R4/R5 it is the suite's own goal text,
+    which is where the real v3 change would land (the goal template in
+    bench/suites/aero_calc.py). Applying it to the goal rather than to the
+    system prefix is deliberate: it keeps this a probe of the ACTUAL proposed
+    change, not of a different intervention that happens to work.
+    """
     out_key, expected, tol = expected_for(key)
     goal = goal_text(ctx, key)
     out = []
@@ -151,6 +170,8 @@ def run_rung(ctx, rung: str, key: str, model: str, samples: int) -> list[dict]:
             # escalates is the scaffolding around them.
             bare = BARE_BY_TASK.get(key, BARE)
             contract = OUTPUT_CONTRACT.format(key=key, out_key=out_key)
+            if step_by_step:
+                contract = contract + " " + STEP_BY_STEP
             if rung == "R0":
                 prompt = bare
             elif rung == "R1":
@@ -170,6 +191,9 @@ def run_rung(ctx, rung: str, key: str, model: str, samples: int) -> list[dict]:
         else:
             spec = ctx.userdata.get_suite_by_name("aero_calc").to_specs()
             spec = next(s for s in spec if s["key"] == key)
+            if step_by_step:
+                spec = dict(spec)
+                spec["goal"] = spec["goal"] + " " + STEP_BY_STEP
             reset_workspace(ctx.config.root, spec["artifact_scope"],
                             spec.get("fixtures") or {})
             ctx.config.limits.max_steps = 1 if rung == "R4" else 10
@@ -191,6 +215,7 @@ def run_rung(ctx, rung: str, key: str, model: str, samples: int) -> list[dict]:
             out.append({"rung": rung, "sample": i + 1,
                         "correct": res.status in ("done", "done_unannounced"),
                         "answer": got, "status": res.status,
+                        "goal_chars": len(spec["goal"]),
                         "wall_s": round(time.time() - t0, 1)})
         r = out[-1]
         print(f"  {rung} {i+1}/{samples}  correct={r['correct']}  "
@@ -205,6 +230,8 @@ def main() -> int:
     ap.add_argument("--model", default="granite4.1:3b")
     ap.add_argument("--samples", type=int, default=5)
     ap.add_argument("--rungs", default="R0,R1,R2,R3,R4,R5")
+    ap.add_argument("--step-by-step", action="store_true",
+                    help="add the v3 reasoning instruction to every rung")
     ap.add_argument("--out", default="runs/ladder.json")
     args = ap.parse_args()
 
@@ -220,18 +247,23 @@ def main() -> int:
     ctx.backends = build_backends(ctx.config)
 
     k, expected, tol = expected_for(args.task)
-    print(f"{args.task}: {k} = {expected} (tol {tol})  model={args.model}\n")
+    print(f"{args.task}: {k} = {expected} (tol {tol})  model={args.model}  step_by_step={args.step_by_step}\n")
 
     rows = []
     for rung in args.rungs.split(","):
-        rows += run_rung(ctx, rung.strip(), args.task, args.model, args.samples)
+        rows += run_rung(ctx, rung.strip(), args.task, args.model,
+                         args.samples, args.step_by_step)
         print()
 
     dest = Path(ctx.config.resolve(args.out))
     dest.parent.mkdir(parents=True, exist_ok=True)
     dest.write_text(json.dumps(
         {"task": args.task, "model": args.model, "expected": expected,
-         "tolerance": tol, "samples": args.samples, "rows": rows},
+         "tolerance": tol, "samples": args.samples,
+         "harness_version": HARNESS_VERSION,
+         "step_by_step": args.step_by_step,
+         "step_by_step_text": STEP_BY_STEP if args.step_by_step else None,
+         "rungs": args.rungs, "rows": rows},
         indent=2), encoding="utf-8")
 
     print(f"{'rung':<5} {'correct':>9}  answers")

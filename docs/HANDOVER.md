@@ -4,10 +4,13 @@ Written for a competent Python developer who has never seen this project.
 Everything needed to be productive is here or pointed at. No prior context
 assumed.
 
-> There is a second `HANDOVER.md` at the repository root. It is older and
-> describes the project as it stood before the measurement work. **This file
-> supersedes it.** The root file is kept because its architecture map and
-> environment notes are still accurate.
+> **This is the only handover.** A second `HANDOVER.md` used to sit at the
+> repository root, describing the project as it stood before the measurement
+> work. It was consolidated into this file on 2026-09-01 and deleted: its
+> architecture map, verifier table, traps, glossary and claim are now
+> sections 17-21 below. The parts of it that had gone stale were dropped
+> rather than carried forward, and section 17 lists what was dropped and why —
+> including one number that is **withdrawn, not merely stale**.
 
 ---
 
@@ -151,7 +154,13 @@ Only its *text* is now carried into the sandbox; the file is never reachable.
 ## 4. How to run each thing
 
 All commands from the project root. `PY` below means
-`..\..\..\.alpha-test-1-venv\Scripts\python.exe`.
+`%USERPROFILE%\.alpha-test-1-venv\Scripts\python.exe` — that is where
+`setup.ps1` puts it (`$env:USERPROFILE\.alpha-test-1-venv`), outside the sync
+folder. On this machine that is
+`C:\Users\char1\.alpha-test-1-venv\Scripts\python.exe`. Set `PYTHONUTF8=1`
+first; the repo path contains Greek characters. (An earlier draft of this
+line said `..\..\..\.alpha-test-1-venv`, which resolves correctly only if the
+checkout sits at `Desktop\...` rather than `OneDrive\Desktop\...`.)
 
 | Command | Produces | Time |
 |---|---|---|
@@ -169,6 +178,30 @@ All commands from the project root. `PY` below means
 Useful flags on `noise.py`: `--only KEY` (repeatable), `--tier easy`,
 `--split eval`, `--resume`, `--executor MODEL`, `--budget-scale N`,
 `--skill NAME`.
+
+**Flags on `ladder.py`:**
+
+| Flag | Default | What it does |
+|---|---|---|
+| `--task KEY` | `E01` | Which suite task to walk. R0-R3 need an entry in `BARE_BY_TASK` (currently `E01`, `E03`, `E04`, `E05`); any other key silently falls back to E01's physics text, which would measure the wrong question - add the task's own bare prompt first |
+| `--model NAME` | `granite4.1:3b` | Overrides `backends["cloud"].model`, so it sets the executor for R4/R5 as well as the raw completions at R0-R3 |
+| `--samples N` | `5` | Samples per rung |
+| **`--rungs LIST`** | `R0,R1,R2,R3,R4,R5` | Comma-separated subset, run in the order given. **This is the flag that makes the ladder cheap.** A full six-rung 5-sample walk is ~15 min; `--rungs R0,R1` is ~4 min and answers "does the tax reproduce" on its own. Whitespace around commas is tolerated |
+| `--step-by-step` | off | Appends the reasoning instruction to the contract at R0-R3, and to the task goal at R4/R5. This is the **v3 candidate fix** under test - see section 7 |
+| `--out PATH` | `runs/ladder.json` | Resolved against `config.root`. **Change it per run or you overwrite the previous ladder** |
+| `--config PATH` | `config.local.yaml` | |
+
+Why `--rungs` matters beyond speed: the rungs are independent measurements, so
+a subset is a valid experiment rather than a truncated one. `R0,R1` isolates
+the output contract; `R2,R3` isolates the system prefix and the tool manual;
+`R4,R5` is the only pair that runs the real loop and the real grader.
+
+**Do not compare across the R3/R4 seam as if it were one scale.** R0-R3 score
+the number in the reply *text*; R4/R5 score the *artifact on disk* through
+`verify_program`. The gap between them is informative - it separates "can it
+compute this" from "can it deliver this" - but it is not a like-for-like
+difference, and a rung subset that straddles the boundary is comparing two
+different measurements.
 
 Both long runs are **resumable**. They append each finished task to a
 `.partial.jsonl` ledger with an fsync, so a kill costs at most one task.
@@ -598,3 +631,215 @@ tune the gate to make something pass.
    the artifact is correct. The alternative view is that failing to terminate
    is a real failure and should be scored as one. Both counts are reported
    separately so the choice stays visible.
+
+---
+
+## 17. Architecture
+
+Merged from the root `HANDOVER.md` when the two files were consolidated.
+
+The system is 13 milestones (M1-M13) from the spec. The build order is not
+arbitrary — several later components are unsafe or unmeasurable without
+earlier ones.
+
+```
+                    +------------------------------+
+   console (:8901)  |  M12 control plane (FastAPI) |  CLI (alpha.ps1)
+   web UI --------->|  + M13 plan / deputy         |<----------
+                    +---------------+--------------+
+                                    |
+                    +---------------v--------------+
+                    |  M4 the loop (execute/loop)  |
+                    |  plan -> act -> verify -> ratchet
+                    +---+--------+--------+--------+
+                        |        |        |
+        +---------------v--+  +--v-----+ +v-----------------+
+        | M8 capability    |  | M6     | | M7 verification  |
+        | gate + taint     |  | router | | mesh + ratchet   |
+        +-------+----------+  +--+-----+ ++-----------------+
+                |                |        |
+        +-------v----------------v--------v-----------------+
+        | M1 kernel - event log, hash chain, receipts       |
+        | M2 telemetry - M3 context ledger                  |
+        +-----------------------+---------------------------+
+                                |
+                    +-----------v------------+
+                    | SQLite (agent.local.db)|
+                    +------------------------+
+```
+
+### Module map
+
+Complements the file-oriented map in section 3; this one is keyed by
+milestone, which is how the spec refers to things.
+
+| Path | Milestone | What it does |
+|---|---|---|
+| `kernel/db.py` | M1 | Schema. **Never UPDATE/DELETE `events`.** |
+| `kernel/events.py` | M1 | Append-only log + SHA-256 hash chain |
+| `kernel/integrity.py` | M1 | The anchor; resume halts on mismatch |
+| `kernel/receipts.py` | M1 | `execute_once` — side effects at most once |
+| `instrument/telemetry.py` | M2 | Per-call cost; observed throughput |
+| `ledger/prefix.py` | M3 | Cache-stable prompt prefix + guard |
+| `ledger/compact.py` | M3 | Compaction by **deletion**, never summarization |
+| `ledger/semantic_cache.py` | M3 | Cached operations; refuses to launder taint |
+| `models/` | M4 | ollama / anthropic / mock backends |
+| `execute/loop.py` | M4 | **The spine. Read this first.** |
+| `execute/sandbox.py` | M5 | Subprocess + audit hook + live tool bridge |
+| `execute/tools.py` | M5/M8 | Tool registry and the taint table |
+| `router/cascade.py` | M6 | Allowlist routing, escalation by disagreement |
+| `assure/verifiers.py` | M7 | The verifier registry (see section 18) |
+| `assure/mesh.py` | M7 | Ratchet, anti-gaming, held-out registry |
+| `assure/monitor.py` | M8.3 | Silent monitor — **never visible to the agent** |
+| `security/taint.py` | M8 | Provenance lattice: trusted < user < untrusted |
+| `security/capabilities.py` | M8 | The gate. Every tool call passes here |
+| `skills/gate.py` | **M9** | **The statistical gate. The heart of the project.** |
+| `skills/generate.py` | M11 | Generator — cannot promote, by construction |
+| `delegate/contracts.py` | M10 | Five-gate test; most delegations refused |
+| `plan/planner.py` | M13 | Read-only planning; plan hash pinned |
+| `plan/review.py` | M13.3 | The deputy |
+| `control/server.py` | M12 | HTTP API |
+| `control/guard.py` | — | Auth, CSRF, DNS-rebinding protection |
+| `userdata/store.py` | — | User-authored suites/policy/grounding |
+| `profiles.py` | — | Enforced local/mixed backend profiles |
+
+### What was dropped in the merge, and why
+
+The root file was written before the measurement work and several of its
+claims had gone stale. They are recorded here rather than silently deleted,
+because a reader who saw the old file should be able to find out what
+happened to them.
+
+| Root claim | Status |
+|---|---|
+| "215 tests passing", "27 commits" | Superseded. 326 tests; see section 5 |
+| "The instrument validated once at small scale — 3 tasks, 0/3 baseline to 3/3 with the calibration skill, 3/3 discordant in the skill's favour" | **Withdrawn, not merely stale.** It was measured before the workspace-reset defect (SPEC-DELTA C12) was found. Both arms shared one directory and `verify_program` grades files on disk, so the control arm could be graded against the answer the skill arm had just written — which manufactures exactly that result. It is not evidence and must not be quoted |
+| Gate table showing ">= 30 paired trials" | Superseded by `config.local.yaml`, which is 15. Section 12 carries the current thresholds and why the change is strictly harder, not weaker |
+| "Plus two vetoes ... visible/held-out pass gap > 0.25" | Written as if operative. It cannot fire — see section 11 and CORRECTIONS 2.8 |
+| "No LICENSE. A deliberate omission" | Stale. Apache 2.0 is in the tree |
+| "`INVARIANTS.md` has all 25" | Stale. 29 |
+| Root sections 8-9 ("what is incomplete", "the next three things to do") | Superseded wholesale by sections 11 and 13 of this file |
+
+---
+
+## 18. Verifiers — what "passed" means
+
+In `assure/verifiers.py`. **The choice of verifier decides whether the
+benchmark measures anything.**
+
+| Verifier | Checks | Use for |
+|---|---|---|
+| `verify_program` | Runs the task's own `verify.py` against files on disk | **The eval suite.** Strongest |
+| `expected_value` | Answer equals a known value (`x-expected`) | Numeric/string answers |
+| `contains_all` | Required substrings survived (`x-contains`) | Prose with checkable facts |
+| `execution` | Code runs, exit 0 | Code-writing tasks |
+| `json_schema` | **Shape only** | Almost never in an eval suite |
+| `always_pass` | Nothing | Refused by the suite validator |
+
+**The trap:** `json_schema` accepts `{"total": 0}` for an invoice totalling
+4825. A suite scored that way reports a high pass rate that means nothing —
+the same failure an audit found in ~59% of SWE-bench Verified's hardest
+tasks. The console shows a running count of how many tasks cannot catch a
+wrong answer.
+
+Two consequences that are easy to miss:
+
+* `always_pass` grades nothing, so `_final_sweep` in `execute/loop.py`
+  deliberately refuses to sweep it. Sweeping a task that grades nothing would
+  turn every budget exhaustion into a pass.
+* `verify_program` grades **files on disk**. That single property is the root
+  of both instrument defects in section 9: it is why the workspace must be
+  rebuilt from identical bytes before every arm of every run, and why the
+  grader must live outside `artifact_scope`.
+
+---
+
+## 19. Traps for the next engineer
+
+From the root file, minus the ones already covered in sections 2 and 9.
+
+1. **Never trust "the function is tested" as "the system uses it."** Seven
+   components were dead code with green tests. Grep for call sites.
+   `tests/test_wired_invariants.py` exists for exactly this.
+2. **Small models cannot follow text output formats.** Both the action
+   protocol and the deputy's verdict needed constrained decoding (a JSON
+   schema via Ollama's `format`). The deputy silently denied **100%** of
+   actions for want of it — which would have made a 7-hour benchmark report
+   0% on every task and look like a suite that was too hard.
+3. **Ollama defaults to a 4096-token context** regardless of the model, and
+   truncates silently. Always send `num_ctx`.
+4. **A `$0.00` budget must not mean "cannot run."** It meant that once, and
+   every local task was born exhausted.
+5. **Routing must not cost a model call.** A throughput probe fired a real
+   completion, bypassed telemetry, and triggered a 58s cold load purely to
+   make a routing decision.
+6. **Sandbox path names matter.** Flattening `work/E01` to `E01` breaks every
+   task whose instructions name the documented path.
+7. **Verify the benchmark's own answers.** H27 was unsolvable as first
+   generated — a correct solver found 13 bad rows against an expected 4,
+   because the synthetic telemetry did not conserve energy. H30 needed its
+   heliocentric-speed convention pinned in the objective for the same class
+   of reason. `tests/test_bench_suite.py` recomputes both independently.
+8. **`work/` lives under OneDrive**, whose sync client holds file handles.
+   `shutil.rmtree` on a task workspace fails with `PermissionError [WinError
+   5]` mid-run, which killed a noise-floor pass. The workspace reset deletes
+   *files* and leaves directories for this reason. Excluding `work/` from
+   sync would remove the whole class of problem.
+9. **The venv is at `%USERPROFILE%\.alpha-test-1-venv`,** not beside the
+   source — OneDrive deleted an in-folder `.venv` twice.
+
+---
+
+## 20. Glossary
+
+**Artifact** — stored content, addressed by hash, referenced not pasted.
+
+**Taint** — provenance label: `trusted` < `user` < `untrusted`. Combining
+takes the maximum; it never decreases.
+
+**Ratchet** — a revision is kept only if it scores strictly better.
+
+**Discordant pair** — a paired trial where the two arms disagree. Only these
+carry information in McNemar's test.
+
+**Deputy / auto-review** — a second model that decides permission boundaries
+so the agent does not stop for a human. Visible to the agent. Off in every
+benchmark run.
+
+**Monitor** — a silent watcher. **Never** visible to the agent.
+
+**Stable prefix** — the byte-identical prompt opening that a provider caches.
+
+**Two-touch** — approve a plan, receive a result, nothing in between.
+
+**Drafting / eval split** — tasks a generator may see, versus tasks it may not.
+
+**Harness version** — the definition of "what counts as a pass". Numbers from
+different harness versions must never share a chart.
+
+**`done_unannounced`** — the artifact is correct but the model never said so.
+Counted separately from `done`, everywhere.
+
+---
+
+## 21. The claim to actually make
+
+Not "10x cheaper" — that is a framework pitch nobody can check. The claim the
+instrument is built to support is:
+
+> **Skills that pass a paired-trial gate raise a local model's task success by
+> X points at Y% of the cost of a frontier model, measured on N tasks.**
+
+Report three ways — bare model, model + scaffold, full system — with date,
+model version, and profile. State contamination caveats in the same paragraph
+as the number, never a footnote.
+
+Note what the harness tax (section 6) does to this claim. "Model + scaffold"
+was assumed to be the *floor* a skill improves on. On the 3B it is measurably
+**below** the bare model, so that middle arm is not a floor, it is a deficit.
+Any lift a skill shows against the scaffolded arm has to be read against
+that, and the bare-model arm stops being an optional third number.
+
+**It might not work.** Self-generated skills average slightly negative in the
+literature. The gate exists so that failing is visible instead of silent.
+That is what makes it worth trying.

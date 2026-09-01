@@ -13,7 +13,7 @@ continue it, not to redesign it.
 
 ## Read these first, in this order, before writing any code
 
-1. **`HANDOVER.md`** — what exists, how to run it, what is complete, what is
+1. **`docs/HANDOVER.md`** — what exists, how to run it, what is complete, what is
    not, and the next three actions. Start here.
 2. **`spec/CORRECTIONS.md`** — read this **before** the spec. The original
    specification contains instructions that are factually wrong (a model that

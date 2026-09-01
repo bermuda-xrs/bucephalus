@@ -303,7 +303,7 @@ supersedes them:
 - **The two-touch interaction model** and everything in M13.
 - **The cloud/API tier.** Not yet exercised — there is no API key — but the
   design is sound and the adapter is written. This is *unfinished*, not wrong.
-  See `HANDOVER.md` §8.4.
+  See `docs/HANDOVER.md` §11.
 - **Muse Glimmer 30B as a future desktop tier** if you get a 24–32 GB GPU. The
   30B is real; only the 3B was a misreading.
 - **The benchmark honesty guidance** (Part 13): cost-vs-quality Pareto rather
@@ -317,7 +317,7 @@ supersedes them:
 
 For a coding agent picking this up, the reading order that works:
 
-1. **`HANDOVER.md`** — what exists, how to run it, what is incomplete, what to
+1. **`docs/HANDOVER.md`** — what exists, how to run it, what is incomplete, what to
    do next. Start here.
 2. **`spec/CORRECTIONS.md`** — this file. Read before opening the spec.
 3. **`spec/BUILD-SPEC.md`** and **`spec/EXPLAINER.md`** — the reasoning behind

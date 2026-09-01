@@ -1,6 +1,6 @@
 """The benchmark's own answers are verified here, not asserted.
 
-Trap 7 in HANDOVER.md: H27 was unsolvable as first generated because nobody
+Trap 7 in docs/HANDOVER.md section 19: H27 was unsolvable as first generated because nobody
 independently recomputed it. H30 then shipped an answer that depended on an
 unstated convention, so two correct solvers disagreed by 1.27% and the
 continuous scorer ranked one of them at 0.37. Both failures share a cause —
@@ -137,7 +137,7 @@ def test_emitted_tree_matches_the_table():
 def test_every_eval_task_can_fail():
     """A verifier that cannot catch a wrong answer measures nothing.
 
-    §5 of HANDOVER: this is the failure an audit found in 59% of SWE-bench
+    Section 18 of docs/HANDOVER.md: this is the failure an audit found in 59% of SWE-bench
     Verified's hardest tasks. Feed each verifier a deliberately wrong answer
     and require it to say no.
     """

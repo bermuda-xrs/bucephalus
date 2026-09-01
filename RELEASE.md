@@ -74,7 +74,7 @@ State it in this shape, or not at all:
 
 - [ ] `git log --oneline` reads as the project's memory — no commit message
       claims more than was verified
-- [ ] `HANDOVER.md` §8 (the honest list) matches reality
+- [ ] `docs/HANDOVER.md` §11 (what has never been measured) matches reality
 - [ ] `runs/` artifacts worth keeping copied into `docs/evidence/`
 - [x] The version in `pyproject.toml` and `src/agent/__init__.py` agree (both 0.1.0)
 

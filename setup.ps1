@@ -47,5 +47,5 @@ Write-Host @"
 Next:
   1. .\ollama-serve.ps1                     (leave open; serves the models)
   2. .\alpha.ps1 --config config.local.yaml serve    (console on :8901)
-  3. Read HANDOVER.md
+  3. Read docs/HANDOVER.md
 "@ -ForegroundColor Green
