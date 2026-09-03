@@ -233,3 +233,116 @@ or reduce the plumbing so the physics is the task. Decide on evidence, not
 assumption.
 **Class:** spec self-inconsistency — the local-tier scope and the benchmark
 design contradict each other.
+
+### C16. The ladder's R4 rung scores step allocation, not correctness
+**Instrument:** `bench/ladder.py`, rung R4, documented as "the full agent
+loop, one step allowed" and read as answering "can it deliver this".
+**Reality:** R4 sets `max_steps=1`, so it actually scores *whether the model
+spent its single action on `run_code`*. Measured across five samples: one
+spent its step on `run_code` and produced an answer; four spent it on
+`read_file(params.json)` — correct agent behaviour — and produced no artifact
+at all, in 7.2–7.5 s.
+**Why it matters beyond one rung:** the bias is directional. "Work through it
+step by step" is an instruction to take preparatory steps, so R4 systematically
+penalises the intervention it was being used to test. The published v2 R4 row
+(0/5, answer 11185784.5) carries the same defect and must not be read as
+evidence that the harness tax survives into the full loop.
+**Correct version:** either give R4 enough steps to read-then-compute (2–3),
+or rename it and report it as what it measures — a one-action budget probe —
+and treat R5 as the only loop rung that speaks to correctness.
+**Class:** oversight. Fourth in the instrument class, found by applying the
+documented test: what would this check score for an agent that did the work
+perfectly but behaved slightly unusually?
+
+### C17. `reap_orphans()` kills healthy workers, not just orphans
+**Spec/House rule:** "route every termination through `kill_tree()`, and reap
+orphans before any timed run" — the guard against the documented 5.9 GB
+orphaned `llama-server`.
+**Reality:** `ORPHAN_NAMES = ("llama-server",)` and the reaper matches on
+**process name alone**, then `kill_tree()`s every match. It cannot distinguish
+a live child of a running Ollama from a true orphan. Observed killing the warm
+model three times during Phase 1, between ladder runs, defeating
+`keep_alive: 30m`.
+**Consequence for published numbers:** R0 always runs first in a ladder, so
+R0's first sample always absorbs a cold model load (~58 s on this hardware).
+That inflates the R0→R1 **wall-clock** drop cited as evidence of suppression.
+The effect survives on warm samples (E04: 24.3 s → 12.0 s), so the finding
+stands, but `45.7 s → 7.7 s` is partly cold-load and is not a clean effect
+size. Blast radius is limited: `noise.py` calls the reaper once in preflight,
+not per task, so a full-suite median is unaffected — only the first task.
+**Correct version:** reap only processes whose parent is gone (or which are
+not children of the live server), not every process with a matching name.
+**Class:** oversight — and the **mirror image** of the documented class-2
+pattern. Class 2 is "anything spawned outlives what spawned it"; this is "the
+reaper cannot tell a live child from an orphan". Fourth in the process class.
+
+### C18. Temperature 0 is not byte-deterministic on this stack
+**Assumed everywhere:** that warm-cache runs at temperature 0 are
+byte-identical, so within-process variance is near zero and repeat passes add
+nothing.
+**Reality:** four counterexamples on identical prompt bytes, across both
+models —
+
+| observation | first sample | subsequent samples |
+|---|---|---|
+| E05 R1 (3B) | 362 ch, **wrong** (8775.75) | 685 ch, **right** (12918.75) |
+| E04 R0 (3B) | 537 ch | 561 ch |
+| E01 R1 (8B) | 7674.6, 1097 ch, 127.1 s | 7663.2, 1002 ch, ~78 s |
+| E01 R5 (3B) | 7909.54 | 250.12, 250.12 |
+
+The pattern is specific: **the first sample of a block diverges; subsequent
+samples are byte-identical to each other.** Divergence is tied to the first
+call after a model load or a rung change. `ladder.py` rebuilds the prompt
+identically per sample and `complete()` sends an identical body, so this is
+not a prompt artifact.
+**Why it matters:** E05 is a *correctness* flip, not a cosmetic one — the same
+task at the same rung with the same bytes both passed and failed. `n=1` per
+task inherits this, and the first task of any run is the most exposed.
+**Correct version:** do not justify cutting repeat passes on determinism
+grounds. If a variance estimate is wanted, use **cold-start** repeats, because
+cold start is the condition that produces the divergence.
+**Class:** oversight — an assumption about the backend that was never tested.
+
+### C19. The harness tax is answer position, and it does not generalize
+**Earlier version (HANDOVER §6):** "the mechanism: chain-of-thought
+suppression", evidenced by response length collapsing 1155 → 236 → 32
+characters.
+**Reality:** length is a **correlate**. The discriminator is where the answer
+appears — failing responses emit `key: value` before any working, passing
+responses emit the number last. E04's R1 failure states `delta_v_m_s: 8860`,
+then writes the *correct* formula and the *correct* substitution and never
+evaluates them: post-hoc rationalisation anchored to a token already in the
+context, which autoregression cannot revise. A response that commits to a
+number first has nothing left to write, which is *why* it is shorter.
+**The control:** E05, same task, same rung, same prompt bytes, temperature 0,
+produced both behaviours — the answer-first sample wrong, the two answer-last
+samples right. That isolates position from task, rung and prompt in one
+comparison; the length story cannot.
+**Scope correction:** the tax reproduces on **1 of 3** tasks (E04; E05
+partially; E03 not at all), and the 8B is **unaffected** (5/5 at R1 where the
+3B is 0/5). It is neither general across tasks nor independent of capacity.
+**Consequence:** the intervention to aim for is not "make the model reason
+more" but "stop it emitting the answer token first". The v3 step-by-step
+instruction was the former, and it failed at R5 (0/5) — while improving error
+*structure* 3.6× on the monotonic scorer, which is a real effect and not a
+pass.
+**Class:** oversight in the original inference — a correlate read as a cause
+from a single task.
+
+### C20. `granite4.1:8b` does not fit this machine alongside normal desktop use
+**Spec (§0.1b) and HANDOVER:** the 8B is the desktop/heavier local tier.
+**Reality, measured:** at the executor's `usable_context_window: 16384` the
+8B is **7.64 GB resident**. Free memory with no model loaded has been observed
+between **3.6 and 6.4 GB** depending on what else is running, so loading it
+leaves **0.79 GB or less** — against a house-rule floor of 2 GB free. This is
+not an orphan and cannot be reaped; it is the OS, the editor, the browser and
+any second model runtime.
+**Evidence it bites:** one model call in Phase 1 took **2465 s** against a
+600 s budget and manufactured a `budget_exhausted` — 29× the median for that
+rung. Since `budget_exhausted` is a *time* limit, memory pressure converts
+into apparent task difficulty.
+**Correct version:** state the free-memory precondition (~8.5 GB) as part of
+the 8B run procedure, not as a general "check free memory" note, and record
+free memory per task rather than only at preflight.
+**Class:** oversight — the hardware note records total RAM but never the
+headroom an 8B run actually needs.

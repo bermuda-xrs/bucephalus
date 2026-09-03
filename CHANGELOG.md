@@ -3,6 +3,113 @@
 Dates are commit dates. `0.1.0` is not released yet — see "Unreleased" for
 what still stands between here and a first iteration.
 
+## Unreleased — Phase 1: the tax measured, v3 rejected
+
+`HARNESS_VERSION` remains **2**. v3 was evaluated and rejected on evidence;
+nothing in this section changes what counts as a pass, so every v2 number
+still stands.
+
+### Measured
+
+* **The harness tax does not generalize — 1 of 3 tasks.** Ladder R0/R1 on the
+  3B: E03 unaffected (3/3 → 3/3), E04 collapses (3/3 → 0/3), E05 partial
+  (3/3 → 2/3). The premise that a one-line prompt change would "substantially
+  raise every 3B number" does not hold.
+* **The mechanism was wrong and is now narrower and better evidenced.** It is
+  **answer position**, not chain-of-thought suppression. Failing responses
+  emit `key: value` *before* any working; passing responses emit the number
+  *last*. E04's failure states `delta_v_m_s: 8860`, then writes the correct
+  formula and the correct substitution and never evaluates them — post-hoc
+  rationalisation anchored to a token autoregression cannot revise. Length is
+  downstream: a response that commits to a number first has nothing left to
+  write. **E05 is the within-task control** — same task, same rung, same
+  prompt bytes, temperature 0, both behaviours observed, the answer-first
+  sample wrong and the two answer-last samples right.
+* **The tax is capacity-dependent.** `granite4.1:8b` scores **5/5** at R1
+  where the 3B scores 0/5, on the identical 456-character prompt. Recorded as
+  a capacity threshold. It costs 77–127 s against the 3B's 7.7 s — 10–16× the
+  wall clock, on a benchmark whose only cost axis is seconds. Its shown
+  working is not a faithful trace: it writes `sqrt(58873.6) = 242.6 m/s`, then
+  "approximately 7.6 km/s", then lands correctly on 7663.2.
+
+### Decided
+
+* **v3 is not applied.** R4 0/5, R5 0/5 with the step-by-step instruction
+  appended to the suite goal — the injection point the real change would use.
+  Both decision routes agree: the fix does not survive the loop, and the tax
+  it targets does not generalize. The "you would not want to ship a
+  CoT-suppressing harness regardless of pass rates" argument was conditional
+  on v3 surviving Phase 1, and it did not.
+* **What v3 *did* do is recorded as a real effect that is not a pass.** It
+  improved error **structure** 3.6× on the monotonic scorer with **no** change
+  in pass rate: 11,185,784.5 (145689% out, score 0.077) became
+  7909.544108195981 (3.09% out, score 0.279). That figure is
+  `sqrt(mu/(6371000+400))` exactly — the model reads `altitude_km: 400` and
+  adds **400 metres**, the suite's own km-to-m trap. By FINDINGS §4's
+  criterion this makes the suite measure what it was built to measure. It
+  still fails, and it is not tuned into a pass.
+
+### Found — a fourth bug in each documented class
+
+* **Instrument (4th): the ladder's R4 rung scores step allocation, not
+  correctness.** R4 sets `max_steps=1`, so it measures *whether the model
+  spent its one action on `run_code`*. Four of five samples spent it on
+  `read_file(params.json)` — correct behaviour — and scored zero in 7.4 s. The
+  bias is directional: "work through it step by step" is an instruction to
+  take preparatory steps, exactly what R4 punishes. The published v2 R4 row
+  carries the same defect. Found by applying the documented test — what would
+  this check score for an agent that did the work perfectly but behaved
+  slightly unusually? See SPEC-DELTA C16.
+* **Process (4th): `reap_orphans()` kills healthy workers.** It matches on
+  process name alone and `kill_tree()`s every `llama-server`, live or not;
+  it killed the warm model three times during Phase 1, defeating
+  `keep_alive`. This is the mirror image of the documented pattern — not
+  "anything spawned outlives what spawned it" but "the reaper cannot tell a
+  live child from an orphan". Because R0 runs first, R0's first sample always
+  absorbs a cold load, so the published `45.7 s → 7.7 s` drop is partly
+  cold-load and is not a clean effect size; the drop survives on warm samples
+  (E04: 24.3 s → 12.0 s). `noise.py` calls the reaper once in preflight, not
+  per task, so full-suite medians are unaffected. See SPEC-DELTA C17.
+* **Temperature 0 is not byte-deterministic here.** Four counterexamples
+  across both models on identical prompt bytes. The pattern is specific: the
+  *first* sample of a block diverges, subsequent samples are byte-identical.
+  E05's is a correctness flip, not a cosmetic one. Any plan that cuts repeat
+  passes because "warm runs at temperature 0 are byte-identical" rests on a
+  false premise; cold-start repeats are the right variance instrument. See
+  SPEC-DELTA C18.
+* **The 8B does not fit this machine alongside normal desktop use.** Measured:
+  7.64 GB resident at the executor's `num_ctx: 16384`, against 3.6–6.4 GB free
+  depending on what else is open — leaving 0.79 GB or less against a 2 GB
+  house-rule floor. One Phase 1 model call took **2465 s** against a 600 s
+  budget and manufactured a `budget_exhausted`; since that outcome is a time
+  limit, memory pressure converts directly into apparent task difficulty. See
+  SPEC-DELTA C20.
+
+### Changed
+
+* `bench/ladder.py` gains `--step-by-step`, which appends the reasoning
+  instruction to the contract at R0–R3 and to the **suite goal** at R4/R5 —
+  the goal deliberately, because that is where the real v3 change would land.
+  The instruction is a named constant echoed into every run record; the
+  earlier probe preserved its result but not its prompt.
+* Every ladder run record now carries `harness_version`, `step_by_step`,
+  `step_by_step_text` and `rungs`.
+* **The two `HANDOVER.md` files are one.** `docs/HANDOVER.md` absorbs the root
+  file's architecture map, module map, verifier table, traps, glossary and
+  "the claim to actually make" as sections 17–21; the root file is deleted and
+  all pointers repointed. Seven stale claims were dropped rather than merged
+  and are listed in section 17 — six are ordinary drift, and one is
+  **withdrawn rather than stale**: "3 tasks, 0/3 baseline → 3/3 with the
+  calibration skill" predates the shared-workspace defect (C12) that
+  manufactures exactly that result.
+* `--rungs` is documented, along with every other ladder flag, including why a
+  rung subset is a valid experiment and why the R3/R4 seam is not a
+  like-for-like step.
+* The documented venv path was wrong for a OneDrive checkout (`..\..\..\`
+  lands on `OneDrive`, not the user profile). Now `%USERPROFILE%`.
+* `cal.json` deleted — a tracked artifact of an aborted calibration whose own
+  verdict was "insufficient / stub".
+
 ## Unreleased — the measurement
 
 Everything in this section is instrument work. The system was already running

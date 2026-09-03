@@ -214,16 +214,30 @@ split, profile or executor.
 
 | | |
 |---|---|
-| Commit | `8d68392` |
-| Harness version | **2** (`HARNESS_VERSION` in `src/agent/__init__.py`) |
+| Branch | `measurement-2026-09-01` (off `main` at `148cd99`; no remote) |
+| Harness version | **2** (`HARNESS_VERSION` in `src/agent/__init__.py`) — v3 was evaluated and **rejected**, see section 7 |
 | Tests | 326 passing |
 | Working tree | clean |
-| Running | nothing — no Python, no Ollama, no `llama-server` |
-| Last completed step | The harness-tax ladder (section 6), stopped at its gate |
-| Next step | Section 13 |
+| Running | the dedicated Ollama on 11435; no model resident |
+| Last completed step | **Phase 1** — G3, G4 and the v3 probe (sections 6, 7; FINDINGS 1.6–1.11) |
+| Next step | Full 30 tasks on the 8B, harness v2 — **blocked on memory**, see below |
 
-One stray tracked file: `cal.json` at the repository root, an artifact of an
-aborted calibration. Harmless; delete it.
+**The memory ceiling is now measured, not estimated.** At the executor's
+`usable_context_window: 16384`, `granite4.1:8b` is **7.64 GB resident**, and
+`--executor` overrides only the model name, so a full-suite 8B run uses
+exactly that. Free memory with no model loaded has been observed between
+**3.6 and 6.4 GB** depending on what else is open. The house rule's floor is
+2 GB *free*; loading the 8B at 6.4 GB free leaves **0.79 GB**.
+
+This is not an orphan and cannot be reaped — it is the OS, the editor, the
+browser, and any other model runtime. A full 8B pass under those conditions
+will page, and the one cost axis this project has is wall-clock seconds. One
+such event is already on record from Phase 1: a single model call took
+**2465 s** against a 600 s budget and manufactured a `budget_exhausted`.
+
+**Before any 8B run, close other applications and confirm free memory is
+above ~8.5 GB.** `LM Studio` in particular is a second model runtime and will
+compete directly.
 
 ---
 
@@ -285,7 +299,12 @@ loop.
 > km above Earth's surface, calculated using the gravitational parameter
 > (μ = 3.986004418e14 m^3/s^2) and Earth's radius (6371000 m).
 
-### The mechanism: chain-of-thought suppression
+### The mechanism: answer position, not chain-of-thought suppression
+
+> **Superseded 2026-09-03 by Phase 1 (G3).** This section originally read
+> "the mechanism: chain-of-thought suppression", citing the collapse in
+> response length. That is a **correlate, not the cause**, and the corrected
+> version below is both narrower and better evidenced. See FINDINGS 1.6.
 
 Response length collapses **1155 → 236 → 32** characters and time
 **45.7 s → 7.7 s → 1.4 s**. At R0 the model reasons in four steps and gets the
@@ -294,6 +313,32 @@ radius right. From R1 it emits an answer immediately with no working, and a
 
 It is **not context dilution** — R1's prompt is 456 characters. It is **not
 tool distraction** — no tools appear until R3.
+
+**But length is downstream of something more specific.** The discriminator is
+**where the answer appears in the response**:
+
+* every **failing** response emits `key: value` *before* any working;
+* every **passing** response emits the number *last*.
+
+E04's R1 failure shows this cleanly: it states `delta_v_m_s: 8860`, then
+writes the **correct** formula and the **correct** substitution, and never
+evaluates them. The working is post-hoc rationalisation anchored to a token
+already in the context, which autoregression cannot revise. A response that
+commits to a number first has nothing left to write — hence the shorter
+length.
+
+**E05 is the within-task control.** Same task, same rung, same prompt bytes,
+temperature 0, and it produced *both* behaviours across three samples: the
+answer-first sample (362 ch) was wrong, the two answer-last samples (685 ch)
+were right. That isolates answer position from task identity, from rung and
+from prompt in a single comparison — which the length story cannot do.
+
+Two consequences. The fix to aim for is **not** "make the model reason more"
+but "stop it emitting the answer token first". And the wall-clock half of the
+figures above is partly an artifact: `reap_orphans()` kills the warm model
+between runs, so R0's first sample always absorbs a cold load. The drop
+survives on warm samples (E04: 24.3 s → 12.0 s), but **45.7 s → 7.7 s should
+not be quoted as a pure effect size.** See FINDINGS 1.10.
 
 ### The confirmatory probe
 
@@ -328,7 +373,7 @@ stored verbatim. Preserved copies: `docs/evidence/ladder-E01-3b.json` and
 
 ---
 
-## 7. The pending v3 decision — deliberately not made
+## 7. The v3 decision — SETTLED 2026-09-03: not applied
 
 **The change.** One line in the goal template in `bench/suites/aero_calc.py`:
 an instruction to work step by step before giving the final answer.
@@ -358,6 +403,48 @@ refuse to plot v2 and v3 points together — by design.
 instruction included. If correctness survives into the full loop, apply v3. If
 it collapses again at R4, the contract is only part of the cause and the rest
 is in the system prefix or the tool schemas.
+
+### The answer, 2026-09-03
+
+That probe was run: `bench/ladder.py --task E01 --model granite4.1:3b
+--samples 5 --rungs R4,R5 --step-by-step`. Evidence in
+`docs/evidence/v3probe-ladder-E01-3b-R4R5-sbs.json` and
+`docs/evidence/phase1-analysis.json`.
+
+**R4 0/5, R5 0/5. v3 is NOT applied. `HARNESS_VERSION` stays 2.**
+
+Two independent routes reached the same verdict:
+
+* **The fix does not survive.** 0/5 at R5, the valid rung.
+* **The tax does not generalize.** G3 reproduced the R0-correct /
+  R1-collapsed pattern on only **1 of 3** tasks (E04; E05 partially; E03 not
+  at all), so the premise that v3 would "substantially raise every 3B number"
+  does not hold either.
+
+**Reason 1 above was the right worry and it was vindicated** — one task, one
+model, one rung did not survive contact with the loop. **Reason 2 was
+withdrawn before the run** as a category error: rebalancing and re-tiering
+moved the target, whereas v3 repairs the instrument, and those are different
+things. **Reason 3 is now partly answered** by G4 — the 3B/8B spread at R1 is
+real and capacity-linked, not purely an artifact of the scaffold.
+
+**R4 turned out not to be a valid rung at all.** It sets `max_steps=1`, so it
+scores *whether the model spent its one action on `run_code`* rather than
+whether it can deliver. Four of five samples spent their step on
+`read_file(params.json)` — correct behaviour — and scored zero in 7.4 s. The
+bias runs against the intervention, since "work through it step by step" is
+an instruction to take preparatory steps. **The v2 R4 row in section 6
+carries the same defect** and should not be read as evidence the tax survives
+into the loop. See FINDINGS 1.9.
+
+**What v3 did do**, recorded because it is a real effect that is *not* a
+pass: it improved error **structure** 3.6x on the monotonic scorer while
+leaving the pass rate at 0/5. The v2 answer 11,185,784.5 (145689% out, score
+0.077) became 7909.544108195981 (3.09% out, score 0.279) — which is
+`sqrt(mu/(6371000+400))` exactly: the model reads `altitude_km: 400` and adds
+**400 metres**. That is the suite's own km-to-m trap, so v3 makes the suite
+measure what it was designed to measure. It still fails. It is not a pass and
+must not be tuned into one.
 
 ---
 
@@ -545,14 +632,21 @@ contamination caveat must appear in the same paragraph as the number.
 
 ## 13. Next steps, in order
 
-| # | Step | Compute | What it would establish |
+| # | Step | Compute | Status / what it would establish |
 |---|---|---|---|
-| 1 | **G3** — ladder R0/R1 on E03, E04, E05 with the 3B, 3 samples each | ~20 min | Whether the tax is general or E01 is special |
-| 2 | **G4** — ladder R1 on the **8B**, E01, 5 samples | ~15 min | Whether the tax is capacity-dependent. If the 8B is unaffected, that is an evidenced statement about when small local models are viable at all |
-| 3 | **The v3 decision** (section 7) — run R4/R5 with the step-by-step instruction | ~20 min | Whether the fix survives into the full loop, or the system prefix and tool schemas suppress reasoning too |
-| 4 | **H1** — full 30 tasks on the 8B, harness v2 | **~2.5 h** | The medium and hard tiers have never run on the fixed harness. Currently the single most informative run available |
-| 5 | **Calibration + ablation** | ~4 h | See below |
+| 1 | ~~**G3** — ladder R0/R1 on E03, E04, E05 with the 3B~~ | ~20 min | **DONE 2026-09-03.** The tax reproduces on **1 of 3**. Not general. Mechanism corrected to answer position. FINDINGS 1.6 |
+| 2 | ~~**G4** — ladder R1 on the **8B**, E01~~ | ~15 min | **DONE.** 8B is **5/5** where the 3B is 0/5. Capacity threshold. FINDINGS 1.7 |
+| 3 | ~~**The v3 decision**~~ | ~20 min | **DONE. v3 REJECTED**, R5 0/5. Harness stays v2. Section 7, FINDINGS 1.8 |
+| 4 | **H1** — full 30 tasks on the 8B, harness v2 | **~3 h** | **BLOCKED ON MEMORY** (section 5). The medium and hard tiers have never run on the fixed harness. Still the single most informative run available |
+| 5 | **Calibration + ablation** | ~4 h | See below. Coverage upper bound is **20/30** against a gate floor of 10, so the floor is reachable — easy 9/10, medium 7/12, hard 4/8 |
 | 6 | **M11** — generate one skill, gate it on eval only | ~4 h | The actual research question |
+
+**Two new defects from Phase 1 change how later steps should be read**, both
+in FINDINGS: `reap_orphans()` kills healthy workers (1.10), and temperature 0
+is **not** byte-deterministic on this stack (1.11). The second one matters
+most for planning: any argument that repeat passes carry no information
+because warm runs are byte-identical does **not** hold. Cold-start repeats
+are the right variance instrument.
 
 **Protect the ablation if anything gets cut.** It removes module 3 (the
 magnitude check) from the calibration skill and re-runs the paired trial. If
