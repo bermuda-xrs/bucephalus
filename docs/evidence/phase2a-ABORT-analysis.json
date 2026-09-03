@@ -1,0 +1,78 @@
+{
+  "LABEL": "Phase 2A ABORTED at task 23/30 - granite4.1:3b, harness_version 2, 2026-09-03",
+  "status": "ABORTED. Partial results are NOT a measurement and are not reported as one.",
+  "abort_rule": "pre-authorised: more than 5 tasks flagged memory-suspect -> abort mid-run, do not salvage",
+  "abort_trigger": "6th suspect task (M19) at 23/30",
+
+  "WHY_THIS_ABORT_MATTERS": {
+    "headline": "The abort condition did its job, and it caught a real defect rather than a noisy threshold.",
+    "what_I_got_wrong": "Mid-run I judged the commit-ratio flags to be false positives - 'too tight by roughly 0.05', 'three of these five are false positives' - because the flagged tasks were not slow. That was WRONG. The flags were tracking a monotonic leak, and the flagged tasks were not slow YET.",
+    "what_stopped_the_mistake": "Refusing to retune a threshold mid-run because loosening it would conveniently avoid an abort. The rule held; the analysis that would have overridden it was the thing that was wrong."
+  },
+
+  "THE_FINDING_fifth_process_class_bug": {
+    "name": "the model worker leaks across a long run, and the leak is invisible in free memory",
+    "class": "process - FIFTH. The first three were 'anything spawned outlives what spawned it'; the fourth was 'the reaper cannot tell a live child from an orphan'; this one is 'a live, legitimate worker grows without bound'.",
+    "evidence_monotonic": {
+      "commit_ratio_by_task_position": [1.231, 1.231, 1.24, 1.253, 1.255, 1.28, 1.292, 1.296, 1.315, 1.316, 1.326, 1.335, 1.354, 1.366, 1.375, 1.377, 1.377, 1.381, 1.391, 1.4, 1.409, 1.415, 1.421],
+      "strictly_non_decreasing": true,
+      "rise": "1.231 -> 1.421, +0.190 over 23 tasks",
+      "why_this_is_the_smoking_gun": "23 consecutive readings with not one decrease. Pressure from other applications fluctuates; this only ever climbs. Free memory over the same span oscillated 0.44 -> 2.34 -> 1.41, so free memory alone CANNOT see this."
+    },
+    "evidence_isolation": {
+      "baseline_no_model_committed_gb": 15.44,
+      "fresh_3b_committed_gb": 18.92,
+      "fresh_3b_llama_server_rss_gb": 3.41,
+      "after_23_tasks_committed_gb": 22.12,
+      "after_23_tasks_llama_server_rss_gb": 4.86,
+      "after_reload_committed_gb": 18.92,
+      "after_reload_llama_server_rss_gb": 3.41,
+      "harness_process_is_innocent": "commit ratio was 1.431 AFTER the python harness was killed - higher than the 1.421 recorded while it ran. The growth is not in the measurement process.",
+      "model_commitment_growth_gb": "3.48 -> 6.68, i.e. +3.20 GB over 23 tasks = ~139 MB per task",
+      "reload_fully_reclaims": true
+    },
+    "CONSEQUENCES": [
+      "WALL-CLOCK IS CONFOUNDED WITH POSITION IN THE RUN. Suite order is fixed (E01-E10, M11-M22, H23-H30), so tasks that run late are measured under progressively worse memory conditions than tasks that run early. Hard tasks run LAST.",
+      "That means 'hard tasks are slower' is partly 'hard tasks run last'. In this partial run hard-tier median wall is 442.2s against easy 132.9s, and the hard tasks were also the ones at the highest commit ratios. The two explanations are not separated by this design.",
+      "budget_exhausted is a TIME limit, so the leak makes it progressively more likely later in a run - manufacturing apparent difficulty that is really lateness.",
+      "It scales with run LENGTH, so it hits the longest runs hardest: the paired calibration (2 arms x 30 tasks) and M11 are far more exposed than this 30-task pass.",
+      "Extrapolated: ~139 MB/task means a 60-arm paired run adds ~8 GB of commitment on a 15.47 GB machine."
+    ],
+    "PROPOSED_FIX": [
+      "Refresh the worker on a schedule or on a commit-ratio trigger during long runs (unload + reload reclaims it fully), and RECORD which tasks paid a reload so the cold-load cost stays visible rather than smearing into the task's time.",
+      "Randomise or rotate task order per run so position stops being confounded with tier. This changes no pass criterion, so it does not bump HARNESS_VERSION, but it does change wall-clock comparability and must be stated.",
+      "Record llama-server RSS per task alongside the commit ratio, so the leak is visible in the data instead of inferred from it."
+    ]
+  },
+
+  "PARTIAL_DATA_NOT_A_MEASUREMENT": {
+    "tasks_completed": 23,
+    "of": 30,
+    "passes": 10,
+    "status_counts": {"plateau": 10, "done": 10, "max_steps": 3},
+    "median_wall_s": 141.6,
+    "tier_partial": {
+      "easy":   {"passes": "5/10", "median_wall_s": 132.9},
+      "medium": {"passes": "4/9",  "median_wall_s": 144.7},
+      "hard":   {"passes": "1/4",  "median_wall_s": 442.2}
+    },
+    "above_2x_median": ["E02=311s", "M13=415s", "M16=401s", "H23=860s", "H24=743s"],
+    "memory_suspect": ["M12", "M13", "E10", "M17", "M18", "M19"],
+    "WHY_NOT_REPORTED_AS_A_RESULT": "The abort rule says partial results are not salvaged as a measurement, and independently the leak means later tasks were measured under different conditions from earlier ones. A mean over 23 tasks measured on a drifting instrument is not a pass rate. These numbers are recorded to document the abort, not to be quoted.",
+    "resumable": "runs/phase2a-3b-30tasks.json.partial.jsonl holds all 23 with an fsync per task, so a corrected re-run resumes rather than repeats - but it SHOULD NOT resume until the leak is addressed, because resuming would blend pre-fix and post-fix conditions."
+  },
+
+  "ONE_RESULT_THAT_SURVIVES": {
+    "claim": "R1 answer position predicts full-loop outcome",
+    "evidence": "4 for 4 on the tasks where both measurements exist: E01 collapsed at R1 -> failed the loop; E03 did not collapse -> passed; E04 collapsed -> failed; E05 partial with majority answer-last -> passed.",
+    "why_it_survives_the_abort": "It is a per-task correspondence between two independent measurements, not an aggregate over the run, so the drifting instrument does not touch it. Pass/fail is decided by the grader on the artifact; the leak corrupts SECONDS, not verification.",
+    "caveat": "n=4, all easy tier, single samples in the loop arm. Suggestive, not established."
+  },
+
+  "preflight_check_inconsistency": {
+    "observed": "noise.py's preflight printed 'under 2 GB free even after reaping' and warned, because the model was deliberately kept warm (1.2 GB free is the healthy resident state).",
+    "cause": "the 2 GB free-memory rule still exists in noise.py's PREFLIGHT while the per-task check was moved to commit ratio. The same wrong comparison - a model-resident reading against a no-model rule - survives in the place that was not fixed.",
+    "severity": "warns only, does not abort, so it did not affect this run",
+    "action": "fix the preflight to use memory_pressure() too, so one rule is not expressed two incompatible ways"
+  }
+}
