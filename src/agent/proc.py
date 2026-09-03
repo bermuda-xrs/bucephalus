@@ -16,6 +16,28 @@ Two instances of the same bug in two days, which makes it a class:
 So every termination goes through `kill_tree`, and every timed run reaps
 known orphans first. The third instance of this bug is somewhere; this is
 where it gets caught.
+
+The FOURTH instance was here, in the reaper itself, and it points the other
+way. `reap_orphans` matched on process NAME alone and killed every match, so
+it could not tell a live child of a running Ollama from a true orphan. It
+killed the warm model three times during one measurement session, defeating
+`keep_alive: 30m`. Because R0 runs first in a ladder, R0's first sample then
+absorbed a ~58 s cold load, which inflated the very R0-to-R1 wall-clock drop
+the harness-tax finding cites as evidence.
+
+So the class has two directions, not one:
+
+  * anything spawned outlives what spawned it   (the original three), and
+  * the reaper cannot tell a live child from an orphan  (this one).
+
+The test is now PARENTAGE, not name: a process is an orphan when its parent
+is gone. PID reuse is handled by comparing creation times - a "parent" that
+started AFTER its child is a recycled pid, not the real parent. When
+parentage genuinely cannot be established the process is left ALIVE, because
+the two errors are not symmetric: wrongly killing a healthy worker corrupts
+every subsequent measurement in the run, while wrongly sparing an orphan
+costs memory that `free_memory_gb()` will report and the preflight will
+surface.
 """
 
 from __future__ import annotations
@@ -73,41 +95,154 @@ def _alive(pid: int) -> bool:
         return False
 
 
-def find_by_name(name: str) -> list[int]:
-    """Pids whose image name matches, so orphans can be found without psutil."""
+def process_table() -> list[tuple[int, int, str]]:
+    """(pid, ppid, image name) for every visible process. [] if unavailable.
+
+    `tasklist` cannot report a parent pid, which is why the original reaper
+    matched on name alone. CreateToolhelp32Snapshot can, needs no extra
+    dependency, and costs one syscall rather than one subprocess per lookup.
+    """
     try:
-        if sys.platform == "win32":
-            out = subprocess.run(
-                ["tasklist", "/FI", f"IMAGENAME eq {name}.exe", "/NH"],
-                capture_output=True, text=True, timeout=15).stdout
-            pids = []
-            for line in out.splitlines():
-                parts = line.split()
-                if len(parts) >= 2 and parts[0].lower().startswith(name.lower()):
-                    try:
-                        pids.append(int(parts[1]))
-                    except ValueError:
-                        continue
-            return pids
-        out = subprocess.run(["pgrep", "-x", name], capture_output=True,
-                             text=True, timeout=15).stdout
-        return [int(x) for x in out.split()]
-    except Exception:  # noqa: BLE001
+        if sys.platform == "win32":  # pragma: no cover - platform split
+            import ctypes
+            from ctypes import wintypes
+
+            class _PE32(ctypes.Structure):
+                _fields_ = [("dwSize", wintypes.DWORD),
+                            ("cntUsage", wintypes.DWORD),
+                            ("th32ProcessID", wintypes.DWORD),
+                            ("th32DefaultHeapID", ctypes.POINTER(ctypes.c_ulong)),
+                            ("th32ModuleID", wintypes.DWORD),
+                            ("cntThreads", wintypes.DWORD),
+                            ("th32ParentProcessID", wintypes.DWORD),
+                            ("pcPriClassBase", ctypes.c_long),
+                            ("dwFlags", wintypes.DWORD),
+                            ("szExeFile", ctypes.c_char * 260)]
+
+            k32 = ctypes.windll.kernel32
+            snap = k32.CreateToolhelp32Snapshot(0x00000002, 0)
+            if snap in (-1, 0xFFFFFFFF, None):
+                return []
+            rows: list[tuple[int, int, str]] = []
+            try:
+                e = _PE32()
+                e.dwSize = ctypes.sizeof(_PE32)
+                ok = k32.Process32First(snap, ctypes.byref(e))
+                while ok:
+                    rows.append((int(e.th32ProcessID),
+                                 int(e.th32ParentProcessID),
+                                 e.szExeFile.decode("utf-8", "replace")))
+                    ok = k32.Process32Next(snap, ctypes.byref(e))
+            finally:
+                k32.CloseHandle(snap)
+            return rows
+
+        rows = []
+        for entry in os.listdir("/proc"):
+            if not entry.isdigit():
+                continue
+            try:
+                with open(f"/proc/{entry}/stat", encoding="utf-8") as fh:
+                    raw = fh.read()
+                name = raw[raw.index("(") + 1:raw.rindex(")")]
+                after = raw[raw.rindex(")") + 2:].split()
+                rows.append((int(entry), int(after[1]), name))
+            except (OSError, ValueError, IndexError):
+                continue
+        return rows
+    except Exception:  # noqa: BLE001 - never let bookkeeping stop a run
         return []
 
 
-def reap_orphans(names: tuple[str, ...] = ORPHAN_NAMES) -> list[int]:
-    """Kill known orphaned workers. Returns the pids reaped.
+def process_start_time(pid: int) -> int | None:
+    """Monotonic-ish creation stamp for `pid`, or None if unreadable.
+
+    Only ever compared against another value from this same function, so the
+    unit does not matter - Windows FILETIME ticks and Linux jiffies-since-boot
+    are both fine.
+    """
+    try:
+        if sys.platform == "win32":  # pragma: no cover - platform split
+            import ctypes
+            from ctypes import wintypes
+
+            k32 = ctypes.windll.kernel32
+            h = k32.OpenProcess(0x1000, False, pid)  # QUERY_LIMITED_INFORMATION
+            if not h:
+                return None
+            try:
+                ct, et = wintypes.FILETIME(), wintypes.FILETIME()
+                kt, ut = wintypes.FILETIME(), wintypes.FILETIME()
+                if not k32.GetProcessTimes(h, ctypes.byref(ct), ctypes.byref(et),
+                                           ctypes.byref(kt), ctypes.byref(ut)):
+                    return None
+                return (int(ct.dwHighDateTime) << 32) | int(ct.dwLowDateTime)
+            finally:
+                k32.CloseHandle(h)
+
+        with open(f"/proc/{pid}/stat", encoding="utf-8") as fh:
+            raw = fh.read()
+        return int(raw[raw.rindex(")") + 2:].split()[19])
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _name_matches(image: str, names: tuple[str, ...]) -> bool:
+    stem = image.lower()
+    if stem.endswith(".exe"):
+        stem = stem[:-4]
+    return any(stem == n.lower() for n in names)
+
+
+def orphan_pids(names: tuple[str, ...] = ORPHAN_NAMES,
+                protect_pids: tuple[int, ...] = ()) -> list[int]:
+    """Pids matching `names` whose parent is GONE. Selection only, no killing.
+
+    Split out from `reap_orphans` so the decision can be tested without
+    killing anything - the defect was never in the kill, it was in deciding
+    what to kill.
+
+    A process is spared when its parent is still alive, when it is named in
+    `protect_pids`, or when parentage cannot be determined at all. Sparing is
+    the safe direction: a wrongly-killed worker silently corrupts the run that
+    follows it, whereas a wrongly-spared orphan shows up in free memory.
+    """
+    table = process_table()
+    if not table:
+        return []
+    live = {pid: ppid for pid, ppid, _ in table}
+    out = []
+    for pid, ppid, image in table:
+        if pid in protect_pids or not _name_matches(image, names):
+            continue
+        if ppid > 0 and ppid in live:
+            p_start, c_start = process_start_time(ppid), process_start_time(pid)
+            if p_start is None or c_start is None:
+                continue                       # cannot disprove -> leave alive
+            if p_start <= c_start:
+                continue                       # real, living parent -> healthy
+            # parent started AFTER the child: a recycled pid, so the true
+            # parent is gone and this really is an orphan.
+        out.append(pid)
+    return out
+
+
+def reap_orphans(names: tuple[str, ...] = ORPHAN_NAMES,
+                 protect_pids: tuple[int, ...] = ()) -> list[int]:
+    """Kill orphaned workers - those whose parent is gone. Returns pids reaped.
 
     Called before a timed run: an orphan's memory is charged to whatever runs
     next, and on a 15.5 GB box that is the difference between 88s and 1500s
     for the same model call.
+
+    It does NOT kill live children of a running server. It used to, which cost
+    a cold model load on the first sample of every run - see the module
+    docstring.
     """
     reaped = []
-    for name in names:
-        for pid in find_by_name(name):
-            if kill_tree(pid):
-                reaped.append(pid)
+    for pid in orphan_pids(names, protect_pids):
+        if kill_tree(pid):
+            reaped.append(pid)
     return reaped
 
 

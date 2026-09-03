@@ -165,3 +165,90 @@ written procedures hurting on 16 of 84 tasks; this is one. It is not flagged
 H25 as outside the skill's scope, and both lifted. The upper bound was
 conservative in the useful direction, but it is a keyword match over a
 one-line trap description, not a model of what the skill does.
+
+---
+
+## Superseded claims in this directory (added 2026-09-03)
+
+The files themselves are left byte-identical, per the preservation rule. What
+follows is what later evidence changed about how to read them.
+
+### `b1-smoke-analysis.json` → `determinism_finding` is WRONG
+
+It reads, in part: *"at temperature 0 with a warm cache, repeated runs in one
+process are deterministic, so a noise floor measures almost no variance after
+run 1 ... Passes 2-3 as configured would measure very little."*
+
+That generalised correctly from B1's own five runs and **does not hold**.
+Four counterexamples, on identical prompt bytes, across both models:
+
+| observation | first sample | subsequent samples |
+|---|---|---|
+| E05 R1 (3B) | 362 ch, **wrong** (8775.75) | 685 ch, **right** (12918.75) |
+| E04 R0 (3B) | 537 ch | 561 ch |
+| E01 R1 (8B) | 7674.6, 1097 ch, 127.1 s | 7663.2, 1002 ch, ~78 s |
+| E01 R5 (3B) | 7909.54 | 250.12, 250.12 |
+
+The E05 case is a **correctness flip**, not a cosmetic one: same task, same
+rung, same bytes, and it both passed and failed.
+
+The mechanism the B1 note proposed is right — divergence is tied to the first
+call after a model load. The conclusion drawn from it is not. Because the
+first sample of every block is the divergent one, `n=1` per task inherits
+exactly that variance, and the **first task of any run is the most exposed**.
+
+**Consequence for planning:** repeat passes cannot be cut on the grounds that
+warm runs are byte-identical. The correct variance instrument is **cold-start
+repeats**, because cold start is the condition that produces the divergence.
+See FINDINGS 1.11 and SPEC-DELTA C18.
+
+### `ladder-E01-3b.json` → the R4 row is VOID, and it has no R5 rows
+
+Two separate problems.
+
+**R4 is void.** That rung ran with `max_steps=1`, which cannot measure "can
+it deliver this" — it measures whether the model happened to spend its single
+action on `run_code`. Of five samples in the v3 re-run, four spent their step
+on `read_file(params.json)`, which is correct agent behaviour, and produced
+no artifact in ~7.4 s. `bench/ladder.py` now runs R4 at `max_steps=3` and
+keeps the one-action probe as `R4x`, named for what it is. See FINDINGS 1.9
+and SPEC-DELTA C16.
+
+**There are no R5 rows in this file at all.** The R5 line in
+`ladder-E01-3b-analysis.json` is annotated `"real loop unrestricted (B1)"` —
+it was carried across from the B1 run and presented in the same table as the
+rungs that were actually measured here. When reading that table, R0–R3 and
+R4 come from this file; R5 does not.
+
+### `ladder-E01-3b.json` → wall-clock at R2 and R3 is cold-load inflated
+
+`reap_orphans()` used to kill the live model between runs, so the first
+sample of every rung absorbed a ~58 s cold load. Warm-only means differ
+sharply at the later rungs:
+
+| rung | published (sample 1) | warm-only mean |
+|---|---|---|
+| R0 | 45.7 s | 39.8 s |
+| R1 | 7.7 s | 6.7 s |
+| R2 | **14.3 s** | **1.5 s** |
+| R3 | **13.9 s** | **2.8 s** |
+
+**The headline ratio survives:** R0→R1 is 5.9× on both readings, so
+"45.7 s → 7.7 s" overstates the absolute figures but not the effect. The
+mechanism section's "45.7 → 7.7 → 1.4" is inconsistent, though — it takes
+sample 1 for R0 and R1 and a warm sample for R2. Warm-only throughout it is
+**39.8 → 6.7 → 1.5 → 2.8**. See FINDINGS 1.10 and SPEC-DELTA C17.
+
+### `ladder-E01-3b.json` → the recorded `answer` is not always the model's answer
+
+R1 records `answer: 6371000.0`. The model's stated answer was
+`7.784152678`; 6371000 is Earth's radius, quoted in a trailing citation. The
+extractor took the **last** number in the response.
+
+No published verdict is wrong because of this — all 43 archived text-rung
+samples were re-scored with the corrected extractor and **0 verdicts
+flipped** — but the defect was live: a model that answers correctly and then
+cites its inputs would have been scored wrong. The extractor now prefers a
+number the model labelled with the output key, records `numbers_seen`,
+`hits`, `labelled_answer` and `last_number`, and keeps the old verdict as
+`correct_last_number` so the two readings cannot silently diverge.

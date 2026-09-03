@@ -14,8 +14,27 @@ collapse can be attributed to a specific addition rather than to "the agent".
     R1  R0 + the suite's own goal text (paths, key names, "use run_code")
     R2  R1 + the SYSTEM_CONTRACT prefix the agent always sends
     R3  R2 + the tool manual, still one turn, still no tools callable
-    R4  the real loop, max_steps=1
-    R5  the real loop, unrestricted
+    R4  the real loop, minimum viable step budget (3)
+    R5  the real loop, unrestricted (10)
+    R4x the real loop with ONE action allowed - a step-budget probe, NOT a
+        correctness measurement. See below.
+
+R4 USED TO MEAN max_steps=1 AND ITS PUBLISHED RESULT IS VOID.
+
+    A one-action budget cannot measure "can it deliver this". It measures
+    "did the model happen to spend its single action on run_code". Measured
+    on 2026-09-03: of five samples, one spent its step on run_code and wrote
+    an answer; four spent it on read_file(params.json) - correct agent
+    behaviour, reading your input before computing - and produced no artifact
+    at all, in 7.4 s each.
+
+    The bias is directional, which is what makes it dangerous rather than
+    merely noisy: "work through it step by step" is an instruction to take
+    preparatory steps, so a one-action budget systematically penalises the
+    intervention it was being used to test.
+
+    R4 is now max_steps=3, the minimum that can cover read, compute and
+    finalise. The one-action probe survives as R4x, named for what it is.
 
 R0-R3 are single completions scored on the number in the text. R4-R5 run the
 real loop and are scored by the real grader on the artifact. That is a
@@ -47,6 +66,13 @@ from agent.proc import free_memory_gb, reap_orphans  # noqa: E402
 from agent.workspace import reset_workspace  # noqa: E402
 
 ENDPOINT = "http://127.0.0.1:11435/api/generate"
+
+# Step budget per loop rung. Recorded into every row so a rung's meaning is
+# readable from the data alone rather than from this file's history - the old
+# R4 was published as "the full loop, one step allowed" and read as a
+# correctness result for months.
+RUNG_STEPS = {"R4x": 1, "R4": 3, "R5": 10}
+LOOP_RUNGS = tuple(RUNG_STEPS)
 SEP = chr(10) * 2          # blank line between prompt sections
 
 # The I/O contract the suite imposes, minus the parts that need a file
@@ -110,20 +136,59 @@ def numbers(text: str) -> list[float]:
     return out
 
 
-def score_text(text: str, expected: float, tol: float) -> tuple[bool, float | None]:
-    """(correct, the number judged to be its answer).
+def score_text(text: str, expected: float, tol: float,
+               out_key: str | None = None) -> dict:
+    """What the model answered, how it was judged, and everything discarded.
 
-    The last in-range number is taken as the answer, which is where a worked
-    solution puts it. `any_hit` is reported separately so a model that
-    computed the right value and then mangled it is not scored the same as
-    one that never had it.
+    Returns a dict rather than a pair so the run record keeps the evidence:
+    `numbers_seen` and `hits` make every verdict re-checkable without the
+    prose, which is what "preserve the value verbatim" actually requires.
+
+    THE LAST-NUMBER HEURISTIC IS A LATENT FALSE NEGATIVE. `correct` keyed off
+    the final number in the response, on the reasoning that a worked solution
+    ends with its answer. But a model that answers correctly and then cites
+    its inputs - "7672.6 m/s, using Earth's radius (6371000 m)" - ends on
+    6371000 and was scored WRONG. That is the documented instrument-bug
+    pattern: what would this check score for an agent that did the work
+    perfectly but behaved slightly unusually?
+
+    Scanned across every text-rung sample on record (E01 3B, E03/E04/E05 3B,
+    E01 8B): the shape occurs - E01 R1 s1 records 6371000.0, the trailing
+    radius citation, as its "answer" - but produced ZERO false negatives,
+    because in every such case the model's own answer was wrong too. So this
+    fix changes no result that has ever been published. It is recorded that
+    way deliberately: a scoring change that raises pass rates has to be shown
+    not to be the reason a number moved.
+
+    `correct_last_number` keeps the old verdict alongside the new one so the
+    two readings can never silently diverge.
     """
     ns = numbers(text)
     hits = [n for n in ns if expected and abs(n - expected) / abs(expected) <= tol]
     last = ns[-1] if ns else None
-    correct = bool(last is not None and expected
-                   and abs(last - expected) / abs(expected) <= tol)
-    return correct, (last if correct or not hits else hits[-1])
+    correct_last = bool(last is not None and expected
+                        and abs(last - expected) / abs(expected) <= tol)
+
+    # Prefer a number the model LABELLED with the output key - that is its
+    # stated answer - and fall back to the trailing number only when it did
+    # not label one.
+    labelled = None
+    if out_key:
+        m = re.findall(re.escape(out_key) + r"[^0-9\-]{0,20}(-?\d[\d,]*\.?\d*(?:[eE][-+]?\d+)?)",
+                       text)
+        if m:
+            try:
+                labelled = float(m[-1].replace(",", ""))
+            except ValueError:
+                labelled = None
+
+    answer = labelled if labelled is not None else last
+    correct = bool(answer is not None and expected
+                   and abs(answer - expected) / abs(expected) <= tol)
+    return {"correct": correct, "answer": answer,
+            "correct_last_number": correct_last, "last_number": last,
+            "labelled_answer": labelled, "hits": hits,
+            "numbers_seen": ns[:40], "n_numbers": len(ns)}
 
 
 def goal_text(ctx, key: str) -> str:
@@ -158,7 +223,7 @@ def run_rung(ctx, rung: str, key: str, model: str, samples: int,
 
     for i in range(samples):
         t0 = time.time()
-        if rung in ("R0", "R1", "R2", "R3"):
+        if rung not in LOOP_RUNGS:
             # EVERY rung must be ANSWERABLE from its own prompt. The first
             # version of R1 was the suite goal verbatim, which says "read
             # work/E01/input/params.json" and "use run_code" - at R1 there is
@@ -183,11 +248,16 @@ def run_rung(ctx, rung: str, key: str, model: str, samples: int,
                           + SEP + bare + SEP + contract
                           + chr(10) + ACTION_SCHEMA_HINT)
             text = complete(model, prompt)
-            ok, got = score_text(text, expected, tol)
-            out.append({"rung": rung, "sample": i + 1, "correct": ok,
-                        "answer": got, "wall_s": round(time.time() - t0, 1),
-                        "chars": len(text), "prompt_chars": len(prompt),
-                        "response": text[:1500]})
+            sc = score_text(text, expected, tol, out_key)
+            row = {"rung": rung, "sample": i + 1,
+                   "wall_s": round(time.time() - t0, 1),
+                   "chars": len(text), "prompt_chars": len(prompt),
+                   # 1E: the whole response, not a 1500-char prefix. v2 R5
+                   # sample 1 is permanently unclassifiable because its value
+                   # was never written down; truncation is how that happens.
+                   "response": text}
+            row.update(sc)
+            out.append(row)
         else:
             spec = ctx.userdata.get_suite_by_name("aero_calc").to_specs()
             spec = next(s for s in spec if s["key"] == key)
@@ -196,7 +266,7 @@ def run_rung(ctx, rung: str, key: str, model: str, samples: int,
                 spec["goal"] = spec["goal"] + " " + STEP_BY_STEP
             reset_workspace(ctx.config.root, spec["artifact_scope"],
                             spec.get("fixtures") or {})
-            ctx.config.limits.max_steps = 1 if rung == "R4" else 10
+            ctx.config.limits.max_steps = RUNG_STEPS[rung]
             task = create_task(ctx.conn, ctx.log, TaskContract(
                 goal=spec["goal"], success_criterion="verify_program",
                 output_schema=spec.get("output_schema", {}),
@@ -206,15 +276,26 @@ def run_rung(ctx, rung: str, key: str, model: str, samples: int,
             ctx.set_frozen_skills(task.id, [])
             res = run_task(ctx, task.id)
             f = Path(ctx.config.root) / spec["artifact_scope"][0] / "output" / "answer.json"
-            got = None
+            got, raw_artifact = None, None
             if f.exists():
+                # 1E: keep the bytes. A parse failure used to leave `got=None`
+                # and no trace of WHAT failed to parse.
                 try:
-                    got = float(list(json.loads(f.read_text(encoding="utf-8")).values())[0])
+                    raw_artifact = f.read_text(encoding="utf-8")[:2000]
+                except OSError:
+                    raw_artifact = None
+                try:
+                    got = float(list(json.loads(raw_artifact).values())[0])
                 except Exception:  # noqa: BLE001
                     got = None
+            rel = (abs(got - expected) / abs(expected)
+                   if (got is not None and expected) else None)
             out.append({"rung": rung, "sample": i + 1,
                         "correct": res.status in ("done", "done_unannounced"),
                         "answer": got, "status": res.status,
+                        "max_steps": RUNG_STEPS[rung],
+                        "relative_error": rel,
+                        "answer_json_raw": raw_artifact,
                         "goal_chars": len(spec["goal"]),
                         "wall_s": round(time.time() - t0, 1)})
         r = out[-1]
@@ -229,7 +310,9 @@ def main() -> int:
     ap.add_argument("--task", default="E01")
     ap.add_argument("--model", default="granite4.1:3b")
     ap.add_argument("--samples", type=int, default=5)
-    ap.add_argument("--rungs", default="R0,R1,R2,R3,R4,R5")
+    ap.add_argument("--rungs", default="R0,R1,R2,R3,R4,R5",
+                    help="R4 is now max_steps=3; the old one-action probe is "
+                         "R4x and is not a correctness measurement")
     ap.add_argument("--step-by-step", action="store_true",
                     help="add the v3 reasoning instruction to every rung")
     ap.add_argument("--out", default="runs/ladder.json")

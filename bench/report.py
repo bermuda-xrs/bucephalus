@@ -147,7 +147,32 @@ def render(noise: dict | None, cal: dict | None) -> str:
                 or noise.get("wall_s_this_session")
                 or noise.get("wall_s_total") or 0)
         add(f"| wall clock, all runs | {secs / 3600:.2f} h |")
+
+        # Memory-suspect tasks. A wall-clock reading taken while the machine
+        # was paging is not a measurement of the task, and seconds are the
+        # only cost axis this project has. One call has already been observed
+        # at 2465 s against a 600 s budget - 29x its rung median - which
+        # ended `budget_exhausted`, i.e. memory pressure masquerading as
+        # difficulty. These are named rather than silently averaged in.
+        suspect = noise.get("memory_suspect_keys") or []
+        floor = noise.get("low_memory_threshold_gb")
+        lowest = noise.get("min_free_gb_any_task")
+        if lowest is not None:
+            add(f"| lowest free memory, any task | {lowest} GB |")
+        if suspect:
+            add(f"| **wall-clock SUSPECT (free memory < {floor} GB)** | "
+                f"**{len(suspect)} task(s): {', '.join(suspect)}** |")
+        elif noise.get("memory_suspect_keys") is not None:
+            add(f"| wall-clock suspect (free memory < {floor} GB) | none |")
         add("")
+        if suspect:
+            add(f"> **{len(suspect)} task(s) ran with free memory below "
+                f"{floor} GB: {', '.join(suspect)}.** Their pass/fail still "
+                "counts - the artifact either verified or it did not - but "
+                "their wall-clock is NOT a measurement of the task and must "
+                "not be read as one. Exclude them from any median, p90 or "
+                "Pareto point, or state that they are included.")
+            add("")
         tiers = noise.get("tier_pass_rates") or {}
         if tiers:
             add("| tier | pass rate |")

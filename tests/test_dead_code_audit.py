@@ -43,6 +43,15 @@ KNOWN_INERT = {
     "measure_retrieval_precision":
         "M9.4 measures retrieval separately from quality. Never invoked, so "
         "'the right skill existed and was not retrieved' is unmeasured.",
+    "calibrate":
+        "CORRECTIONS 1.2 replaced tiktoken with a local estimator for in-loop "
+        "budgeting PLUS the provider's count_tokens for calibration. The "
+        "calibration half has no caller, so _CHARS_PER_TOKEN is never "
+        "measured against a real tokenizer and EVERY token figure in this "
+        "project is an uncalibrated estimate. It also cannot run under "
+        "--profile local: count_tokens_exact needs a provider client and "
+        "there is no API key. Surfaced 2026-09-03 when the audit stopped "
+        "counting comment mentions as call sites.",
 
     # --- superseded by an inline implementation ---------------------------
     "refine_with_ratchet":
@@ -65,6 +74,10 @@ KNOWN_INERT = {
 
     # --- small helpers, genuinely unused ----------------------------------
     "artifacts_for": "helper; superseded by ledger/artifacts.project().",
+    "describe":
+        "profile banner helper; report headers build their own provenance "
+        "block from profile_provenance instead. Surfaced 2026-09-03 by the "
+        "same audit fix as `calibrate`.",
     "children": "task-tree helper; no caller.",
     "contract_hash": "helper; plan pinning hashes the plan, not the contract.",
     "has_receipt": "receipts are checked inside execute_once.",
@@ -87,23 +100,40 @@ def _unreferenced() -> dict[str, Path]:
 
     prod = list(SRC.rglob("*.py")) + list((ROOT / "bench").glob("*.py"))
     prod += [ROOT / "demo.py"]
-    bodies = {f: f.read_text(encoding="utf-8").splitlines()
-              for f in prod if f.exists()}
 
-    out = {}
-    for name, (home, lineno) in defs.items():
-        for f, lines in bodies.items():
-            for i, line in enumerate(lines, 1):
-                if f == home and i == lineno:
-                    continue                     # the def itself
-                if re.search(rf"\b{re.escape(name)}\b", line):
-                    break
-            else:
-                continue
-            break
-        else:
-            out[name] = home
-    return out
+    # References are collected from the AST, not by grepping lines.
+    #
+    # The regex version counted any line CONTAINING the name, so a mention in
+    # a comment or a docstring registered as a call site. It was caught when a
+    # docstring reading "does NOT kill live children of a running server"
+    # made the unused `children` helper look wired.
+    #
+    # That is this project's own instrument-bug pattern, in the test written
+    # to prevent it: the check measured "the token appears in a line", not
+    # "the system calls it". Ask what it scores for code that did the work
+    # perfectly but behaved slightly unusually - here, code that merely
+    # NAMES a function in prose - and the answer was "wired".
+    refs: set[str] = set()
+    for f in prod:
+        if not f.exists():
+            continue
+        tree = ast.parse(f.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Name):
+                refs.add(node.id)
+            elif isinstance(node, ast.Attribute):
+                refs.add(node.attr)
+            elif isinstance(node, ast.alias):        # from x import y [as z]
+                refs.add(node.name.split(".")[-1])
+                if node.asname:
+                    refs.add(node.asname)
+            elif isinstance(node, ast.Constant) and isinstance(node.value, str):
+                # getattr(obj, "name") and registry tables key off strings.
+                # Kept deliberately: a string reference is a real one, and
+                # dropping it would flag registered handlers as dead.
+                refs.add(node.value)
+
+    return {name: home for name, (home, _l) in defs.items() if name not in refs}
 
 
 def test_no_newly_unreferenced_machinery():

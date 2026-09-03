@@ -38,6 +38,12 @@ from agent.kernel.types import Budget, TaskContract  # noqa: E402
 from agent.models.base import BackendError  # noqa: E402
 from agent import HARNESS_VERSION  # noqa: E402
 from agent.proc import free_memory_gb, reap_orphans  # noqa: E402
+
+# Below this, a wall-clock reading is not trustworthy. The house rule says
+# stop under ~2 GB; a task that dips under it mid-run cannot be stopped
+# retroactively, so it is flagged instead and the report refuses to treat its
+# seconds as a measurement.
+LOW_MEMORY_GB = 2.0
 from agent.runlock import RunLock, RunLockBusy  # noqa: E402
 from agent.workspace import reset_workspace  # noqa: E402
 
@@ -85,9 +91,20 @@ def run_once(ctx, spec: dict, run_ix: int) -> dict:
     )
     task = create_task(ctx.conn, ctx.log, contract, budget)
     ctx.set_frozen_skills(task.id, SKILLS_FOR_ARM)
+    # Free memory is read per TASK, not only in preflight. Preflight alone
+    # cannot see pressure that arrives mid-run, and this project has already
+    # measured what that costs: one model call took 2465 s against a 600 s
+    # budget - 29x the median for its rung - and ended `budget_exhausted`.
+    # Because that outcome is a TIME limit, memory pressure converts directly
+    # into apparent task difficulty, which is the one thing a difficulty
+    # measurement must not be allowed to invent.
+    mem_before = free_memory_gb()
     t0 = time.time()
     result = run_task(ctx, task.id)
+    wall = round(time.time() - t0, 1)
+    mem_after = free_memory_gb()
     m = ctx.telemetry.metrics(task.id)
+    low = min([g for g in (mem_before, mem_after) if g is not None], default=None)
     return {
         "run": run_ix,
         "task_id": task.id,
@@ -95,7 +112,12 @@ def run_once(ctx, spec: dict, run_ix: int) -> dict:
         # done_unannounced is a PASS: the artifact verified, the model
         # just never said <final>. Counted separately in the report.
         "passed": result.status in ("done", "done_unannounced"),
-        "wall_s": round(time.time() - t0, 1),
+        "wall_s": wall,
+        "free_gb_before": None if mem_before is None else round(mem_before, 2),
+        "free_gb_after": None if mem_after is None else round(mem_after, 2),
+        # The flag travels with the row, so a suspect wall-clock stays suspect
+        # through resume, through the ledger, and into the report.
+        "memory_suspect": bool(low is not None and low < LOW_MEMORY_GB),
         "free_tokens": m.free_tokens,
         "cost_usd": m.cost_usd,
     }
@@ -127,6 +149,8 @@ def run_with_backend_retry(ctx, spec: dict, run_ix: int, key: str) -> dict:
             return {
                 "run": run_ix, "task_id": None, "status": "backend_error",
                 "passed": False, "unmeasured": True, "wall_s": 0.0,
+                "free_gb_before": None, "free_gb_after": None,
+                "memory_suspect": False,
                 "free_tokens": 0, "cost_usd": 0.0, "error": str(e),
             }
 
@@ -406,8 +430,12 @@ def main() -> int:
             results.setdefault(key, []).append(out)
             # Before the print, so a kill between them loses nothing.
             append_run(ledger, sig, out)
+            flag = ""
+            if out.get("memory_suspect"):
+                flag = (f"  !! LOW MEMORY {out.get('free_gb_after')} GB - "
+                        "wall-clock suspect")
             print(f"  run {r + 1}/{args.runs}  {i:>2}/{len(specs)}  {key:<6} "
-                  f"{out['status']:<16} {out['wall_s']:>6.1f}s", flush=True)
+                  f"{out['status']:<16} {out['wall_s']:>6.1f}s{flag}", flush=True)
 
     rows = []
     unmeasured_keys = []
@@ -425,7 +453,8 @@ def main() -> int:
                 "split": (next(s for s in specs if s["key"] == key)
                           .get("output_schema") or {}).get("x-split", "?"),
                 "classification": "unmeasured", "passes": 0, "runs": 0,
-                "mean_wall_s": 0.0,
+                "mean_wall_s": 0.0, "memory_suspect": False,
+                "min_free_gb": None,
                 "statuses": [x["status"] for x in runs],
             })
             continue
@@ -439,6 +468,14 @@ def main() -> int:
             "classification": classify(passes),
             "passes": sum(passes), "runs": len(passes),
             "mean_wall_s": round(statistics.mean(x["wall_s"] for x in runs), 1),
+            # A task is memory-suspect if ANY of its runs dipped below the
+            # floor. Its pass/fail still counts - the artifact either verified
+            # or it did not - but its SECONDS are not a measurement, and the
+            # cost axis of this project is seconds.
+            "memory_suspect": any(x.get("memory_suspect") for x in runs),
+            "min_free_gb": min(
+                [x["free_gb_after"] for x in runs
+                 if x.get("free_gb_after") is not None] or [None]),
             "statuses": [x["status"] for x in runs],
         })
 
@@ -478,6 +515,13 @@ def main() -> int:
         "date": time.strftime("%Y-%m-%d"),
         "harness_version": HARNESS_VERSION,
         "budget_scale": args.budget_scale,
+        # Per-task memory, summarised. Preflight numbers alone cannot show
+        # pressure that arrived mid-run.
+        "memory_suspect_keys": [r["key"] for r in rows if r.get("memory_suspect")],
+        "min_free_gb_any_task": min(
+            [r["min_free_gb"] for r in rows
+             if r.get("min_free_gb") is not None] or [None]),
+        "low_memory_threshold_gb": LOW_MEMORY_GB,
         "free_memory_gb_at_start": free_gb,
         "free_memory_gb_before_reap": before_gb,
         "orphans_reaped": reaped,
