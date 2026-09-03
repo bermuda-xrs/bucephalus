@@ -246,6 +246,89 @@ def reap_orphans(names: tuple[str, ...] = ORPHAN_NAMES,
     return reaped
 
 
+def memory_pressure() -> dict:
+    """Is the machine THRASHING, as distinct from merely busy?
+
+    Free memory alone cannot answer that, and assuming it could was the sixth
+    instrument bug found in this project. A per-task check was added with the
+    house rule's 2 GB floor, but that floor was written for PREFLIGHT, with no
+    model loaded. Measured here with `granite4.1:3b` legitimately resident at
+    16k context, available memory is ~1.2-1.5 GB - so a 2 GB floor flags 100%
+    of a perfectly healthy run, and an abort rule built on it would kill that
+    run a few tasks in. The check scored "suspect" for a run that behaved
+    correctly, which is the question this project asks of every new check.
+
+    Two anchor points, both measured on this hardware (15.47 GB physical):
+
+        healthy, 3B resident, 16k ctx   available 1.17 GB   commit ratio 1.231
+        pathological, orphaned worker   available 0.90 GB   commit ratio 1.574
+
+    Available memory barely separates those. The COMMIT RATIO - promised
+    memory over physical memory - separates them cleanly, because thrashing
+    is precisely the state of having promised far more than exists. The
+    pathological row is the documented orphan incident from this module's own
+    docstring, where one model call took 1499.8 s for 88.1 s of work.
+
+    This is a TWO-POINT calibration and that is thin. Both anchors are named
+    above so a later session can refine rather than re-derive them.
+    """
+    try:
+        if sys.platform == "win32":  # pragma: no cover - platform split
+            import ctypes
+
+            m = _mem_status()
+            if m is None:
+                return {}
+            committed = m.ullTotalPageFile - m.ullAvailPageFile
+            phys = m.ullTotalPhys
+            return {
+                "available_gb": round(m.ullAvailPhys / 1024 ** 3, 2),
+                "committed_gb": round(committed / 1024 ** 3, 2),
+                "physical_gb": round(phys / 1024 ** 3, 2),
+                "commit_ratio": round(committed / phys, 3) if phys else None,
+            }
+
+        vals = {}
+        with open("/proc/meminfo", encoding="utf-8") as fh:
+            for line in fh:
+                k, _, v = line.partition(":")
+                vals[k] = int(v.split()[0]) * 1024
+        phys = vals.get("MemTotal", 0)
+        committed = vals.get("Committed_AS", 0)
+        return {
+            "available_gb": round(vals.get("MemAvailable", 0) / 1024 ** 3, 2),
+            "committed_gb": round(committed / 1024 ** 3, 2),
+            "physical_gb": round(phys / 1024 ** 3, 2),
+            "commit_ratio": round(committed / phys, 3) if phys else None,
+        }
+    except Exception:  # noqa: BLE001 - bookkeeping must never stop a run
+        return {}
+
+
+def _mem_status():
+    """Raw GlobalMemoryStatusEx, or None. Windows only."""
+    try:
+        import ctypes
+
+        class _MS(ctypes.Structure):
+            _fields_ = [("dwLength", ctypes.c_ulong),
+                        ("dwMemoryLoad", ctypes.c_ulong),
+                        ("ullTotalPhys", ctypes.c_ulonglong),
+                        ("ullAvailPhys", ctypes.c_ulonglong),
+                        ("ullTotalPageFile", ctypes.c_ulonglong),
+                        ("ullAvailPageFile", ctypes.c_ulonglong),
+                        ("ullTotalVirtual", ctypes.c_ulonglong),
+                        ("ullAvailVirtual", ctypes.c_ulonglong),
+                        ("ullAvailExtendedVirtual", ctypes.c_ulonglong)]
+
+        m = _MS()
+        m.dwLength = ctypes.sizeof(_MS)
+        ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(m))
+        return m
+    except Exception:  # noqa: BLE001
+        return None
+
+
 def free_memory_gb() -> float | None:
     """Physical memory free, or None if it cannot be read."""
     try:

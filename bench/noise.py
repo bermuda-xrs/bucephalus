@@ -37,13 +37,27 @@ from agent.kernel.tasks import create_task  # noqa: E402
 from agent.kernel.types import Budget, TaskContract  # noqa: E402
 from agent.models.base import BackendError  # noqa: E402
 from agent import HARNESS_VERSION  # noqa: E402
-from agent.proc import free_memory_gb, reap_orphans  # noqa: E402
+from agent.proc import free_memory_gb, memory_pressure, reap_orphans  # noqa: E402
 
-# Below this, a wall-clock reading is not trustworthy. The house rule says
-# stop under ~2 GB; a task that dips under it mid-run cannot be stopped
-# retroactively, so it is flagged instead and the report refuses to treat its
-# seconds as a measurement.
-LOW_MEMORY_GB = 2.0
+# When a task's wall-clock stops being trustworthy.
+#
+# The first version of this used the house rule's 2 GB free-memory floor. That
+# was WRONG, and wrong in this project's signature way: the 2 GB rule is a
+# PREFLIGHT check, taken with no model loaded, while this one runs with the
+# model resident. Measured on this hardware, a healthy run with granite4.1:3b
+# at 16k context sits at 1.17-1.48 GB available - so the 2 GB test flagged
+# 100% of a correct run, and the abort rule built on it would have killed a
+# healthy pass within a few tasks.
+#
+# Two measured anchors, 15.47 GB physical:
+#     healthy, 3B resident        available 1.17 GB   commit ratio 1.231
+#     pathological, orphan held   available 0.90 GB   commit ratio 1.574
+#
+# Available memory barely separates those; the commit ratio does. 1.40 sits
+# between the two anchors with margin on both sides. The absolute floor is
+# kept only as an emergency backstop, well below normal operation.
+COMMIT_RATIO_SUSPECT = 1.40
+EMERGENCY_FREE_GB = 0.50
 from agent.runlock import RunLock, RunLockBusy  # noqa: E402
 from agent.workspace import reset_workspace  # noqa: E402
 
@@ -98,13 +112,21 @@ def run_once(ctx, spec: dict, run_ix: int) -> dict:
     # Because that outcome is a TIME limit, memory pressure converts directly
     # into apparent task difficulty, which is the one thing a difficulty
     # measurement must not be allowed to invent.
-    mem_before = free_memory_gb()
+    press_before = memory_pressure()
+    mem_before = press_before.get("available_gb", free_memory_gb())
     t0 = time.time()
     result = run_task(ctx, task.id)
     wall = round(time.time() - t0, 1)
-    mem_after = free_memory_gb()
+    press_after = memory_pressure()
+    mem_after = press_after.get("available_gb", free_memory_gb())
     m = ctx.telemetry.metrics(task.id)
     low = min([g for g in (mem_before, mem_after) if g is not None], default=None)
+    ratios = [p["commit_ratio"] for p in (press_before, press_after)
+              if p.get("commit_ratio") is not None]
+    worst_ratio = max(ratios) if ratios else None
+    suspect = bool(
+        (worst_ratio is not None and worst_ratio >= COMMIT_RATIO_SUSPECT)
+        or (low is not None and low < EMERGENCY_FREE_GB))
     return {
         "run": run_ix,
         "task_id": task.id,
@@ -117,7 +139,8 @@ def run_once(ctx, spec: dict, run_ix: int) -> dict:
         "free_gb_after": None if mem_after is None else round(mem_after, 2),
         # The flag travels with the row, so a suspect wall-clock stays suspect
         # through resume, through the ledger, and into the report.
-        "memory_suspect": bool(low is not None and low < LOW_MEMORY_GB),
+        "memory_suspect": suspect,
+        "commit_ratio": worst_ratio,
         "free_tokens": m.free_tokens,
         "cost_usd": m.cost_usd,
     }
@@ -150,7 +173,7 @@ def run_with_backend_retry(ctx, spec: dict, run_ix: int, key: str) -> dict:
                 "run": run_ix, "task_id": None, "status": "backend_error",
                 "passed": False, "unmeasured": True, "wall_s": 0.0,
                 "free_gb_before": None, "free_gb_after": None,
-                "memory_suspect": False,
+                "memory_suspect": False, "commit_ratio": None,
                 "free_tokens": 0, "cost_usd": 0.0, "error": str(e),
             }
 
@@ -432,8 +455,8 @@ def main() -> int:
             append_run(ledger, sig, out)
             flag = ""
             if out.get("memory_suspect"):
-                flag = (f"  !! LOW MEMORY {out.get('free_gb_after')} GB - "
-                        "wall-clock suspect")
+                flag = (f"  !! MEMORY PRESSURE free={out.get('free_gb_after')} GB "
+                        f"commit={out.get('commit_ratio')} - wall-clock suspect")
             print(f"  run {r + 1}/{args.runs}  {i:>2}/{len(specs)}  {key:<6} "
                   f"{out['status']:<16} {out['wall_s']:>6.1f}s{flag}", flush=True)
 
@@ -521,7 +544,9 @@ def main() -> int:
         "min_free_gb_any_task": min(
             [r["min_free_gb"] for r in rows
              if r.get("min_free_gb") is not None] or [None]),
-        "low_memory_threshold_gb": LOW_MEMORY_GB,
+        "commit_ratio_suspect_threshold": COMMIT_RATIO_SUSPECT,
+        "emergency_free_gb": EMERGENCY_FREE_GB,
+        "memory_pressure_at_start": memory_pressure(),
         "free_memory_gb_at_start": free_gb,
         "free_memory_gb_before_reap": before_gb,
         "orphans_reaped": reaped,

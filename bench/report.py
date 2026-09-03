@@ -155,19 +155,20 @@ def render(noise: dict | None, cal: dict | None) -> str:
         # ended `budget_exhausted`, i.e. memory pressure masquerading as
         # difficulty. These are named rather than silently averaged in.
         suspect = noise.get("memory_suspect_keys") or []
-        floor = noise.get("low_memory_threshold_gb")
+        floor = noise.get("commit_ratio_suspect_threshold")
         lowest = noise.get("min_free_gb_any_task")
         if lowest is not None:
             add(f"| lowest free memory, any task | {lowest} GB |")
         if suspect:
-            add(f"| **wall-clock SUSPECT (free memory < {floor} GB)** | "
+            add(f"| **wall-clock SUSPECT (commit ratio >= {floor})** | "
                 f"**{len(suspect)} task(s): {', '.join(suspect)}** |")
         elif noise.get("memory_suspect_keys") is not None:
-            add(f"| wall-clock suspect (free memory < {floor} GB) | none |")
+            add(f"| wall-clock suspect (commit ratio >= {floor}) | none |")
         add("")
         if suspect:
-            add(f"> **{len(suspect)} task(s) ran with free memory below "
-                f"{floor} GB: {', '.join(suspect)}.** Their pass/fail still "
+            add(f"> **{len(suspect)} task(s) ran under memory pressure "
+                f"(commit ratio >= {floor}): {', '.join(suspect)}.** "
+                "Their pass/fail still "
                 "counts - the artifact either verified or it did not - but "
                 "their wall-clock is NOT a measurement of the task and must "
                 "not be read as one. Exclude them from any median, p90 or "
