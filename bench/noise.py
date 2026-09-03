@@ -24,6 +24,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import random
 import statistics
 import sys
 import time
@@ -37,7 +38,8 @@ from agent.kernel.tasks import create_task  # noqa: E402
 from agent.kernel.types import Budget, TaskContract  # noqa: E402
 from agent.models.base import BackendError  # noqa: E402
 from agent import HARNESS_VERSION  # noqa: E402
-from agent.proc import free_memory_gb, memory_pressure, reap_orphans  # noqa: E402
+from agent.proc import (  # noqa: E402
+    free_memory_gb, memory_pressure, reap_orphans, worker_rss_gb)
 
 # When a task's wall-clock stops being trustworthy.
 #
@@ -58,6 +60,20 @@ from agent.proc import free_memory_gb, memory_pressure, reap_orphans  # noqa: E4
 # kept only as an emergency backstop, well below normal operation.
 COMMIT_RATIO_SUSPECT = 1.40
 EMERGENCY_FREE_GB = 0.50
+
+# L1. When to reload the model worker mid-run.
+#
+# Phase 2A aborted at task 23/30 because the worker's commitment grew
+# monotonically - 1.231 to 1.421 across 23 tasks, not one decrease, about
+# 139 MB per task - until the suspect flag fired six times. An unload plus
+# reload reclaims all of it (RSS 4.86 GB -> 3.41 GB, the fresh value).
+#
+# The refresh trigger sits BELOW the suspect threshold on purpose. Firing at
+# 1.35 means the run repairs itself before any task is flagged, so the flag
+# keeps its meaning: "this task was measured under pressure" rather than
+# "the run has been climbing for a while". If tasks are still flagged after
+# this lands, the refresh is not working - which is what L6 checks.
+REFRESH_COMMIT_RATIO = 1.35
 from agent.runlock import RunLock, RunLockBusy  # noqa: E402
 from agent.workspace import reset_workspace  # noqa: E402
 
@@ -114,6 +130,7 @@ def run_once(ctx, spec: dict, run_ix: int) -> dict:
     # measurement must not be allowed to invent.
     press_before = memory_pressure()
     mem_before = press_before.get("available_gb", free_memory_gb())
+    rss_before = worker_rss_gb()
     t0 = time.time()
     result = run_task(ctx, task.id)
     wall = round(time.time() - t0, 1)
@@ -141,9 +158,49 @@ def run_once(ctx, spec: dict, run_ix: int) -> dict:
         # through resume, through the ledger, and into the report.
         "memory_suspect": suspect,
         "commit_ratio": worst_ratio,
+        # L2: the leak, observable rather than inferred. If this climbs
+        # monotonically across a run, the L1 refresh is not working.
+        "worker_rss_before_gb": rss_before,
+        "worker_rss_after_gb": worker_rss_gb(),
         "free_tokens": m.free_tokens,
         "cost_usd": m.cost_usd,
     }
+
+
+def refresh_worker(ctx) -> dict:
+    """Unload and reload the executor model. Returns what it cost.
+
+    Reclaims the worker leak (L1). The cost is a cold load - about 58 s on
+    this hardware - and it is RECORDED against the refresh rather than left
+    to smear into the wall-clock of whichever task happened to follow it.
+    That distinction is the whole reason this is reported: a task that looks
+    slow because it paid for a reload is not a hard task.
+    """
+    b = ctx.config.backends["cloud"]
+    url = b.endpoint.rstrip("/") + "/api/generate"
+    t0 = time.time()
+    before = worker_rss_gb()
+    try:
+        _ollama_post(url, {"model": b.model, "keep_alive": 0})
+        time.sleep(3.0)                       # let the OS reclaim the pages
+        _ollama_post(url, {"model": b.model, "prompt": "ok", "stream": False,
+                           "keep_alive": "30m",
+                           "options": {"num_ctx": b.usable_context_window,
+                                       "num_predict": 1}})
+    except Exception as e:  # noqa: BLE001 - a failed refresh must not kill a run
+        return {"ok": False, "error": str(e),
+                "cost_s": round(time.time() - t0, 1),
+                "rss_before_gb": before, "rss_after_gb": worker_rss_gb()}
+    return {"ok": True, "cost_s": round(time.time() - t0, 1),
+            "rss_before_gb": before, "rss_after_gb": worker_rss_gb()}
+
+
+def _ollama_post(url: str, body: dict) -> None:
+    import urllib.request
+
+    req = urllib.request.Request(
+        url, json.dumps(body).encode(), {"Content-Type": "application/json"})
+    urllib.request.urlopen(req, timeout=600).read()
 
 
 def run_with_backend_retry(ctx, spec: dict, run_ix: int, key: str) -> dict:
@@ -174,6 +231,7 @@ def run_with_backend_retry(ctx, spec: dict, run_ix: int, key: str) -> dict:
                 "passed": False, "unmeasured": True, "wall_s": 0.0,
                 "free_gb_before": None, "free_gb_after": None,
                 "memory_suspect": False, "commit_ratio": None,
+                "worker_rss_before_gb": None, "worker_rss_after_gb": None,
                 "free_tokens": 0, "cost_usd": 0.0, "error": str(e),
             }
 
@@ -208,8 +266,12 @@ def run_signature(args, n_specs: int) -> dict:
     # decide plan resume into passes 2 and 3 without repeating pass 1 —
     # hours, on this hardware. Everything that would change WHAT is being
     # measured is included.
+    # order_seed IS part of the signature. Rows are keyed (run, task_key) so
+    # resume would work regardless, but two orders mean two different sets of
+    # measurement conditions per task, and blending them silently is exactly
+    # what this signature exists to prevent.
     return {"suite": args.suite, "split": args.split,
-            "executor": args.executor,
+            "executor": args.executor, "order_seed": args.order_seed,
             "limit": args.limit, "tier": sorted(args.tier) if args.tier else None,
             "only": sorted(args.only) if args.only else None,
             "skill": args.skill,
@@ -305,10 +367,24 @@ def main() -> int:
                     help="override the executor model, making this a MODEL "
                          "arm rather than a skill arm (e.g. granite4.1:8b)")
     ap.add_argument("--skill", help="run WITH this skill (name or id) instead of bare")
+    ap.add_argument("--order-seed", type=int, default=None,
+                    help="seed for per-run task order. Default: random, and "
+                         "recorded. Order is randomised because suite order "
+                         "is fixed (E..M..H..) and any drift across a long "
+                         "run is therefore confounded with TIER - hard tasks "
+                         "always ran last, under the worst conditions.")
     ap.add_argument("--resume", action="store_true",
                     help="reuse completed runs from the .partial.jsonl ledger "
                          "beside --out; a killed pass restarts where it stopped")
     args = ap.parse_args()
+
+    # L3: a seed is always chosen and always recorded, so a run is
+    # replayable even when nobody asked for a particular order.
+    if args.order_seed is None:
+        args.order_seed = random.randrange(1, 2**31 - 1)
+        print(f"task order seed (generated): {args.order_seed}")
+    else:
+        print(f"task order seed (given): {args.order_seed}")
 
     # One measurement process at a time. Two concurrent runs measure their
     # tasks under CPU contention, which can manufacture `budget_exhausted` on
@@ -331,13 +407,26 @@ def main() -> int:
     free_gb = free_memory_gb()
     if reaped:
         print(f"reaped {len(reaped)} orphaned worker(s): {reaped}")
-    if free_gb is not None:
-        moved = f" (was {before_gb:.1f})" if before_gb and reaped else ""
-        print(f"free memory at start: {free_gb:.1f} GB{moved}")
-        if free_gb < 2.0:
-            print("WARNING: under 2 GB free even after reaping. Paging "
-                  "rewrites a seconds-based measurement - one call has been "
-                  "seen 18x slower under pressure.")
+
+    # L4. This used the same 2 GB free-memory rule the per-task check used,
+    # and it was wrong for the same reason: 2 GB is a NO-MODEL-LOADED figure,
+    # so it warns spuriously whenever the worker is legitimately warm. Both
+    # call sites now read the one function, and
+    # tests/test_memory_gate_single_source.py fails if a third copy of the
+    # rule appears.
+    press = memory_pressure()
+    if press:
+        print(f"memory at start: {press.get('available_gb')} GB available, "
+              f"commit ratio {press.get('commit_ratio')} "
+              f"(suspect >= {COMMIT_RATIO_SUSPECT}, "
+              f"refresh >= {REFRESH_COMMIT_RATIO})")
+        rss0 = worker_rss_gb()
+        if rss0 is not None:
+            print(f"model worker resident at start: {rss0} GB")
+        if (press.get("commit_ratio") or 0) >= COMMIT_RATIO_SUSPECT:
+            print("WARNING: already at or above the suspect commit ratio "
+                  "before the first task. Paging rewrites a seconds-based "
+                  "measurement - one call has been seen 18x slower.")
 
     ctx = AgentContext.open(args.config, profile=args.profile)
 
@@ -438,8 +527,15 @@ def main() -> int:
 
     results: dict[str, list[dict]] = {}
     started = time.time()
+    reloads: list[dict] = []
     for r in range(args.runs):
-        for i, spec in enumerate(specs, 1):
+        # A fresh permutation per run index, derived from the recorded seed so
+        # the whole thing replays exactly.
+        ordered = list(specs)
+        random.Random(f"{args.order_seed}:{r}").shuffle(ordered)
+        print(f"  task order for run {r + 1}: "
+              f"{', '.join(x['key'] for x in ordered)}")
+        for i, spec in enumerate(ordered, 1):
             key = spec["key"]
             cached = done.get((r, key))
             if cached is not None:
@@ -448,8 +544,29 @@ def main() -> int:
                       f"{cached['status']:<16} {cached['wall_s']:>6.1f}s  (resumed)",
                       flush=True)
                 continue
+            # L1: repair the worker leak BEFORE it can flag a task, so the
+            # suspect flag keeps meaning "measured under pressure" rather
+            # than "the run has been climbing for a while".
+            pre = memory_pressure()
+            if (pre.get("commit_ratio") or 0) >= REFRESH_COMMIT_RATIO:
+                info = refresh_worker(ctx)
+                info.update({"before_task": key, "run": r,
+                             "trigger_ratio": pre.get("commit_ratio")})
+                after = memory_pressure()
+                info["ratio_after"] = after.get("commit_ratio")
+                reloads.append(info)
+                print(f"    worker refresh before {key}: "
+                      f"ratio {info['trigger_ratio']} -> {info['ratio_after']}, "
+                      f"RSS {info['rss_before_gb']} -> {info['rss_after_gb']} GB, "
+                      f"cost {info['cost_s']}s"
+                      + ("" if info["ok"] else f"  FAILED: {info.get('error')}"),
+                      flush=True)
+
             out = run_with_backend_retry(ctx, spec, r, key)
             out["key"] = key
+            out["reload_before_this_task"] = bool(
+                reloads and reloads[-1]["before_task"] == key
+                and reloads[-1]["run"] == r)
             results.setdefault(key, []).append(out)
             # Before the print, so a kill between them loses nothing.
             append_run(ledger, sig, out)
@@ -544,6 +661,12 @@ def main() -> int:
         "min_free_gb_any_task": min(
             [r["min_free_gb"] for r in rows
              if r.get("min_free_gb") is not None] or [None]),
+        "order_seed": args.order_seed,
+        "task_order_randomised": True,
+        "worker_reloads": reloads,
+        "worker_reload_count": len(reloads),
+        "worker_reload_cost_s": round(sum(x["cost_s"] for x in reloads), 1),
+        "refresh_commit_ratio_threshold": REFRESH_COMMIT_RATIO,
         "commit_ratio_suspect_threshold": COMMIT_RATIO_SUSPECT,
         "emergency_free_gb": EMERGENCY_FREE_GB,
         "memory_pressure_at_start": memory_pressure(),

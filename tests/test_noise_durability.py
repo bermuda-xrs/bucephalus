@@ -41,6 +41,9 @@ class _Args:
     executor = None
     tier = None
     only = None
+    # Part of the signature since task order was randomised: two orders in
+    # one ledger are two sets of measurement conditions, blended silently.
+    order_seed = 1234
 
 
 def test_each_completed_run_is_on_disk_before_the_next_one_starts(tmp_path):
@@ -267,3 +270,40 @@ def test_the_only_signature_is_order_independent(tmp_path):
         only = ["H23", "M11"]
 
     assert noise.run_signature(A(), 2) == noise.run_signature(B(), 2)
+
+
+def test_resume_refuses_a_ledger_written_under_a_different_task_order(tmp_path):
+    """Two task orders in one ledger are two sets of conditions, blended.
+
+    Task order is randomised because the suite order is fixed - all easy,
+    then all medium, then all hard - so any drift across a long run is
+    confounded with TIER. Phase 2A measured exactly that: the model worker
+    leaked ~139 MB per task, so the hard tasks, which always ran last, were
+    measured under the worst conditions of the run.
+
+    Randomising fixes the confound only if a resume cannot silently stitch a
+    run under seed A onto rows measured under seed B.
+    """
+    led = noise.ledger_path(tmp_path / "nf.json")
+
+    class SeedA(_Args):
+        order_seed = 111
+
+    class SeedB(_Args):
+        order_seed = 222
+
+    noise.append_run(led, noise.run_signature(SeedA(), 2),
+                     {"run": 0, "key": "E01", "status": "done",
+                      "passed": True, "wall_s": 1.0})
+
+    assert noise.run_signature(SeedA(), 2) != noise.run_signature(SeedB(), 2), (
+        "order_seed is not part of the signature, so a resume under a "
+        "different task order would be accepted")
+
+    # It refuses LOUDLY rather than quietly returning nothing - the right
+    # direction for a guard whose whole job is to stop a silent blend.
+    with pytest.raises(SystemExit):
+        noise.load_completed(led, noise.run_signature(SeedB(), 2))
+
+    same = noise.load_completed(led, noise.run_signature(SeedA(), 2))
+    assert len(same) == 1, "the SAME seed must still resume, or nothing resumes"

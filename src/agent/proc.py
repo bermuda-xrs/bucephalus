@@ -246,6 +246,71 @@ def reap_orphans(names: tuple[str, ...] = ORPHAN_NAMES,
     return reaped
 
 
+def worker_rss_gb(names: tuple[str, ...] = ORPHAN_NAMES) -> float | None:
+    """Resident memory held by the model worker(s), or None if unreadable.
+
+    L2. The leak that aborted Phase 2A was INFERRED from a monotonic commit
+    ratio and then isolated by hand. Recording the worker's own RSS per task
+    makes it observable directly: if this climbs across a run after the
+    refresh in L1 is in place, the refresh is not working and the run says so
+    on its face instead of needing a post-mortem.
+
+    Measured anchors on this hardware, granite4.1:3b at 16k context:
+        fresh                     3.41 GB
+        after 23 benchmark tasks  4.86 GB   (+139 MB commitment per task)
+        after unload + reload     3.41 GB   (fully reclaimed)
+    """
+    try:
+        if sys.platform == "win32":  # pragma: no cover - platform split
+            import ctypes
+            from ctypes import wintypes
+
+            class _PMC(ctypes.Structure):
+                _fields_ = [("cb", wintypes.DWORD),
+                            ("PageFaultCount", wintypes.DWORD),
+                            ("PeakWorkingSetSize", ctypes.c_size_t),
+                            ("WorkingSetSize", ctypes.c_size_t),
+                            ("QuotaPeakPagedPoolUsage", ctypes.c_size_t),
+                            ("QuotaPagedPoolUsage", ctypes.c_size_t),
+                            ("QuotaPeakNonPagedPoolUsage", ctypes.c_size_t),
+                            ("QuotaNonPagedPoolUsage", ctypes.c_size_t),
+                            ("PagefileUsage", ctypes.c_size_t),
+                            ("PeakPagefileUsage", ctypes.c_size_t)]
+
+            k32, psapi = ctypes.windll.kernel32, ctypes.windll.psapi
+            total = 0
+            found = False
+            for pid, _ppid, image in process_table():
+                if not _name_matches(image, names):
+                    continue
+                h = k32.OpenProcess(0x1000 | 0x0010, False, pid)  # QUERY|VM_READ
+                if not h:
+                    continue
+                try:
+                    c = _PMC()
+                    c.cb = ctypes.sizeof(_PMC)
+                    if psapi.GetProcessMemoryInfo(h, ctypes.byref(c), c.cb):
+                        total += int(c.WorkingSetSize)
+                        found = True
+                finally:
+                    k32.CloseHandle(h)
+            return round(total / 1024 ** 3, 3) if found else None
+
+        total, found = 0, False
+        for pid, _ppid, image in process_table():
+            if not _name_matches(image, names):
+                continue
+            try:
+                with open(f"/proc/{pid}/statm", encoding="utf-8") as fh:
+                    total += int(fh.read().split()[1]) * os.sysconf("SC_PAGE_SIZE")
+                found = True
+            except (OSError, ValueError, IndexError):
+                continue
+        return round(total / 1024 ** 3, 3) if found else None
+    except Exception:  # noqa: BLE001
+        return None
+
+
 def memory_pressure() -> dict:
     """Is the machine THRASHING, as distinct from merely busy?
 
