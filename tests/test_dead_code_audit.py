@@ -74,6 +74,10 @@ KNOWN_INERT = {
 
     # --- small helpers, genuinely unused ----------------------------------
     "artifacts_for": "helper; superseded by ledger/artifacts.project().",
+    "reset_injection_counter":
+        "test-only helper for the ALPHA_INJECT_STALL fault-injection switch. "
+        "Production has no call site BY DESIGN - a reset reachable from a "
+        "real run is one more way for injection to affect a measurement.",
     "describe":
         "profile banner helper; report headers build their own provenance "
         "block from profile_provenance instead. Surfaced 2026-09-03 by the "

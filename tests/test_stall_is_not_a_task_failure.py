@@ -110,3 +110,130 @@ def test_an_excluded_task_is_not_counted_as_a_failure():
     assert '"unmeasured": True' in branch, (
         "an excluded task must be unmeasured, or a machine fault still "
         "depresses the pass rate")
+
+
+# ---------------------------------------------------------------------------
+# Path (b): a stall that lands AFTER the work is already done.
+#
+# Proved deterministically with the mock backend rather than on real hardware.
+# Two attempts to provoke it with an injected stall on a live model failed for
+# an unrelated reason - `run_code` errored on the first call, so there was no
+# artifact for the sweep to find - and chasing a specific branch through model
+# non-determinism is the wrong instrument. The sweep is the branch under test,
+# so the test controls what is on disk.
+#
+# Why the branch matters: re-running a task whose answer is already correct
+# can turn a pass into a fail, because generation here is NOT
+# byte-deterministic (SPEC-DELTA C18). Discarding a verified artifact is a
+# correctness problem, not wasted compute.
+# ---------------------------------------------------------------------------
+
+VERIFY_B = """\
+import json, pathlib
+
+
+def check():
+    p = pathlib.Path("output/answer.json")
+    if not p.exists():
+        return False, 0.0
+    return json.loads(p.read_text(encoding="utf-8")).get("x") == 42, 1.0
+"""
+
+
+def test_a_stall_after_the_answer_is_written_returns_the_swept_pass(
+        ctx, workspace, tmp_path, monkeypatch):
+    """The correctness case: sweep first, do not discard a correct artifact."""
+    import json as _json
+
+    from agent.execute.loop import run_task
+    from agent.kernel.tasks import create_task
+    from agent.kernel.types import Budget, TaskContract
+    from agent.skills.gate import TaskSpec
+    from agent.workspace import reset_workspace
+
+    monkeypatch.chdir(tmp_path)
+    ctx.config.autonomy.auto_review = False
+    ctx.config.autonomy.approve_scoped_writes = True
+    ctx.config.limits.max_steps = 4
+
+    key = "SB"
+    spec = TaskSpec(
+        key=key, goal=f"write work/{key}/output/answer.json with x=42",
+        success_criterion="verify_program", artifact_scope=[f"work/{key}"],
+        grader_dir=f"grading/{key}",
+        fixtures={f"grading/{key}/verify.py": VERIFY_B,
+                  f"work/{key}/output/.keep": ""},
+    )
+    reset_workspace(ctx.config.root, spec.artifact_scope, spec.fixtures)
+
+    write = _json.dumps({"kind": "code", "code": (
+        "import json,pathlib\n"
+        f"p=pathlib.Path('work/{key}/output/answer.json')\n"
+        "p.parent.mkdir(parents=True,exist_ok=True)\n"
+        "p.write_text(json.dumps({'x':42}))\n")})
+
+    calls = {"n": 0}
+
+    def responder(prefix, tail):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return write            # the work gets done
+        raise ModelStall("stall AFTER the artifact was written", 0.1, 2.5, 5, 60.0)
+
+    for name in ("cloud", "local", "review"):
+        ctx.backends[name]._responder = responder  # noqa: SLF001
+
+    t = create_task(ctx.conn, ctx.log, TaskContract(
+        goal=spec.goal, success_criterion="verify_program",
+        artifact_scope=spec.artifact_scope, grader_dir=spec.grader_dir),
+        Budget(usd=1.0, seconds=600))
+
+    # It must NOT raise: the work is complete, so there is nothing to re-run.
+    res = run_task(ctx, t.id)
+    assert res.status == "done_unannounced", (
+        f"a stall landing after the answer was written must return the swept "
+        f"pass, not discard it and re-run. got {res.status!r}")
+
+    kinds = [r[0] for r in ctx.conn.execute(
+        "SELECT type FROM events WHERE task_id=?", (t.id,))]
+    assert "task.model_stalled" in kinds, "the stall must still be recorded"
+    assert "verify.unannounced_pass" in kinds, "the sweep must leave a record"
+
+
+def test_a_stall_before_any_answer_re_raises_for_the_caller(
+        ctx, workspace, tmp_path, monkeypatch):
+    """The other half: nothing on disk, so the caller must get the stall."""
+    from agent.execute.loop import run_task
+    from agent.kernel.tasks import create_task
+    from agent.kernel.types import Budget, TaskContract
+    from agent.skills.gate import TaskSpec
+    from agent.workspace import reset_workspace
+
+    monkeypatch.chdir(tmp_path)
+    ctx.config.autonomy.auto_review = False
+    ctx.config.autonomy.approve_scoped_writes = True
+    ctx.config.limits.max_steps = 4
+
+    key = "SC"
+    spec = TaskSpec(
+        key=key, goal=f"write work/{key}/output/answer.json with x=42",
+        success_criterion="verify_program", artifact_scope=[f"work/{key}"],
+        grader_dir=f"grading/{key}",
+        fixtures={f"grading/{key}/verify.py": VERIFY_B,
+                  f"work/{key}/output/.keep": ""},
+    )
+    reset_workspace(ctx.config.root, spec.artifact_scope, spec.fixtures)
+
+    def responder(prefix, tail):
+        raise ModelStall("stall before any work", 0.1, 2.5, 3, 60.0)
+
+    for name in ("cloud", "local", "review"):
+        ctx.backends[name]._responder = responder  # noqa: SLF001
+
+    t = create_task(ctx.conn, ctx.log, TaskContract(
+        goal=spec.goal, success_criterion="verify_program",
+        artifact_scope=spec.artifact_scope, grader_dir=spec.grader_dir),
+        Budget(usd=1.0, seconds=600))
+
+    with pytest.raises(ModelStall):
+        run_task(ctx, t.id)

@@ -56,6 +56,11 @@ EVENT_TYPES = frozenset(
         # "did the work" and "said it was done" stay separable.
         "verify.unannounced_pass",
         "task.crashed",
+        # A stalled model call: a MACHINE fault, not a task outcome.
+        # Distinct from task.crashed precisely so the two can never be
+        # confused again - a stall recorded as a crash is scored as a
+        # task failure, which is what aborted two Phase 2A attempts.
+        "task.model_stalled",
         "human.approved",
         "human.denied",
         "human.steered",

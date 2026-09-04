@@ -11,6 +11,7 @@ retry-for-format is pure wasted tokens.
 from __future__ import annotations
 
 import json
+import os
 import statistics
 import time
 
@@ -85,6 +86,59 @@ def reset_rates() -> None:
     _RATES.clear()
 
 
+# ---------------------------------------------------------------------------
+# Fault injection, for proving the machine-fault path works.
+#
+# Stalls have occurred about three times in sixty tasks. A short shakedown run
+# will almost certainly see none, and "no stall occurred" is not evidence the
+# handler works - it is the same absence of evidence that let the wiring
+# defect survive two aborted attempts. So the condition is INJECTED rather
+# than waited for.
+#
+# ALPHA_INJECT_STALL is a comma-separated list of 1-based model-call indices,
+# counted from process start, on which `complete()` raises ModelStall instead
+# of calling the server. Unset - which is every normal run - and nothing here
+# can fire: `_inject_on()` returns an empty set and the counter is never even
+# compared. `test_injection_cannot_fire_without_the_flag` holds that line.
+_CALLS = {"n": 0}
+
+
+def _inject_on() -> set[int]:
+    """Call indices that raise ModelStall directly."""
+    return {n for n, kind in _inject_spec().items() if kind == "stall"}
+
+
+def _inject_timeout_on() -> set[int]:
+    """Call indices that raise a TRANSPORT timeout instead.
+
+    A separate path on purpose. H30 stalled with too few tokens for a rate to
+    be judged, so it never hit the tok/s test and surfaced as a plain
+    BackendError - which the generic handler scored as a task failure.
+    Injecting a real httpx timeout exercises the conversion, where injecting a
+    ModelStall would skip the very step that was broken.
+    """
+    return {n for n, kind in _inject_spec().items() if kind == "timeout"}
+
+
+def _inject_spec() -> dict[int, str]:
+    raw = os.environ.get("ALPHA_INJECT_STALL", "").strip()
+    if not raw:
+        return {}
+    out: dict[int, str] = {}
+    for part in raw.split(","):
+        part = part.strip().lower()
+        kind = "stall"
+        if part.endswith("t"):
+            kind, part = "timeout", part[:-1]
+        if part.isdigit() and int(part) > 0:
+            out[int(part)] = kind
+    return out
+
+
+def reset_injection_counter() -> None:
+    _CALLS["n"] = 0
+
+
 class OllamaBackend(BackendBase):
     def __init__(self, name: str, cfg: BackendConfig, client: httpx.Client | None = None):
         super().__init__(name, cfg)
@@ -136,12 +190,30 @@ class OllamaBackend(BackendBase):
         rate_key = f"{self.endpoint}|{self.model}"
         baseline = median_rate(rate_key)
 
+        _CALLS["n"] += 1
+        if _CALLS["n"] in _inject_on():
+            raise ModelStall(
+                f"INJECTED stall on model call {_CALLS['n']} "
+                "(ALPHA_INJECT_STALL) - aborted as a machine fault, not a "
+                "task outcome",
+                0.01, baseline or 2.5, 0, 0.0)
+
         client = self._client or httpx
         parts: list[str] = []
         final: dict = {}
         first_token_at: float | None = None
         n_chunks = 0
         try:
+            # INSIDE the try, because a real transport timeout is raised
+            # from inside `client.stream(...)` and is converted by the
+            # handler below. The first version of this injection sat ABOVE
+            # the try and therefore bypassed the exact conversion it existed
+            # to exercise - it produced `crashed`, which is the bug, not the
+            # test of the fix. An injection outside the path it is testing
+            # proves nothing about that path.
+            if _CALLS["n"] in _inject_timeout_on():
+                raise httpx.ReadTimeout(
+                    "INJECTED transport timeout (ALPHA_INJECT_STALL)")
             with client.stream("POST", f"{self.endpoint}/api/chat",
                                timeout=httpx.Timeout(connect=15.0, read=900.0,
                                                      write=30.0, pool=15.0),

@@ -321,6 +321,49 @@ def run_with_backend_retry(ctx, spec: dict, run_ix: int, key: str) -> dict:
             }
 
 
+def assert_machine_fault_never_scored_as_failure(row: dict) -> None:
+    """S4. A machine event must never reach the pass rate as a failure.
+
+    Both aborted Phase 2A attempts violated exactly this and neither was
+    caught by an abort condition, because the mis-scored tasks were recorded
+    as `crashed` rather than as machine faults. It is cheap to enforce
+    permanently, so it is enforced permanently.
+
+    Two ways it can be violated:
+
+      * an EXCLUDED task that is still measured - it would depress the pass
+        rate with a machine event, and
+      * a task whose status is `crashed` carrying a stall or timeout cause -
+        which is the generic-catch bug returning by another door.
+    """
+    if row.get("excluded") and not row.get("unmeasured"):
+        raise AssertionError(
+            f"{row.get('key')}: excluded_machine_fault must be unmeasured, "
+            "or a machine event depresses the pass rate")
+    status = str(row.get("status") or "")
+    if status == "crashed":
+        # ANY crash aborts. The earlier version of this guard looked for
+        # evidence of a stall in the row - a `stalls` key, or "timed out" in
+        # an error string - and a crashed row carrying NEITHER slipped
+        # straight through it. That is what an injected transport timeout
+        # produced, and the guard written to catch exactly that case passed it.
+        #
+        # So the test is no longer "does this crash look like a machine
+        # event". Every machine event now has its own terminal status, which
+        # makes `crashed` unreachable for one; if it appears, a path was
+        # missed and the run must stop rather than score it as a failure.
+        # Requiring the guard to RECOGNISE the cause is what let two aborted
+        # attempts through, and recognition is the part that keeps failing.
+        raise AssertionError(
+            f"{row.get('key')}: status `crashed`, which the suite scores as "
+            "FAILED. Machine events have their own terminal statuses, so a "
+            "crash means a path was missed. Abort and diagnose rather than "
+            f"scoring it. stalls={row.get('stalls')} error={row.get('error')}")
+    if row.get("machine_fault") and row.get("passed") and row.get("excluded"):
+        raise AssertionError(
+            f"{row.get('key')}: excluded tasks cannot also be passes")
+
+
 def classify(passes: list[bool]) -> str:
     if all(passes):
         return "stable_pass"
@@ -653,6 +696,7 @@ def main() -> int:
 
             out = run_with_backend_retry(ctx, spec, r, key)
             out["key"] = key
+            assert_machine_fault_never_scored_as_failure(out)
 
             # A task far off the run's own median is the signature of the
             # pathological single call this project keeps hitting - 2539 s for
@@ -845,9 +889,29 @@ def main() -> int:
           f"done_unannounced={status_counts.get('done_unannounced', 0)})")
     for tier in ("easy", "medium", "hard"):
         t = [r for r in rows if r["tier"] == tier]
-        if t:
-            rate = sum(r["passes"] for r in t) / sum(r["runs"] for r in t)
-            print(f"  {tier:<7} {rate:>6.1%}  ({len(t)} tasks)")
+        if not t:
+            continue
+        # An EXCLUDED task contributes 0 runs, so a tier whose tasks were all
+        # excluded divides by zero here. The report block above already
+        # guarded this; the printing block did not, and it crashed AFTER the
+        # numbers were computed - on a 2.5-hour run that means losing the
+        # summary at the very end. Report the tier as unmeasured rather than
+        # inventing a rate for it.
+        denom = sum(r["runs"] for r in t)
+        if denom == 0:
+            print(f"  {tier:<7}    n/a  ({len(t)} tasks, all excluded)")
+            continue
+        rate = sum(r["passes"] for r in t) / denom
+        print(f"  {tier:<7} {rate:>6.1%}  ({len(t)} tasks)")
+    excluded_rows = [r for r in rows
+                     if any(x.get("excluded")
+                            for x in results.get(r["key"], []))]
+    if excluded_rows:
+        keys = ", ".join(r["key"] for r in excluded_rows)
+        print(chr(10) + f"{len(excluded_rows)} task(s) EXCLUDED after two "
+              f"machine stalls: {keys}")
+        print("Excluded is NOT a failure and NOT a pass. These are out "
+              "of the pass rate entirely; re-run them before reporting.")
     if unmeasured:
         print(f"\n{len(unmeasured)} task(s) UNMEASURED - the model server "
               f"failed twice: {', '.join(r['key'] for r in unmeasured)}")
