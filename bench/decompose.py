@@ -55,7 +55,36 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from bench.suites.aero_calc import CONSTANTS, DRAFTING, EVAL  # noqa: E402
 
-RTOL = 1e-6
+# How exactly a candidate must reproduce the written value.
+#
+# 1e-6 was too tight and could not match ANYTHING in the body-swap family.
+# Candidates are built as `expected * ratio`, and the suite's `expected`
+# values are rounded to about five significant figures - Mars escape velocity
+# is tabled as 5027.0 against a true 5027.047. So the achievable residual
+# floor is the rounding error of `expected`, around 1e-5 relative, and a gate
+# below that floor rejects correct decompositions by construction. E03's real
+# failure sat at 9.36e-06: an exact hit on sqrt(2*mu_mars/R_earth), reported
+# as unclassifiable purely because the gate was below the noise floor of its
+# own inputs.
+#
+# But it cannot simply be loosened either. Distinct traps can sit very close
+# together: for E01, "altitude ignored (r = R)" and "km read as m
+# (r = R + 400)" differ by only 3.1e-05, because adding 400 metres to a
+# 6,371,000 m radius barely moves the answer. A gate at 1e-4 conflates them.
+#
+# So the gate is bounded on BOTH sides by quantities that can be computed
+# rather than chosen:
+#     above  the rounding floor of `expected`      ~9.4e-06  (E03)
+#     below  the separation between distinct traps ~3.1e-05  (E01)
+# 2e-5 sits between them, and is still 250x TIGHTER than the suite's own 0.5%
+# pass tolerance, so it cannot turn a near miss into a trap - a 1% miss stays
+# unclassifiable by a factor of 500.
+#
+# Where those bounds ever cross, no single gate can separate the candidates,
+# and the `ambiguous` classification below is the safety net for exactly that
+# case: it reports both rather than picking the nearer and implying a
+# precision the data does not carry.
+RTOL = 2e-5
 
 # Unit confusions, as multipliers. Hand-written and disclosed - see the module
 # docstring. Each entry is (name, factor).
@@ -119,15 +148,30 @@ def _body_swap_candidates(task, key: str, expected: float) -> list[tuple[str, fl
     alt = (p.get("altitude_km") or 0) * 1000.0
     r_r = R_r + alt
     out = []
-    for other in BODIES:
-        if other == body or other not in CONSTANTS:
-            continue
-        mu_o, R_o = CONSTANTS[other]["mu"], CONSTANTS[other]["radius"]
-        r_o = R_o + alt
-        # expected scales as sqrt(mu/r) for both circular and escape speed,
-        # so the ratio is formula-independent within this family.
-        out.append((f"wrong body: {other} constants, not {body}",
-                    expected * math.sqrt((mu_o / r_o) / (mu_r / r_r))))
+    # MIXED constants, not just whole-body swaps. Found by a real failure the
+    # first version missed: E03 wrote sqrt(2*mu_mars/R_earth) exactly - the
+    # right body's mu against the wrong body's radius - which is precisely
+    # what "Mars problem, not Earth constants" is meant to provoke. Swapping
+    # mu and radius together could never produce it, so the tool was silent on
+    # the trap the suite declares. Under-counting trap-shaped failures pushes
+    # the Phase 2B fraction down and can trigger a STOP the data does not
+    # support, which is why this was worth fixing rather than logging.
+    for mu_body in BODIES:
+        for r_body in BODIES:
+            if mu_body == body and r_body == body:
+                continue
+            if mu_body not in CONSTANTS or r_body not in CONSTANTS:
+                continue
+            mu_o = CONSTANTS[mu_body]["mu"]
+            r_o = CONSTANTS[r_body]["radius"] + alt
+            if r_o <= 0:
+                continue
+            # expected scales as sqrt(mu/r) for both circular and escape
+            # speed, so the ratio is formula-independent within this family.
+            label = (f"wrong body: {mu_body} mu"
+                     + ("" if r_body == mu_body else f" with {r_body} radius")
+                     + f", not {body}")
+            out.append((label, expected * math.sqrt((mu_o / r_o) / (mu_r / r_r))))
     return out
 
 
@@ -186,12 +230,25 @@ def decompose(task, key: str, expected: float, got: float) -> dict:
                 "residual": None, "generic_scale_note": None}
 
     best = None
+    matches: list[str] = []
     for name, val in _trap_candidates(task, key, expected):
         if val == 0:
             continue
         resid = abs(val - got) / abs(got) if got else float("inf")
+        if resid <= RTOL:
+            matches.append(name)
         if best is None or resid < best[0]:
             best = (resid, name)
+
+    # Two different traps that both reproduce the value are not one finding.
+    # Reporting the nearer as if it were established would invent a precision
+    # the data does not carry, so the ambiguity is surfaced instead.
+    distinct = {m.split(" + ")[0] for m in matches}
+    if len(distinct) > 1:
+        return {"classification": "ambiguous", "trap": None,
+                "candidates": sorted(matches),
+                "residual": best[0] if best else None,
+                "generic_scale_note": None}
 
     # Recorded, never classified - see the module docstring.
     note = None
