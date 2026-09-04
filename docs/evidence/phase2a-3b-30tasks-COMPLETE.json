@@ -1,0 +1,647 @@
+{
+  "date": "2026-09-05",
+  "harness_version": 2,
+  "budget_scale": 1.0,
+  "memory_suspect_keys": [
+    "M16",
+    "H30",
+    "H24",
+    "H26",
+    "H27"
+  ],
+  "min_free_gb_any_task": 2.05,
+  "order_seed": 1420531403,
+  "task_order_randomised": true,
+  "worker_reloads": [
+    {
+      "ok": true,
+      "cost_s": 18.1,
+      "rss_before_gb": 3.498,
+      "rss_after_gb": 3.252,
+      "before_task": "E03",
+      "run": 0,
+      "trigger_ratio": 1.355,
+      "ratio_after": 1.344
+    },
+    {
+      "ok": true,
+      "cost_s": 10.7,
+      "rss_before_gb": 2.657,
+      "rss_after_gb": 3.252,
+      "before_task": "M16",
+      "run": 0,
+      "trigger_ratio": 1.353,
+      "ratio_after": 1.333
+    },
+    {
+      "ok": true,
+      "cost_s": 13.4,
+      "rss_before_gb": 2.932,
+      "rss_after_gb": 3.251,
+      "before_task": "M19",
+      "run": 0,
+      "trigger_ratio": 1.35,
+      "ratio_after": 1.312
+    },
+    {
+      "ok": true,
+      "cost_s": 20.6,
+      "rss_before_gb": 2.978,
+      "rss_after_gb": 3.251,
+      "before_task": "M21",
+      "run": 0,
+      "trigger_ratio": 1.355,
+      "ratio_after": 1.317
+    },
+    {
+      "ok": true,
+      "cost_s": 11.5,
+      "rss_before_gb": 3.807,
+      "rss_after_gb": 3.252,
+      "before_task": "H27",
+      "run": 0,
+      "trigger_ratio": 1.354,
+      "ratio_after": 1.33
+    },
+    {
+      "ok": true,
+      "cost_s": 13.6,
+      "rss_before_gb": 2.612,
+      "rss_after_gb": 3.252,
+      "before_task": "H25",
+      "run": 0,
+      "trigger_ratio": 1.353,
+      "ratio_after": 1.343
+    }
+  ],
+  "worker_reload_count": 6,
+  "worker_reload_cost_s": 87.9,
+  "refresh_commit_ratio_threshold": 1.35,
+  "machine_fault_keys": [
+    "H23",
+    "M11"
+  ],
+  "excluded_keys": [
+    "M11"
+  ],
+  "stall_rule": "a call below 25% of the executor's running median tok/s is aborted as a machine fault; the task re-runs once and is EXCLUDED (never failed) if it stalls again",
+  "wall_outlier_keys": [
+    "M16",
+    "H30",
+    "H24",
+    "H26",
+    "H27"
+  ],
+  "commit_ratio_high_keys": [],
+  "wall_outlier_factor": 3.0,
+  "commit_ratio_suspect_threshold": 1.4,
+  "emergency_free_gb": 0.5,
+  "memory_pressure_at_start": {
+    "available_gb": 2.76,
+    "committed_gb": 20.71,
+    "physical_gb": 15.47,
+    "commit_ratio": 1.339
+  },
+  "free_memory_gb_at_start": 5.87078857421875,
+  "free_memory_gb_before_reap": 5.871257781982422,
+  "orphans_reaped": [],
+  "free_memory_gb_at_end": 2.760547637939453,
+  "profile": "local",
+  "profile_provenance": {
+    "profile": "local",
+    "cloud_backends": [],
+    "credentials_present": [],
+    "backends": {
+      "cloud": {
+        "kind": "ollama",
+        "model": "granite4.1:3b",
+        "tier": "local"
+      },
+      "local": {
+        "kind": "ollama",
+        "model": "granite4.1:3b",
+        "tier": "local"
+      },
+      "review": {
+        "kind": "ollama",
+        "model": "granite4.1:8b",
+        "tier": "local"
+      }
+    }
+  },
+  "suite": "aero_calc",
+  "split": null,
+  "runs_per_task": 1,
+  "n_tasks": 30,
+  "mean_pass_rate": 0.2414,
+  "stable_pass": 7,
+  "stable_fail": 22,
+  "flaky": 0,
+  "wall_s_this_session": 20797.5,
+  "wall_s_all_runs": 11947.6,
+  "status_counts": {
+    "plateau": 17,
+    "excluded_machine_fault": 1,
+    "done": 7,
+    "budget_exhausted": 4,
+    "max_steps": 1
+  },
+  "unmeasured": 1,
+  "unmeasured_keys": [
+    "M11"
+  ],
+  "partially_unmeasured_keys": [
+    "M11"
+  ],
+  "done": 7,
+  "done_unannounced": 0,
+  "ended_at_step_limit": 1,
+  "ended_budget_exhausted": 4,
+  "tier_pass_rates": {
+    "easy": 0.3,
+    "medium": 0.2727,
+    "hard": 0.125
+  },
+  "tasks": [
+    {
+      "key": "E01",
+      "tier": "easy",
+      "split": "drafting",
+      "classification": "stable_fail",
+      "passes": 0,
+      "runs": 1,
+      "mean_wall_s": 254.4,
+      "memory_suspect": false,
+      "wall_outlier": false,
+      "commit_ratio_high": false,
+      "min_free_gb": 2.51,
+      "statuses": [
+        "plateau"
+      ]
+    },
+    {
+      "key": "E02",
+      "tier": "easy",
+      "split": "drafting",
+      "classification": "stable_fail",
+      "passes": 0,
+      "runs": 1,
+      "mean_wall_s": 196.5,
+      "memory_suspect": false,
+      "wall_outlier": false,
+      "commit_ratio_high": false,
+      "min_free_gb": 3.35,
+      "statuses": [
+        "plateau"
+      ]
+    },
+    {
+      "key": "E03",
+      "tier": "easy",
+      "split": "drafting",
+      "classification": "stable_pass",
+      "passes": 1,
+      "runs": 1,
+      "mean_wall_s": 154.9,
+      "memory_suspect": false,
+      "wall_outlier": false,
+      "commit_ratio_high": false,
+      "min_free_gb": 2.49,
+      "statuses": [
+        "done"
+      ]
+    },
+    {
+      "key": "E04",
+      "tier": "easy",
+      "split": "drafting",
+      "classification": "stable_fail",
+      "passes": 0,
+      "runs": 1,
+      "mean_wall_s": 179.2,
+      "memory_suspect": false,
+      "wall_outlier": false,
+      "commit_ratio_high": false,
+      "min_free_gb": 3.06,
+      "statuses": [
+        "plateau"
+      ]
+    },
+    {
+      "key": "E05",
+      "tier": "easy",
+      "split": "drafting",
+      "classification": "stable_pass",
+      "passes": 1,
+      "runs": 1,
+      "mean_wall_s": 256.3,
+      "memory_suspect": false,
+      "wall_outlier": false,
+      "commit_ratio_high": false,
+      "min_free_gb": 2.94,
+      "statuses": [
+        "done"
+      ]
+    },
+    {
+      "key": "E06",
+      "tier": "easy",
+      "split": "eval",
+      "classification": "stable_pass",
+      "passes": 1,
+      "runs": 1,
+      "mean_wall_s": 90.1,
+      "memory_suspect": false,
+      "wall_outlier": false,
+      "commit_ratio_high": false,
+      "min_free_gb": 2.11,
+      "statuses": [
+        "done"
+      ]
+    },
+    {
+      "key": "E07",
+      "tier": "easy",
+      "split": "eval",
+      "classification": "stable_fail",
+      "passes": 0,
+      "runs": 1,
+      "mean_wall_s": 288.1,
+      "memory_suspect": false,
+      "wall_outlier": false,
+      "commit_ratio_high": false,
+      "min_free_gb": 2.16,
+      "statuses": [
+        "plateau"
+      ]
+    },
+    {
+      "key": "E08",
+      "tier": "easy",
+      "split": "eval",
+      "classification": "stable_fail",
+      "passes": 0,
+      "runs": 1,
+      "mean_wall_s": 252.0,
+      "memory_suspect": false,
+      "wall_outlier": false,
+      "commit_ratio_high": false,
+      "min_free_gb": 3.19,
+      "statuses": [
+        "plateau"
+      ]
+    },
+    {
+      "key": "E09",
+      "tier": "easy",
+      "split": "eval",
+      "classification": "stable_fail",
+      "passes": 0,
+      "runs": 1,
+      "mean_wall_s": 199.6,
+      "memory_suspect": false,
+      "wall_outlier": false,
+      "commit_ratio_high": false,
+      "min_free_gb": 3.49,
+      "statuses": [
+        "plateau"
+      ]
+    },
+    {
+      "key": "E10",
+      "tier": "easy",
+      "split": "eval",
+      "classification": "stable_fail",
+      "passes": 0,
+      "runs": 1,
+      "mean_wall_s": 96.0,
+      "memory_suspect": false,
+      "wall_outlier": false,
+      "commit_ratio_high": false,
+      "min_free_gb": 2.05,
+      "statuses": [
+        "plateau"
+      ]
+    },
+    {
+      "key": "H23",
+      "tier": "hard",
+      "split": "drafting",
+      "classification": "stable_fail",
+      "passes": 0,
+      "runs": 1,
+      "mean_wall_s": 428.9,
+      "memory_suspect": false,
+      "wall_outlier": false,
+      "commit_ratio_high": false,
+      "min_free_gb": 3.3,
+      "statuses": [
+        "plateau"
+      ]
+    },
+    {
+      "key": "H24",
+      "tier": "hard",
+      "split": "drafting",
+      "classification": "stable_fail",
+      "passes": 0,
+      "runs": 1,
+      "mean_wall_s": 941.2,
+      "memory_suspect": true,
+      "wall_outlier": true,
+      "commit_ratio_high": false,
+      "min_free_gb": 2.98,
+      "statuses": [
+        "budget_exhausted"
+      ]
+    },
+    {
+      "key": "H25",
+      "tier": "hard",
+      "split": "drafting",
+      "classification": "stable_pass",
+      "passes": 1,
+      "runs": 1,
+      "mean_wall_s": 152.9,
+      "memory_suspect": false,
+      "wall_outlier": false,
+      "commit_ratio_high": false,
+      "min_free_gb": 2.76,
+      "statuses": [
+        "done"
+      ]
+    },
+    {
+      "key": "H26",
+      "tier": "hard",
+      "split": "drafting",
+      "classification": "stable_fail",
+      "passes": 0,
+      "runs": 1,
+      "mean_wall_s": 789.5,
+      "memory_suspect": true,
+      "wall_outlier": true,
+      "commit_ratio_high": false,
+      "min_free_gb": 2.68,
+      "statuses": [
+        "max_steps"
+      ]
+    },
+    {
+      "key": "H27",
+      "tier": "hard",
+      "split": "eval",
+      "classification": "stable_fail",
+      "passes": 0,
+      "runs": 1,
+      "mean_wall_s": 1228.8,
+      "memory_suspect": true,
+      "wall_outlier": true,
+      "commit_ratio_high": false,
+      "min_free_gb": 3.61,
+      "statuses": [
+        "budget_exhausted"
+      ]
+    },
+    {
+      "key": "H28",
+      "tier": "hard",
+      "split": "eval",
+      "classification": "stable_fail",
+      "passes": 0,
+      "runs": 1,
+      "mean_wall_s": 474.0,
+      "memory_suspect": false,
+      "wall_outlier": false,
+      "commit_ratio_high": false,
+      "min_free_gb": 2.64,
+      "statuses": [
+        "plateau"
+      ]
+    },
+    {
+      "key": "H29",
+      "tier": "hard",
+      "split": "eval",
+      "classification": "stable_fail",
+      "passes": 0,
+      "runs": 1,
+      "mean_wall_s": 306.2,
+      "memory_suspect": false,
+      "wall_outlier": false,
+      "commit_ratio_high": false,
+      "min_free_gb": 3.45,
+      "statuses": [
+        "plateau"
+      ]
+    },
+    {
+      "key": "H30",
+      "tier": "hard",
+      "split": "eval",
+      "classification": "stable_fail",
+      "passes": 0,
+      "runs": 1,
+      "mean_wall_s": 1236.6,
+      "memory_suspect": true,
+      "wall_outlier": true,
+      "commit_ratio_high": false,
+      "min_free_gb": 3.18,
+      "statuses": [
+        "budget_exhausted"
+      ]
+    },
+    {
+      "key": "M11",
+      "tier": "medium",
+      "split": "drafting",
+      "classification": "unmeasured",
+      "passes": 0,
+      "runs": 0,
+      "mean_wall_s": 0.0,
+      "memory_suspect": false,
+      "wall_outlier": false,
+      "commit_ratio_high": false,
+      "min_free_gb": null,
+      "statuses": [
+        "excluded_machine_fault"
+      ]
+    },
+    {
+      "key": "M12",
+      "tier": "medium",
+      "split": "drafting",
+      "classification": "stable_fail",
+      "passes": 0,
+      "runs": 1,
+      "mean_wall_s": 130.0,
+      "memory_suspect": false,
+      "wall_outlier": false,
+      "commit_ratio_high": false,
+      "min_free_gb": 2.97,
+      "statuses": [
+        "plateau"
+      ]
+    },
+    {
+      "key": "M13",
+      "tier": "medium",
+      "split": "drafting",
+      "classification": "stable_fail",
+      "passes": 0,
+      "runs": 1,
+      "mean_wall_s": 336.4,
+      "memory_suspect": false,
+      "wall_outlier": false,
+      "commit_ratio_high": false,
+      "min_free_gb": 3.5,
+      "statuses": [
+        "plateau"
+      ]
+    },
+    {
+      "key": "M14",
+      "tier": "medium",
+      "split": "drafting",
+      "classification": "stable_pass",
+      "passes": 1,
+      "runs": 1,
+      "mean_wall_s": 137.3,
+      "memory_suspect": false,
+      "wall_outlier": false,
+      "commit_ratio_high": false,
+      "min_free_gb": 4.09,
+      "statuses": [
+        "done"
+      ]
+    },
+    {
+      "key": "M15",
+      "tier": "medium",
+      "split": "drafting",
+      "classification": "stable_pass",
+      "passes": 1,
+      "runs": 1,
+      "mean_wall_s": 195.6,
+      "memory_suspect": false,
+      "wall_outlier": false,
+      "commit_ratio_high": false,
+      "min_free_gb": 3.52,
+      "statuses": [
+        "done"
+      ]
+    },
+    {
+      "key": "M16",
+      "tier": "medium",
+      "split": "drafting",
+      "classification": "stable_fail",
+      "passes": 0,
+      "runs": 1,
+      "mean_wall_s": 653.2,
+      "memory_suspect": true,
+      "wall_outlier": true,
+      "commit_ratio_high": false,
+      "min_free_gb": 2.64,
+      "statuses": [
+        "budget_exhausted"
+      ]
+    },
+    {
+      "key": "M17",
+      "tier": "medium",
+      "split": "eval",
+      "classification": "stable_fail",
+      "passes": 0,
+      "runs": 1,
+      "mean_wall_s": 185.2,
+      "memory_suspect": false,
+      "wall_outlier": false,
+      "commit_ratio_high": false,
+      "min_free_gb": 2.21,
+      "statuses": [
+        "plateau"
+      ]
+    },
+    {
+      "key": "M18",
+      "tier": "medium",
+      "split": "eval",
+      "classification": "stable_fail",
+      "passes": 0,
+      "runs": 1,
+      "mean_wall_s": 1777.4,
+      "memory_suspect": false,
+      "wall_outlier": false,
+      "commit_ratio_high": false,
+      "min_free_gb": 2.85,
+      "statuses": [
+        "plateau"
+      ]
+    },
+    {
+      "key": "M19",
+      "tier": "medium",
+      "split": "eval",
+      "classification": "stable_pass",
+      "passes": 1,
+      "runs": 1,
+      "mean_wall_s": 356.6,
+      "memory_suspect": false,
+      "wall_outlier": false,
+      "commit_ratio_high": false,
+      "min_free_gb": 3.62,
+      "statuses": [
+        "done"
+      ]
+    },
+    {
+      "key": "M20",
+      "tier": "medium",
+      "split": "eval",
+      "classification": "stable_fail",
+      "passes": 0,
+      "runs": 1,
+      "mean_wall_s": 211.8,
+      "memory_suspect": false,
+      "wall_outlier": false,
+      "commit_ratio_high": false,
+      "min_free_gb": 3.48,
+      "statuses": [
+        "plateau"
+      ]
+    },
+    {
+      "key": "M21",
+      "tier": "medium",
+      "split": "eval",
+      "classification": "stable_fail",
+      "passes": 0,
+      "runs": 1,
+      "mean_wall_s": 225.2,
+      "memory_suspect": false,
+      "wall_outlier": false,
+      "commit_ratio_high": false,
+      "min_free_gb": 2.32,
+      "statuses": [
+        "plateau"
+      ]
+    },
+    {
+      "key": "M22",
+      "tier": "medium",
+      "split": "eval",
+      "classification": "stable_fail",
+      "passes": 0,
+      "runs": 1,
+      "mean_wall_s": 213.7,
+      "memory_suspect": false,
+      "wall_outlier": false,
+      "commit_ratio_high": false,
+      "min_free_gb": 3.43,
+      "statuses": [
+        "plateau"
+      ]
+    }
+  ]
+}

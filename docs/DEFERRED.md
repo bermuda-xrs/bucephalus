@@ -165,3 +165,61 @@ only then shuffles. The flag's own help text says "takes the FIRST N tasks,
 which are all easy", which is no longer what a reader would infer now that
 order is randomised. L6 used `--limit 10` and got a mix of easy and medium,
 which is better, but by accident of the table rather than by design.
+
+---
+
+## D10 — User-facing stop paths do not route through `kill_tree`
+
+**Severity:** corrupting, and it has now bitten four times.
+
+A manual stop of the Phase 2A run did not reach the interpreter. Both
+processes survived and the run kept appending to the ledger while it was
+believed stopped:
+
+    pid 33248  venv wrapper       python.exe bench/noise.py ... --resume
+    pid 17264  real interpreter   child of 33248, same command line
+
+This is SPEC-DELTA C13 again — a venv `python.exe` on Windows is a
+trampoline, so anything that kills "the process" kills the wrapper and
+leaves the interpreter running. `proc.kill_tree()` exists precisely for
+this and handles it correctly; the problem is that the paths a *user*
+reaches do not go through it.
+
+**Occurrences:** the original `test_kill_and_resume` false pass; the
+orphaned `llama-server`; the reaper's inability to tell a live child from
+an orphan; and now a manual stop that silently did nothing.
+
+**Why it is more than an annoyance:** a run believed stopped but still
+executing holds the OS run-lock, keeps a model resident, and competes for
+CPU with whatever is started next — which is exactly the contention that
+manufactures `budget_exhausted` on a task that would otherwise finish.
+Two measurement processes overlapping for 36 minutes is already on record
+as having corrupted three tasks.
+
+**Correct version:** every user-facing stop path routes through
+`kill_tree()`, and a stop that cannot confirm the tree is gone reports
+that rather than returning silently.
+
+**Why deferred:** the freeze. It costs nothing to work around manually
+(`kill_tree(<wrapper pid>)`), and no measurement currently in flight
+depends on it.
+
+---
+
+## D11 — The wall-outlier detector has a warm-up blind spot
+
+**Severity:** cosmetic, bounded to the first three tasks of a run.
+
+The flag compares a task's wall clock against the running median of
+completed tasks and needs at least three of them, so **tasks 1-3 of any
+run can never be flagged**. In the Phase 2A run, M18 took 1777.4 s -
+roughly 8x its neighbours - and passed unflagged as task 2 for exactly
+this reason.
+
+**Correct version:** seed the median from the previous run's tasks when a
+ledger is being resumed, or fall back to an absolute ceiling until enough
+samples exist.
+
+**Note:** this is a gap in FLAGGING, not in the stall detector. A genuine
+machine stall in the first three tasks is still caught by the tok/s test
+and the transport timeout, both of which are independent of run position.

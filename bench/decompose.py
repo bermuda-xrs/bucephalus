@@ -84,7 +84,45 @@ from bench.suites.aero_calc import CONSTANTS, DRAFTING, EVAL  # noqa: E402
 # and the `ambiguous` classification below is the safety net for exactly that
 # case: it reports both rather than picking the nearer and implying a
 # precision the data does not carry.
-RTOL = 2e-5
+RTOL = 2e-5          # fallback only; per-task tolerance is derived below
+
+
+def task_rtol(expected: float) -> float:
+    """Match tolerance derived from how precisely the SUITE tabled the value.
+
+    Candidates are built as `expected * ratio`, so the tightest achievable
+    residual is the rounding error of `expected` itself - and that error is
+    NOT the same for every task. The suite tables Mars escape velocity as
+    5027.0 but specific impulse as 287.7, whose rounding floors differ by an
+    order of magnitude.
+
+    A single global gate is therefore below its own inputs' noise for the
+    coarser tasks. That defect appeared twice: 1e-6 hid E03's exact
+    sqrt(2*mu_mars/R_earth) hit, and 2e-5 then hid E07's exact thrust/mdot
+    hit at residual 1.34e-04 - a trap the suite explicitly declares ("g0"),
+    reported as unclassifiable because of the tolerance rather than the data.
+
+    Precision is measured in SIGNIFICANT FIGURES, not decimal places,
+    because the suite writes some values in scientific notation: 7.138e6 is
+    four significant figures, but `repr` renders it "7138000.0" and a
+    decimal-place count would read it as far more precise than it is.
+
+    Three half-ulps, because the ratio arithmetic compounds rounding from
+    both ends. Still at least an order of magnitude tighter than the suite's
+    own 0.5% pass tolerance, and where two distinct traps fall inside it the
+    `ambiguous` classification reports both rather than picking one.
+    """
+    x = abs(float(expected))
+    if not x:
+        return RTOL
+    txt = repr(x)
+    mantissa = txt.split("e")[0].replace(".", "").replace("-", "")
+    digits = mantissa.strip("0")
+    n = len(digits) or 1
+    exp = math.floor(math.log10(x))
+    ulp = 10.0 ** (exp - n + 1)
+    return max(3.0 * (0.5 * ulp) / x, 1e-6)
+
 
 # Unit confusions, as multipliers. Hand-written and disclosed - see the module
 # docstring. Each entry is (name, factor).
@@ -172,6 +210,21 @@ def _body_swap_candidates(task, key: str, expected: float) -> list[tuple[str, fl
                      + ("" if r_body == mu_body else f" with {r_body} radius")
                      + f", not {body}")
             out.append((label, expected * math.sqrt((mu_o / r_o) / (mu_r / r_r))))
+
+            # Cross the body swap with radius FORMATION, not just body
+            # identity. E10 wrote sqrt(mu_earth/R_earth) exactly - Earth's
+            # constants AND the altitude dropped - and no candidate could
+            # reproduce it, because the altitude was only ever applied to the
+            # swapped body. A model that gets the body wrong is precisely the
+            # one likely to mishandle the altitude too, so the two errors
+            # co-occur and must be generated together.
+            if alt:
+                r_noalt = CONSTANTS[r_body]["radius"]
+                out.append((label + ", altitude ignored",
+                            expected * math.sqrt((mu_o / r_noalt) / (mu_r / r_r))))
+                r_kmasm = CONSTANTS[r_body]["radius"] + (alt / 1000.0)
+                out.append((label + ", km read as m",
+                            expected * math.sqrt((mu_o / r_kmasm) / (mu_r / r_r))))
     return out
 
 
@@ -227,15 +280,29 @@ def decompose(task, key: str, expected: float, got: float) -> dict:
     """Classify one written value. Never force-fits."""
     if got is None:
         return {"classification": "no_artifact", "trap": None,
-                "residual": None, "generic_scale_note": None}
+                "residual": None, "tolerance": None,
+                "generic_scale_note": None}
+
+    # A written value of ZERO is a real outcome, not an impossible one - the
+    # original bucket-D taxonomy recorded two tasks returning 0.0, which is
+    # what a program looks like when the plumbing was wired and the physics
+    # never filled in. Dividing the residual by `got` crashed on exactly that
+    # case (M16 wrote v_apogee_m_s: 0.0). Scale by the EXPECTED magnitude
+    # instead when `got` is zero: the question "how far off is this" still has
+    # a meaning, and the answer for a zero against a non-zero expected is
+    # "completely", which is what a residual of ~1 says.
+    scale = abs(got) if got else abs(expected)
+    if not scale:
+        scale = 1.0
+    tol = task_rtol(expected)
 
     best = None
     matches: list[str] = []
     for name, val in _trap_candidates(task, key, expected):
         if val == 0:
             continue
-        resid = abs(val - got) / abs(got) if got else float("inf")
-        if resid <= RTOL:
+        resid = abs(val - got) / scale
+        if resid <= tol:
             matches.append(name)
         if best is None or resid < best[0]:
             best = (resid, name)
@@ -247,23 +314,24 @@ def decompose(task, key: str, expected: float, got: float) -> dict:
     if len(distinct) > 1:
         return {"classification": "ambiguous", "trap": None,
                 "candidates": sorted(matches),
-                "residual": best[0] if best else None,
+                "residual": best[0] if best else None, "tolerance": tol,
                 "generic_scale_note": None}
 
     # Recorded, never classified - see the module docstring.
     note = None
     for sname, f in SCALES:
         cand = expected * f
-        if cand and abs(cand - got) / abs(got) <= RTOL:
+        if cand and abs(cand - got) / scale <= tol:
             note = f"value equals expected {sname}, but this task declares " \
                    f"{'no trap' if not (task.trap or '').strip() else 'a different trap'}"
             break
 
-    if best is not None and best[0] <= RTOL:
+    if best is not None and best[0] <= tol:
         return {"classification": "trap", "trap": best[1],
-                "residual": best[0], "generic_scale_note": note}
+                "residual": best[0], "tolerance": tol,
+                "generic_scale_note": note}
     return {"classification": "unclassifiable", "trap": None,
-            "residual": (best[0] if best else None),
+            "residual": (best[0] if best else None), "tolerance": tol,
             "generic_scale_note": note}
 
 

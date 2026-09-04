@@ -1,0 +1,123 @@
+{
+  "LABEL": "Phase 2A complete + Phase 2B trap distribution - granite4.1:3b, harness v2, 2026-09-05",
+  "harness_version": 2,
+  "order_seed": 1420531403,
+  "executor": "granite4.1:3b (3.4B, Q4_K_M)",
+  "profile": "local",
+  "hardware": "Intel Core Ultra 5 225U, 12C/14T, 15.47 GB RAM, CPU inference",
+  "note_on_completion": "First complete 30-task reference measurement in the project's history. Survived one session-tied kill at task 5 and resumed from the fsynced ledger using the recorded order seed.",
+
+  "PHASE_2A": {
+    "tasks": 30,
+    "measured": 29,
+    "excluded": 1,
+    "passes": 7,
+    "pass_rate_raw": 0.241,
+    "pass_rate_timing_clean": 0.280,
+    "timing_clean_denominator": 25,
+    "timing_clean_excludes": ["M16", "H30", "H24", "H27"],
+    "STRADDLE_NOTE": "The two figures land on OPPOSITE SIDES of the 25% band floor: raw 24.1% is below it, timing-clean 28.0% is above. The difference is entirely four tasks whose failure mode is a TIME limit measured with a clock the instrument itself flagged as untrustworthy. 2C branches on the RAW figure because it is the conservative one.",
+
+    "per_tier_raw": {
+      "easy":   {"passes": 3, "of": 10, "rate": 0.300, "which": ["E03", "E05", "E06"]},
+      "medium": {"passes": 3, "of": 11, "rate": 0.273, "which": ["M14", "M15", "M19"]},
+      "hard":   {"passes": 1, "of": 8,  "rate": 0.125, "which": ["H25"]}
+    },
+    "status_counts": {"plateau": 17, "done": 7, "budget_exhausted": 4,
+                      "max_steps": 1, "excluded_machine_fault": 1},
+    "done_vs_done_unannounced": {"done": 7, "done_unannounced": 0},
+    "note_done_unannounced": "ZERO. On the 8B this was the dominant failure mode - it wrote correct answers and never emitted <final>. The 3B terminates properly; its failures are wrong answers, not unannounced right ones. That is a clean behavioural difference between the two models.",
+    "ceiling_hits": {"max_steps": 1, "budget_exhausted": 4},
+
+    "wall_clock": {
+      "median_s": 252.0,
+      "p90_s": 941.2,
+      "total_h": 3.32,
+      "above_2x_median": {"M18": 1777, "H27": 1229, "H30": 1237, "H24": 941,
+                          "H26": 790, "M16": 653}
+    },
+
+    "wall_outliers": [
+      {"key": "M16", "status": "budget_exhausted", "x_median": 3.18},
+      {"key": "H30", "status": "budget_exhausted", "x_median": 5.79},
+      {"key": "H24", "status": "budget_exhausted", "x_median": 4.04},
+      {"key": "H26", "status": "max_steps", "x_median": 3.51},
+      {"key": "H27", "status": "budget_exhausted", "x_median": 5.15}
+    ],
+    "note_on_H26": "Flagged but NOT removed from the timing-clean denominator. max_steps is a STEP limit, which slow timing cannot manufacture; its wall clock is untrustworthy but its pass/fail is sound. Only the four budget_exhausted tasks are time-limit failures.",
+
+    "machine_faults": {
+      "count": 2,
+      "keys": ["M11", "H23"],
+      "M11": "stalled three times across two runs (timeout at 152 tokens; 1.17 tok/s vs 5.63 median; timeout at 0 tokens) -> EXCLUDED",
+      "H23": "stalled once at 0.17 tok/s vs 5.89 median (147 tokens in 850 s, a 35x slowdown) -> re-ran and completed as plateau. Its result is valid and measured.",
+      "note": "Stalls are TASK-CONCENTRATED, not random. Across the session they land on M11, H23, H30, E02 and E06 repeatedly while H25 ran clean three times and E01 five. Both offenders here are medium/hard with long generations, which is a lead for DEFERRED D2 where the cause is still unknown."
+    },
+
+    "worker_refreshes": {
+      "count": 6,
+      "total_s": 87.9,
+      "cost_range_s": [10.7, 20.6],
+      "median_s": 13.5,
+      "note": "Condition-dependent, NOT a fixed per-task overhead. The earlier aborted run fired on every task; this run fired 6 times in 30. The ~14 s/task estimate was wrong as a general figure - 87.9 s total is 0.7% of the run."
+    },
+    "memory": {
+      "at_start": {"available_gb": 2.76, "committed_gb": 20.71, "commit_ratio": 1.339},
+      "min_free_any_task_gb": 2.05
+    }
+  },
+
+  "PHASE_2B": {
+    "denominators_stated_not_assumed": {
+      "A_failures_producing_a_numeric_value": 19,
+      "B_strictly_decomposing_to_a_named_trap": 2,
+      "ambiguous_within_one_trap_family": 1,
+      "B_inclusive": 3,
+      "C_failures_with_no_value_at_all": 2,
+      "N_non_numeric_task_out_of_scope": 1
+    },
+    "fractions": {
+      "B_over_A": 0.105,
+      "B_inclusive_over_A": 0.158,
+      "B_over_A_plus_C": 0.095,
+      "B_inclusive_over_A_plus_C": 0.143
+    },
+    "classified": [
+      {"key": "E09", "written": 16.88888888888889, "trap": "xg0 (Isp seconds without g0)", "residual": 7.33e-06, "tolerance": 8.71e-05},
+      {"key": "E07", "written": 2821.7522658610274, "trap": "xg0 (Isp seconds without g0)", "residual": 1.34e-04, "tolerance": 5.21e-04},
+      {"key": "E10", "written": 7909.730326847391, "classification": "ambiguous", "family": "wrong body: earth mu, not moon", "variants": ["altitude ignored", "km read as m"], "residual": 3.13e-05, "tolerance": 9.18e-05}
+    ],
+    "trap_families": {"xg0 (Isp seconds without g0)": 2, "wrong body: earth mu": 1},
+    "acceptance_guard": "HELD. Of the five no-trap tasks, E06/H25/M19 passed and are not in the failure set; H24 returned no_artifact; M18 returned unclassifiable. None force-fitted.",
+
+    "VERDICT": "B/A = 10.5% strict, 15.8% inclusive. Both far below the 50% branch threshold. STOP.",
+
+    "WHAT_THE_FAILURES_ACTUALLY_LOOK_LIKE": "Overwhelmingly unstructured rather than trap-shaped. Written values include 4.3e10 (M22), 5.3e12 (M21), 5.2e-23 (M13), 9.7e-04 (E08), 2.4e-03 (E02), 0.0 (M16), and NEGATIVE numbers on H28 (-19115.85), H23 (-2038.86) and M17 (-779.93). A negative escape velocity or delta-v is not a units confusion or a wrong-body error - it is a program that ran and never implemented the physics. This reproduces the original bucket-D taxonomy (14 of 15 unstructured, median relative error 100%) on the FIXED harness, which is the important part: the plumbing defects that explained the first 10% are gone, and the failures are still unstructured.",
+
+    "ONE_STRUCTURED_FAILURE_NOT_COUNTED": "E04 wrote 4913.26 against 4233.9. Decomposing by hand: 4913.26/(311*9.80665) = 1.6110, so ln(mass ratio) = 1.6110 and the ratio used was 5.008 = (549054+137000)/137000. The model ADDED the masses instead of using m0 directly. That is a real, identifiable mistake - but it is not the trap E04 declares ('Isp in seconds needs g0') and it is not in any declared family, so the decomposer correctly returns unclassifiable rather than inventing a category. Worth recording because it shows 'unclassifiable' is not the same as 'random'."
+  },
+
+  "DECOMPOSER_DEFECTS_FOUND_AND_FIXED_DURING_2B": [
+    {
+      "defect": "ZeroDivisionError on a written value of 0.0",
+      "detail": "M16 wrote v_apogee_m_s: 0.0 and the residual divided by abs(got). A written zero is a real outcome - the original bucket D recorded two of them - and it crashed the instrument outright.",
+      "fix": "scale the residual by |expected| when the written value is zero"
+    },
+    {
+      "defect": "TypeError on a non-numeric expected value",
+      "detail": "H27 expects bad_row_indices = [12, 21, 30, 34]. It is an anomaly-detection task, structurally outside a numeric decomposer's scope. Reported as its own category rather than forced.",
+      "fix": "detect non-numeric expected and report non_numeric"
+    },
+    {
+      "defect": "The residual gate was BELOW the rounding floor of its own inputs, for the second time",
+      "detail": "2e-5 was derived from E03's floor of 9.4e-06. But the floor varies per task with how precisely the suite tabled the value: E07's isp_s is 287.7, whose floor is ~1.7e-04. E07's written 2821.7522658610274 is EXACTLY thrust/mdot = Isp-without-g0, matching the declared trap at residual 1.34e-04 - and was reported unclassifiable because of the tolerance rather than the data.",
+      "fix": "per-task tolerance = 3 half-ulps, measured in SIGNIFICANT FIGURES not decimal places, because the suite writes some values as 7.138e6 which repr renders as 7138000.0 and a decimal count would read as far more precise than it is"
+    },
+    {
+      "defect": "Body swaps never crossed with radius formation",
+      "detail": "E10 wrote sqrt(mu_earth/R_earth) - Earth's constants AND the altitude dropped. Candidates only ever applied the altitude to the swapped body, so the compound could not be generated. A model that gets the body wrong is exactly the one likely to mishandle the altitude too.",
+      "fix": "generate body-swap x {altitude correct, ignored, km-read-as-m}"
+    }
+  ],
+  "note_on_those_fixes": "All four were found by decomposing values rather than trusting the tool's verdict, and all four moved B UPWARD (1 -> 3). The conclusion did not change - 15.8% is still far below 50% - but it would have been reported as 5.3% on a tool defect. The instruction to verify before branching to STOP was load-bearing."
+}
