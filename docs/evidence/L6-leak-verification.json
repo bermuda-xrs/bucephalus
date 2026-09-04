@@ -1,0 +1,306 @@
+{
+  "date": "2026-09-04",
+  "harness_version": 2,
+  "budget_scale": 1.0,
+  "memory_suspect_keys": [
+    "E03",
+    "M12",
+    "M14",
+    "E04",
+    "E02",
+    "E01",
+    "M13",
+    "M15"
+  ],
+  "min_free_gb_any_task": 1.06,
+  "order_seed": 1005318294,
+  "task_order_randomised": true,
+  "worker_reloads": [
+    {
+      "ok": true,
+      "cost_s": 16.5,
+      "rss_before_gb": 3.521,
+      "rss_after_gb": 3.252,
+      "before_task": "E03",
+      "run": 0,
+      "trigger_ratio": 1.383,
+      "ratio_after": 1.366
+    },
+    {
+      "ok": true,
+      "cost_s": 15.4,
+      "rss_before_gb": 3.393,
+      "rss_after_gb": 3.252,
+      "before_task": "M12",
+      "run": 0,
+      "trigger_ratio": 1.606,
+      "ratio_after": 1.609
+    },
+    {
+      "ok": true,
+      "cost_s": 15.3,
+      "rss_before_gb": 3.393,
+      "rss_after_gb": 3.252,
+      "before_task": "M14",
+      "run": 0,
+      "trigger_ratio": 1.597,
+      "ratio_after": 1.598
+    },
+    {
+      "ok": true,
+      "cost_s": 16.7,
+      "rss_before_gb": 3.393,
+      "rss_after_gb": 3.252,
+      "before_task": "E04",
+      "run": 0,
+      "trigger_ratio": 1.596,
+      "ratio_after": 1.596
+    },
+    {
+      "ok": true,
+      "cost_s": 17.7,
+      "rss_before_gb": 2.28,
+      "rss_after_gb": 3.251,
+      "before_task": "E02",
+      "run": 0,
+      "trigger_ratio": 1.633,
+      "ratio_after": 1.634
+    },
+    {
+      "ok": true,
+      "cost_s": 18.1,
+      "rss_before_gb": 3.393,
+      "rss_after_gb": 3.252,
+      "before_task": "E01",
+      "run": 0,
+      "trigger_ratio": 1.587,
+      "ratio_after": 1.589
+    },
+    {
+      "ok": true,
+      "cost_s": 15.2,
+      "rss_before_gb": 3.394,
+      "rss_after_gb": 3.251,
+      "before_task": "M13",
+      "run": 0,
+      "trigger_ratio": 1.575,
+      "ratio_after": 1.571
+    },
+    {
+      "ok": true,
+      "cost_s": 17.6,
+      "rss_before_gb": 3.394,
+      "rss_after_gb": 3.252,
+      "before_task": "M15",
+      "run": 0,
+      "trigger_ratio": 1.526,
+      "ratio_after": 1.525
+    }
+  ],
+  "worker_reload_count": 8,
+  "worker_reload_cost_s": 132.5,
+  "refresh_commit_ratio_threshold": 1.35,
+  "commit_ratio_suspect_threshold": 1.4,
+  "emergency_free_gb": 0.5,
+  "memory_pressure_at_start": {
+    "available_gb": 2.52,
+    "committed_gb": 23.67,
+    "physical_gb": 15.47,
+    "commit_ratio": 1.531
+  },
+  "free_memory_gb_at_start": 4.824394226074219,
+  "free_memory_gb_before_reap": 4.833545684814453,
+  "orphans_reaped": [],
+  "free_memory_gb_at_end": 2.5234947204589844,
+  "profile": "local",
+  "profile_provenance": {
+    "profile": "local",
+    "cloud_backends": [],
+    "credentials_present": [],
+    "backends": {
+      "cloud": {
+        "kind": "ollama",
+        "model": "granite4.1:3b",
+        "tier": "local"
+      },
+      "local": {
+        "kind": "ollama",
+        "model": "granite4.1:3b",
+        "tier": "local"
+      },
+      "review": {
+        "kind": "ollama",
+        "model": "granite4.1:8b",
+        "tier": "local"
+      }
+    }
+  },
+  "suite": "aero_calc",
+  "split": null,
+  "runs_per_task": 1,
+  "n_tasks": 10,
+  "mean_pass_rate": 0.4,
+  "stable_pass": 4,
+  "stable_fail": 6,
+  "flaky": 0,
+  "wall_s_this_session": 4748.2,
+  "wall_s_all_runs": 4613.5,
+  "status_counts": {
+    "plateau": 5,
+    "done": 4,
+    "budget_exhausted": 1
+  },
+  "unmeasured": 0,
+  "unmeasured_keys": [],
+  "partially_unmeasured_keys": [],
+  "done": 4,
+  "done_unannounced": 0,
+  "ended_at_step_limit": 0,
+  "ended_budget_exhausted": 1,
+  "tier_pass_rates": {
+    "easy": 0.4,
+    "medium": 0.4
+  },
+  "tasks": [
+    {
+      "key": "E01",
+      "tier": "easy",
+      "split": "drafting",
+      "classification": "stable_fail",
+      "passes": 0,
+      "runs": 1,
+      "mean_wall_s": 126.1,
+      "memory_suspect": true,
+      "min_free_gb": 1.26,
+      "statuses": [
+        "plateau"
+      ]
+    },
+    {
+      "key": "E02",
+      "tier": "easy",
+      "split": "drafting",
+      "classification": "stable_fail",
+      "passes": 0,
+      "runs": 1,
+      "mean_wall_s": 2644.7,
+      "memory_suspect": true,
+      "min_free_gb": 1.45,
+      "statuses": [
+        "budget_exhausted"
+      ]
+    },
+    {
+      "key": "E03",
+      "tier": "easy",
+      "split": "drafting",
+      "classification": "stable_pass",
+      "passes": 1,
+      "runs": 1,
+      "mean_wall_s": 181.7,
+      "memory_suspect": true,
+      "min_free_gb": 1.06,
+      "statuses": [
+        "done"
+      ]
+    },
+    {
+      "key": "E04",
+      "tier": "easy",
+      "split": "drafting",
+      "classification": "stable_fail",
+      "passes": 0,
+      "runs": 1,
+      "mean_wall_s": 145.1,
+      "memory_suspect": true,
+      "min_free_gb": 1.94,
+      "statuses": [
+        "plateau"
+      ]
+    },
+    {
+      "key": "E05",
+      "tier": "easy",
+      "split": "drafting",
+      "classification": "stable_pass",
+      "passes": 1,
+      "runs": 1,
+      "mean_wall_s": 157.0,
+      "memory_suspect": false,
+      "min_free_gb": 1.71,
+      "statuses": [
+        "done"
+      ]
+    },
+    {
+      "key": "M11",
+      "tier": "medium",
+      "split": "drafting",
+      "classification": "stable_fail",
+      "passes": 0,
+      "runs": 1,
+      "mean_wall_s": 471.6,
+      "memory_suspect": false,
+      "min_free_gb": 3.05,
+      "statuses": [
+        "plateau"
+      ]
+    },
+    {
+      "key": "M12",
+      "tier": "medium",
+      "split": "drafting",
+      "classification": "stable_fail",
+      "passes": 0,
+      "runs": 1,
+      "mean_wall_s": 154.5,
+      "memory_suspect": true,
+      "min_free_gb": 1.09,
+      "statuses": [
+        "plateau"
+      ]
+    },
+    {
+      "key": "M13",
+      "tier": "medium",
+      "split": "drafting",
+      "classification": "stable_fail",
+      "passes": 0,
+      "runs": 1,
+      "mean_wall_s": 371.6,
+      "memory_suspect": true,
+      "min_free_gb": 1.89,
+      "statuses": [
+        "plateau"
+      ]
+    },
+    {
+      "key": "M14",
+      "tier": "medium",
+      "split": "drafting",
+      "classification": "stable_pass",
+      "passes": 1,
+      "runs": 1,
+      "mean_wall_s": 155.7,
+      "memory_suspect": true,
+      "min_free_gb": 1.48,
+      "statuses": [
+        "done"
+      ]
+    },
+    {
+      "key": "M15",
+      "tier": "medium",
+      "split": "drafting",
+      "classification": "stable_pass",
+      "passes": 1,
+      "runs": 1,
+      "mean_wall_s": 205.5,
+      "memory_suspect": true,
+      "min_free_gb": 2.52,
+      "statuses": [
+        "done"
+      ]
+    }
+  ]
+}

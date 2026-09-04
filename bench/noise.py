@@ -61,6 +61,37 @@ from agent.proc import (  # noqa: E402
 COMMIT_RATIO_SUSPECT = 1.40
 EMERGENCY_FREE_GB = 0.50
 
+# L5. RE-ANCHORED after the L6 verification run. Read this before changing it.
+#
+# The commit ratio DETECTED the worker leak in Phase 2A - 23 consecutive
+# readings climbing 1.231 -> 1.421 without one decrease - and that detection
+# was correct and load-bearing. It is NOT usable as the per-task suspect flag,
+# and L6 showed why with the fix in place:
+#
+#   post-fix commit ratio, 10 tasks : 1.278 1.384 1.606 1.608 1.599 1.633
+#                                     1.634 1.589 1.571 1.531
+#   flagged at 1.40                 : 8 of 10, including M15 at 2.52 GB free
+#
+# The old "pathological" anchor of 1.574 now sits INSIDE the healthy operating
+# range. The two-point calibration was invalid: its healthy anchor (1.223) was
+# taken before any task had run and with a different set of applications
+# loaded, so it measured the machine's state, not the run's health. Committed
+# memory on Windows also releases lazily, so the ratio has heavy hysteresis -
+# across seven successful refreshes it moved 1.606->1.609, 1.633->1.634,
+# 1.587->1.589, i.e. not at all, while worker RSS returned to 3.252 GB every
+# single time.
+#
+# What DOES discriminate is wall clock against the run's own median. The real
+# hazard is a single pathological model call, seen three times now: E02 in L6
+# took 2539 s to emit 512 tokens (~0.2 tok/s against a normal 2-3), the v3
+# probe hit 2465 s, and the historical orphan incident hit 1499.8 s. Those are
+# 15x, 29x and 18x their medians. A ratio test cannot separate them from a
+# healthy task; a median test separates them trivially.
+#
+# So: the ratio is still RECORDED, because it is what caught the leak and a
+# future monotonic climb should be visible. It no longer decides the flag.
+WALL_OUTLIER_FACTOR = 3.0
+
 # L1. When to reload the model worker mid-run.
 #
 # Phase 2A aborted at task 23/30 because the worker's commitment grew
@@ -141,9 +172,13 @@ def run_once(ctx, spec: dict, run_ix: int) -> dict:
     ratios = [p["commit_ratio"] for p in (press_before, press_after)
               if p.get("commit_ratio") is not None]
     worst_ratio = max(ratios) if ratios else None
-    suspect = bool(
-        (worst_ratio is not None and worst_ratio >= COMMIT_RATIO_SUSPECT)
-        or (low is not None and low < EMERGENCY_FREE_GB))
+    # The commit-ratio test is retained as a SEPARATE recorded signal rather
+    # than as the flag - see the L5 note at the top of this file. The flag
+    # itself is decided by the caller, which is the only place that knows the
+    # run's median so far.
+    ratio_high = bool(worst_ratio is not None
+                      and worst_ratio >= COMMIT_RATIO_SUSPECT)
+    suspect = bool(low is not None and low < EMERGENCY_FREE_GB)
     return {
         "run": run_ix,
         "task_id": task.id,
@@ -156,7 +191,10 @@ def run_once(ctx, spec: dict, run_ix: int) -> dict:
         "free_gb_after": None if mem_after is None else round(mem_after, 2),
         # The flag travels with the row, so a suspect wall-clock stays suspect
         # through resume, through the ledger, and into the report.
+        # Emergency free-memory backstop only; the wall-clock outlier test is
+        # applied by the caller once a median exists.
         "memory_suspect": suspect,
+        "commit_ratio_high": ratio_high,
         "commit_ratio": worst_ratio,
         # L2: the leak, observable rather than inferred. If this climbs
         # monotonically across a run, the L1 refresh is not working.
@@ -231,6 +269,7 @@ def run_with_backend_retry(ctx, spec: dict, run_ix: int, key: str) -> dict:
                 "passed": False, "unmeasured": True, "wall_s": 0.0,
                 "free_gb_before": None, "free_gb_after": None,
                 "memory_suspect": False, "commit_ratio": None,
+                "commit_ratio_high": False, "wall_outlier": False,
                 "worker_rss_before_gb": None, "worker_rss_after_gb": None,
                 "free_tokens": 0, "cost_usd": 0.0, "error": str(e),
             }
@@ -564,6 +603,24 @@ def main() -> int:
 
             out = run_with_backend_retry(ctx, spec, r, key)
             out["key"] = key
+
+            # A task far off the run's own median is the signature of the
+            # pathological single call this project keeps hitting - 2539 s for
+            # 512 tokens in L6, 2465 s in the v3 probe, 1499.8 s historically.
+            # Computed against completed tasks so far, which is why it lives
+            # here and not in run_once.
+            prior = [x["wall_s"] for xs in results.values() for x in xs
+                     if not x.get("unmeasured")]
+            if len(prior) >= 3:
+                med = statistics.median(prior)
+                out["wall_outlier"] = bool(med > 0 and
+                                           out["wall_s"] > WALL_OUTLIER_FACTOR * med)
+                out["wall_vs_median"] = round(out["wall_s"] / med, 2) if med else None
+            else:
+                out["wall_outlier"] = False
+                out["wall_vs_median"] = None
+            if out["wall_outlier"]:
+                out["memory_suspect"] = True
             out["reload_before_this_task"] = bool(
                 reloads and reloads[-1]["before_task"] == key
                 and reloads[-1]["run"] == r)
@@ -571,9 +628,14 @@ def main() -> int:
             # Before the print, so a kill between them loses nothing.
             append_run(ledger, sig, out)
             flag = ""
-            if out.get("memory_suspect"):
-                flag = (f"  !! MEMORY PRESSURE free={out.get('free_gb_after')} GB "
-                        f"commit={out.get('commit_ratio')} - wall-clock suspect")
+            if out.get("wall_outlier"):
+                flag = (f"  !! WALL OUTLIER {out.get('wall_vs_median')}x median "
+                        f"- wall-clock suspect")
+            elif out.get("memory_suspect"):
+                flag = (f"  !! FREE MEMORY {out.get('free_gb_after')} GB below "
+                        f"{EMERGENCY_FREE_GB} - wall-clock suspect")
+            elif out.get("commit_ratio_high"):
+                flag = f"  (commit {out.get('commit_ratio')}, recorded not flagged)"
             print(f"  run {r + 1}/{args.runs}  {i:>2}/{len(specs)}  {key:<6} "
                   f"{out['status']:<16} {out['wall_s']:>6.1f}s{flag}", flush=True)
 
@@ -594,6 +656,7 @@ def main() -> int:
                           .get("output_schema") or {}).get("x-split", "?"),
                 "classification": "unmeasured", "passes": 0, "runs": 0,
                 "mean_wall_s": 0.0, "memory_suspect": False,
+                "wall_outlier": False, "commit_ratio_high": False,
                 "min_free_gb": None,
                 "statuses": [x["status"] for x in runs],
             })
@@ -613,6 +676,8 @@ def main() -> int:
             # or it did not - but its SECONDS are not a measurement, and the
             # cost axis of this project is seconds.
             "memory_suspect": any(x.get("memory_suspect") for x in runs),
+            "wall_outlier": any(x.get("wall_outlier") for x in runs),
+            "commit_ratio_high": any(x.get("commit_ratio_high") for x in runs),
             "min_free_gb": min(
                 [x["free_gb_after"] for x in runs
                  if x.get("free_gb_after") is not None] or [None]),
@@ -667,6 +732,10 @@ def main() -> int:
         "worker_reload_count": len(reloads),
         "worker_reload_cost_s": round(sum(x["cost_s"] for x in reloads), 1),
         "refresh_commit_ratio_threshold": REFRESH_COMMIT_RATIO,
+        "wall_outlier_keys": [r["key"] for r in rows if r.get("wall_outlier")],
+        "commit_ratio_high_keys": [r["key"] for r in rows
+                                   if r.get("commit_ratio_high")],
+        "wall_outlier_factor": WALL_OUTLIER_FACTOR,
         "commit_ratio_suspect_threshold": COMMIT_RATIO_SUSPECT,
         "emergency_free_gb": EMERGENCY_FREE_GB,
         "memory_pressure_at_start": memory_pressure(),
