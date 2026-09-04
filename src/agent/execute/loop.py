@@ -21,6 +21,7 @@ from typing import Any
 
 from ..kernel.integrity import IntegrityError, checkpoint
 from ..kernel.receipts import execute_once, idempotency_key
+from ..models.ollama import ModelStall
 from ..kernel.tasks import load_task, set_status, spend
 from ..kernel.types import GateDecision, Taint, TaskStatus
 from ..ledger.artifacts import project, write_artifact
@@ -374,6 +375,34 @@ def run_task(ctx, task_id: str) -> TaskResult:
             task.id, "paused", reason=p.reason, approval_id=p.approval_id
         )
 
+    except ModelStall as e:
+        # A STALLED MODEL CALL IS NOT A TASK OUTCOME, and this handler has to
+        # sit ahead of the generic one or it never runs. It did not, at first:
+        # the stall detector fired correctly and `run_task` swallowed it into
+        # `crashed`, which the suite scores as a FAILURE. Two tasks in a Phase
+        # 2A run were mis-scored that way before the run was aborted - the
+        # exact defect the detector was added to prevent, defeated by being
+        # caught one level too low.
+        ctx.log.append(task.id, "task.model_stalled",
+                       {"error": f"{type(e).__name__}: {e}",
+                        "observed_tok_s": getattr(e, "observed_rate", None),
+                        "median_tok_s": getattr(e, "median_rate", None)})
+        spend(ctx.conn, ctx.log, task, seconds=time.time() - started)
+
+        # Sweep FIRST. The work may already be complete - a stall can land on
+        # a call made after the answer was written - and re-running would
+        # discard a correct artifact. Worse, because generation here is not
+        # byte-deterministic, a re-run can turn a pass into a fail, so
+        # discarding a verified artifact is a correctness problem and not
+        # merely wasted compute.
+        swept = _final_sweep(ctx, task, "model_stalled", best_answer, 0)
+        if swept.status in ("done", "done_unannounced"):
+            return swept
+
+        # The work was not done. Hand the stall to the caller, which re-runs
+        # the task once and excludes it on a second stall.
+        raise
+
     except Exception as e:  # noqa: BLE001 - see below
         # S2: an unhandled exception used to propagate with the task left
         # RUNNING forever and its artifact never graded. The work may well be
@@ -640,6 +669,9 @@ def finish(
         "needs_replan": TaskStatus.PAUSED,
         "failed": TaskStatus.FAILED,
         "crashed": TaskStatus.FAILED,
+        # Recorded so a stalled task is never silently a pass; the caller
+        # re-runs it and excludes it if it stalls again.
+        "model_stalled": TaskStatus.FAILED,
     }
     set_status(ctx.conn, ctx.log, task, mapping.get(status, TaskStatus.FAILED), status)
     checkpoint(ctx.log, ctx.anchor, task.id)

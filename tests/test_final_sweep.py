@@ -284,12 +284,27 @@ def test_a_human_park_is_not_swept(ctx, workspace, tmp_path, monkeypatch):
     grading it now would score work that was never authorised to complete."""
     from agent.execute import loop as loop_mod
 
+    # Scan the TaskPaused branch ONLY - to the next handler at the same
+    # indent, not to the next `except Exception` anywhere below it. The
+    # earlier version measured the text between two markers and assumed no
+    # other handler could sit between them; adding a ModelStall handler that
+    # legitimately DOES sweep then failed this test for its position rather
+    # than for its behaviour. The claim is about one branch, so the scan is.
+    # Scan the TaskPaused branch ONLY - to the next handler at the same
+    # indent, not to the next `except Exception` anywhere below it. The
+    # earlier version measured the text between two markers and assumed
+    # no other handler could sit between them; adding a ModelStall
+    # handler that legitimately DOES sweep then failed this test for its
+    # position rather than for its behaviour. The claim is about one
+    # branch, so the scan is about one branch.
     src = (ROOT_SRC / "loop.py").read_text(encoding="utf-8")
-    paused = src.index("except TaskPaused as p:")
-    nxt = src.index("except Exception as e:", paused)
-    assert "_final_sweep" not in src[paused:nxt], (
-        "the TaskPaused branch must not sweep - the work is incomplete and "
-        "awaiting a human")
+    marker = "    except TaskPaused as p:"
+    paused = src.index(marker)
+    nxt = src.index(chr(10) + "    except ", paused + len(marker))
+    branch = src[paused:nxt]
+    assert "_final_sweep" not in branch, (
+        "the TaskPaused branch must not sweep - the work is incomplete "
+        "and awaiting a human")
 
 
 from pathlib import Path as _P  # noqa: E402

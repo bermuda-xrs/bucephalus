@@ -183,6 +183,20 @@ class OllamaBackend(BackendBase):
                                     observed, baseline, n_chunks, elapsed)
         except ModelStall:
             raise
+        except httpx.TimeoutException as e:
+            # A timeout IS a stall - the same machine event, caught by the
+            # transport instead of by the rate test. It reaches here when the
+            # call produced too few tokens for a rate to be judged at all, so
+            # the tok/s check never got the chance to fire. Raising the same
+            # type means both paths are handled identically by the caller
+            # rather than one of them landing in the generic backend-error
+            # branch and being scored as a task failure.
+            raise ModelStall(
+                f"model call timed out at {self.endpoint} after producing "
+                f"{n_chunks} tokens - aborted as a machine fault, not a task "
+                f"outcome: {e}",
+                0.0, baseline or 0.0, n_chunks,
+                time.time() - (first_token_at or t0)) from e
         except Exception as e:  # noqa: BLE001
             raise BackendError(f"ollama call failed at {self.endpoint}: {e}") from e
 
