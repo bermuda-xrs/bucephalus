@@ -37,6 +37,7 @@ from agent.execute.loop import run_task  # noqa: E402
 from agent.kernel.tasks import create_task  # noqa: E402
 from agent.kernel.types import Budget, TaskContract  # noqa: E402
 from agent.models.base import BackendError  # noqa: E402
+from agent.models.ollama import ModelStall, reset_rates  # noqa: E402
 from agent import HARNESS_VERSION  # noqa: E402
 from agent.proc import (  # noqa: E402
     free_memory_gb, memory_pressure, reap_orphans, worker_rss_gb)
@@ -254,6 +255,51 @@ def run_with_backend_retry(ctx, spec: dict, run_ix: int, key: str) -> dict:
     script. So it gets its own status, is excluded from the pass rate, and is
     reported loudly.
     """
+    # A STALL is not a backend error and not a task outcome. The task budget
+    # is wall clock and `budget_exhausted` is scored as a failure, so a
+    # machine stall silently converts a task that would have passed into one
+    # that failed - and in a paired trial that manufactures a discordant pair
+    # from a machine event. Interleaving arms cannot help, because a single
+    # stalled call lands on exactly one arm by definition.
+    #
+    # So: abort, re-run the task once, and if it stalls again mark it
+    # EXCLUDED. Excluded is reported as excluded. It is never a failure, and
+    # never quietly dropped either - a silently discarded task is how a suite
+    # gets easier without anyone deciding that it should.
+    stalls: list[dict] = []
+    for stall_attempt in (1, 2):
+        try:
+            out = run_once(ctx, spec, run_ix)
+            if stalls:
+                out["machine_fault"] = True
+                out["stalls"] = stalls
+                print(f"    {key}: recovered after {len(stalls)} stall(s)",
+                      flush=True)
+            return out
+        except ModelStall as e:
+            stalls.append({"attempt": stall_attempt,
+                           "observed_tok_s": round(e.observed_rate, 3),
+                           "median_tok_s": round(e.median_rate, 3),
+                           "tokens": e.tokens, "elapsed_s": round(e.elapsed, 1)})
+            print(f"    {key}: MACHINE FAULT - {e}", flush=True)
+            if stall_attempt == 1:
+                print(f"    {key}: re-running once", flush=True)
+                continue
+            print(f"    {key}: stalled twice, EXCLUDED (not a failure)",
+                  flush=True)
+            return {
+                "run": run_ix, "task_id": None, "status": "excluded_machine_fault",
+                "passed": False, "unmeasured": True, "excluded": True,
+                "machine_fault": True, "stalls": stalls, "wall_s": 0.0,
+                "free_gb_before": None, "free_gb_after": None,
+                "memory_suspect": False, "commit_ratio": None,
+                "commit_ratio_high": False, "wall_outlier": False,
+                "worker_rss_before_gb": None, "worker_rss_after_gb": None,
+                "free_tokens": 0, "cost_usd": 0.0,
+            }
+        except BackendError:
+            break
+
     for attempt in (1, 2):
         try:
             return run_once(ctx, spec, run_ix)
@@ -476,6 +522,10 @@ def main() -> int:
 
         ctx.config.backends["cloud"].model = args.executor
         ctx.backends = build_backends(ctx.config)
+        # Generation rate is a property of the EXECUTOR. Carrying 3B rates
+        # into an 8B run would make every 8B call look like a stall, and the
+        # 8B is legitimately 10-16x slower per token.
+        reset_rates()
         ctx.config.profile_provenance["executor_override"] = args.executor
         # profile_provenance["backends"] was captured at config load, BEFORE
         # this override, so the report header named the wrong model while the
@@ -732,6 +782,16 @@ def main() -> int:
         "worker_reload_count": len(reloads),
         "worker_reload_cost_s": round(sum(x["cost_s"] for x in reloads), 1),
         "refresh_commit_ratio_threshold": REFRESH_COMMIT_RATIO,
+        "machine_fault_keys": sorted({
+            x["key"] for xs in results.values() for x in xs
+            if x.get("machine_fault")}),
+        "excluded_keys": sorted({
+            x["key"] for xs in results.values() for x in xs
+            if x.get("excluded")}),
+        "stall_rule": (
+            f"a call below {int(100 * 0.25)}% of the executor's running median "
+            "tok/s is aborted as a machine fault; the task re-runs once and is "
+            "EXCLUDED (never failed) if it stalls again"),
         "wall_outlier_keys": [r["key"] for r in rows if r.get("wall_outlier")],
         "commit_ratio_high_keys": [r["key"] for r in rows
                                    if r.get("commit_ratio_high")],

@@ -10,6 +10,8 @@ retry-for-format is pure wasted tokens.
 
 from __future__ import annotations
 
+import json
+import statistics
 import time
 
 import httpx
@@ -17,6 +19,70 @@ import httpx
 from ..config import BackendConfig
 from ..kernel.types import ModelResponse, TokenUsage
 from .base import BackendBase, BackendError
+
+# ---------------------------------------------------------------------------
+# Stall detection.
+#
+# Three times in one session a single model call ran an order of magnitude
+# slow: 2465 s in the v3 ladder probe, 2539 s for 512 tokens in the L6
+# verification run (about 0.2 tok/s against a normal 2-3), and 1499.8 s in the
+# documented orphan incident. They are 29x, 17x and 18x their run medians.
+#
+# Why this had to be fixed rather than logged: the task budget is WALL CLOCK
+# and `budget_exhausted` is scored as a FAILURE. So a machine stall converts a
+# task that would have passed into one that failed. In a paired trial that
+# manufactures a discordant pair out of a machine event, and interleaving the
+# arms cannot help - a single stalled call lands on exactly one arm by
+# definition. A machine stall is not a task outcome.
+#
+# Note the timeout that was already there did NOT bound this. The call carried
+# `timeout=600.0` and ran for 2539 s, because with `stream: False` httpx's
+# read timeout measures the gap between bytes, and the server sends nothing at
+# all until it is done. Streaming is therefore not incidental to the fix: it
+# is what makes a wall-clock rule enforceable, and closing the stream actually
+# stops the server generating, where abandoning a blocking request would leave
+# the worker busy and the retry queued behind it.
+_RATES: dict[str, list[float]] = {}
+
+STALL_FRACTION = 0.25          # abort below a quarter of the running median
+MIN_RATE_SAMPLES = 3           # no median, no judgement
+MIN_TOKENS_BEFORE_JUDGING = 24
+MIN_SECONDS_BEFORE_JUDGING = 45.0
+RATE_HISTORY = 50
+
+
+class ModelStall(BackendError):
+    """A call generating far below this executor's established rate.
+
+    Subclasses BackendError so nothing that already handles backend trouble
+    breaks, but callers that want to record it as `machine_fault` rather than
+    as a task failure can catch it specifically.
+    """
+
+    def __init__(self, msg: str, observed: float, median: float,
+                 tokens: int, elapsed: float):
+        super().__init__(msg)
+        self.observed_rate = observed
+        self.median_rate = median
+        self.tokens = tokens
+        self.elapsed = elapsed
+
+
+def record_rate(key: str, tokens_per_s: float) -> None:
+    if tokens_per_s > 0:
+        h = _RATES.setdefault(key, [])
+        h.append(tokens_per_s)
+        del h[:-RATE_HISTORY]
+
+
+def median_rate(key: str) -> float | None:
+    h = _RATES.get(key) or []
+    return statistics.median(h) if len(h) >= MIN_RATE_SAMPLES else None
+
+
+def reset_rates() -> None:
+    """Rates are per executor; a different model is a different baseline."""
+    _RATES.clear()
 
 
 class OllamaBackend(BackendBase):
@@ -53,7 +119,6 @@ class OllamaBackend(BackendBase):
                 {"role": "system", "content": prefix},
                 {"role": "user", "content": tail},
             ],
-            "stream": False,
             "options": options,
             # Keeping weights resident is the single biggest wall-clock win on
             # a CPU tier: a cold load measured 30s against 8s warm for the same
@@ -67,24 +132,73 @@ class OllamaBackend(BackendBase):
         if tools:
             body["tools"] = tools
 
+        body["stream"] = True
+        rate_key = f"{self.endpoint}|{self.model}"
+        baseline = median_rate(rate_key)
+
         client = self._client or httpx
+        parts: list[str] = []
+        final: dict = {}
+        first_token_at: float | None = None
+        n_chunks = 0
         try:
-            r = client.post(f"{self.endpoint}/api/chat", timeout=600.0, json=body)
-            r.raise_for_status()
+            with client.stream("POST", f"{self.endpoint}/api/chat",
+                               timeout=httpx.Timeout(connect=15.0, read=900.0,
+                                                     write=30.0, pool=15.0),
+                               json=body) as r:
+                r.raise_for_status()
+                for line in r.iter_lines():
+                    if not line:
+                        continue
+                    try:
+                        chunk = json.loads(line)
+                    except ValueError:
+                        continue
+                    piece = (chunk.get("message") or {}).get("content") or ""
+                    if piece:
+                        parts.append(piece)
+                        n_chunks += 1
+                        if first_token_at is None:
+                            first_token_at = time.time()
+                    if chunk.get("done"):
+                        final = chunk
+                        break
+
+                    # The rule, checked while it can still be acted on. Only
+                    # after enough tokens and enough seconds that the estimate
+                    # means something - judging a rate off two tokens would
+                    # abort healthy calls.
+                    if (baseline and first_token_at
+                            and n_chunks >= MIN_TOKENS_BEFORE_JUDGING):
+                        elapsed = time.time() - first_token_at
+                        if elapsed >= MIN_SECONDS_BEFORE_JUDGING:
+                            observed = n_chunks / elapsed
+                            if observed < STALL_FRACTION * baseline:
+                                raise ModelStall(
+                                    f"model call stalled at {observed:.2f} tok/s "
+                                    f"against a median of {baseline:.2f} "
+                                    f"({n_chunks} tokens in {elapsed:.0f}s) - "
+                                    "aborted as a machine fault, not a task "
+                                    "outcome",
+                                    observed, baseline, n_chunks, elapsed)
+        except ModelStall:
+            raise
         except Exception as e:  # noqa: BLE001
             raise BackendError(f"ollama call failed at {self.endpoint}: {e}") from e
 
-        d = r.json()
-        message = d.get("message", {}) or {}
-        text = message.get("content", "") or ""
+        text = "".join(parts)
+        out_tokens = final.get("eval_count", 0) or n_chunks
+        if first_token_at is not None:
+            gen_s = max(time.time() - first_token_at, 1e-6)
+            record_rate(rate_key, out_tokens / gen_s)
         return self._response(
             text,
             TokenUsage(
-                input_tokens=d.get("prompt_eval_count", 0) or 0,
-                output_tokens=d.get("eval_count", 0) or 0,
+                input_tokens=final.get("prompt_eval_count", 0) or 0,
+                output_tokens=out_tokens,
             ),
             t0,
-            {"done_reason": d.get("done_reason")},
+            {"done_reason": final.get("done_reason")},
         )
 
     def available(self) -> bool:
