@@ -128,3 +128,38 @@ snippet did not, so the code follows the test:
 * **The M5.3 sandbox cannot pass the M5 acceptance test as specified.** A
   subprocess with rlimits does not stop `Path(anchor_path).write_text(...)`.
   An audit hook inside the child now enforces it.
+
+---
+
+## Added 2026-09-05 (iteration one close)
+
+**30. A machine event is never scored as a task outcome.**
+A stalled or timed-out model call is aborted, the task re-runs once, and a
+second stall marks it `excluded` — reported as excluded, never as a failure
+and never silently dropped. `crashed` is unreachable for a machine event.
+Enforced per task by `assert_machine_fault_never_scored_as_failure` in
+`bench/noise.py`, before the row reaches the ledger.
+*Caught by:* `tests/test_stall_injection.py`.
+
+**31. A sandbox library may not widen the sandbox.**
+Every importable library declares a pinned version and whether it touches
+network, writes outside `artifact_scope`, or spawns subprocesses.
+Registration refuses anything answering yes, so widening the sandbox must be
+deliberate and visible in a diff.
+*Caught by:* `tests/test_sandbox_libraries.py`.
+
+**32. Runs with different toolset versions are never plotted together.**
+`TOOLSET_VERSION` is separate from `HARNESS_VERSION`: the library set does not
+change what counts as a pass, but it changes what a run can achieve.
+*Caught by:* the refusal block in `bench/report.py`.
+
+**33. A suite is always named explicitly.**
+No tool falls back to a default suite. A missing `--suite` or `--tasks` fails
+loudly naming what is absent; `ladder.py` raises on a task it has no prompt
+for rather than substituting another task's.
+*Caught by:* `required=True` and `SuiteDataMissing`.
+
+**34. Resume never blends two task orders.**
+`order_seed` is part of the run signature, so a ledger written under one
+randomised order cannot be continued under another.
+*Caught by:* `tests/test_noise_durability.py`.

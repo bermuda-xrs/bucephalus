@@ -10,6 +10,86 @@
 Dates are commit dates. `0.1.0` is not released yet — see "Unreleased" for
 what still stands between here and a first iteration.
 
+## Iteration one complete — 2026-09-05
+
+The reference measurement exists, the research question does not have an
+answer, and the reason is itself a result. See `RELEASE.md`.
+
+### Measured
+
+* **The reference run.** 30 tasks, `granite4.1:3b`, harness v2, randomised
+  order, 3.32 h. **24.1% raw / 28.0% timing-clean** — two denominators that
+  straddle the 25% band floor, differing only by four `budget_exhausted`
+  tasks whose timing the instrument itself flagged. Easy 3/10, medium 3/11,
+  hard 1/8. `done_unannounced` **zero**, against it being the 8B's dominant
+  failure mode: the 3B terminates properly and its failures are wrong
+  answers, not unannounced right ones.
+* **Trap distribution.** 3 of 19 numeric failures decompose to a declared
+  trap. The rest are unstructured — negative escape velocities on H28, H23
+  and M17, plus 5.3e12, 5.2e-23 and 0.0.
+
+### Concluded
+
+* **No skill was measurable on this substrate**, and that is a finding rather
+  than an absence. A skill repairs structured error; nothing in a written
+  procedure fixes a program that never implemented the physics. Property of
+  the model–task pairing, not evidence about skills.
+* **Trap decomposition is a cheap pre-test for whether a skill experiment is
+  possible at all** — minutes against a 4-hour experiment avoided. The
+  `coverage.py` contrast sharpens it: coverage predicted 20/30, the
+  measurement found 3, because declared-trap coverage is not measured-trap
+  incidence.
+* **Phase 3 was skipped** on that evidence: 3 decomposable failures across 2
+  families against a gate floor of 10 discordant pairs. No route.
+
+### Changed
+
+* **The aerospace suite is archived**, not deleted. `git mv` throughout, 154
+  files moved as renames. Every published number remains reproducible from
+  `bench/suites/archive/`. It is no longer any tool's default — `--suite` and
+  `--tasks` are required arguments and a missing suite fails loudly.
+* **`ladder.py` is decoupled** rather than archived, because it carries the
+  project's best finding. Prompts are suite-supplied data extracted
+  programmatically rather than retyped; `expected_for()` takes a grader path
+  instead of resolving against the process CWD; an unknown task raises.
+  Acceptance shown rather than asserted: **16 prompt entries compared, 0
+  differences; 43 verdicts compared, 0 changes.**
+* **A sandbox-library layer**, separate from the tool surface. Libraries
+  declare a pinned version and whether they touch network, write outside
+  scope, or spawn subprocesses; registration refuses anything that would
+  widen the sandbox. `TOOLSET_VERSION` is stamped on every run and
+  `report.py` refuses to plot across differing values.
+* **sympy 1.13.3** as the first entry, verified inside the real sandbox with
+  three runs rather than assumed: `solve` → `[-sqrt(2), sqrt(2)]`, `simplify`
+  → `x + 1`, and `900 km/h` → `250 m/s` through `sympy.physics.units`. It
+  landed **after** the 2A measurement and is reflected in no published
+  number — that run was TOOLSET_VERSION 0.
+* **The abort rule now counts EXCLUDED only.** `machine_fault` is health
+  telemetry with no abort authority. The previous rule conflated H23, which
+  stalled once and produced a valid measured result, with M11, whose data was
+  lost — and would have aborted a healthy run on evidence recovery worked.
+
+### Found
+
+Four more decomposer defects, all fixed during 2B and all **adversarial to
+the conclusion**: every one moved the trap count **upward, 1 → 3**, pushing
+against the STOP, and the STOP held anyway. Recorded in FINDINGS 1.15 as a
+researcher-degrees-of-freedom disclosure rather than left to be noticed.
+
+The residual gate sat **below the rounding floor of its own inputs, twice** —
+a check that could not have matched anything, announcing nothing. It is now
+per-task, three half-ulps of the last significant figure, measured in
+significant figures rather than decimal places.
+
+Two more process defects logged: user-facing stop paths do not route through
+`kill_tree` (C13's fourth appearance — a manual stop left both the wrapper and
+the interpreter running while the ledger kept growing), and the wall-outlier
+detector cannot flag the first three tasks of a run.
+
+`docs/DEFERRED.md` now carries twelve entries. The freeze held: everything
+above was either a granted exception or a defect that would have invalidated
+a measurement in flight.
+
 ## Unreleased — Phase 1: the tax measured, v3 rejected
 
 `HARNESS_VERSION` remains **2**. v3 was evaluated and rejected on evidence;

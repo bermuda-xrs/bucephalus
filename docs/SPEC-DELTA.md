@@ -353,3 +353,53 @@ the 8B run procedure, not as a general "check free memory" note, and record
 free memory per task rather than only at preflight.
 **Class:** oversight — the hardware note records total RAM but never the
 headroom an 8B run actually needs.
+
+### C21. The suite was the default, which is how it became load-bearing
+
+**Reality:** `noise.py --suite` defaulted to `aero_calc`, `coverage.py
+--tasks` to `bench/tasks/aero_calc`, and `ladder.py` hard-coded
+`get_suite_by_name("aero_calc")` for its loop rungs while carrying four tasks'
+orbital mechanics as source literals. No one ever chose the aerospace suite
+for a given run; it arrived by default and stayed.
+
+**Correct version:** a suite is a REQUIRED argument everywhere, with no
+fallback. A missing suite fails loudly naming what is missing. `ladder.py`
+takes its prompts as suite-supplied data and raises on an unknown task rather
+than silently substituting E01's physics — which would measure a different
+question and report it as the right one.
+
+**Class:** oversight, and a slow one. Convenience defaults are how a general
+instrument acquires a domain.
+
+### C22. Sandbox libraries are a second extension surface and were unmanaged
+
+**Reality:** anything installed in the environment was importable by
+model-written code inside `run_code`. Tools pass the capability gate;
+imports do not. So the set of things a model could reach was whatever
+`setup.ps1` happened to install, undeclared and unversioned.
+
+**Correct version:** `execute/libraries.py`. Each library declares a pinned
+version and explicitly whether it touches network, writes outside
+`artifact_scope`, or spawns subprocesses. Registration REFUSES anything
+answering yes. `TOOLSET_VERSION` is stamped on every run and `report.py`
+refuses to plot across differing values — because a model that can import
+sympy is not attempting the same problem as one that cannot, even though the
+pass criterion is unchanged.
+
+**Class:** oversight. The gap was never exploited; it was simply never named.
+
+### C23. An instruction can carry the same defect as an instrument
+
+**Reality:** five instruction-level errors in this iteration had the identical
+shape as the code defects — a stated criterion measuring something adjacent to
+what it claimed. An abort threshold counting "experienced a machine event"
+when the thing that mattered was "lost data". An ablation design measuring
+necessity-given-the-others when the question was sufficiency. A premise that a
+value was "unstructured" when it decomposed exactly.
+
+**Correct version:** apply the same test to instructions as to checks — *what
+would this score for something that behaved correctly but unusually?* — and
+decompose values rather than inheriting labels.
+
+**Class:** not a spec error. Recorded because the taxonomy was incomplete
+without it, and because it was caught by the same discipline as the rest.

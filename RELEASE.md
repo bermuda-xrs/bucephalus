@@ -105,3 +105,80 @@ If a result is disappointing, publish it anyway with the caveats intact. The
 literature says self-generated skills average about **−1 point**. The gate
 exists so that failing is *visible* rather than silent, and a believable
 number with its flaws disclosed beats an impressive one nobody can check.
+
+---
+
+# ITERATION ONE: COMPLETE — 2026-09-05
+
+Marked complete on the terms this document set out: *a measurement, plus an
+instrument honest enough that the measurement can be checked.* Both exist. The
+original research question does not have an answer, and section "What was not
+answered" below says why in plain terms.
+
+## Delivered
+
+| | |
+|---|---|
+| **The runtime** | M1–M13, 376 tests, entirely offline. Plans, executes, verifies, refuses instructions embedded in fetched content, hash-chains its own trail |
+| **The packaged wheel** | Builds and runs a task from another directory (`scripts/postinstall_check.py`) |
+| **The ladder instrument** | `bench/ladder.py` — six rungs of escalating scaffolding. Now suite-agnostic: prompts are data, the grader path is explicit, an unknown task raises rather than falling back |
+| **The reference measurement** | 30 tasks, `granite4.1:3b`, harness v2. **24.1% raw / 28.0% timing-clean.** Per-tier, per-task, with the machine-fault exclusions named. The first complete pass in the project's history |
+| **Two findings** | Answer position discriminates correctness (FINDINGS 1.6); trap decomposition is a pre-test for skill measurability (1.14) |
+| **The defect taxonomy** | Six instrument defects, five process defects, twelve deferred. Two classes with a stated pattern for each, and a fourth and fifth instance found in this iteration by applying that pattern deliberately |
+
+## What was not answered
+
+**The research question — do self-generated skills help? — was not answered.**
+Not deferred, not partially answered: not answered.
+
+**Why: the substrate could not support the measurement.** Phase 2B decomposed
+every failing value from the reference run. Three of nineteen numeric failures
+correspond to a trap the suite declares. The rest are unstructured — negative
+escape velocities, 5.3e12, 5.2e-23, 0.0.
+
+A skill repairs *structured* error. A units-discipline procedure can fix "read
+km as m"; nothing written in a procedure fixes a program that ran and never
+implemented the physics. So the paired trial could not have produced
+discordant pairs regardless of how good the skill was, and the gate's floor of
+10 was unreachable with 3 decomposable failures across 2 families.
+
+This is a property of the **model–task pairing**, not evidence about skills.
+It is also not a failure of the gate: the gate was never given a chance to
+fire, which is precisely what the pre-test in FINDINGS 1.14 exists to detect
+*before* four hours are spent.
+
+Consequently:
+
+- **M11, the skill generator, has never run.** By design — the calibration
+  positive control never passed, and a gate that has not been shown to detect
+  a real effect makes every later rejection uninterpretable.
+- **No skill has been through the gate.** Not the calibration skill, not a
+  generated one.
+- **The 8B tier was not measured at suite scale.** It does not fit this
+  hardware at the harness's context length: 7.64 GB resident against 3.6–6.4
+  GB free. An evidenced correction to the spec's laptop-tier assumption
+  (SPEC-DELTA C20), recorded rather than worked around.
+
+## What the next iteration needs
+
+Not a bigger suite — a **different** one, chosen from evidence rather than
+intuition, and sized to what a 3B can actually do inside a harness. Two
+measurements from this iteration constrain that choice:
+
+1. **The failures must be structured** for any skill experiment to be
+   possible. Run the decomposition pre-test on a candidate suite before
+   committing to paired trials.
+2. **The task shape matters more than the domain.** E01's goal is 115 words of
+   which 10 are physics and 105 are I/O contract. The spec's own stated scope
+   for a local tier is "summarizing, sorting, extracting" — which this suite
+   never was.
+
+The aerospace suite is archived, not deleted, and every number above remains
+reproducible from `bench/suites/archive/`.
+
+## Honest status of the checklist above
+
+Items in section 1 referring to `tests/test_bench_suite.py` and the 30-task
+aero suite now refer to **archived** components. They still pass, from
+`tests/archive/`. The test count in that section (223) predates this
+iteration; the current count is **376**.

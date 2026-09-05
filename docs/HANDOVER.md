@@ -222,29 +222,77 @@ split, profile or executor.
 | | |
 |---|---|
 | Branch | `measurement-2026-09-01` (off `main` at `148cd99`; no remote) |
-| Harness version | **2** (`HARNESS_VERSION` in `src/agent/__init__.py`) — v3 was evaluated and **rejected**, see section 7 |
-| Tests | 326 passing |
+| Harness version | **2** — v3 was evaluated and **rejected**, see section 7 |
+| Toolset version | **1** — sympy 1.13.3, added AFTER the reference measurement |
+| Tests | **376 passing** |
 | Working tree | clean |
-| Running | the dedicated Ollama on 11435; no model resident |
-| Last completed step | **Phase 1** — G3, G4 and the v3 probe (sections 6, 7; FINDINGS 1.6–1.11) |
-| Next step | Full 30 tasks on the 8B, harness v2 — **blocked on memory**, see below |
+| Running | nothing |
+| Last completed step | **Iteration one closed.** See `RELEASE.md` |
+| Next step | Choose a new suite — from evidence, not intuition. See below |
 
-**The memory ceiling is now measured, not estimated.** At the executor's
-`usable_context_window: 16384`, `granite4.1:8b` is **7.64 GB resident**, and
-`--executor` overrides only the model name, so a full-suite 8B run uses
-exactly that. Free memory with no model loaded has been observed between
-**3.6 and 6.4 GB** depending on what else is open. The house rule's floor is
-2 GB *free*; loading the 8B at 6.4 GB free leaves **0.79 GB**.
+### Where the project actually stands
 
-This is not an orphan and cannot be reaped — it is the OS, the editor, the
-browser, and any other model runtime. A full 8B pass under those conditions
-will page, and the one cost axis this project has is wall-clock seconds. One
-such event is already on record from Phase 1: a single model call took
-**2465 s** against a 600 s budget and manufactured a `budget_exhausted`.
+**Iteration one is complete and the research question is not answered.** Those
+are both true and the second is not a failure of the first. `RELEASE.md` states
+it plainly; FINDINGS 1.13 gives the evidence.
 
-**Before any 8B run, close other applications and confirm free memory is
-above ~8.5 GB.** `LM Studio` in particular is a second model runtime and will
-compete directly.
+The short version: the reference measurement ran (24.1% raw / 28.0%
+timing-clean on the 3B), and then Phase 2B decomposed every failing value and
+found that **3 of 19 numeric failures correspond to a trap the suite
+declares.** The rest are unstructured. A skill repairs structured error, so no
+skill could have been measured to help here — which is a property of the
+model–task pairing, not evidence about skills.
+
+**The aerospace suite is archived** under `bench/suites/archive/`,
+`bench/tasks/archive/` and `bench/archive/decompose_aero.py`. Nothing was
+deleted and every published number remains reproducible. It is no longer any
+tool's default: `--suite` and `--tasks` are required arguments.
+
+### What the next iteration needs
+
+Not a bigger suite — a **different** one, and the two constraints below come
+from measurement rather than taste:
+
+1. **Run the decomposition pre-test before committing to paired trials**
+   (FINDINGS 1.14). If a candidate suite's failures do not decompose, no skill
+   has a handle and the experiment cannot produce discordant pairs. Minutes of
+   analysis against four hours.
+2. **Size it to what a 3B can do in-harness.** E01's goal is 115 words of
+   which 10 are physics and 105 are I/O contract. The spec's own stated scope
+   for a local tier is "summarizing, sorting, extracting", which this suite
+   never was.
+
+Do **not** treat `coverage.py`'s number as a readiness signal. It predicted
+20/30 here and the measurement found 3, because declared-trap coverage is not
+measured-trap incidence (DEFERRED D12).
+
+### The memory ceiling, measured
+
+At the executor's `usable_context_window: 16384`, `granite4.1:8b` is **7.64 GB
+resident**, against 3.6–6.4 GB free depending on what else is running. Loading
+it leaves ~0.8 GB against a 2 GB floor, so a full 8B pass pages throughout —
+and wall-clock seconds is the only cost axis this project has. The 8B tier is
+**not viable on this hardware**, recorded as an evidenced correction to the
+spec's laptop-tier assumption (SPEC-DELTA C20).
+
+The 3B is 3.25 GB resident and fits with room.
+
+### Two things that will bite a new session
+
+**A stopped run may not be stopped.** A venv `python.exe` on Windows is a
+trampoline, and user-facing stop paths do not route through `kill_tree`
+(DEFERRED D10). A manual stop during this iteration left both the wrapper and
+the real interpreter running while the ledger kept growing. Check for a live
+`python.exe` with `bench/noise.py` in its command line before concluding
+anything is idle.
+
+**Long runs are resumable, but only with the seed.** Task order is randomised
+and `order_seed` is part of the resume signature, so continuing a killed run
+needs `--order-seed <the recorded seed> --resume`. The seed is printed at
+start and stored in the ledger's signature line. Without it the run refuses to
+resume rather than blending two orders — which is the guard working, not a
+bug.
+
 
 ---
 

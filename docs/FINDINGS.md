@@ -578,3 +578,176 @@ than silent.
   would say the local tier's scope in the spec — "summarizing, sorting,
   extracting" — is right, and that this task family was always the wrong ask
   for a 3.4B.
+
+---
+
+## 5. Reading order, by evidential strength
+
+The findings above accumulated chronologically. This is the order to read
+them in if you want the strongest claims first.
+
+| # | Finding | Where | Strength |
+|---|---|---|---|
+| 1 | **Answer position, not response length, discriminates correctness** | 1.6 | Strongest. E05 is a natural control — same task, same rung, same prompt bytes, temperature 0, both behaviours observed. Warm-only timings 39.8 → 6.7 → 1.5 → 2.8 s. The R1→loop correspondence is **n=4 distinct tasks, each observed twice with identical outcomes**: replication, not extension |
+| 2 | **The tax is capacity-dependent** | 1.7, 1.12 | Strong. 3B 0/5 vs 8B 5/5 at R1. Two caveats travel with it: the 8B costs 10–16× the wall clock, and its shown working is **not** a faithful trace of what produced its answer. Plus the behavioural split from 2A — `done_unannounced` was the 8B's dominant failure mode and is **zero** for the 3B |
+| 3 | **The reference measurement** | 1.12 | Solid, single run. 24.1% raw / 28.0% timing-clean, both denominators, the straddle of the 25% floor, per-tier, and four `budget_exhausted` failures whose timing the instrument itself flagged |
+| 4 | **Failures are unstructured, so no skill was measurable** | 1.13 | Solid. 3 of 19 numeric failures decompose to a declared trap. A skill repairs structured error; there was nothing here to repair |
+| 5 | **Trap decomposition as a pre-test for skill measurability** | 1.14 | Methodological, and the transferable one. Scope: one model, one suite, one iteration |
+| 6 | **What was not measured** | 2, 3, DEFERRED | — |
+
+**Not measured, restated plainly:** no skill has ever been through the gate;
+M11 (the generator) has never run; the 8B does not fit this hardware at the
+harness's context length; every token figure is an uncalibrated estimate *and*
+invariant 11's context ceiling budgets against that same estimator; and the
+twelve entries in `docs/DEFERRED.md`.
+
+---
+
+## 6. Method — how the instrument was corrected
+
+Separate from the findings, because this iteration's clearest output is not a
+number. Eleven defects were found across two classes, and the ones below are
+the episodes where the *process* caught what judgement missed.
+
+### 6.1 The leak, and the rule that stopped a misdiagnosis landing
+
+Phase 2A aborted at task 23 of 30 on a memory-suspect count. The commit ratio
+across those 23 tasks:
+
+```
+1.231 1.231 1.240 1.253 1.255 1.280 1.292 1.296 1.315 1.316 1.326 1.335
+1.354 1.366 1.375 1.377 1.377 1.381 1.391 1.400 1.409 1.415 1.421
+```
+
+Twenty-three consecutive readings, **not one decrease**. Free memory over the
+same span oscillated 0.44 → 2.34 → 1.41 GB, so free memory alone could not
+see it.
+
+**The misdiagnosis.** Mid-run I judged the flags false positives — "too tight
+by roughly 0.05", "three of these five are false positives" — because the
+flagged tasks were not slow. They were not slow *yet*.
+
+**What stopped it landing** was a rule, not an insight: *do not retune a
+threshold mid-run when loosening it would conveniently avoid an abort.* The
+analysis that would have overridden the rule was the thing that was wrong.
+
+**The isolation measurement**, which settled it:
+
+| state | committed | `llama-server` RSS |
+|---|---|---|
+| no model | 15.44 GB | — |
+| fresh 3B, 16k | 18.92 GB | 3.41 GB |
+| after 23 tasks | 22.12 GB | 4.86 GB |
+| after reload | 18.92 GB | 3.41 GB |
+
+The harness was innocent — the ratio read **1.431 after the Python process
+was killed**, higher than while it ran. ~139 MB/task, fully reclaimed by a
+reload. Confirmed independently at 141 MB/task by direct RSS measurement.
+
+### 6.2 The signal that detected the leak was the wrong controller
+
+The commit ratio *found* the leak and was load-bearing in doing so. It is
+useless as the per-task flag. Post-fix it read 1.278–1.634 across ten healthy
+tasks, so the old "pathological" anchor of 1.574 sat **inside** the healthy
+range.
+
+Replayed over the L6 verification run:
+
+| rule | flagged |
+|---|---|
+| commit ratio ≥ 1.40 | **8 of 10** — including a task with 2.52 GB free |
+| wall clock > 3× running median | **1 of 10** — exactly the one with a genuine 17× slowdown |
+
+A detector and a controller are different jobs. The same signal can be
+excellent at one and useless at the other.
+
+### 6.3 The stall wiring: correct at both ends, caught one level too low
+
+The stall detector worked and the `machine_fault` handler worked. Two Phase 2A
+attempts still aborted, because the handler sat *below* a generic
+`except BackendError`, so a stall was converted to `crashed` and scored as a
+task failure before the handler could see it.
+
+**A test asserting that `ModelStall` gets raised would have passed throughout
+the entire defect.** The rule that follows: *when a check fires and the
+outcome is still wrong, verify the path from check to outcome, not the check.*
+
+The fix was not to improve recognition. An earlier guard tried to *recognise*
+a machine cause in the row — looking for a `stalls` key or "timed out" in an
+error string — and a crashed row carrying neither went straight through it.
+Recognition was the part that kept failing, so every machine event now has its
+own terminal status and `crashed` is simply unreachable for one.
+
+### 6.4 The residual gate below its own inputs' rounding floor — twice
+
+The decomposer's match tolerance was set to 1e-6, then 2e-5. Both were
+**below the rounding error of the values being compared**, so entire families
+of correct decomposition could never match — a check that could not have
+matched anything, announcing nothing.
+
+* 1e-6 hid E03's exact `sqrt(2·mu_mars/R_earth)` hit at residual 9.36e-06.
+* 2e-5 then hid E07's exact `thrust/mdot` hit at residual 1.34e-04 — the g₀
+  trap E07 explicitly declares.
+
+The floor is **per-task**, because the suite tables values to differing
+precision: `5027.0` (floor ~9.4e-06) against `287.7` (floor ~1.7e-04). The
+gate is now three half-ulps of the last significant figure, measured in
+**significant figures rather than decimal places** — `7.138e6` reprs as
+`7138000.0`, and a decimal count reads that as far more precise than it is.
+
+### 6.5 Injection over observation
+
+Stalls occurred roughly three times in sixty tasks. A five-task shakedown
+would almost certainly have seen none, and "no stall occurred" is not evidence
+a handler works.
+
+Injecting the condition found **three defects a real run had not surfaced**:
+an unregistered event type that crashed the handler on its first use, the
+generic-catch ordering above, and a transport timeout path that produced no
+stall record at all.
+
+*Prefer injecting a condition over waiting to observe it. Absence of a rare
+event is not evidence a handler works.*
+
+### 6.6 Instruction-level errors
+
+Recorded beside the code defects, because they are the same class of mistake
+and were caught the same way.
+
+| Error | How it was caught |
+|---|---|
+| The "unstructured" premise — v2's 11185784.55 was assumed not to decompose | Decomposing it. It is `sqrt(mu/(R + alt_km))` × the escape-formula and ×1000 decorations; v2 and v3 share an **identical** radius error |
+| The leave-one-out ablation design | Noticing the three skill modules are **redundant** against the observed error, so removing any one leaves the others compensating. Leave-one-in measures sufficiency; leave-one-out measures only necessity-given-the-others |
+| "The uncalibrated tokenizer does not corrupt any result" | Invariant 11's context ceiling **budgets against that same estimator**, so it is a live safety consequence, not only a reporting caveat |
+| A brief referenced but never supplied | Refusing to execute it rather than reconstructing it from context |
+| An abort threshold conflating recovered faults with lost data | Noticing that H23 recovered and produced a valid result while M11's data was lost, and that counting them together aborts a healthy run on evidence that recovery worked |
+
+The pattern across all five: **a stated criterion that measured something
+adjacent to what it claimed.** It is the same shape as the six instrument
+defects, and it does not stop being that shape because it appeared in an
+instruction rather than in code.
+
+---
+
+## 7. Pareto — one arm, and why the second was cut
+
+**One point, plotted honestly, beats two with a void one.**
+
+| arm | median s/task | pass rate | harness | toolset |
+|---|---|---|---|---|
+| `granite4.1:3b`, bare | **252.0 s** | 24.1% raw / 28.0% timing-clean | 2 | 0 |
+
+**Why there is no second arm.** The 8B was the intended comparison and it was
+cut on measurement, not preference: it is **7.64 GB resident** at the
+executor's `num_ctx: 16384`, against 3.6–6.4 GB free depending on what else is
+running. Loading it leaves ~0.8 GB against a 2 GB floor. A full 8B pass would
+have paged throughout, and the *only* cost axis this project has is wall-clock
+seconds — so the second point would have been a measurement of the pagefile.
+
+Recorded as an evidenced correction to the spec's laptop-tier assumption
+(SPEC-DELTA C20), not as a gap.
+
+**Two caveats on the point that is plotted.** Its median excludes nothing, but
+five tasks carried wall-outlier flags, and four of those are `budget_exhausted`
+— failures decided by a clock the instrument distrusted. And the dollar axis
+is `n/a`: every call cost $0.0000 under `--profile local`.
