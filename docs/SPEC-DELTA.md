@@ -403,3 +403,40 @@ decompose values rather than inheriting labels.
 
 **Class:** not a spec error. Recorded because the taxonomy was incomplete
 without it, and because it was caught by the same discipline as the rest.
+
+### C24. The wheel never shipped the operator console
+
+**Reality:** `pyproject.toml`'s `package-data` listed `themes/*.toml`,
+`assets/*.ans` and `py.typed`, but not `control/*.html`. `ui.html` is 569
+lines and is read at request time by `GET /`, so a pip-installed control
+plane started, served its whole JSON API correctly, and raised
+`FileNotFoundError` on the one route a human opens.
+
+**How it was found:** verifying that Phase Q had not broken the user-facing
+paths. It had not — this predates the quarantine entirely and was never a Q
+regression. It survived because every test and every launcher runs from the
+checkout, where `ui.html` sits beside `server.py` and the packaging is never
+exercised. `scripts/postinstall_check.py` installs the wheel and runs a task,
+which is why it passed: it never opens the console.
+
+**Correct version:** `control/*.html` added to `package-data`. Verified by
+rebuilding and reinstalling into a clean venv in another directory:
+`ui.html present in installed copy: True - 26287 bytes`.
+
+**Class:** oversight, and the same shape as the rest — a check that measured
+something adjacent to what it claimed. The postinstall check verifies "an
+installed wheel can run a task", which is true and was never the same claim
+as "an installed wheel is usable".
+
+### C25. `wmic` is not available on current Windows builds
+
+**Reality:** `wmic.exe` is deprecated and absent on this Windows 11 build.
+Anything shelling out to it fails with `FileNotFoundError [WinError 2]`.
+Nothing in `src/` depends on it — this was hit in an ad-hoc diagnostic — but
+it is worth recording before someone reaches for it.
+
+**Correct version:** `Get-CimInstance Win32_Process` from PowerShell, or
+`proc.process_table()`, which already reads parentage through
+`CreateToolhelp32Snapshot` and needs no subprocess at all.
+
+**Class:** environment drift.
