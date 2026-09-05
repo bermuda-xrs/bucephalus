@@ -100,6 +100,9 @@ def render(noise: dict | None, cal: dict | None) -> str:
     if (src or {}).get("budget_scale", 1.0) != 1.0:
         add(f"* **time budgets scaled** x{(src or {}).get('budget_scale')} "
             "(so a slower executor is compared on models, not step budgets)")
+    add(f"* **toolset version** {(src or {}).get('toolset_version', 'UNKNOWN')}"
+        f" — libraries importable by model-written code:"
+        f" {', '.join((src or {}).get('sandbox_libraries') or ['none recorded'])}")
     add(f"* **harness version** {(src or {}).get('harness_version', 'UNKNOWN')} "
         "— pass rates are comparable only within one version")
     add(f"* **profile** `{(src or {}).get('profile', 'unknown')}` — "
@@ -262,6 +265,21 @@ def render(noise: dict | None, cal: dict | None) -> str:
             "post-fix rates answer different questions and a frontier drawn "
             "through both is meaningless. Re-run the older arm on the current "
             "harness.")
+        add("")
+        pts = []
+
+    # T3 - the same refusal for the TOOLSET version. The library set does not
+    # change what counts as a pass, so it is not a harness bump; but a run
+    # whose model could import sympy is not attempting the same problem as one
+    # that could not, and a frontier through both would attribute a tooling
+    # difference to the model or the skill.
+    tvs = {p.get("toolset_version") for p in pts}
+    if len(tvs) > 1:
+        add("> **REFUSING TO PLOT.** These points come from different toolset "
+            f"versions ({sorted(v for v in tvs if v is not None)}). The set of "
+            "libraries model-written code may import differs between them, so "
+            "they are not attempting the same problem. Re-run the older arm on "
+            "the current toolset.")
         add("")
         pts = []
 

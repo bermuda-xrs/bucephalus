@@ -135,3 +135,40 @@ def test_the_invariant_runs_on_every_task_not_just_at_the_end():
     assert "assert_machine_fault_never_scored_as_failure(out)" in src[i:j], (
         "the invariant must be checked between running a task and writing it "
         "to the ledger")
+
+
+# ---------------------------------------------------------------------------
+# The abort rule: EXCLUDED counts, machine_fault does not.
+# ---------------------------------------------------------------------------
+
+def test_a_recovered_machine_fault_carries_no_abort_authority():
+    """H23 stalled once, re-ran, and produced a valid measured result. M11
+    stalled twice and its data was lost. Only the second is missing data.
+
+    The first version of the rule counted `machine_fault OR excluded`, which
+    would have aborted a healthy run on evidence that recovery WORKED.
+    """
+    n = _noise()
+    recovered = {"key": "H23", "status": "plateau", "passed": False,
+                 "machine_fault": True, "excluded": False, "unmeasured": False}
+    lost = {"key": "M11", "status": "excluded_machine_fault", "passed": False,
+            "machine_fault": True, "excluded": True, "unmeasured": True}
+
+    n.assert_machine_fault_never_scored_as_failure(recovered)
+    n.assert_machine_fault_never_scored_as_failure(lost)
+
+    assert not recovered["excluded"]
+    assert lost["excluded"]
+
+
+def test_the_abort_threshold_counts_excluded_only():
+    n = _noise()
+    src = (ROOT / "bench" / "noise.py").read_text(encoding="utf-8")
+    assert n.ABORT_EXCLUDED_MAX == 3
+    i = src.index("excluded_so_far = sum(")
+    j = src.index("ABORT_EXCLUDED_MAX:", i)
+    window = src[i:j]
+    assert 'x.get("excluded")' in window
+    assert "machine_fault" not in window, (
+        "machine_fault must not enter the abort count - a recovered stall is "
+        "evidence the handler worked, not a reason to stop")

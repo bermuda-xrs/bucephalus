@@ -38,7 +38,7 @@ from agent.kernel.tasks import create_task  # noqa: E402
 from agent.kernel.types import Budget, TaskContract  # noqa: E402
 from agent.models.base import BackendError  # noqa: E402
 from agent.models.ollama import ModelStall, reset_rates  # noqa: E402
-from agent import HARNESS_VERSION  # noqa: E402
+from agent import HARNESS_VERSION, TOOLSET_VERSION  # noqa: E402
 from agent.proc import (  # noqa: E402
     free_memory_gb, memory_pressure, reap_orphans, worker_rss_gb)
 
@@ -61,6 +61,20 @@ from agent.proc import (  # noqa: E402
 # kept only as an emergency backstop, well below normal operation.
 COMMIT_RATIO_SUSPECT = 1.40
 EMERGENCY_FREE_GB = 0.50
+
+# When a run has lost too much data to be a measurement.
+#
+# The threshold counts EXCLUDED tasks only. An earlier version counted
+# `machine_fault OR excluded`, which conflated two different things: H23
+# stalled once, re-ran, and produced a perfectly valid measured result, while
+# M11 stalled twice and its data was lost. Only the second removes a
+# measurement. Counting them together would have aborted a healthy run on
+# evidence of recovery.
+#
+# `machine_fault` is retained as HEALTH TELEMETRY with no abort authority: it
+# says a stall occurred and was handled, which is worth knowing and is not a
+# reason to stop.
+ABORT_EXCLUDED_MAX = 3
 
 # L5. RE-ANCHORED after the L6 verification run. Read this before changing it.
 #
@@ -362,6 +376,19 @@ def assert_machine_fault_never_scored_as_failure(row: dict) -> None:
     if row.get("machine_fault") and row.get("passed") and row.get("excluded"):
         raise AssertionError(
             f"{row.get('key')}: excluded tasks cannot also be passes")
+
+
+def _library_provenance() -> list[str]:
+    """Pinned versions of everything model-written code could import.
+
+    Recorded per run, not just the version number, so a later reader can see
+    WHAT changed rather than only that something did.
+    """
+    try:
+        from agent.execute.libraries import REGISTRY
+        return REGISTRY.provenance()
+    except Exception:  # noqa: BLE001 - provenance must never stop a run
+        return []
 
 
 def classify(passes: list[bool]) -> str:
@@ -705,6 +732,18 @@ def main() -> int:
             out["key"] = key
             assert_machine_fault_never_scored_as_failure(out)
 
+            excluded_so_far = sum(
+                1 for xs in results.values() for x in xs if x.get("excluded")
+            ) + (1 if out.get("excluded") else 0)
+            if excluded_so_far > ABORT_EXCLUDED_MAX:
+                append_run(ledger, sig, out)
+                raise SystemExit(
+                    f"ABORT: {excluded_so_far} tasks excluded as machine "
+                    f"faults, above the limit of {ABORT_EXCLUDED_MAX}. Too "
+                    "much data is missing for this to be a measurement. The "
+                    "ledger is intact and resumable; partial results must NOT "
+                    "be reported as a pass rate.")
+
             # A task far off the run's own median is the signature of the
             # pathological single call this project keeps hitting - 2539 s for
             # 512 tokens in L6, 2465 s in the v3 probe, 1499.8 s historically.
@@ -827,12 +866,18 @@ def main() -> int:
         "min_free_gb_any_task": min(
             [r["min_free_gb"] for r in rows
              if r.get("min_free_gb") is not None] or [None]),
+        "toolset_version": TOOLSET_VERSION,
+        "sandbox_libraries": _library_provenance(),
         "order_seed": args.order_seed,
         "task_order_randomised": True,
         "worker_reloads": reloads,
         "worker_reload_count": len(reloads),
         "worker_reload_cost_s": round(sum(x["cost_s"] for x in reloads), 1),
         "refresh_commit_ratio_threshold": REFRESH_COMMIT_RATIO,
+        "abort_excluded_max": ABORT_EXCLUDED_MAX,
+        "machine_fault_note": (
+            "health telemetry only - a recovered stall produced a valid "
+            "measured result and carries no abort authority"),
         "machine_fault_keys": sorted({
             x["key"] for xs in results.values() for x in xs
             if x.get("machine_fault")}),

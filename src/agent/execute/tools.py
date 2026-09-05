@@ -72,9 +72,26 @@ class ToolRegistry:
 
     def manual(self) -> str:
         """Rendered into the cache-stable prefix — must be deterministic."""
-        return "\n".join(
+        lines = [
             t.manual_line() for t in sorted(self._tools.values(), key=lambda t: t.name)
-        )
+        ]
+        libs = _library_manual()
+        if libs:
+            # Aimed at the measured failure mode. The harness-tax work
+            # found a 3.4B answering immediately with no working and
+            # getting the arithmetic wrong (FINDINGS 1.6), and Phase 2B
+            # found its failures are overwhelmingly unstructured -
+            # negative escape velocities, 5e12, 0.0 (FINDINGS 1.13).
+            # Offloading exact computation to a symbolic engine targets
+            # that directly: sympy does not make arithmetic slips, and
+            # it converts units without a remembered factor.
+            lines.append("")
+            lines.append("Inside run_code you may also import:")
+            lines.append(libs)
+            lines.append(
+                "  Use them for exact arithmetic or unit conversion "
+                "rather than computing it in your head.")
+        return "\n".join(lines)
 
     def read_only(self) -> "ToolRegistry":
         r = ToolRegistry()
@@ -82,6 +99,20 @@ class ToolRegistry:
             if not t.side_effecting:
                 r.register(t)
         return r
+
+
+def _library_manual() -> str:
+    """Sandbox libraries, if the registry is importable.
+
+    Tolerant on purpose: a missing registry degrades to "no
+    libraries listed" rather than breaking the cache-stable prefix
+    that every prompt in the system is built from.
+    """
+    try:
+        from .libraries import REGISTRY
+        return REGISTRY.manual()
+    except Exception:  # noqa: BLE001
+        return ""
 
 
 # --------------------------------------------------------------------------

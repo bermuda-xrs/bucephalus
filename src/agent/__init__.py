@@ -13,3 +13,21 @@ __version__ = "0.1.0"
 #      grader moved outside artifact_scope; max_steps 10; budget charged
 #      wall clock; per-backend action protocol; monotonic scorer.
 HARNESS_VERSION = 2
+
+
+# Bump this whenever the set of libraries model-written code may import
+# changes. It is SEPARATE from HARNESS_VERSION on purpose.
+#
+# HARNESS_VERSION governs what counts as a PASS. The library set does not
+# touch that - a correct answer is correct either way. But it absolutely
+# changes what a run can ACHIEVE: a model that can import sympy is not
+# attempting the same problem as one that cannot, and comparing their pass
+# rates would attribute a tooling difference to the model or the skill.
+#
+# This exists so the next several tool additions cannot silently invalidate
+# comparisons the way the aerospace suite silently became the default.
+#
+#   1  2026-09-05: sympy 1.13.3. Added AFTER the Phase 2A reference
+#      measurement, which therefore ran at TOOLSET_VERSION 0 and is
+#      reflected in no published number here.
+TOOLSET_VERSION = 1

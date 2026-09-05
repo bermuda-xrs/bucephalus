@@ -32,7 +32,8 @@ if (-not (Test-Path "$venv\Scripts\python.exe")) {
 }
 & "$venv\Scripts\python.exe" -m pip install --quiet --upgrade pip
 & "$venv\Scripts\python.exe" -m pip install --quiet `
-    pydantic httpx anthropic pyyaml fastapi uvicorn scipy rich pytest pytest-asyncio
+    pydantic httpx anthropic pyyaml fastapi uvicorn scipy rich pytest pytest-asyncio `
+    "sympy==1.13.3"
 
 Write-Host "`nverifying..." -ForegroundColor Cyan
 & "$venv\Scripts\python.exe" -c "import pydantic, scipy, rich, fastapi, yaml, httpx, pytest; print('dependencies ok')"

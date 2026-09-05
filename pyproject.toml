@@ -13,6 +13,11 @@ dependencies = [
     "fastapi>=0.110",
     "uvicorn>=0.29",
     "scipy>=1.13",            # McNemar / binomtest for the skill gate
+    "sympy==1.13.3",          # SANDBOX LIBRARY, pinned: model-written
+                              # code imports it. See TOOLSET_VERSION -
+                              # an unpinned version would let two runs
+                              # import different code under one
+                              # toolset version.
     "rich>=13.0",             # readable CLI output
     "platformdirs>=4.0",      # state paths once installed
 ]
