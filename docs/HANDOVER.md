@@ -1,5 +1,12 @@
 # Handover
 
+> **The aerospace suite is archived.** As of 2026-09-05 `aero_calc` lives
+> under `bench/suites/archive/`, `bench/tasks/archive/` and
+> `bench/archive/decompose_aero.py`, and is no longer any tool's default —
+> `--suite` and `--tasks` are now required arguments. Every result below
+> remains reproducible from the archive. Nothing was deleted. See FINDINGS
+> 1.13 for why it was retired.
+
 Written for a competent Python developer who has never seen this project.
 Everything needed to be productive is here or pointed at. No prior context
 assumed.

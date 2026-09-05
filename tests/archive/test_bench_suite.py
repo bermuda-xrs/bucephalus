@@ -21,13 +21,13 @@ from pathlib import Path
 
 import pytest
 
-ROOT = Path(__file__).resolve().parents[1]
-TREE = ROOT / "bench" / "tasks" / "aero_calc"
+ROOT = Path(__file__).resolve().parents[2]
+TREE = ROOT / "bench" / "tasks" / "archive" / "aero_calc"
 
 
 def _load_suite():
     spec = importlib.util.spec_from_file_location(
-        "aero_calc_suite", ROOT / "bench" / "suites" / "aero_calc.py"
+        "aero_calc_suite", ROOT / "bench" / "suites" / "archive" / "aero_calc.py"
     )
     mod = importlib.util.module_from_spec(spec)
     # @dataclass resolves annotations via sys.modules[cls.__module__]; without
@@ -130,7 +130,7 @@ def test_emitted_tree_matches_the_table():
             stale.append(t.id)
     assert not stale, (
         f"emitted tree is stale for {stale}; regenerate with "
-        "`python bench/suites/aero_calc.py --out bench/tasks/aero_calc`"
+        "`python bench/suites/archive/aero_calc.py --out bench/tasks/archive/aero_calc`"
     )
 
 

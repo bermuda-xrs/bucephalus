@@ -75,42 +75,57 @@ RUNG_STEPS = {"R4x": 1, "R4": 3, "R5": 10}
 LOOP_RUNGS = tuple(RUNG_STEPS)
 SEP = chr(10) * 2          # blank line between prompt sections
 
-# The I/O contract the suite imposes, minus the parts that need a file
-# system or a tool. This is the scaffolding whose cost the ladder measures.
-OUTPUT_CONTRACT = (
-    "Write the answer to work/{key}/output/answer.json as a JSON object "
-    "containing exactly this key, spelled exactly as shown: {out_key}. "
-    "Values in SI base units unless the key name says otherwise. "
-    "State the final number in your reply as well."
-)
+# The ladder no longer carries any suite's physics in its source.
+#
+# OUTPUT_CONTRACT, STEP_BY_STEP and the per-task bare prompts are now DATA,
+# supplied by --bare-prompts alongside the suite they belong to. They lived
+# here as literals for the aerospace suite's whole life, which is how a
+# general instrument came to hard-code one domain's orbital mechanics.
+#
+# The values are unchanged. They were extracted programmatically rather than
+# retyped, and tests/test_ladder_decoupled.py pins the resulting prompt bytes
+# against the pre-quarantine hashes.
 
-# The v3 candidate fix. Reconstructed from the confirmatory probe recorded in
-# docs/evidence/ladder-E01-3b-analysis.json, which preserved the finding but
-# NOT the prompt - the analysis quotes only "work through it step by step ...
-# and only then give the final number". That gap is why this constant now
-# lives in the source and is echoed into every ladder run record: the next
-# person should not have to reconstruct it a second time.
-STEP_BY_STEP = ("Work through it step by step, showing each step, and only "
-                "then give the final number.")
 
-# R0: the physics, with nothing else. This is the D1 prompt.
-BARE = ("Earth has gravitational parameter mu = 3.986004418e14 m^3/s^2 and "
-        "radius 6371000 m. A satellite is in a circular orbit at an altitude "
-        "of 400 km. Compute its circular orbital velocity in m/s. Give the "
-        "final number.")
+class SuiteDataMissing(RuntimeError):
+    """Raised when the ladder is asked for something the data does not carry.
 
-BARE_BY_TASK = {
-    "E01": BARE,
-    "E03": ("Mars has gravitational parameter mu = 4.282837e13 m^3/s^2 and "
-            "radius 3389500 m. Compute the escape velocity at its surface in "
-            "m/s. Give the final number."),
-    "E04": ("A rocket stage has specific impulse 311 s, initial mass 549054 kg "
-            "and final mass 137000 kg. Standard gravity is 9.80665 m/s^2. "
-            "Compute the ideal delta-v in m/s by the Tsiolkovsky equation. "
-            "Give the final number."),
-    "E05": ("Air density is 0.4135 kg/m^3 and speed is 900 km/h. Compute the "
-            "dynamic pressure in pascals. Give the final number."),
-}
+    Never falls back to a default task's physics. A silent fallback would
+    measure the wrong question and report it as the right one - the failure
+    mode this whole instrument exists to detect.
+    """
+
+
+def load_bare_prompts(path: str | Path) -> dict:
+    p = Path(path)
+    if not p.exists():
+        raise SuiteDataMissing(
+            f"--bare-prompts file not found: {p}\n"
+            "The ladder's text rungs (R0-R3) need the suite's bare-physics "
+            "prompts. For the archived aerospace suite that file is "
+            "bench/suites/archive/aero_calc.bare.json")
+    data = json.loads(p.read_text(encoding="utf-8"))
+    for field in ("output_contract", "step_by_step", "bare"):
+        if field not in data:
+            raise SuiteDataMissing(f"{p} is missing required field {field!r}")
+    return data
+
+
+def bare_for(data: dict, key: str) -> str:
+    """The bare physics question for `key`. RAISES if absent - never guesses.
+
+    The previous version fell back to E01's orbital-mechanics text for any
+    unknown key, so asking for a task the data did not cover silently
+    measured a different question entirely.
+    """
+    bare = data.get("bare") or {}
+    if key not in bare:
+        raise SuiteDataMissing(
+            f"no bare-physics prompt for task {key!r}. "
+            f"Available: {', '.join(sorted(bare)) or '(none)'}. "
+            "Every rung must be answerable from its own prompt, so a task "
+            "without one cannot be laddered at R0-R3.")
+    return bare[key]
 
 
 def complete(model: str, prompt: str, num_ctx: int = 16384,
@@ -197,8 +212,18 @@ def goal_text(ctx, key: str) -> str:
     return row[0] if row else ""
 
 
-def expected_for(key: str) -> tuple[str, float, float]:
-    g = Path("grading") / key / "verify.py"
+def expected_for(key: str, grading_dir: str | Path = "grading") -> tuple[str, float, float]:
+    """Read the grader's expected value. `grading_dir` is explicit, not implied.
+
+    It used to resolve `Path("grading")` against the process CWD, which is the
+    same shape as SPEC-DELTA C9 - a path resolved against wherever the harness
+    happened to be launched from.
+    """
+    g = Path(grading_dir) / key / "verify.py"
+    if not g.exists():
+        raise SuiteDataMissing(
+            f"no grader at {g}. The ladder scores against the suite's own "
+            "verify.py; pass --grading-dir if it is not at ./grading")
     src = g.read_text(encoding="utf-8")
     exp = eval(re.search(r"EXPECTED = (\{.*?\})\n", src).group(1))
     tol = float(re.search(r"TOL = ([\d.e-]+)", src).group(1))
@@ -207,7 +232,8 @@ def expected_for(key: str) -> tuple[str, float, float]:
 
 
 def run_rung(ctx, rung: str, key: str, model: str, samples: int,
-             step_by_step: bool = False) -> list[dict]:
+             step_by_step: bool = False, data: dict | None = None,
+             suite: str = "", grading_dir: str | Path = "grading") -> list[dict]:
     """One rung, `samples` times. R4/R5 use the real loop and real grader.
 
     `step_by_step` adds STEP_BY_STEP to whatever the rung already sends. At
@@ -217,7 +243,7 @@ def run_rung(ctx, rung: str, key: str, model: str, samples: int,
     system prefix is deliberate: it keeps this a probe of the ACTUAL proposed
     change, not of a different intervention that happens to work.
     """
-    out_key, expected, tol = expected_for(key)
+    out_key, expected, tol = expected_for(key, grading_dir)
     goal = goal_text(ctx, key)
     out = []
 
@@ -233,10 +259,10 @@ def run_rung(ctx, rung: str, key: str, model: str, samples: int,
             #
             # So the physics VALUES stay inline at every text rung, and what
             # escalates is the scaffolding around them.
-            bare = BARE_BY_TASK.get(key, BARE)
-            contract = OUTPUT_CONTRACT.format(key=key, out_key=out_key)
+            bare = bare_for(data, key)
+            contract = data["output_contract"].format(key=key, out_key=out_key)
             if step_by_step:
-                contract = contract + " " + STEP_BY_STEP
+                contract = contract + " " + data["step_by_step"]
             if rung == "R0":
                 prompt = bare
             elif rung == "R1":
@@ -259,11 +285,11 @@ def run_rung(ctx, rung: str, key: str, model: str, samples: int,
             row.update(sc)
             out.append(row)
         else:
-            spec = ctx.userdata.get_suite_by_name("aero_calc").to_specs()
+            spec = ctx.userdata.get_suite_by_name(suite).to_specs()
             spec = next(s for s in spec if s["key"] == key)
             if step_by_step:
                 spec = dict(spec)
-                spec["goal"] = spec["goal"] + " " + STEP_BY_STEP
+                spec["goal"] = spec["goal"] + " " + data["step_by_step"]
             reset_workspace(ctx.config.root, spec["artifact_scope"],
                             spec.get("fixtures") or {})
             ctx.config.limits.max_steps = RUNG_STEPS[rung]
@@ -307,7 +333,17 @@ def run_rung(ctx, rung: str, key: str, model: str, samples: int,
 def main() -> int:
     ap = argparse.ArgumentParser(description="the scaffold ladder")
     ap.add_argument("--config", default="config.local.yaml")
-    ap.add_argument("--task", default="E01")
+    ap.add_argument("--task", required=True,
+                    help="task key to ladder. REQUIRED - no default")
+    ap.add_argument("--suite", required=True,
+                    help="suite name for the R4/R5 loop rungs. "
+                         "REQUIRED - was hard-coded to aero_calc")
+    ap.add_argument("--bare-prompts", required=True,
+                    help="JSON of the suite's bare-physics prompts and "
+                         "output contract. For the archived aerospace "
+                         "suite: bench/suites/archive/aero_calc.bare.json")
+    ap.add_argument("--grading-dir", default="grading",
+                    help="where verify.py lives, per task key")
     ap.add_argument("--model", default="granite4.1:3b")
     ap.add_argument("--samples", type=int, default=5)
     ap.add_argument("--rungs", default="R0,R1,R2,R3,R4,R5",
@@ -329,13 +365,16 @@ def main() -> int:
 
     ctx.backends = build_backends(ctx.config)
 
-    k, expected, tol = expected_for(args.task)
+    data = load_bare_prompts(args.bare_prompts)
+    bare_for(data, args.task)      # fail fast, before any model call
+    k, expected, tol = expected_for(args.task, args.grading_dir)
     print(f"{args.task}: {k} = {expected} (tol {tol})  model={args.model}  step_by_step={args.step_by_step}\n")
 
     rows = []
     for rung in args.rungs.split(","):
         rows += run_rung(ctx, rung.strip(), args.task, args.model,
-                         args.samples, args.step_by_step)
+                         args.samples, args.step_by_step, data,
+                         args.suite, args.grading_dir)
         print()
 
     dest = Path(ctx.config.resolve(args.out))
@@ -345,7 +384,8 @@ def main() -> int:
          "tolerance": tol, "samples": args.samples,
          "harness_version": HARNESS_VERSION,
          "step_by_step": args.step_by_step,
-         "step_by_step_text": STEP_BY_STEP if args.step_by_step else None,
+         "step_by_step_text": data["step_by_step"] if args.step_by_step else None,
+         "suite": args.suite, "bare_prompts": args.bare_prompts,
          "rungs": args.rungs, "rows": rows},
         indent=2), encoding="utf-8")
 

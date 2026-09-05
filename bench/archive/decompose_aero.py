@@ -39,7 +39,7 @@ the acceptance guard above is what makes a hand-written list safe: it can fail
 to name a trap, but it cannot invent one. This limitation is disclosed in
 FINDINGS rather than hidden here.
 
-    python bench/decompose.py --run runs/phase2a-3b-30tasks.json
+    python bench/archive/decompose_aero.py --run runs/phase2a-3b-30tasks.json
 """
 
 from __future__ import annotations
@@ -50,10 +50,13 @@ import math
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+# parents[2]: this file lives at bench/archive/, one level deeper than it
+# did before the quarantine, so the project root is two up rather than one.
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
-from bench.suites.aero_calc import CONSTANTS, DRAFTING, EVAL  # noqa: E402
+from bench.suites.archive.aero_calc import (  # noqa: E402
+    CONSTANTS, DRAFTING, EVAL)
 
 # How exactly a candidate must reproduce the written value.
 #

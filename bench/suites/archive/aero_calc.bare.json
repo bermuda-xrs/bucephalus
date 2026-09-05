@@ -1,0 +1,12 @@
+{
+  "_comment": "Bare-physics prompts for the ladder's text rungs (R0-R3), extracted verbatim from bench/ladder.py when the aerospace suite was archived. Every rung must be ANSWERABLE from its own prompt, so the physics VALUES stay inline here and what escalates across rungs is the scaffolding around them.",
+  "suite": "aero_calc",
+  "output_contract": "Write the answer to work/{key}/output/answer.json as a JSON object containing exactly this key, spelled exactly as shown: {out_key}. Values in SI base units unless the key name says otherwise. State the final number in your reply as well.",
+  "step_by_step": "Work through it step by step, showing each step, and only then give the final number.",
+  "bare": {
+    "E01": "Earth has gravitational parameter mu = 3.986004418e14 m^3/s^2 and radius 6371000 m. A satellite is in a circular orbit at an altitude of 400 km. Compute its circular orbital velocity in m/s. Give the final number.",
+    "E03": "Mars has gravitational parameter mu = 4.282837e13 m^3/s^2 and radius 3389500 m. Compute the escape velocity at its surface in m/s. Give the final number.",
+    "E04": "A rocket stage has specific impulse 311 s, initial mass 549054 kg and final mass 137000 kg. Standard gravity is 9.80665 m/s^2. Compute the ideal delta-v in m/s by the Tsiolkovsky equation. Give the final number.",
+    "E05": "Air density is 0.4135 kg/m^3 and speed is 900 km/h. Compute the dynamic pressure in pascals. Give the final number."
+  }
+}

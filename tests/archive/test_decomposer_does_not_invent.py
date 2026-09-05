@@ -19,11 +19,11 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "src"))
 
-from bench.decompose import (  # noqa: E402
+from bench.archive.decompose_aero import (  # noqa: E402
     RTOL, all_tasks, decompose, no_trap_tasks)
 
 NO_TRAP = ["E06", "H24", "H25", "M18", "M19"]

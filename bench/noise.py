@@ -466,7 +466,14 @@ def main() -> int:
     ap.add_argument("--config", default="config.local.yaml")
     ap.add_argument("--profile", default="local",
                     help="enforced backend profile; 'local' forbids cloud backends")
-    ap.add_argument("--suite", default="aero_calc")
+    # A suite is now REQUIRED. There is no default and there is no fallback:
+#     a missing suite fails loudly naming what is missing, rather than
+#     silently measuring whichever suite happened to be the default. The
+#     aerospace suite was that default for the project's whole history,
+#     which is how it became load-bearing without anyone choosing it.
+    ap.add_argument("--suite", required=True,
+                    help="suite name to measure, e.g. a suite loaded into the "
+                         "user data store. REQUIRED - there is no default")
     ap.add_argument("--runs", type=int, default=3)
     ap.add_argument("--max-flaky", type=int, default=8)
     ap.add_argument("--split", choices=["drafting", "eval"])
@@ -614,7 +621,7 @@ def main() -> int:
     suite = ctx.userdata.get_suite_by_name(args.suite)
     if suite is None:
         print(f"no suite named {args.suite!r}. Load it first:\n"
-              f"  python bench/suites/aero_calc.py --load --config {args.config}")
+              f"  python bench/suites/archive/aero_calc.py --load --config {args.config}")
         return 2
 
     specs = suite.to_specs()

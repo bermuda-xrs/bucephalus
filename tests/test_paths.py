@@ -90,7 +90,7 @@ def test_no_expected_value_in_scope_still_holds_after_the_move():
     import importlib.util
 
     spec = importlib.util.spec_from_file_location(
-        "aero_paths_check", ROOT / "bench" / "suites" / "aero_calc.py")
+        "aero_paths_check", ROOT / "bench" / "suites" / "archive" / "aero_calc.py")
     mod = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = mod
     spec.loader.exec_module(mod)

@@ -118,7 +118,11 @@ def report(rows: list[dict], min_discordant: int, split: str | None = None) -> s
 def main() -> int:
     ap = argparse.ArgumentParser(description="upper bound on discordant pairs")
     ap.add_argument("--skill", required=True, help="path to the skill markdown")
-    ap.add_argument("--tasks", default="bench/tasks/aero_calc")
+    ap.add_argument("--tasks", required=True,
+                    help="path to the emitted task tree. REQUIRED - there is "
+                         "no default. The aerospace tree was the default for "
+                         "this project's whole history, which is how it "
+                         "became load-bearing without anyone choosing it")
     ap.add_argument("--split", choices=["drafting", "eval"])
     ap.add_argument("--min-discordant", type=int, default=10)
     args = ap.parse_args()

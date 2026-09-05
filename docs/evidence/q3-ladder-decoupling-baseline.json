@@ -1,0 +1,375 @@
+{
+ "prompts": {
+  "E01:R0": {
+   "len": 213,
+   "sha256": "c0a3f29bf44805b83c5766cce9fd9b7cd6bc39e5e7f18f3d6a55f710cd151db4"
+  },
+  "E01:R1": {
+   "len": 456,
+   "sha256": "c2f6cc569b60e253254d1648c5a7fc561c45166d5eb25d9b01b4acfd1c4f3882"
+  },
+  "E01:R1+sbs": {
+   "len": 542,
+   "sha256": "3800b53eb6918a193274c89ebf2399e5115b0fecccf25b1bd8c156adabe9d038"
+  },
+  "E01:expected": {
+   "expected": 7672.6,
+   "out_key": "v_circular_m_s",
+   "tol": 0.005
+  },
+  "E03:R0": {
+   "len": 153,
+   "sha256": "7aee4ce311eee47565b98d339ea14dfa18f87758cdaf9c849ed4e151352b98ca"
+  },
+  "E03:R1": {
+   "len": 394,
+   "sha256": "1030f5d0bf73a788049a472e5b9ecd8817fabe0f66fe03fb69ccf7c514e478c9"
+  },
+  "E03:R1+sbs": {
+   "len": 480,
+   "sha256": "6676cbef45f35d9f9593967dd109c8897a5624f18f486b3284350b07e4ae8c92"
+  },
+  "E03:expected": {
+   "expected": 5027.0,
+   "out_key": "v_escape_m_s",
+   "tol": 0.005
+  },
+  "E04:R0": {
+   "len": 211,
+   "sha256": "a2051aaebbfff4937ca26a31ec3819c0465df7cd89df756748183b78c0fe28b7"
+  },
+  "E04:R1": {
+   "len": 451,
+   "sha256": "dda26afa1edbf3cc87cdcefbd22032605ab511c2bb3973e4dd746cdb5fa74556"
+  },
+  "E04:R1+sbs": {
+   "len": 537,
+   "sha256": "4008be2697886c0f7c834239c8266ca5f7818fbe68b1aa53affdd3021f056c81"
+  },
+  "E04:expected": {
+   "expected": 4233.9,
+   "out_key": "delta_v_m_s",
+   "tol": 0.005
+  },
+  "E05:R0": {
+   "len": 115,
+   "sha256": "109c8c1169121b485c0c611acf344e7e7014a84e289febb228d9785673343c6b"
+  },
+  "E05:R1": {
+   "len": 348,
+   "sha256": "7e587ffbdbae9601cb72aeefe7be5d4fbb452405d0ed474e380338a09ba1c43b"
+  },
+  "E05:R1+sbs": {
+   "len": 434,
+   "sha256": "93f4b2b37d3131fc9efd483160978bc36056bd4979929ee0f64338abac0930a8"
+  },
+  "E05:expected": {
+   "expected": 12922.0,
+   "out_key": "q_pa",
+   "tol": 0.005
+  }
+ },
+ "verdicts": [
+  {
+   "answer": 5027.0,
+   "correct": true,
+   "file": "g3-ladder-E03-3b.json",
+   "rung": "R0",
+   "sample": 1
+  },
+  {
+   "answer": 5027.0,
+   "correct": true,
+   "file": "g3-ladder-E03-3b.json",
+   "rung": "R0",
+   "sample": 2
+  },
+  {
+   "answer": 5027.0,
+   "correct": true,
+   "file": "g3-ladder-E03-3b.json",
+   "rung": "R0",
+   "sample": 3
+  },
+  {
+   "answer": 5022.0,
+   "correct": true,
+   "file": "g3-ladder-E03-3b.json",
+   "rung": "R1",
+   "sample": 1
+  },
+  {
+   "answer": 5022.0,
+   "correct": true,
+   "file": "g3-ladder-E03-3b.json",
+   "rung": "R1",
+   "sample": 2
+  },
+  {
+   "answer": 5022.0,
+   "correct": true,
+   "file": "g3-ladder-E03-3b.json",
+   "rung": "R1",
+   "sample": 3
+  },
+  {
+   "answer": 4227.7,
+   "correct": true,
+   "file": "g3-ladder-E04-3b.json",
+   "rung": "R0",
+   "sample": 1
+  },
+  {
+   "answer": 4230.0,
+   "correct": true,
+   "file": "g3-ladder-E04-3b.json",
+   "rung": "R0",
+   "sample": 2
+  },
+  {
+   "answer": 4230.0,
+   "correct": true,
+   "file": "g3-ladder-E04-3b.json",
+   "rung": "R0",
+   "sample": 3
+  },
+  {
+   "answer": 8860.0,
+   "correct": false,
+   "file": "g3-ladder-E04-3b.json",
+   "rung": "R1",
+   "sample": 1
+  },
+  {
+   "answer": 8860.0,
+   "correct": false,
+   "file": "g3-ladder-E04-3b.json",
+   "rung": "R1",
+   "sample": 2
+  },
+  {
+   "answer": 8860.0,
+   "correct": false,
+   "file": "g3-ladder-E04-3b.json",
+   "rung": "R1",
+   "sample": 3
+  },
+  {
+   "answer": 12918.75,
+   "correct": true,
+   "file": "g3-ladder-E05-3b.json",
+   "rung": "R0",
+   "sample": 1
+  },
+  {
+   "answer": 12918.75,
+   "correct": true,
+   "file": "g3-ladder-E05-3b.json",
+   "rung": "R0",
+   "sample": 2
+  },
+  {
+   "answer": 12918.75,
+   "correct": true,
+   "file": "g3-ladder-E05-3b.json",
+   "rung": "R0",
+   "sample": 3
+  },
+  {
+   "answer": 8775.75,
+   "correct": false,
+   "file": "g3-ladder-E05-3b.json",
+   "rung": "R1",
+   "sample": 1
+  },
+  {
+   "answer": 12918.75,
+   "correct": true,
+   "file": "g3-ladder-E05-3b.json",
+   "rung": "R1",
+   "sample": 2
+  },
+  {
+   "answer": 12918.75,
+   "correct": true,
+   "file": "g3-ladder-E05-3b.json",
+   "rung": "R1",
+   "sample": 3
+  },
+  {
+   "answer": 7674.6,
+   "correct": true,
+   "file": "g4-ladder-E01-8b.json",
+   "rung": "R1",
+   "sample": 1
+  },
+  {
+   "answer": 7663.2,
+   "correct": true,
+   "file": "g4-ladder-E01-8b.json",
+   "rung": "R1",
+   "sample": 2
+  },
+  {
+   "answer": 7663.2,
+   "correct": true,
+   "file": "g4-ladder-E01-8b.json",
+   "rung": "R1",
+   "sample": 3
+  },
+  {
+   "answer": 7663.2,
+   "correct": true,
+   "file": "g4-ladder-E01-8b.json",
+   "rung": "R1",
+   "sample": 4
+  },
+  {
+   "answer": 7663.2,
+   "correct": true,
+   "file": "g4-ladder-E01-8b.json",
+   "rung": "R1",
+   "sample": 5
+  },
+  {
+   "answer": 7668.0,
+   "correct": true,
+   "file": "ladder-E01-3b.json",
+   "rung": "R0",
+   "sample": 1
+  },
+  {
+   "answer": 7668.0,
+   "correct": true,
+   "file": "ladder-E01-3b.json",
+   "rung": "R0",
+   "sample": 2
+  },
+  {
+   "answer": 7668.0,
+   "correct": true,
+   "file": "ladder-E01-3b.json",
+   "rung": "R0",
+   "sample": 3
+  },
+  {
+   "answer": 7668.0,
+   "correct": true,
+   "file": "ladder-E01-3b.json",
+   "rung": "R0",
+   "sample": 4
+  },
+  {
+   "answer": 7668.0,
+   "correct": true,
+   "file": "ladder-E01-3b.json",
+   "rung": "R0",
+   "sample": 5
+  },
+  {
+   "answer": 7.784152678,
+   "correct": false,
+   "file": "ladder-E01-3b.json",
+   "rung": "R1",
+   "sample": 1
+  },
+  {
+   "answer": 7.784152678,
+   "correct": false,
+   "file": "ladder-E01-3b.json",
+   "rung": "R1",
+   "sample": 2
+  },
+  {
+   "answer": 7.784152678,
+   "correct": false,
+   "file": "ladder-E01-3b.json",
+   "rung": "R1",
+   "sample": 3
+  },
+  {
+   "answer": 7.784152678,
+   "correct": false,
+   "file": "ladder-E01-3b.json",
+   "rung": "R1",
+   "sample": 4
+  },
+  {
+   "answer": 7.784152678,
+   "correct": false,
+   "file": "ladder-E01-3b.json",
+   "rung": "R1",
+   "sample": 5
+  },
+  {
+   "answer": 7.784,
+   "correct": false,
+   "file": "ladder-E01-3b.json",
+   "rung": "R2",
+   "sample": 1
+  },
+  {
+   "answer": 7.784,
+   "correct": false,
+   "file": "ladder-E01-3b.json",
+   "rung": "R2",
+   "sample": 2
+  },
+  {
+   "answer": 7.784,
+   "correct": false,
+   "file": "ladder-E01-3b.json",
+   "rung": "R2",
+   "sample": 3
+  },
+  {
+   "answer": 7.784,
+   "correct": false,
+   "file": "ladder-E01-3b.json",
+   "rung": "R2",
+   "sample": 4
+  },
+  {
+   "answer": 7.784,
+   "correct": false,
+   "file": "ladder-E01-3b.json",
+   "rung": "R2",
+   "sample": 5
+  },
+  {
+   "answer": 7.7841017306,
+   "correct": false,
+   "file": "ladder-E01-3b.json",
+   "rung": "R3",
+   "sample": 1
+  },
+  {
+   "answer": 7.78489967753972,
+   "correct": false,
+   "file": "ladder-E01-3b.json",
+   "rung": "R3",
+   "sample": 2
+  },
+  {
+   "answer": 7.78489967753972,
+   "correct": false,
+   "file": "ladder-E01-3b.json",
+   "rung": "R3",
+   "sample": 3
+  },
+  {
+   "answer": 7.78489967753972,
+   "correct": false,
+   "file": "ladder-E01-3b.json",
+   "rung": "R3",
+   "sample": 4
+  },
+  {
+   "answer": 7.78489967753972,
+   "correct": false,
+   "file": "ladder-E01-3b.json",
+   "rung": "R3",
+   "sample": 5
+  }
+ ]
+}

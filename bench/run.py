@@ -412,7 +412,8 @@ def main() -> int:
     sub = p.add_subparsers(dest="cmd", required=True)
 
     a = sub.add_parser("arms", help="cost-vs-pass-rate across configurations")
-    a.add_argument("--suite", default="bench/tasks")
+    a.add_argument("--suite", required=True,
+                   help="path to the task tree. REQUIRED - no default, no fallback")
     a.add_argument("--out", default="runs/bench.json")
     a.add_argument("--only")
     a.add_argument("--executor", help="override the executor model; makes this a model arm")
@@ -421,7 +422,8 @@ def main() -> int:
 
     q = sub.add_parser("paired", help="M9 paired trials for one skill")
     q.add_argument("skill_id")
-    q.add_argument("--suite", default="bench/tasks")
+    q.add_argument("--suite", required=True,
+                   help="path to the task tree. REQUIRED - no default, no fallback")
     q.add_argument("--out", default="runs/calibration.json",
                    help="write the two-number report here")
     q.add_argument("--auto-review", action="store_true",

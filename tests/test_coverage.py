@@ -106,7 +106,7 @@ def test_the_real_suite_and_the_real_skill_clear_the_floor():
     """
     import yaml  # noqa: F401 - load_tasks needs it
 
-    tasks = cov.load_tasks(ROOT / "bench" / "tasks" / "aero_calc")
+    tasks = cov.load_tasks(ROOT / "bench" / "tasks" / "archive" / "aero_calc")
     assert len(tasks) == 30
     skill = (ROOT / "examples" / "skills" / "aero_units_discipline.md"
              ).read_text(encoding="utf-8")

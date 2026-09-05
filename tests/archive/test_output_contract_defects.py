@@ -34,13 +34,13 @@ from pathlib import Path
 
 import pytest
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 
 
 def _suite_module():
     spec = importlib.util.spec_from_file_location(
-        "aero_suite_contract", ROOT / "bench" / "suites" / "aero_calc.py")
+        "aero_suite_contract", ROOT / "bench" / "suites" / "archive" / "aero_calc.py")
     mod = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = mod
     spec.loader.exec_module(mod)
