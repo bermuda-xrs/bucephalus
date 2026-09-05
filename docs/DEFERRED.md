@@ -297,3 +297,31 @@ weight is sympy and its dependencies.
 **Correct version:** if a desktop build is ever revisited, measure onefile
 (compressed) rather than onedir, and check whether sympy can be excluded from
 the sidecar and required only in the sandbox's interpreter.
+
+---
+
+## D15 — An archived test writes `cal.json` into the repository root
+
+**Severity:** cosmetic, but it re-dirties a clean tree on every test run.
+
+`tests/archive/test_bench_suite.py` passes `--out` as `tmp_path / "cal.json"`
+and a file nevertheless appears at the repo root. Verified by deletion and
+re-run: removed at 01:00:56, back at 01:01:01, carrying the test's own
+`skill_id: "abc"`.
+
+`Config.resolve()` handles absolute paths correctly, and `cal.json` is not a
+literal anywhere in `src/` or `bench/`, so one of the two `write_text` calls
+in `bench/run.py` is writing to a path that is not `args.out`. Same shape as
+SPEC-DELTA C9 — a path resolved against something other than what the caller
+passed.
+
+It survived this long because it looks like a leftover: the original file was
+deleted as "a stray artifact of an aborted calibration" during housekeeping
+and simply came back. It was then re-committed by a broad `git add -A`.
+
+**Now:** untracked and in `.gitignore`, so it can no longer be committed by
+accident.
+
+**Correct version:** find which `write_text` ignores `args.out` and make it
+use the resolved destination. Deferred because the freeze covers `bench/`,
+nothing depends on the file, and it changes no measurement.
