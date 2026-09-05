@@ -223,3 +223,39 @@ samples exist.
 **Note:** this is a gap in FLAGGING, not in the stall detector. A genuine
 machine stall in the first three tasks is still caught by the tok/s test
 and the transport timeout, both of which are independent of run position.
+
+---
+
+## D12 — `coverage.py` measures declared-trap coverage, not measured-trap incidence
+
+**Severity:** corrupting, for any future use as a go/no-go signal.
+
+Coverage predicted an upper bound of **20/30** tasks in scope for the
+calibration skill. Phase 2B's decomposition found the model actually
+commits a declared trap in **3** of 19 numeric failures.
+
+The tool is not wrong about what it measures. It matches a skill's
+vocabulary against each task's **declared** trap string, and it says so.
+What it cannot know is whether the model **actually commits** that trap.
+
+**Declared-trap coverage is not measured-trap incidence, and only the
+second bounds a skill experiment.** Coverage answers "could this skill in
+principle speak to this task" — a property of the suite and the skill.
+Decomposition answers "did the model make the error the skill addresses"
+— a property of the *model on that suite*, which is what a paired trial
+actually measures.
+
+**Consequence:** coverage's number is an upper bound on an upper bound,
+and the gap between 20 and 3 is the distance between them. Its docstring
+already says "treat a low number as a reason to stop and a high number as
+permission to proceed, never as a prediction" — which is right, but
+understates it. A high coverage number is not even weak evidence that an
+experiment is possible.
+
+**Correct version:** report coverage alongside measured-trap incidence
+from a prior run whenever one exists, and never quote coverage alone as a
+readiness signal.
+
+**Why deferred:** the freeze, and the aerospace suite is being archived.
+The limitation is recorded in FINDINGS 1.14 wherever the number is
+quoted.

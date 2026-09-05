@@ -314,6 +314,194 @@ this variance, and the first task of any run is the most exposed.
 
 ---
 
+
+### 1.12 The reference measurement: 24.1% raw, 28.0% timing-clean
+
+The first complete 30-task measurement in the project's history.
+`granite4.1:3b`, harness v2, randomised task order (seed 1420531403),
+3.32 h. Evidence: `docs/evidence/phase2a-2b-analysis.json`.
+
+**Two denominators, and neither is "the" answer.**
+
+| | | |
+|---|---|---|
+| **raw** | 7 / 29 | **24.1%** |
+| **timing-clean** | 7 / 25 | **28.0%** |
+
+They **straddle the 25% band floor** — raw below it, timing-clean above.
+The entire difference is four tasks (M16, H30, H24, H27) whose failure mode
+is `budget_exhausted`, a **time** limit, measured with a clock the instrument
+itself flagged as untrustworthy (3.18×, 5.79×, 4.04×, 5.15× the run median).
+SPEC-DELTA C6 says that outcome is contention-manufacturable. The
+conservative figure is raw, and the branch below uses it.
+
+H26 was also flagged (3.51×) but **kept** in the timing-clean denominator:
+`max_steps` is a step limit, which slow timing cannot manufacture. Its
+wall-clock is untrustworthy; its pass/fail is sound.
+
+| tier | passes | rate | which |
+|---|---|---|---|
+| easy | 3/10 | 30.0% | E03, E05, E06 |
+| medium | 3/11 | 27.3% | M14, M15, M19 |
+| **hard** | **1/8** | **12.5%** | H25 |
+
+`done` 7 · **`done_unannounced` 0** · `max_steps` 1 · `budget_exhausted` 4 ·
+median 252.0 s · p90 941.2 s · excluded 1 (M11) · machine faults 2 · **no
+`crashed` rows** · worker refreshes 6 totalling 87.9 s (0.7% of the run).
+
+**`done_unannounced` is zero, and that is a behavioural finding.** On the 8B
+it was the *dominant* failure mode — correct answers written and never
+announced (1.5). The 3B terminates properly. Its failures are wrong answers,
+not unannounced right ones. Two models, byte-identical config, opposite
+failure signatures.
+
+### 1.13 The failures are unstructured, so no skill was measurable here
+
+**This is a result, not the absence of one.**
+
+Of 19 numeric failures, **3 decompose to a declared trap** (2 strictly, 1
+ambiguous within a single family). B/A = **10.5%** strict, **15.8%**
+inclusive — against a 50% threshold.
+
+What the other 16 look like:
+
+| task | written | expected shape |
+|---|---|---|
+| H28 | **−19115.85** | escape velocity |
+| H23 | **−2038.86** | delta-v |
+| M17 | **−779.93** | — |
+| M21 | 5.32e12 | — |
+| M22 | 4.31e10 | — |
+| M13 | 5.23e-23 | — |
+| E08 | 9.67e-04 | — |
+| M16 | **0.0** | — |
+
+A **negative escape velocity** is not a units confusion and not a wrong-body
+error. It is a program that ran and never implemented the physics.
+
+**The consequence for the research question.** A skill repairs *structured*
+error. A units-discipline procedure can fix "read km as m"; nothing in a
+written procedure fixes a program that never implemented the physics. So on
+this substrate **no skill could have been measured to help** — not because
+skills do not work, but because there was nothing for one to repair. That is
+a property of the **model–task pairing**, not of skills.
+
+**And this reproduces the original bucket-D taxonomy** (14 of 15 unstructured,
+median relative error 100%, section 1.2) on a harness where the plumbing
+defects that explained the first 10% are *gone*. The explanation changed; the
+failure shape did not. That is the substantive part.
+
+**Scope:** one model, one suite, one iteration.
+
+### 1.14 Trap decomposition is a cheap pre-test for skill measurability
+
+The transferable result.
+
+**The method.** Before spending hours on paired trials, decompose the
+failures against the traps the suite declares. If the failures do not
+decompose, no written procedure has a handle on them, and the paired trial
+cannot produce discordant pairs **regardless of how good the skill is**.
+
+**The cost asymmetry.** Minutes of analysis against a 4+ hour experiment
+avoided — and, more importantly, against a result that would have been
+uninterpretable. A gate that rejects everything and a gate facing a substrate
+with no structured error produce the same output.
+
+**The `coverage.py` contrast, which sharpens it.** Coverage predicted an
+upper bound of **20/30** tasks in scope. The measurement found **3**.
+
+Coverage matches a skill's vocabulary against a task's **declared** trap. It
+cannot know whether the model actually *commits* that trap. **Declared-trap
+coverage is not measured-trap incidence, and only the second bounds the
+experiment.** Coverage answers "could this skill in principle speak to this
+task"; decomposition answers "did the model actually make the error the skill
+addresses". The first is a property of the suite and the skill; the second is
+a property of the *model on that suite*, which is what a paired trial
+measures. Recorded as a limitation of `coverage.py` in DEFERRED D12.
+
+**Scope: this is a claim about method, not about skills generally.** One
+model, one suite, one iteration. What transfers is the pre-test, not the
+verdict.
+
+### 1.15 Disclosure: the decomposer was improved after seeing the data
+
+Four defects were fixed in `bench/decompose.py` *during* Phase 2B, after the
+failure values were visible. That is a researcher-degrees-of-freedom concern
+and it is stated here rather than left to be noticed.
+
+**The defence is directional, and it is checkable.** Every one of the four
+fixes moved B **upward** — from **1 to 3** — i.e. each pushed *against* the
+STOP, and the STOP held anyway. Fixes that make a conclusion **harder** to
+reach, applied **before** the conclusion is drawn, strengthen it rather than
+weakening it. Had any fix moved B downward, this disclosure would read very
+differently.
+
+The four:
+
+1. `ZeroDivisionError` on a written `0.0` (M16). A written zero is a real
+   outcome — the original bucket D had two — and it crashed the tool outright.
+2. `TypeError` on a non-numeric expected value. H27 expects
+   `bad_row_indices = [12, 21, 30, 34]`; it is an anomaly-detection task,
+   structurally outside a numeric decomposer's scope, and is now reported as
+   its own category rather than forced.
+3. **The residual gate sat below the rounding floor of its own inputs, for
+   the second time.** See below.
+4. **Body swaps never crossed with radius formation.** E10 wrote
+   `sqrt(mu_earth/R_earth)` — Earth's constants *and* the altitude dropped —
+   and no candidate could reproduce it, because the altitude was only ever
+   applied to the swapped body.
+
+**The residual gate, stated so the number is reproducible rather than chosen.**
+
+The gate is bounded on both sides by quantities that can be **computed**:
+
+* **above** — the rounding floor of the tabled `expected`. Candidates are
+  built as `expected × ratio`, so the tightest achievable residual is the
+  rounding error of `expected` itself.
+* **below** — the separation between distinct candidate traps. For E01,
+  "altitude ignored (r = R)" and "km read as m (r = R + 400)" differ by only
+  **3.1e-05**, because 400 m on a 6,371,000 m radius barely moves the answer.
+
+A single global gate cannot satisfy both across tasks, because **the rounding
+floor varies per task**: E03's Mars escape velocity is tabled `5027.0`
+(floor ~9.4e-06) while E07's specific impulse is tabled `287.7`
+(floor ~1.7e-04) — an order of magnitude apart. A global 2e-5 hid E07's
+**exact** `thrust/mdot` hit at residual 1.34e-04, which is the g₀ trap E07
+explicitly declares, reported as unclassifiable *because of the tolerance
+rather than the data*.
+
+So the tolerance is **per-task: three half-ulps of the last significant
+figure**, measured in **significant figures rather than decimal places** —
+the suite writes some values as `7.138e6`, which `repr` renders `7138000.0`,
+and a decimal-place count would read that as far more precise than it is.
+Where the two bounds ever cross, no single gate separates the candidates, and
+the `ambiguous` classification reports both rather than implying a precision
+the data does not carry (this is what E10 returns).
+
+The acceptance guard was never relaxed: the five no-trap tasks return
+`unclassifiable` under every probe, held by
+`tests/test_decomposer_does_not_invent.py`.
+
+### 1.16 The 2C branch, recorded and superseded
+
+Raw **24.1%** is below the 25% floor. Buckets A and B are near zero: **2**
+tasks produced no value at all (H30, H24), both `budget_exhausted`.
+
+By the pre-registered branch table that is the **"mean <25% and A+B near
+zero → genuine difficulty at this tier"** cell, whose prescribed action is to
+**rebalance the suite**.
+
+**That action was not taken.** It was superseded by the decision to archive
+the aerospace suite (Phase Q). Rebalancing a suite that is being retired
+would spend hours tuning difficulty on a substrate that 1.13 shows cannot
+support the measurement in the first place — the problem is not that the
+tasks are too hard, it is that the failures are unstructured.
+
+Recorded here so the branch is visible and the deviation is explicit rather
+than silent.
+
+---
+
 ## 2. What these numbers do **not** show
 
 * **Nothing about hybrid routing.** `config.local.yaml` maps the *cloud* slot
