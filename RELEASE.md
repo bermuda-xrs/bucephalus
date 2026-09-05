@@ -58,12 +58,24 @@ State it in this shape, or not at all:
 
 - [x] A wheel builds at this path. The Greek-character problem affects only
       *editable* installs, which write a `.pth` in the system ANSI codepage
-- [ ] **The wheel is not runnable standalone.** It carries all 64 modules and
-      none of `policy.md`, `themes/`, `assets/`, or the config files, which
-      the runtime resolves relative to the config's parent. Today this is a
-      clone-and-run-from-the-directory project. Making it installable means
-      shipping those as package data with a resource loader, or an
-      `alpha init` that materializes them into a working directory
+- [x] **Build it with `pip wheel . --no-deps -w dist`.** `python -m build`
+      fails here: setuptools' own `build/` output directory shadows the
+      `build` module, and the resulting "No module named build.__main__"
+      reads like a missing dependency rather than the shadowing it is.
+      SPEC-DELTA C27
+- [x] **The wheel carries its runtime assets.** `themes/*.toml`,
+      `assets/*.ans` and `control/*.html` ship as package data. Verified
+      2026-09-06 by installing into a clean venv in another directory:
+      `postinstall_check.py` runs a task end to end, state resolves to the
+      user data dir, and nothing is written to cwd.
+      `control/*.html` was **missing until 2026-09-06** — a pip-installed
+      control plane served its whole JSON API and raised `FileNotFoundError`
+      on `GET /`, the one route a human opens. SPEC-DELTA C24
+- [ ] **`policy.md` and the config files are still not shipped**, and the
+      runtime resolves them relative to the config's parent. So an installed
+      wheel runs the library but still needs a checkout for its
+      configuration. Making it fully standalone means shipping those too, or
+      an `alpha init` that materialises them into a working directory
 - [ ] **No LICENSE.** Deliberate — that is the author's decision, and an
       unlicensed repository is "all rights reserved" by default, which may
       or may not be what is wanted

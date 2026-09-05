@@ -440,3 +440,62 @@ it is worth recording before someone reaches for it.
 `CreateToolhelp32Snapshot` and needs no subprocess at all.
 
 **Class:** environment drift.
+
+### C26. The sandbox cannot survive a PyInstaller freeze — it becomes a fork bomb
+
+**Spec (M13.5 / the Tauri desktop plan):** ship the control plane as a frozen
+sidecar so the app needs no Python on the target machine.
+
+**Reality:** `execute/sandbox.py` spawns its child with
+
+    argv = [sys.executable, "-I", "-u", str(script)]
+
+Under PyInstaller `sys.executable` is **the frozen application**, not an
+interpreter, and the bootloader passes `-I -u script.py` through as plain
+`sys.argv` rather than honouring them as interpreter flags. So every
+`run_sandboxed()` call **re-launches the whole application**, which calls
+`run_sandboxed()` again.
+
+**Measured, not reasoned.** A minimal frozen probe (onedir, 169 MB) produced
+eleven levels of nested sandbox working directories —
+`alpha_sbx_tiwx7ant\alpha_sbx_0siqqlo5\alpha_sbx_s277jg6k\...` — and left
+**four chained `probe.exe` processes** alive (19044 → 31828 → 20260 → 22164)
+after crashing on a `PermissionError` while trying to clean them up. The
+child processes printed the parent's own banner, which is the direct evidence
+of re-entry. The unfrozen baseline of the same probe passes every property.
+
+None of the security checks were even reached: the build never got far enough
+to evaluate the audit hook, the taint gate, or resource limits.
+
+**Correct version:** the sandbox must spawn a real interpreter, not
+`sys.executable`. Options, none free:
+
+1. Ship a separate embedded Python alongside the frozen app and point the
+   sandbox at it. Costs a second interpreter in the bundle.
+2. Re-entry guard plus a `multiprocessing` spawn path, which on Windows still
+   re-executes the frozen exe and needs `multiprocessing.freeze_support()`
+   plus a distinct entry mode.
+3. Run model-written code in-process under the audit hook only. **Rejected:**
+   it discards process isolation and the timeout, which is most of what the
+   sandbox is for.
+
+**Class:** oversight with a hard consequence. `sys.executable` is correct for
+every non-frozen deployment and silently catastrophic for a frozen one.
+
+**Status:** blocks the desktop-app branch entirely. Iteration one ends as a
+CLI plus a browser console, which is what the evidence supports.
+
+### C27. `python -m build` fails because the repo's own `build/` shadows it
+
+**Reality:** setuptools writes intermediate output to `build/`, and Python
+resolves `build` to that directory before the installed package. The error is
+`No module named build.__main__; 'build' is a package and cannot be directly
+executed`, which names a shadowing problem in language that sounds like a
+missing dependency.
+
+**Correct version:** `pip wheel . --no-deps -w dist` is the supported path and
+is what `RELEASE.md` and `docs/HANDOVER.md` now document. Renaming the
+directory would fight a setuptools convention for no gain.
+
+**Class:** environment trap. Costs the next person ten minutes and points
+them at the wrong cause.

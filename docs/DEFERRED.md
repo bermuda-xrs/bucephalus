@@ -259,3 +259,41 @@ readiness signal.
 **Why deferred:** the freeze, and the aerospace suite is being archived.
 The limitation is recorded in FINDINGS 1.14 wherever the number is
 quoted.
+
+---
+
+## D13 — The sandbox spawns `sys.executable`, which is fatal under any freeze
+
+**Severity:** blocking, for packaging only. Harmless in every current
+deployment.
+
+`execute/sandbox.py` line ~239 spawns its child as
+`[sys.executable, "-I", "-u", script]`. That is correct whenever
+`sys.executable` is an interpreter and catastrophic when it is not: under
+PyInstaller it is the frozen application, so each `run_sandboxed()` call
+re-launches the app, which calls `run_sandboxed()` again.
+
+Measured 2026-09-06 with a minimal frozen probe: eleven levels of nested
+sandbox working directories and four chained `probe.exe` processes left
+alive. Full detail and the three candidate fixes are in SPEC-DELTA C26.
+
+**Why deferred rather than fixed:** nothing currently deployed is frozen. The
+CLI, the tests, and the control plane all run from an interpreter and all
+pass. Fixing it means either bundling a second interpreter or reworking the
+spawn path, and neither is worth doing before there is a decision to ship a
+desktop build.
+
+**Do not attempt a desktop/Tauri build until this is resolved.** The failure
+is not a broken feature, it is a fork bomb.
+
+## D14 — PyInstaller onedir build is 169 MB
+
+**Severity:** cosmetic, and only relevant if D13 is ever fixed.
+
+The minimal probe — the agent package plus sympy, no web framework — froze to
+169 MB onedir. The estimate for the packaged app was 25-30 MB. Most of the
+weight is sympy and its dependencies.
+
+**Correct version:** if a desktop build is ever revisited, measure onefile
+(compressed) rather than onedir, and check whether sympy can be excluded from
+the sidecar and required only in the sandbox's interpreter.
