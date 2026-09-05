@@ -182,3 +182,248 @@ Items in section 1 referring to `tests/test_bench_suite.py` and the 30-task
 aero suite now refer to **archived** components. They still pass, from
 `tests/archive/`. The test count in that section (223) predates this
 iteration; the current count is **376**.
+
+---
+
+# Goal-by-goal scorecard — audited 2026-09-06
+
+The spec set eight numbered goals. Iteration one pursued the research question
+(G4) and produced a reference measurement; this records where the other seven
+actually stand, so a reader does not have to reconstruct it.
+
+**Status vocabulary**
+
+* **implemented and measured** — it exists, it runs, and a number exists for it
+* **implemented and unmeasured** — it exists and is enforced at a named point,
+  but no measurement of its *effect* was ever taken
+* **partially implemented** — some of it exists, named parts do not
+* **not implemented** — no working path
+
+| Goal | Status |
+|---|---|
+| G1 ≥10× reduction in **paid** tokens per completed task | **implemented and unmeasured** — and currently unmeasurable, see below |
+| G2 Mobile remote control | **partially implemented** — HTTP API + auth exist; nothing mobile |
+| G3 Multi-agent as context isolation | **implemented and unmeasured** |
+| G4 Research-grounded, verified skill generation | **partially implemented** — the gate works, the generator has never run |
+| G5 Least-privilege security with provenance | **implemented and measured** |
+| G6 Durable, resumable, interruptible execution | **implemented and measured** |
+| G7 Self-measuring, eval harness first-class | **implemented and measured** |
+| G8 Portable skill format | **implemented and unmeasured** |
+
+---
+
+## G1 — ≥10× reduction in paid tokens. The headline claim, and it is unverified.
+
+**The decisive number.** Across the whole project history the telemetry table
+holds **1,179 real model calls** with:
+
+```
+SUM(cost_usd)          = 0.0
+SUM(cache_read_tokens) = 0
+backends used          = {"cloud"}   ← which config.local.yaml maps to a LOCAL model
+```
+
+**Paid tokens to date: zero.** G1 is a ratio of paid tokens against a
+baseline, and both terms are zero. It is not "weakly supported" — it has never
+been evaluated at all.
+
+### The six mechanisms: implemented, enforced, unmeasured
+
+| Mechanism | Enforcement point | Enforced? | Effect measured? |
+|---|---|---|---|
+| Prefix stability | `PrefixGuard.check()`, constructed at `execute/loop.py:200`, raises `PrefixMutationError` on drift | **yes**, raises | **no** — and unmeasurable on Ollama, which has no cache accounting |
+| Deletion-based compaction | `compact()` at `execute/loop.py:249` and `context.py:290` | **yes** | **no** — no before/after token count is recorded per compaction |
+| Semantic cache | `cached_op()` at `execute/loop.py:594` | **yes** | **no** — hit rate is recorded but no token saving is attributed |
+| Code-as-action | inline in `execute/loop.py`; `run_code` batches tool calls into one program | **yes** | **no** — never compared against a one-tool-call-per-turn arm |
+| Context ceiling | `enforce_ceiling()` at `execute/loop.py:242` | **yes** | **no** — and it budgets against an **uncalibrated** estimator (DEFERRED D6) |
+| Routing / cascade | `ctx.router.choose()` at `execute/loop.py:254` and `:565` | **yes**, but **structurally inert**: one tier is configured, so `choose()` returns the same backend every call | **no** — `escalation_rate: 0.0` over 1,179 calls |
+
+**Has any run ever compared paid tokens per task against a baseline?**
+
+**No. Plainly: no such run exists, and no such run could have existed.** Every
+call in the database cost $0.0000.
+
+### What it would take to measure G1 honestly
+
+Three things, and the third is the one that is usually forgotten.
+
+1. **The Anthropic adapter must make its first live call.** It is written and
+   unit-tested and has **never** been exercised against the API
+   (`HANDOVER` §11). That needs an `ANTHROPIC_API_KEY` — which
+   `--profile local` refuses to start with, by design, so this is necessarily
+   a different profile.
+
+2. **Token counts must be calibrated.** `tokens.calibrate` has **no caller**
+   (confirmed in `KNOWN_INERT`), so every token figure in this project is an
+   estimate from a local heuristic. A 10× claim built on an uncalibrated
+   estimator is not a measurement. Calibration also *cannot* run locally —
+   `count_tokens_exact` needs the provider client.
+
+3. **A control arm must exist, and today it does not.** This is the blocker
+   nobody has costed. "10× reduction" is a comparison against the same work
+   done *without* the mechanisms. Checking `config.local.yaml` and
+   `config.py`: there are **no on/off switches** for compaction, the semantic
+   cache, prefix stability, or code-as-action. They are structural in
+   `execute/loop.py`. Only `context_fill_ratio` and `usable_context_window`
+   are tunable, and those move the ceiling rather than removing it.
+
+   So even with a funded API key and a calibrated tokenizer, **there is
+   nothing to compare against.** Measuring G1 requires first building an
+   ablation path for each mechanism — which is the same leave-one-in design
+   problem the skill ablation hit, and it is a design task, not a run.
+
+**Estimated scope, stated because prior estimates here ran optimistic:** an
+API key and one live call is an afternoon. Calibration is another. The
+ablation switches plus a paired paid/unpaid comparison across a task suite is
+the larger part, and it is the part that decides whether the number means
+anything.
+
+---
+
+## G2 — Mobile remote control. Partially implemented.
+
+**Exists:** a 32-endpoint HTTP API, bearer-token auth, CSRF and DNS-rebinding
+protection, and an `ALPHA_ALLOW_REMOTE` env gate in `control/guard.py` that
+deliberately refuses off-loopback binding unless set. A 569-line operator
+console is served at `GET /`.
+
+**Does not exist:** anything mobile. No responsive layout, no mobile client,
+no tested remote deployment. The console was built for a desktop browser.
+
+**Reason there is no measurement:** the remote path has never been exercised
+off-loopback. Everything verified in this project bound to 127.0.0.1.
+
+The honest reading: **the API that mobile control would need is real and
+tested; the mobile control itself was never started.**
+
+---
+
+## G3 — Multi-agent as context isolation. Implemented and unmeasured.
+
+`delegate/contracts.py` implements the five-gate test, and it **is** wired:
+`execute/loop.py:250` dispatches a `delegate` action and `context.py:287`
+calls `may_delegate`.
+
+**Unmeasured because it almost never fires.** The design intent is that most
+delegations are refused — the gates are strict — and no run in this project
+produced a delegation that passed them. So the mechanism is live, and its
+effect on context size has never been observed.
+
+Not to be confused with routing (G1's cascade), which is separately inert for
+a different reason: one configured tier.
+
+---
+
+## G4 — Research-grounded, verified skill generation. Partially implemented.
+
+This is the research question, and `RELEASE.md` above states the outcome. In
+goal terms:
+
+* **The verification half is real and measured.** The gate (`skills/gate.py`)
+  implements paired trials, McNemar, and the promotion rule; 
+  `bench/coverage.py` bounds discordant pairs; the trap decomposer
+  (now `bench/archive/decompose_aero.py`) classifies failures.
+* **The generation half has never run.** `generate_skill` is in `KNOWN_INERT`
+  — "M11. No generated skill has been produced yet - by design, the gate was
+  built first."
+* **Grounding with provenance** is implemented (`render_grounding`) and
+  likewise unexercised.
+
+**Reason there is no measurement:** deliberate ordering — the gate was built
+first — and then Phase 2B established that the substrate could not support the
+measurement at all (FINDINGS 1.13). Two of the gate's own guards are
+additionally inert: `record_holdout_gap` (so M7.4's anti-gaming veto cannot
+fire) and `measure_retrieval_precision`.
+
+---
+
+## G5 — Least-privilege security with provenance. Implemented and measured.
+
+The one goal with an end-to-end demonstration on every run of `demo.py`:
+
+```
+gate refused append_to_outbox: append_to_outbox requires <=user arguments,
+args are untrusted
+message actually sent to the address from the page: no
+```
+
+A three-level taint lattice (`security/taint.py`), a capability gate that
+denies on argument taint (`security/capabilities.py`), and a sandbox that
+confines writes to `artifact_scope` — the last re-verified this iteration with
+sympy present, where an out-of-scope write was still refused.
+
+**Caveat kept from the source:** the sandbox is honest about being a guard
+against mistakes, not against an adversary with code execution.
+
+---
+
+## G6 — Durable, resumable, interruptible execution. Implemented and measured.
+
+Measured **in anger**, not just in tests. Phase 2A was killed at task 5 of 30
+by a session teardown and **resumed from the fsynced ledger**, replaying 4
+completed tasks and continuing — the run that produced the reference
+measurement would not exist otherwise.
+
+Supporting: a hash-chained event log that refuses to resume into a tampered
+state, per-task fsync in the ledger, an OS-level run lock, and `kill_tree` for
+process-tree termination.
+
+**The known gap, already logged:** user-facing stop paths do not route through
+`kill_tree` (DEFERRED D10), so a run believed stopped may still be running.
+That is an *interruptibility* defect against a goal otherwise met.
+
+---
+
+## G7 — Self-measuring, eval harness first-class. Implemented and measured.
+
+The strongest-supported goal after G5, and arguably the iteration's real
+output. Six harness tools (`noise`, `run`, `ladder`, `coverage`, `report`,
+`nextstep`), 376 tests, and a documented defect taxonomy of six
+instrument-class and five process-class defects — several of which were found
+*by the harness measuring itself*.
+
+Concrete evidence it is first-class rather than decorative: `report.py`
+refuses to plot across harness or toolset versions; the run record carries
+per-task memory, machine-fault and wall-outlier flags; and
+`test_dead_code_audit.py` fails when a component is implemented but never
+called.
+
+---
+
+## G8 — Portable skill format. Implemented and unmeasured.
+
+Skills are plain markdown with at most three modules
+(`examples/skills/aero_units_discipline.md`), stored content-addressed by hash
+in `skills_store/`. Two skills exist.
+
+**Unmeasured** in the sense that portability has never been exercised:
+`import_external_skill` is in `KNOWN_INERT` ("External skills go through the
+same gate; none imported yet"), and no skill has ever moved between machines,
+suites, or models. The format is a claim, not a demonstrated property.
+
+---
+
+## What is UNMEASURABLE on this hardware, and why
+
+| Goal / component | Why |
+|---|---|
+| **G1 prefix-cache benefit** | Ollama has no prompt-cache accounting. `cache_read_tokens` is 0 across all 1,179 real calls and is populated *only* by the mock backend. The ratio is **unknown**, not zero |
+| **G1 paid-token reduction** | No paid backend has ever been called. Requires an API key, a live Anthropic call, calibration, and ablation switches that do not exist |
+| **G1 routing / escalation** | One configured tier. The 8B alone is 7.64 GB resident against 3.6–6.4 GB free, so two models cannot be co-resident; a "routed" run would measure model swapping |
+| **8B at suite scale** | Does not fit. 7.64 GB resident at the harness's `num_ctx: 16384`. Measured, and recorded as SPEC-DELTA C20 |
+| **Token counts generally** | `calibrate` has no caller and cannot run locally. Every token figure is an estimate — including the one invariant 11's context ceiling budgets against (DEFERRED D6) |
+| **G4 anti-gaming veto** | `record_holdout_gap` has no caller and a `verify_program` suite has no visible/held-out partition. Every promotion carries `gaming_check: NOT MEASURED` |
+| **Cost axis in dollars** | Every call is $0.0000 under `--profile local`. The Pareto's cost axis is wall-clock seconds, and the dollar column is retained as `n/a` |
+
+---
+
+## The honest one-line summary
+
+**Three of eight goals are measured (G5, G6, G7). One is partially built with
+its measured half working and its generative half never run (G4). Three are
+implemented and enforced but their effect has never been observed (G1, G3,
+G8). One barely started (G2).**
+
+The headline claim — G1's 10× — is the least supported of the eight, and the
+gap is not a missing run. It is a missing API key, a missing calibration, and
+a missing control arm, in that order of increasing cost.
