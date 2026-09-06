@@ -262,8 +262,16 @@ def run_task(ctx, task_id: str) -> TaskResult:
             # but granite4.1:8b never emitted a <final> under it across 8
             # tasks, so it cannot be the universal default.
             # See BackendConfig.action_protocol.
+            #
+            # The gate is `needs_action_envelope`, a declared property, and
+            # NOT `kind == "ollama"` as it was until phase 1. Two adapters can
+            # now reach the same Ollama server running the same weights, and
+            # under a class-name test the config switch this phase exists to
+            # enable would silently stop sending the schema — same model, same
+            # task, a different question asked. Same defect class as a profile
+            # that is whatever config happened to be on disk.
             step_schema = None
-            if backend.cfg.kind == "ollama":
+            if backend.cfg.needs_action_envelope:
                 if getattr(backend.cfg, "action_protocol", "json") == "tags":
                     tail = tail + "\n" + ACTION_TAG_HINT
                 else:

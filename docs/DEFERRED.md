@@ -325,3 +325,34 @@ accident.
 **Correct version:** find which `write_text` ignores `args.out` and make it
 use the resolved destination. Deferred because the freeze covers `bench/`,
 nothing depends on the file, and it changes no measurement.
+
+---
+
+## D16 — Per-backend context windows are unreachable over the OpenAI protocol
+
+**Severity:** would silently corrupt a measurement if the server is started
+without `OLLAMA_CONTEXT_LENGTH`. Mitigated by both launchers setting it.
+
+The OpenAI chat-completions API has no `num_ctx`, so every `openai`-kind
+backend gets whatever window the server allocates. One server-wide value
+cannot satisfy two backends declaring different `usable_context_window`s —
+`config.openai.yaml` has a 3B asking 16384 and an 8B asking 8192 against the
+same URL.
+
+Budgeting BELOW the server's window merely wastes it. Budgeting ABOVE it is
+the corrupting direction: M3.4's ceiling is computed from a number the server
+will not honour, and Ollama truncates without an error.
+
+**Why not detected in code:** the only portable signal is the returned
+`prompt_tokens`, and flagging a mismatch means comparing it against this
+project's own token count — which is an uncalibrated estimator (`calibrate`
+has no caller; see the dead-code audit). A check whose false-alarm rate is
+unknown is worse than a documented constraint, so this is documented.
+
+**Correct version:** either query the server's window through whatever
+non-portable route it offers and assert against the config at startup, or
+calibrate the tokenizer first and then compare `prompt_tokens` to a count that
+can be trusted. The second unblocks several other things and is the better
+order.
+
+SPEC-DELTA C29.

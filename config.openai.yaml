@@ -1,0 +1,139 @@
+# The same all-local run as config.local.yaml, through the OpenAI
+# chat-completions protocol instead of Ollama's native API.
+#
+#   alpha.cmd --config config.openai.yaml new "..." --scope work
+#
+# Same server, same weights, same tasks. The ONLY differences from
+# config.local.yaml are `kind`, `base_url`, and the db/anchor paths. That is
+# the point of B2: changing where the model comes from is a config edit, and
+# nothing in src/ branches on which adapter is in use.
+#
+# Point `base_url` at vLLM, llama.cpp's server, or a hosted OpenAI-compatible
+# endpoint and it keeps working. For an authenticated endpoint add
+# `api_key_env: OPENAI_API_KEY` and set trust_tier: cloud — and note that
+# `--profile local` will then correctly refuse to start.
+#
+# ---------------------------------------------------------------------------
+# MEASURED PARITY against config.local.yaml, Ollama 0.33.3, granite4.1:3b,
+# 2026-09-06. Same prompt, both protocols, using the shipped adapters:
+#
+#   identical  answer text, prompt_tokens (32), completion_tokens (12)
+#   identical  JSON-schema constrained decoding (response_format vs format)
+#   BETTER     /v1 reports prompt-cache accounting; the native API reports
+#              none. On a 206-token prompt the server had never seen:
+#              cached_tokens 5 then 205 on the repeat, against 0/0 native.
+#              The stable-prefix benefit is measurable here and was not
+#              before. See docs/SPEC-DELTA.md C28.
+#   WORSE      keep_alive is accepted and SILENTLY DISCARDED. A /v1 call
+#              sending keep_alive: 30m leaves the model expiring in 5.0
+#              minutes, exactly as if nothing was sent. On CPU a cold load is
+#              ~30s against ~8s warm, so set it on the SERVER instead:
+#              OLLAMA_KEEP_ALIVE=30m before `ollama serve`. ollama-serve.ps1
+#              now does.
+#
+# ###########################################################################
+# READ THIS BEFORE RUNNING A MEASUREMENT THROUGH THIS FILE.
+#
+# `usable_context_window` below is NOT ENFORCEABLE on this protocol. The
+# OpenAI chat-completions API has no num_ctx, so the window is whatever the
+# SERVER was started with — 4096 by Ollama's default — no matter what this
+# file says. Measured 2026-09-06: a real task logged `n_ctx_slot = 4096`
+# while this config declared 16384.
+#
+# That is the exact failure the native adapter sends num_ctx to prevent:
+# M3.4 budgets the context ceiling against usable_context_window, so if the
+# server's window is smaller the ceiling math is a lie and the agent loses
+# the head of its own context mid-task, silently, with no error anywhere.
+#
+# So: start the server with OLLAMA_CONTEXT_LENGTH=16384 (ollama-serve.ps1 and
+# ollama-serve.cmd now do), and treat the number below as a CLAIM ABOUT THE
+# SERVER rather than a request. It is one server-wide value, so per-backend
+# windows are not achievable over this protocol against one Ollama — the
+# `review` entry below asks for 8192, which is safe only because budgeting
+# BELOW what the server provides merely wastes window, while budgeting above
+# it corrupts. DEFERRED D16.
+# ###########################################################################
+# ---------------------------------------------------------------------------
+
+db_path: "./agent.local.db"
+anchor_path: "./anchor/chain.local.anchor"
+skills_path: "./skills_store"
+
+backends:
+  cloud:                            # the executor slot; here, the fast local model
+    kind: openai
+    model: "granite4.1:3b"
+    base_url: "http://localhost:11435/v1"
+    input_cost_per_mtok: 0.0
+    output_cost_per_mtok: 0.0
+    cache_read_per_mtok: 0.0
+    cache_write_per_mtok: 0.0
+    context_window: 131072
+    usable_context_window: 16384
+    can_parallel: false
+    thinking: "disabled"
+    accepts_temperature: true
+    max_output_tokens: 512
+    trust_tier: local
+
+  review:                           # a DIFFERENT model from the executor, invariant 14
+    kind: openai
+    model: "granite4.1:8b"
+    base_url: "http://localhost:11435/v1"
+    input_cost_per_mtok: 0.0
+    output_cost_per_mtok: 0.0
+    cache_read_per_mtok: 0.0
+    cache_write_per_mtok: 0.0
+    context_window: 131072
+    usable_context_window: 8192
+    can_parallel: false
+    thinking: "disabled"
+    accepts_temperature: true
+    max_output_tokens: 128
+    trust_tier: local
+
+  local:
+    kind: openai
+    model: "granite4.1:3b"
+    base_url: "http://localhost:11435/v1"
+    context_window: 131072
+    usable_context_window: 16384
+    thinking: "disabled"
+    accepts_temperature: true
+    max_output_tokens: 512
+    trust_tier: local
+
+active_local_tier: null
+
+limits:
+  context_fill_ratio: 0.28
+  default_task_budget_usd: 0.0
+  default_task_budget_seconds: 1800
+  max_refinement_iterations: 2
+  max_steps: 10
+  delegation_min_isolated_tokens: 1000
+
+local_allowlist: []
+laptop_allowlist: []
+compress_observations_over_tokens: 100000
+
+gate:
+  min_paired_trials: 15
+  min_discordant_pairs: 10
+  max_p_value: 0.05
+  min_lift_pp: 5.0
+
+autonomy:
+  mode: "plan_then_run"
+  plan_required: false
+  auto_review: true
+  auto_review_backend: "review"
+  auto_review_policy: "./policy.md"
+  approve_scoped_writes: false
+  deviation_tolerance: 0.25
+  human_only_tiers: ["trusted"]
+
+ui:
+  theme: "./themes/default.toml"
+  banner_art: "./assets/banner.ans"
+  spinner: "braille"

@@ -499,3 +499,77 @@ directory would fight a setuptools convention for no gain.
 
 **Class:** environment trap. Costs the next person ten minutes and points
 them at the wrong cause.
+
+### C28. Ollama's two APIs are not the same instrument
+
+**Reality:** B2 assumes an OpenAI-compatible adapter is a protocol swap — same
+server, same weights, same run. Measured against Ollama 0.33.3 with
+granite4.1:3b on 2026-09-06, using the shipped adapters, that is true for the
+things a benchmark scores and false for two things it depends on.
+
+Identical: answer text, `prompt_tokens` (32), `completion_tokens` (12), and
+JSON-schema constrained decoding — `format` on the native API and
+`response_format.json_schema` on `/v1` both returned `{ "planet": "Jupiter" }`,
+and `/v1` accepts the real `ACTION_SCHEMA` in 5.4 s.
+
+**`/v1` reports MORE.** It carries `prompt_tokens_details.cached_tokens`; the
+native API carries no such field. On a 206-token prompt built around a fresh
+uuid, so the server had provably never seen it, `/v1` reported 5 cached tokens
+on first sight and 205 on an identical repeat, while `/api/chat` reported 0
+both times. Near-zero then near-total is the shape of real accounting, not a
+constant. `RELEASE.md`'s audit recorded the stable-prefix benefit on the local
+tier as **unmeasurable for want of cache accounting**; it is measurable, and
+was being discarded by the protocol rather than withheld by the server. No
+published number moves — `cache_read_tokens` was 0 across all 1179 recorded
+calls, so nothing was computed from it.
+
+**`/v1` honours LESS.** `keep_alive` is accepted and silently discarded: unload
+the model, send `keep_alive: "30m"`, read `/api/ps`, and the expiry is 5.0
+minutes — identical to sending nothing, with HTTP 200 and no warning. A
+setting that reads as honoured and is not. On CPU a cold load measured ~30 s
+against ~8 s warm, so this is wall clock, the budget that binds here.
+
+**Correct version:** set it on the server. `ollama-serve.ps1` and
+`ollama-serve.cmd` now export `OLLAMA_KEEP_ALIVE=30m`. The adapter does not
+send the field at all, because sending something the server discards is worse
+than not sending it.
+
+**Class:** spec optimism. "OpenAI-compatible" describes a request format, not
+a capability set, and the differences run in both directions.
+
+### C29. `usable_context_window` is a claim, not a request, on the OpenAI protocol
+
+**Reality:** the OpenAI chat-completions API has no `num_ctx`. The native
+adapter sends one on every call, with a comment explaining exactly why:
+Ollama otherwise defaults to a 4096-token window regardless of what the model
+supports and **silently truncates**, and M3.4 budgets the context ceiling
+against `usable_context_window`, so a smaller server window makes the ceiling
+math a lie and the agent loses the head of its own context mid-task.
+
+The `/v1` path cannot send it. Caught in the server log of the first real task
+run through `config.openai.yaml`:
+
+    new prompt, n_ctx_slot = 4096, n_keep = 4, task.n_tokens = 1165
+
+against a config declaring 16384. The prompt fit, so nothing was truncated
+that time — but the guarantee was absent, and it was absent silently.
+
+**Correct version:** `OLLAMA_CONTEXT_LENGTH=16384` in the server environment,
+now set by both launchers and verified in the log (`n_ctx_slot = 16384`).
+`config.openai.yaml` states in a banner that the number is a claim about the
+server rather than a request.
+
+**Residual, and the honest limit of B2:** it is ONE server-wide value, so
+per-backend context windows are not achievable over this protocol against a
+single Ollama. Budgeting below what the server provides only wastes window;
+budgeting above it corrupts. There is no portable check — the only signal is
+`prompt_tokens`, and comparing it to this project's own token count would test
+an uncalibrated estimator, which is a check that cannot be trusted. Documented
+rather than detected. DEFERRED D16.
+
+It also costs memory: resident went from **2.51 GB at ctx 4096 to 3.61 GB at
+16384**, and on this protocol every model the server loads pays it, not only
+the backend that needed the window.
+
+**Class:** a capability the abstraction cannot carry. Worth stating plainly
+rather than letting "one adapter for everything" imply otherwise.

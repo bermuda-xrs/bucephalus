@@ -10,6 +10,112 @@
 Dates are commit dates. `0.1.0` is not released yet — see "Unreleased" for
 what still stands between here and a first iteration.
 
+## Iteration two, phase 1 — one adapter for the OpenAI protocol — 2026-09-06
+
+**Invalidates no published number.** `HARNESS_VERSION` stays 2 and
+`TOOLSET_VERSION` stays 1: no tool or library was added, and nothing here
+changes what counts as a pass. Runs through `config.openai.yaml` are a
+different instrument from native-adapter runs and must not be pooled with
+them — the adapter `kind` already travels into every run header through
+`profile_provenance["backends"]`, so the record distinguishes them.
+
+### Added
+
+* **`models/openai_compat.py`** — one adapter speaking OpenAI
+  chat-completions to Ollama's `/v1`, vLLM, llama.cpp's server or a hosted
+  endpoint. Written on httpx rather than the `openai` package because the
+  stall detector needs the raw stream: a client that returns a completed
+  object has already spent the wall clock this project budgets in.
+* **`models/stall.py`** — the machine-fault rule, lifted out of the Ollama
+  adapter unchanged so both adapters share one implementation. A stall is a
+  property of the machine, not of an adapter. The names stay re-exported from
+  `models/ollama.py` because `bench/noise.py` and `execute/loop.py` import
+  them from there, and a machine-fault path is the wrong place to churn
+  imports for tidiness.
+* **`config.openai.yaml`** — `config.local.yaml` with the adapter swapped and
+  nothing else, pinned by a test that compares the two files field by field.
+
+### Measured — the two APIs are not the same instrument
+
+Ollama 0.33.3, granite4.1:3b, same server, shipped adapters. Full record in
+`docs/evidence/phase1-openai-parity.json`; SPEC-DELTA C28 and C29.
+
+* **Identical** where a benchmark scores: answer text, `prompt_tokens` (32),
+  `completion_tokens` (12), and JSON-schema constrained decoding — including
+  the real `ACTION_SCHEMA`.
+* **`/v1` reports MORE.** It carries prompt-cache accounting the native API
+  does not. On a 206-token prompt built round a fresh uuid: **5 cached tokens
+  on first sight, 205 on the identical repeat**, against 0/0 native. Near-zero
+  then near-total is the shape of real accounting, not a constant. The audit
+  in `RELEASE.md` recorded the stable-prefix benefit on the local tier as
+  **unmeasurable for want of cache accounting** — it is measurable, and was
+  being discarded by the protocol rather than withheld by the server. The
+  first real task through the new adapter printed **cache hit 41%** on the
+  CLI cost line, where native runs print 0.
+* **`/v1` honours LESS, twice.** `keep_alive` is accepted and silently
+  discarded — HTTP 200, model still expires in 5.0 minutes. And there is no
+  `num_ctx`, so `usable_context_window` is a claim about the server rather
+  than a request: a real task logged `n_ctx_slot = 4096` against a configured
+  16384. Both are now set on the server by `ollama-serve.ps1` / `.cmd`
+  (`OLLAMA_KEEP_ALIVE=30m`, `OLLAMA_CONTEXT_LENGTH=16384`, verified in the
+  log). The context ceiling costs memory: **2.51 GB resident at ctx 4096
+  against 3.61 GB at 16384**, server-wide, so every loaded model pays it.
+
+**No speed comparison is reported.** The one back-to-back pair read 53.5s on
+`/v1` against 12.4s native, but the native call ran second against a cache the
+first had just filled and the replies differed in length. Two confounds, n=1.
+
+### Changed — two class-name checks became declared properties
+
+`cfg.kind == "ollama"` decided whether the model is handed a constrained
+action envelope, in `execute/loop.py` and again in `plan/review.py`. With a
+second adapter able to reach the same server running the same weights, that
+test flips while nothing about the model changes — the run would ask a
+different question and not say so. Both now read
+`BackendConfig.needs_action_envelope`. Shown rather than asserted: the old and
+new predicates agree on **all 7 backends across both shipped configs**.
+
+`profiles.enforce` decided locality the same way. It now derives it from where
+a backend POINTS: cloud-only kinds, declared cloud tier, or a host that is not
+loopback/private — and an unresolvable host counts as remote, because unknown
+fails closed. `kind: openai, base_url: https://api.openai.com/v1,
+trust_tier: local` is one careless copy of a working entry, and it would have
+started a `--profile local` run and produced a number labelled local. Any
+`api_key_env` a backend names is now watched alongside the fixed credential
+list. The change only ever ADDS to the cloud set; nothing can clear a backend
+the declared tier already flagged.
+
+### Tests
+
+**376 → 403.** The two structural checks the refactor invalidated were
+replaced by stronger ones rather than deleted:
+
+* the transport-timeout guard read `ollama.py` for the phrase
+  `raise ModelStall`. It now INJECTS a real `httpx.ReadTimeout` into the
+  request path and requires `ModelStall` out of `complete()`, parametrised
+  over **both** adapters. The old check tested spelling and could say nothing
+  about a second adapter.
+* the injection switch was pinned as "read once in `ollama.py`". It is now
+  "read once in the whole package, and that once is `stall.py`" — the narrow
+  version would have passed while a new adapter read the switch for itself.
+* added: the class `bench/noise.py` catches is the same object both adapters
+  raise, asked as an identity question rather than inferred from imports.
+
+### Found
+
+* **A fourth machine stall**, unplanned, during the first end-to-end run:
+  `init_sampler` at 1165 tokens, then no eval timing at all, then cancel;
+  `500 | 17m57s`. Not reproducible from the request shape — `ACTION_SCHEMA`
+  alone, streaming with tools and schema, and the same shape at the real
+  prompt size all returned in 5-54s. Same signature as the three already
+  documented. **The machine-fault path fired on the new adapter, on a real
+  event**, converting the timeout to `ModelStall` rather than to a task
+  failure. n=1 says nothing about whether `/v1` stalls more often, and no such
+  claim is made.
+* 19 pre-existing anchor mismatches in the gitignored local dev database,
+  none of them from today's runs, consistent with D10 — a manually stopped
+  run never checkpoints. Logged, not chased; the freeze holds.
+
 ## Iteration one complete — 2026-09-05
 
 The reference measurement exists, the research question does not have an

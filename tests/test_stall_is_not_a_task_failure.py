@@ -46,17 +46,42 @@ def test_the_handler_sits_ahead_of_the_generic_catch():
         "machine event as a task failure")
 
 
-def test_a_timeout_is_raised_as_a_stall_not_a_generic_backend_error():
+@pytest.mark.parametrize("kind,extra", [
+    ("ollama", {"endpoint": "http://localhost:11435"}),
+    ("openai", {"base_url": "http://localhost:11435/v1"}),
+])
+def test_a_timeout_is_raised_as_a_stall_not_a_generic_backend_error(
+        monkeypatch, kind, extra):
     """A transport timeout is the same machine event, caught by a different
     layer. If it arrives as a plain BackendError it lands in the generic
-    branch and is scored as a failure - which is what happened to H30."""
-    src = (ROOT / "src" / "agent" / "models" / "ollama.py").read_text(encoding="utf-8")
-    assert "except httpx.TimeoutException" in src
-    i = src.index("except httpx.TimeoutException")
-    j = src.index("except Exception", i)
-    assert "raise ModelStall" in src[i:j], (
-        "a transport timeout must be raised as ModelStall, or it is "
-        "indistinguishable from a real backend failure")
+    branch and is scored as a failure - which is what happened to H30.
+
+    This used to read ollama.py and look for `raise ModelStall` between the
+    timeout handler and the generic one. That check was about SPELLING: it
+    passed for any code that contained the phrase and, more to the point, it
+    could say nothing at all about a second adapter. So it is now the
+    property, exercised: inject a real httpx.ReadTimeout into the request path
+    and require ModelStall out the other side, for EVERY adapter that streams.
+
+    No server is involved - the injected timeout is raised inside the try
+    block, which is the whole point of where the injection sits.
+    """
+    from agent.config import BackendConfig
+    from agent.models import stall as stall_mod
+    from agent.models.registry import build_backend
+
+    monkeypatch.setenv("ALPHA_INJECT_STALL", "1t")
+    stall_mod.reset_injection_counter()
+    cfg = BackendConfig(kind=kind, model="granite4.1:3b", trust_tier="local",
+                        **extra)
+    backend = build_backend("t", cfg)
+
+    with pytest.raises(ModelStall) as caught:
+        backend.complete("system", "user", None, 32, 0.0)
+    assert "timed out" in str(caught.value), (
+        "the converted timeout must still say it was a timeout, or the "
+        "machine-fault record loses the cause")
+    stall_mod.reset_injection_counter()
 
 
 def test_model_stall_propagates_out_of_run_task(monkeypatch):

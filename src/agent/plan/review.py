@@ -167,7 +167,12 @@ def auto_review(ctx, req: ReviewRequest) -> ReviewDecision:
     tools = [
         s for s in ctx.tools.schemas() if s["name"] in READ_ONLY_TOOL_NAMES
     ]  # may verify, may not act
-    constrain = backend.cfg.kind == "ollama"
+    # A property, not an adapter type — see BackendConfig.needs_action_envelope.
+    # The deputy losing its schema because the executor changed `kind` would be
+    # the worst place for this bug to land: a reviewer that cannot emit VERDICT
+    # is a reviewer that approves nothing, and granite4.1:8b already failed to
+    # emit one unaided across 8 tasks.
+    constrain = backend.cfg.needs_action_envelope
     resp = backend.complete(
         prefix=REVIEW_PREFIX + "\n\n<policy>\n" + load_policy(ctx) + "\n</policy>",
         tail=render_review_request(req) + (REVIEW_SCHEMA_HINT if constrain else ""),

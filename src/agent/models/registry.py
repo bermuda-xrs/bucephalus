@@ -9,6 +9,7 @@ from .anthropic import AnthropicBackend
 from .base import Backend
 from .mock import MockBackend
 from .ollama import OllamaBackend
+from .openai_compat import OpenAICompatibleBackend
 
 
 @dataclass
@@ -28,6 +29,8 @@ def build_backend(name: str, cfg: BackendConfig) -> Backend:
         return AnthropicBackend(name, cfg)  # type: ignore[return-value]
     if cfg.kind == "ollama":
         return OllamaBackend(name, cfg)  # type: ignore[return-value]
+    if cfg.kind == "openai":
+        return OpenAICompatibleBackend(name, cfg)  # type: ignore[return-value]
     if cfg.kind == "mock":
         return MockBackend(name, cfg)  # type: ignore[return-value]
     raise ValueError(f"unknown backend kind {cfg.kind!r}")

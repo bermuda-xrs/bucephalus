@@ -17,20 +17,79 @@ every artifact the run produces.
 
 from __future__ import annotations
 
+import ipaddress
 import os
+import socket
+from urllib.parse import urlparse
 
 # Credentials that would let a cloud backend work. Their presence is not an
 # error by itself — it is an error in the local profile, because it means a
 # misconfigured backend would silently succeed instead of failing closed.
+#
+# Any `api_key_env` a backend declares is added to this set at check time, so
+# a new provider does not need this tuple edited to be caught.
 PROVIDER_CREDENTIALS = (
     "ANTHROPIC_API_KEY",
     "ANTHROPIC_AUTH_TOKEN",
     "OPENAI_API_KEY",
 )
 
+# Backend kinds that reach a provider by construction and have no local form.
+CLOUD_ONLY_KINDS = ("anthropic",)
+
 LOCAL = "local"
 MIXED = "mixed"
 VALID_PROFILES = (LOCAL, MIXED)
+
+
+def _host_is_local(host: str) -> bool:
+    """Loopback, link-local, or an RFC1918 address. Resolution failures are
+    NOT local: an unresolvable name is unknown, and unknown fails closed."""
+    if not host:
+        return False
+    if host in ("localhost", "localhost.localdomain") or host.endswith(".localhost"):
+        return True
+    try:
+        infos = socket.getaddrinfo(host, None)
+    except OSError:
+        return False
+    if not infos:
+        return False
+    for info in infos:
+        try:
+            ip = ipaddress.ip_address(info[4][0])
+        except ValueError:
+            return False
+        if not (ip.is_loopback or ip.is_private or ip.is_link_local):
+            return False
+    return True
+
+
+def reaches_a_remote_provider(backend) -> bool:
+    """Would using this backend send bytes off this machine?
+
+    Derived from where it POINTS, not from what it CALLS ITSELF. `trust_tier`
+    is a declaration in a file a human edits; the URL is what the socket
+    obeys. A config saying `kind: openai, base_url: https://api.openai.com/v1,
+    trust_tier: local` is not a hypothetical — it is one careless copy of a
+    working entry, and under the old class-name check it would have started a
+    `--profile local` run and produced a number labelled local.
+
+    Note the direction: this only ever ADDS to the set of backends that count
+    as cloud. Nothing here can clear a backend the declared tier already
+    flagged.
+    """
+    if backend.kind in CLOUD_ONLY_KINDS:
+        return True
+    if backend.trust_tier == "cloud":
+        return True
+    url = getattr(backend, "base_url", None) or getattr(backend, "endpoint", None)
+    if not url:
+        # No endpoint at all: `mock` talks to nothing, and a kind that needs
+        # a URL and has none will fail loudly at construction instead.
+        return False
+    parsed = urlparse(url if "//" in url else f"//{url}")
+    return not _host_is_local(parsed.hostname or "")
 
 
 class ProfileViolation(RuntimeError):
@@ -56,9 +115,12 @@ def enforce(config, profile: str, env: dict | None = None) -> dict:
 
     cloud_backends = sorted(
         name for name, b in config.backends.items()
-        if b.kind == "anthropic" or b.trust_tier == "cloud"
+        if reaches_a_remote_provider(b)
     )
-    credentials = sorted(k for k in PROVIDER_CREDENTIALS if env.get(k))
+    watched = set(PROVIDER_CREDENTIALS) | {
+        b.api_key_env for b in config.backends.values() if b.api_key_env
+    }
+    credentials = sorted(k for k in watched if env.get(k))
 
     if profile == LOCAL:
         problems = []

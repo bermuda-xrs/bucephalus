@@ -1,0 +1,81 @@
+{
+  "what": "Ollama native /api/chat vs the same server's OpenAI-compatible /v1, using the shipped adapters",
+  "why": "B2 makes the adapter a config edit. A config edit that changes what gets reported, or what the server allocates, changes what a benchmark can compare - so the differences are measured rather than assumed.",
+  "when": "2026-09-06",
+  "server": "Ollama 0.33.3, 127.0.0.1:11435, CPU inference (integrated GPU dropped), 15.5 GiB total",
+  "model": "granite4.1:3b",
+  "harness_version": 2,
+  "toolset_version": 1,
+  "note_on_versions": "Neither bumps for this phase. No tool or library was added, and nothing here changes what counts as a pass.",
+
+  "identical": {
+    "answer_text": "Jupiter is the largest planet in the solar system.",
+    "prompt_tokens": 32,
+    "completion_tokens": 12,
+    "json_schema_constrained_decoding": {
+      "native_field": "format",
+      "compat_field": "response_format.json_schema",
+      "both_returned": "{ \"planet\": \"Jupiter\" }",
+      "action_schema_accepted_by_v1": true,
+      "action_schema_wall_s": 5.4
+    }
+  },
+
+  "compat_reports_more": {
+    "finding": "prompt-cache accounting exists on /v1 and is absent from the native API",
+    "method": "a 206-token prompt carrying a fresh uuid, so the server had provably never seen it; two identical calls",
+    "compat_cached_tokens": [5, 205],
+    "native_cached_tokens": [0, 0],
+    "reading": "near-zero on first sight, near-total on the repeat, which is the shape of real accounting rather than a constant. The native API reports no field at all - 0 there means unreported, not uncached.",
+    "consequence": "RELEASE.md's audit recorded the stable-prefix benefit on the local tier as UNMEASURABLE for want of cache accounting. It is measurable. It was being discarded by the protocol, not withheld by the server. Nothing published moves: cache_read_tokens was 0 across all 1179 recorded calls, so no number was computed from it."
+  },
+
+  "compat_reports_less": [
+    {
+      "finding": "keep_alive is accepted and silently discarded",
+      "method": "unload the model first so the expiry measured was set by the call under test",
+      "after_unload": null,
+      "v1_plain_minutes_to_expiry": 5.0,
+      "v1_with_keep_alive_30m_minutes_to_expiry": 5.0,
+      "v1_with_keep_alive_status": 200,
+      "native_with_keep_alive_30m_minutes_to_expiry": 30.0,
+      "reading": "HTTP 200 and no error. A setting that reads as honoured and is not.",
+      "cost": "on CPU a cold load measured ~30s against ~8s warm; wall clock is the budget that binds here",
+      "resolution": "OLLAMA_KEEP_ALIVE=30m on the server; ollama-serve.ps1 and .cmd now set it"
+    },
+    {
+      "finding": "num_ctx is unreachable, so usable_context_window is unenforceable",
+      "observed_in": "a real task run through config.openai.yaml",
+      "server_log": "new prompt, n_ctx_slot = 4096, n_keep = 4, task.n_tokens = 1165",
+      "config_declared": 16384,
+      "server_allocated_before_fix": 4096,
+      "server_allocated_after_fix": 16384,
+      "fix": "OLLAMA_CONTEXT_LENGTH=16384 in the server environment, verified in the log",
+      "reading": "This is the exact failure the native adapter sends num_ctx to prevent. M3.4 budgets the context ceiling against usable_context_window; if the server's window is smaller the ceiling is a lie and the agent loses the head of its own context mid-task with no error.",
+      "residual_limitation": "one server-wide value, so per-backend context windows are not achievable over this protocol against a single Ollama. Budgeting BELOW what the server provides only wastes window; budgeting above it corrupts. DEFERRED D16.",
+      "memory_cost_measured": {
+        "resident_at_ctx_4096_gb": 2.51,
+        "resident_at_ctx_16384_gb": 3.61,
+        "delta_gb": 1.1,
+        "note": "server-wide on this protocol, so every loaded model pays it, not only the backend that needed the window"
+      }
+    }
+  ],
+
+  "not_a_finding": {
+    "wall_clock_comparison": "DELIBERATELY NOT REPORTED. The one back-to-back pair at a realistic prompt size read 53.5s on /v1 against 12.4s native, but the native call ran second against a prompt cache the /v1 call had just filled, and the two replies differed in length (40 vs 23 chunks). Two confounds, n=1. Nothing about relative speed is established here."
+  },
+
+  "machine_event": {
+    "what": "one real transport stall on /v1 during the first end-to-end task",
+    "server_log": "init_sampler at 1165 tokens, then no eval timing at all, then cancel; [GIN] 500 | 17m57s POST /v1/chat/completions",
+    "client": "ModelStall: model call timed out after producing 0 tokens - aborted as a machine fault, not a task outcome",
+    "reproduction_attempts": [
+      "ACTION_SCHEMA alone on /v1: 5.4s, correct output",
+      "stream + tools + response_format: 4.9s, 23 chunks",
+      "the same shape at the real 1165-token prompt size, both endpoints: 53.5s and 12.4s, both HTTP 200"
+    ],
+    "conclusion": "not reproducible from the request shape. Same signature as the three stalls already documented (2465s, 2539s, 1499.8s); this is the fourth. n=1 says nothing about whether /v1 stalls more often than the native API, and no such claim is made.",
+    "value": "the machine-fault path fired on the NEW adapter on a real unplanned event, converting a transport timeout to ModelStall rather than to a task failure. That is acceptance 1.5 satisfied by observation as well as by injection."
+  }
+}

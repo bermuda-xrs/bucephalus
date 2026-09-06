@@ -15,9 +15,25 @@ from pydantic import BaseModel, Field
 
 
 class BackendConfig(BaseModel):
-    kind: Literal["anthropic", "ollama", "mock"]
+    kind: Literal["anthropic", "ollama", "openai", "mock"]
     model: str
     endpoint: str | None = None
+    # `openai` only. The OpenAI chat-completions protocol, spoken to whatever
+    # is listening: Ollama's /v1 shim, vLLM, llama.cpp server, or a hosted
+    # endpoint. `base_url` is the field the protocol names; `endpoint` is
+    # accepted as an alias so an existing entry can change kind without being
+    # rewritten. See `resolved_base_url`.
+    base_url: str | None = None
+    # Name of the environment variable holding the key, NEVER the key itself.
+    # A key in a config file is a key in git history.
+    api_key_env: str | None = None
+    api_mode: Literal["chat_completions"] = "chat_completions"
+    # Newer OpenAI models reject `max_tokens` and require
+    # `max_completion_tokens`; Ollama, vLLM and llama.cpp take `max_tokens`.
+    # Declared rather than sniffed — a wrong value here is a 400 at first use,
+    # which is loud, where a silent fallback would quietly change what was
+    # asked for.
+    max_tokens_field: Literal["max_tokens", "max_completion_tokens"] = "max_tokens"
     input_cost_per_mtok: float = 0.0
     output_cost_per_mtok: float = 0.0
     cache_read_per_mtok: float = 0.0
@@ -56,6 +72,36 @@ class BackendConfig(BaseModel):
     def budgeted_window(self) -> int:
         """What M3.4 measures against — the usable window, not the advertised one."""
         return self.usable_context_window or self.context_window
+
+    @property
+    def resolved_base_url(self) -> str:
+        """Where an `openai`-kind backend actually sends its requests."""
+        url = self.base_url or self.endpoint
+        if not url:
+            raise ValueError(
+                f"backend kind={self.kind!r} model={self.model!r} needs a "
+                "base_url (or endpoint) — there is no default for an "
+                "OpenAI-compatible server"
+            )
+        return url.rstrip("/")
+
+    @property
+    def needs_action_envelope(self) -> bool:
+        """Does this backend have to be handed a constrained action format?
+
+        MEASURED, and a property rather than an adapter type. The check this
+        replaces was `cfg.kind == "ollama"`, which was correct only for as
+        long as there was exactly one local adapter. Point a second adapter at
+        the same Ollama server running the same weights and the class-name
+        test flips while nothing about the model changed — the run would
+        silently be asking a different question. That is the same defect class
+        as a benchmark whose profile is whatever config happened to be on
+        disk, so it is settled the same way: by a declared property.
+
+        Cloud tiers keep the tag protocol — they follow it reliably, and a
+        forced schema fights with extended thinking.
+        """
+        return self.trust_tier == "local"
 
     def cost_vector(self) -> dict[str, float]:
         return {

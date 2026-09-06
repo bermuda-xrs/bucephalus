@@ -23,29 +23,29 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "src"))
 
-from agent.models import ollama as ol  # noqa: E402
+from agent.models import stall  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
 def _clean_env(monkeypatch):
     monkeypatch.delenv("ALPHA_INJECT_STALL", raising=False)
-    ol.reset_injection_counter()
+    stall.reset_injection_counter()
     yield
-    ol.reset_injection_counter()
+    stall.reset_injection_counter()
 
 
 def test_injection_cannot_fire_without_the_flag():
     """The whole safety property. Unset means unreachable."""
-    assert ol._inject_on() == set()  # noqa: SLF001
+    assert stall._inject_on() == set()  # noqa: SLF001
     for _ in range(50):
-        ol._CALLS["n"] += 1  # noqa: SLF001
-        assert ol._CALLS["n"] not in ol._inject_on()  # noqa: SLF001
+        stall._CALLS["n"] += 1  # noqa: SLF001
+        assert stall._CALLS["n"] not in stall._inject_on()  # noqa: SLF001
 
 
 def test_injection_fires_only_on_the_named_calls(monkeypatch):
     monkeypatch.setenv("ALPHA_INJECT_STALL", "2,4")
-    assert ol._inject_on() == {2, 4}  # noqa: SLF001
-    fired = [n for n in range(1, 7) if n in ol._inject_on()]  # noqa: SLF001
+    assert stall._inject_on() == {2, 4}  # noqa: SLF001
+    fired = [n for n in range(1, 7) if n in stall._inject_on()]  # noqa: SLF001
     assert fired == [2, 4]
 
 
@@ -54,15 +54,41 @@ def test_garbage_in_the_flag_disables_it_rather_than_firing(monkeypatch):
     into a real run on a typo."""
     for bad in ("yes", "all", "-1", "1;2", " ", "abc,def"):
         monkeypatch.setenv("ALPHA_INJECT_STALL", bad)
-        assert ol._inject_on() == set(), f"{bad!r} should disable injection"
+        assert stall._inject_on() == set(), f"{bad!r} should disable injection"
 
 
 def test_the_flag_is_read_from_the_environment_only():
-    """No config key, no CLI default, nothing that could persist into a run."""
-    src = (ROOT / "src" / "agent" / "models" / "ollama.py").read_text(encoding="utf-8")
-    assert src.count('os.environ.get("ALPHA_INJECT_STALL"') == 1, (
-        "the switch must be READ in exactly one place; more than one read "
-        "site is more than one way for it to fire")
+    """No config key, no CLI default, nothing that could persist into a run.
+
+    Widened from "once in ollama.py" to "once in the whole package" when a
+    second adapter arrived. The narrow version would have passed while a new
+    adapter read the switch for itself, which is the failure it exists to
+    stop: one read site is one way for injection to fire, and the count is
+    the entire guarantee.
+    """
+    sites = {
+        path.relative_to(ROOT).as_posix(): text.count(
+            'os.environ.get("ALPHA_INJECT_STALL"')
+        for path in (ROOT / "src" / "agent").rglob("*.py")
+        if (text := path.read_text(encoding="utf-8"))
+        and "ALPHA_INJECT_STALL" in text
+    }
+    assert sum(sites.values()) == 1, (
+        f"the switch must be READ in exactly one place; found {sites}")
+    assert sites.get("src/agent/models/stall.py") == 1, (
+        "the read site must be the shared stall module, so every adapter "
+        f"inherits the same guard rather than writing its own: {sites}")
+
+
+def test_the_call_counter_is_shared_across_adapters():
+    """An injected index means "the Nth model call of this run", not "the Nth
+    call on whichever adapter". Phase 1 makes the adapter a config edit, so a
+    per-adapter counter would make an injected shakedown produce different
+    calls before and after that edit - the switch would stop being a way to
+    reproduce a fault and become a way to relabel one."""
+    from agent.models import ollama, openai_compat
+    assert ollama.next_call_index is stall.next_call_index
+    assert openai_compat.next_call_index is stall.next_call_index
 
 
 # ---------------------------------------------------------------------------
@@ -172,3 +198,23 @@ def test_the_abort_threshold_counts_excluded_only():
     assert "machine_fault" not in window, (
         "machine_fault must not enter the abort count - a recovered stall is "
         "evidence the handler worked, not a reason to stop")
+
+
+def test_the_bench_catches_the_same_class_the_new_adapter_raises():
+    """bench/noise.py catches ModelStall imported from agent.models.ollama.
+
+    Phase 1 added a second adapter. If the OpenAI-compatible one raised a
+    DIFFERENT ModelStall - its own class, or one from a module that got
+    re-imported under another name - the bench would miss it and score a
+    machine event as a task failure, which is the exact defect the whole
+    machine-fault path exists to prevent. It is an identity question, so it
+    is asked as one rather than inferred from the imports.
+    """
+    from agent.models import openai_compat
+
+    n = _noise()
+    assert n.ModelStall is stall.ModelStall
+    assert openai_compat.ModelStall is stall.ModelStall
+
+    from agent.execute import loop as loop_mod
+    assert loop_mod.ModelStall is stall.ModelStall
