@@ -218,3 +218,58 @@ def test_the_bench_catches_the_same_class_the_new_adapter_raises():
 
     from agent.execute import loop as loop_mod
     assert loop_mod.ModelStall is stall.ModelStall
+
+
+def test_one_stall_re_runs_the_task_and_the_result_still_counts():
+    """The re-run, exercised rather than grepped for.
+
+    The existing checks read noise.py for the word `continue` in the stall
+    branch. That is a test of spelling: it passes for any code containing the
+    token, and it says nothing about whether a second attempt actually happens
+    or what the recovered row looks like. Phase 1 made the acceptance question
+    "does the machine-fault path work on the NEW adapter", and answering that
+    by reasoning about which class gets caught is exactly the inference this
+    project keeps getting wrong. So the condition is injected into the retry
+    itself and the resulting row is inspected.
+    """
+    n = _noise()
+    calls = {"n": 0}
+
+    def flaky(ctx, spec, run_ix):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise stall.ModelStall("first attempt stalled", 0.4, 5.9, 30, 120.0)
+        return {"run": run_ix, "task_id": "E01", "status": "done",
+                "passed": True, "unmeasured": False, "excluded": False}
+
+    n.run_once = flaky
+    out = n.run_with_backend_retry(None, {}, 0, "E01")
+
+    assert calls["n"] == 2, "the first stall must produce exactly one re-run"
+    assert out["passed"] is True, "a recovered task is a real result"
+    assert out["machine_fault"] is True, "the fault is recorded, not hidden"
+    assert out["excluded"] is False and out["unmeasured"] is False, (
+        "recovery means the data exists - excluding it would discard a "
+        "measured result on evidence that the handler WORKED")
+    assert out["stalls"][0]["observed_tok_s"] == 0.4
+    n.assert_machine_fault_never_scored_as_failure(out)
+
+
+def test_two_stalls_exclude_the_task_and_never_score_it_as_a_failure():
+    n = _noise()
+    calls = {"n": 0}
+
+    def always(ctx, spec, run_ix):
+        calls["n"] += 1
+        raise stall.ModelStall("stalled again", 0.2, 5.9, 12, 90.0)
+
+    n.run_once = always
+    out = n.run_with_backend_retry(None, {}, 0, "M11")
+
+    assert calls["n"] == 2, "exactly two attempts, then stop"
+    assert out["status"] == "excluded_machine_fault"
+    assert out["excluded"] is True and out["unmeasured"] is True
+    assert out["passed"] is False
+    assert len(out["stalls"]) == 2
+    # The invariant that both aborted Phase 2A attempts violated.
+    n.assert_machine_fault_never_scored_as_failure(out)

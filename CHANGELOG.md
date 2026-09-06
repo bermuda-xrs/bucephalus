@@ -87,7 +87,7 @@ the declared tier already flagged.
 
 ### Tests
 
-**376 → 403.** The two structural checks the refactor invalidated were
+**376 → 405.** The two structural checks the refactor invalidated were
 replaced by stronger ones rather than deleted:
 
 * the transport-timeout guard read `ollama.py` for the phrase
@@ -100,6 +100,15 @@ replaced by stronger ones rather than deleted:
   version would have passed while a new adapter read the switch for itself.
 * added: the class `bench/noise.py` catches is the same object both adapters
   raise, asked as an identity question rather than inferred from imports.
+* added: the stall RE-RUN, exercised instead of grepped for. The existing
+  check read `noise.py` for the word `continue` in the stall branch, which
+  passes for any code containing the token and says nothing about whether a
+  second attempt happens. `run_once` is now stubbed to stall once and then
+  succeed, and the recovered row is inspected: one re-run, `machine_fault`
+  recorded, `excluded` false. Phase 1's acceptance asked whether the
+  machine-fault path works on the new adapter, and answering that by
+  reasoning about which class gets caught is the inference this project keeps
+  getting wrong.
 
 ### Found
 
