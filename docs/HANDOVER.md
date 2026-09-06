@@ -223,12 +223,40 @@ split, profile or executor.
 |---|---|
 | Branch | `measurement-2026-09-01` (off `main` at `148cd99`; no remote) |
 | Harness version | **2** — v3 was evaluated and **rejected**, see section 7 |
-| Toolset version | **1** — sympy 1.13.3, added AFTER the reference measurement |
-| Tests | **376 passing** |
+| Toolset version | **3** — sympy 1.13.3, then `search_history`, then the memory tools |
+| Tests | **466 passing** |
 | Working tree | clean |
 | Running | nothing |
-| Last completed step | **Iteration one closed.** See `RELEASE.md` |
-| Next step | Choose a new suite — from evidence, not intuition. See below |
+| Last completed step | **Iteration two, Phase 3 (persistent memory).** See CHANGELOG |
+| Next step | Phase 4 (web tools + file ops). Phase 6 (Docker) is PARKED — not installed |
+
+### Iteration two, so far
+
+Phases run in the order 1, 2, 3, with corrections between. Read the CHANGELOG
+top-down; each entry states what it invalidates.
+
+* **Phase 1 (B2)** — one `OpenAICompatibleBackend` for the OpenAI
+  chat-completions protocol. Model switching is a config edit;
+  `config.openai.yaml` runs the same local models through Ollama's `/v1`.
+* **Phase 2 (B4)** — FTS5 search over prior sessions, `search_history`.
+* **Phase 3 (A1)** — persistent memory in three tiers.
+
+**Three things a new session must not re-derive:**
+
+1. **Ollama's two APIs are not the same instrument.** `/v1` reports
+   prompt-cache accounting and the native API does not; the native API
+   honours `num_ctx` and `/v1` silently ignores `keep_alive` and has no
+   `num_ctx` at all. SPEC-DELTA C28, C29. Start the server with
+   `ollama-serve.ps1`, which sets both env vars the `/v1` path needs.
+2. **A benchmark attempt can only read what it produced itself.**
+   `isolate_retrieval` scopes `search_history` and `expand_artifact` to the
+   task tree and empties tier-1 memory. Without it, the skill arm of a paired
+   trial can look up the control arm's answer. `bench/noise.py` sets it
+   itself, deliberately not from yaml.
+3. **A backend's adapter type never decides behaviour.** Branch on a declared
+   capability — `needs_action_envelope`, `reports_prompt_cache` — never on
+   `kind ==`. `tests/test_no_adapter_identity_branches.py` fails if a new one
+   appears.
 
 ### Where the project actually stands
 
