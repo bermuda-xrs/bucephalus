@@ -159,9 +159,11 @@ def tool_search_history(ctx, task, query: str, limit: int = 5,
     ledger discipline that makes the rest of this system affordable.
     """
     from ..kernel import search as search_mod
+    from ..kernel.scope import visible_tasks
 
     try:
-        hits = search_mod.search(ctx.conn, query, limit=limit, offset=offset)
+        hits = search_mod.search(ctx.conn, query, limit=limit, offset=offset,
+                                 allowed_tasks=visible_tasks(ctx, task))
     except search_mod.SearchUnavailable as e:
         return {"ok": False, "error": str(e)}
     except ValueError as e:
@@ -193,9 +195,22 @@ def tool_search_history(ctx, task, query: str, limit: int = 5,
 def tool_expand_artifact(ctx, task, id: str) -> dict:  # noqa: A002 - model-facing name
     from ..ledger.artifacts import read_artifact
 
+    from ..kernel.scope import visible_tasks
+
     art = read_artifact(ctx.conn, id)
     if art is None:
         return {"ok": False, "error": f"no such artifact: {id}"}
+
+    # Retrieval isolation. An artifact id is a content hash, so a benchmark
+    # arm cannot usually guess one — but `search_history` RETURNS ids in its
+    # `ref` field, and an id also survives the workspace reset, which wipes
+    # files and not rows. Scoping the search alone would leave the reference
+    # path open, so the check goes on the read itself.
+    allowed = visible_tasks(ctx, task)
+    if allowed is not None and art.get("task_id") not in allowed:
+        return {"ok": False,
+                "error": (f"artifact {id} belongs to another task attempt and "
+                          "is out of scope for this run")}
     return {
         "ok": True,
         "id": id,

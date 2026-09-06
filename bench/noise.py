@@ -461,6 +461,11 @@ def ledger_path(out: str | Path) -> Path:
     return p.with_suffix(p.suffix + ".partial.jsonl")
 
 
+def _isolation_state(ctx) -> dict:
+    from agent.kernel.scope import isolation_state
+    return isolation_state(ctx)
+
+
 def _median_or_none(values: list) -> float | None:
     """None when there is nothing to take a median OF.
 
@@ -688,6 +693,19 @@ def main() -> int:
                   "measurement - one call has been seen 18x slower.")
 
     ctx = AgentContext.open(args.config, profile=args.profile)
+
+    # RETRIEVAL ISOLATION, set here rather than read from a config file.
+    #
+    # search_history indexes `answer` artifacts, so without this the skill arm
+    # of a paired trial can look up the answer the control arm just wrote and
+    # the run reports a lift that retrieval produced. Same class as the
+    # workspace leak `workspace.py` fixes on disk, and the same granularity:
+    # per ATTEMPT, so run 2 of an arm cannot read run 1 either - the noise
+    # floor assumes those runs are independent draws.
+    #
+    # Not a yaml key, because a contaminated measurement caused by editing the
+    # wrong config is the exact failure this removes. See kernel/scope.py.
+    ctx.config.isolate_retrieval = True
 
     if args.executor:
         # Same suite, same harness, different model: that is what makes the
@@ -997,6 +1015,11 @@ def main() -> int:
             k for k, xs in results.items()
             if any(x.get("cache_drop") for x in xs)),
         "cache_drop_fraction": CACHE_DROP_FRACTION,
+        # Which persistence subsystems could be read during this run. A reader
+        # must never have to infer it: a paired trial where one arm could
+        # retrieve the other's answer is not a paired trial, and the record is
+        # where that is established.
+        "retrieval_isolation": _isolation_state(ctx),
         "min_free_gb_any_task": min(
             [r["min_free_gb"] for r in rows
              if r.get("min_free_gb") is not None] or [None]),

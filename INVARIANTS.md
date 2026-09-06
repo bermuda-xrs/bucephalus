@@ -189,3 +189,27 @@ the alarm on the cost axis that is structurally zero here made it dead on the
 only machine it has ever run on.
 *Caught by:* `test_the_alarm_is_no_longer_gated_on_spending_money`.
 
+## Added 2026-09-06 (retrieval isolation, D17)
+
+**38. A benchmark attempt can read only what it produced itself.**
+Under `isolate_retrieval`, `search_history` and `expand_artifact` are scoped
+to the attempt's task tree, so no arm of a paired trial can retrieve another
+arm's answer and no rerun can retrieve the previous run's. Per ATTEMPT, not
+per arm — the noise floor's 3/3, 0/3, flaky classification assumes the runs
+are independent draws. Isolation with no task to scope to returns the empty
+set rather than opening up.
+*Caught by:* `tests/test_cross_arm_retrieval_blocked.py`, which runs the
+attack across all three paths.
+
+**39. The run record states which persistence subsystems were readable.**
+A reader must never have to infer whether a paired trial could have leaked
+across arms. `retrieval_isolation` is a field in every run record, and the
+unisolated state says in words that it is invalid for a paired trial.
+
+**40. The critical channel is for tampering only.**
+An anchor that is merely behind its task is `info`, distinguished from a
+rewrite by whether the anchored hash is still present in the chain. An alarm
+with a permanent backlog is not an alarm — and memory files now sit under
+this same chain.
+*Caught by:* `tests/test_anchor_behind_is_not_tampering.py`.
+

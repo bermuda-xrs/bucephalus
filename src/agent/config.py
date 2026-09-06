@@ -184,6 +184,13 @@ class Config(BaseModel):
     gate: GateConfig = Field(default_factory=GateConfig)
     autonomy: AutonomyConfig = Field(default_factory=AutonomyConfig)
     ui: UIConfig = Field(default_factory=UIConfig)
+    # Retrieval isolation for measurement runs. See kernel/scope.py.
+    #
+    # NOT normally set from yaml: `bench/noise.py` turns it on itself, because
+    # a paired trial contaminated by someone editing the wrong config file is
+    # precisely the failure it exists to remove. It lives here so every
+    # persistence subsystem reads one flag rather than each inventing its own.
+    isolate_retrieval: bool = False
     root: str = "."
     # Filled by load_config after enforcement; travels into every report.
     profile_provenance: dict[str, Any] = Field(default_factory=dict)

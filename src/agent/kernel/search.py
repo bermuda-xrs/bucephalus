@@ -95,8 +95,19 @@ def _session_of(conn: sqlite3.Connection, task_id: str) -> str:
 
 
 def search(conn: sqlite3.Connection, query: str, limit: int = DEFAULT_LIMIT,
-           offset: int = 0) -> list[Hit]:
+           offset: int = 0,
+           allowed_tasks: set[str] | None = None) -> list[Hit]:
     """Full-text search. Raises ValueError on a malformed query.
+
+    `allowed_tasks` is retrieval isolation (kernel/scope.py). None means
+    unrestricted, which is the shipped default and the whole point of the
+    feature. A set restricts results to one task tree, which is what a
+    benchmark attempt gets so it cannot read another arm's answer.
+
+    The filter is applied IN THE QUERY rather than to the results, because
+    filtering afterwards would let an out-of-scope row consume one of the
+    LIMIT slots and silently shorten the answer — a scope check that changes
+    what an in-scope search returns is a second bug.
 
     FTS5 has its own query grammar and a stray quote or a bare `AND` raises
     OperationalError from deep inside sqlite. That must not reach the agent
@@ -107,15 +118,21 @@ def search(conn: sqlite3.Connection, query: str, limit: int = DEFAULT_LIMIT,
     offset = max(0, int(offset))
     if not (query or "").strip():
         return []
+    if allowed_tasks is not None and not allowed_tasks:
+        return []
+    scope_sql, scope_args = "", []
+    if allowed_tasks is not None:
+        scope_sql = " AND task_id IN (%s)" % ",".join("?" * len(allowed_tasks))
+        scope_args = sorted(allowed_tasks)
     try:
         rows = conn.execute(
             f"""SELECT snippet(search_index, 0, '', '', ' … ', {SNIPPET_TOKENS}),
                        source, ref, task_id, kind, created_at
                 FROM search_index
-                WHERE search_index MATCH ?
+                WHERE search_index MATCH ?{scope_sql}
                 ORDER BY rank
                 LIMIT ? OFFSET ?""",
-            (query, limit, offset),
+            (query, *scope_args, limit, offset),
         ).fetchall()
     except sqlite3.OperationalError as e:
         if "no such table" in str(e):

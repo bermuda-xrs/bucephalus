@@ -394,3 +394,43 @@ whose head is a descendant of the anchored hash.
 **Confirmed not caused by the search index:** the numbers above are before and
 after a full `rebuild()`.
 
+**RESOLVED 2026-09-06**, unfrozen because Phase 3 puts memory files under this
+same chain and a memory-tampering alert would have arrived as the twentieth
+critical in a list nobody reads. `classify_anchor()` separates the two
+conditions by asking whether the anchored hash is STILL IN the chain: present
+means the chain extended past the checkpoint and nothing was rewritten
+(`info`), absent means the history containing it is gone (`critical`). The
+live database now reports 0 critical and 19 info.
+
+The downgrade can only ever apply to an anchored hash that is provably still
+in the log, so a tampered chain cannot reach the quieter branch — tampering is
+what removes the hash that would qualify it. Verified by injection rather than
+by reading the logic: `tests/test_anchor_behind_is_not_tampering.py` excises
+the anchored event and rebuilds a different tail, and the finding stays
+critical.
+
+**D17 was the SYMPTOM. D10 is the disease** — manually stopped runs, and bench
+runs generally, never call `checkpoint()`, which is why 19 tasks drifted past
+their anchors in the first place. D10 remains frozen and open. Reclassifying
+the alarm does not checkpoint anything; it stops a bookkeeping gap from
+occupying the channel reserved for tampering.
+
+## D18 — `isolate_retrieval` has no equivalent for the ladder and calibration paths
+
+**Found:** 2026-09-06, while closing the cross-arm retrieval vector.
+
+`bench/noise.py` turns retrieval isolation on for itself. `bench/ladder.py`
+and the calibration path build their own contexts and do not. They do not
+currently call `search_history` or `expand_artifact` in a way that could leak
+— the ladder measures scaffolding rungs on single tasks — so nothing is
+contaminated today.
+
+**Why it is logged rather than fixed:** the freeze holds, and the right fix is
+probably not three call sites setting a flag but one place that refuses to
+run a measurement without declaring an isolation state. That is a design
+change, and it belongs with Phase 5 (tool exposure), which introduces the
+machinery for restricting what a run can see.
+
+**What would make it urgent:** any measurement path gaining a retrieval tool,
+or `search_history` entering the default toolset for a ladder run.
+

@@ -27,6 +27,22 @@ def conn(tmp_path):
     c.close()
 
 
+class _Cfg:
+    """Normal use: isolation off. A ctx with no config at all raises rather
+    than defaulting to unrestricted — see kernel/scope.py. Cross-arm isolation
+    has its own file, tests/test_cross_arm_retrieval_blocked.py."""
+    isolate_retrieval = False
+
+
+def _ctx(conn):
+    class Ctx:
+        pass
+    c = Ctx()
+    c.conn = conn
+    c.config = _Cfg()
+    return c
+
+
 def add_task(conn, tid, goal, parent=None, criterion="expected_value"):
     import json
     import time
@@ -188,10 +204,7 @@ def test_the_tool_returns_the_error_rather_than_raising(conn):
     would end the task instead."""
     from agent.execute.tools import tool_search_history
 
-    class Ctx:
-        pass
-    ctx = Ctx()
-    ctx.conn = conn
+    ctx = _ctx(conn)
     add_task(conn, "t1", "a goal")
 
     out = tool_search_history(ctx, None, 'unbalanced "quote')
@@ -201,10 +214,7 @@ def test_the_tool_returns_the_error_rather_than_raising(conn):
 def test_the_tool_marks_every_result_untrusted(conn):
     from agent.execute.tools import tool_search_history
 
-    class Ctx:
-        pass
-    ctx = Ctx()
-    ctx.conn = conn
+    ctx = _ctx(conn)
     add_task(conn, "t1", "a goal about magnets")
     add_artifact(conn, "a1", "t1", "answer", "magnets attract iron",
                  taint="trusted")
@@ -218,10 +228,7 @@ def test_the_tool_marks_every_result_untrusted(conn):
 def test_a_contract_hit_renders_the_goal_not_raw_json(conn):
     from agent.execute.tools import tool_search_history
 
-    class Ctx:
-        pass
-    ctx = Ctx()
-    ctx.conn = conn
+    ctx = _ctx(conn)
     add_task(conn, "t1", "measure the coefficient of drag")
 
     out = tool_search_history(ctx, None, "coefficient")

@@ -125,6 +125,87 @@ replaced by stronger ones rather than deleted:
   none of them from today's runs, consistent with D10 — a manually stopped
   run never checkpoints. Logged, not chased; the freeze holds.
 
+## Blockers before Phase 3 — retrieval isolation and D17 — 2026-09-06
+
+### Cross-arm retrieval, closed by scoping rather than by disabling
+
+Phase 2 opened a contamination vector: `search_history` indexes `answer`
+artifacts, so the skill arm of a paired trial could look up the answer the
+control arm just wrote and the run would report a lift that retrieval
+produced.
+
+**Chosen shape: scope retrieval to the task attempt.** Not the offered
+option A (per-arm namespaces) and not option B (disable the tools under a
+benchmark profile). Reasoning:
+
+* **Per-arm is the wrong granularity.** It leaves run 2 of an arm able to read
+  run 1 of the same arm, and the noise floor classifies a task 3/3, 0/3 or
+  flaky on the assumption those runs are independent draws. Scoping per
+  ATTEMPT fixes the paired trial and the noise floor with one rule — and it is
+  the granularity `workspace.py` already chose for the disk version of this
+  same leak, which it resets before *every arm of every run*.
+* **Disabling changes the prefix.** The tool manual is rendered into the
+  cache-stable prefix. This project's central finding is that prefix structure
+  moves pass rates — the harness tax was eight points across R0–R5 — so
+  deleting a tool from the manual perturbs the very thing under study. Under
+  scoping the prompt is byte-identical and only what a lookup can reach
+  changes; "a search that finds nothing" is a state the shipped system reaches
+  on its first session anyway.
+
+All three paths are closed, and the third was the user's catch:
+
+1. `search_history` — filtered in the query, not after, so an out-of-scope row
+   cannot consume a LIMIT slot and silently shorten an in-scope result
+2. `expand_artifact` — an artifact id is a content hash, but search returns
+   ids in `ref` and **an id survives the workspace reset**, which wipes files
+   and not rows
+3. a rerun of the same task — a new attempt is a new task tree
+
+`bench/noise.py` sets `isolate_retrieval` **itself rather than from yaml**,
+because a contaminated measurement caused by editing the wrong config is the
+exact failure being removed; the flag appears in no config file, and a test
+asserts that. Isolation with no task to scope to returns the empty set rather
+than opening up. Every run record carries `retrieval_isolation`, and the
+unisolated state says in words that it is invalid for a paired trial.
+
+The attack is written as a test the way the injection test is:
+`tests/test_cross_arm_retrieval_blocked.py`. Invariants 38, 39.
+
+**D18 logged:** `bench/ladder.py` and the calibration path build their own
+contexts and do not set the flag. Nothing leaks today — the ladder measures
+scaffolding on single tasks and does not retrieve — but the right fix is one
+place that refuses to run a measurement without a declared isolation state,
+which belongs with Phase 5.
+
+### D17 resolved — the critical channel is empty before memory arrives in it
+
+19 of 283 tasks reported `severity: critical — head does not match anchor`
+while every chain verified. `classify_anchor()` asks whether the anchored hash
+is **still in** the chain: present means the chain extended past the
+checkpoint and nothing was rewritten (`info`); absent means the history
+containing it is gone (`critical`). Live database: **0 critical, 19 info.**
+
+The downgrade can only apply to a hash provably still in the log, so a
+tampered chain cannot reach the quieter branch — tampering is what removes the
+hash that would qualify it. Verified by excising the anchored event and
+rebuilding a different tail, not by reading the logic.
+
+`resume()` no longer refuses a merely-behind anchor, which had made every
+un-checkpointed task unresumable — a denial of service built out of a
+bookkeeping gap.
+
+**D17 was the symptom; D10 is the disease** and stays frozen: bench runs never
+call `checkpoint()`, which is why the anchors drifted. Invariant 40.
+
+### Note on Phase 1 evidence
+
+The `refresh_worker` crash fixed in the corrections commit means **any
+`config.openai.yaml` run started before `b0bdcd7` would have died at the first
+worker refresh** with `AttributeError: 'NoneType' object has no attribute
+'rstrip'`. No published number is affected — no measurement pass has run
+through that config — but anyone reading the Phase 1 evidence should know
+which side of that commit a run sits on.
+
 ## Phase 2 (B4) — FTS5 search over prior sessions — 2026-09-06
 
 `search_history`, an FTS5 index over what earlier runs were asked and what

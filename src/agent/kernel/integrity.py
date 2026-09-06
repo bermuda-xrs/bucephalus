@@ -62,6 +62,47 @@ class Anchor:
         return out
 
 
+# Two conditions that look identical from `head != anchor` and are opposites.
+#
+# D17: 19 of 283 tasks in the live database reported `severity: critical - head
+# does not match anchor` while every chain verified and nothing was tampered.
+# They had simply continued past their last checkpoint, because bench runs do
+# not checkpoint per task (D10, still open, and the DISEASE of which this is
+# the symptom). Nineteen permanent criticals is how a real one gets scrolled
+# past - and Phase 3 puts memory files under this same chain, so a
+# memory-tampering alert would have arrived as the twentieth entry in a list
+# nobody reads.
+#
+# The discriminator is whether the anchored hash is STILL IN the chain:
+#
+#   * present  -> the chain legitimately extended past the checkpoint. The
+#                 anchor is behind, not wrong. Nothing was rewritten, because
+#                 the hash we anchored is still exactly where we left it.
+#   * absent   -> the history that contained it is gone. That is a rewrite or
+#                 a fork, and it is the condition the anchor exists to catch.
+#
+# Note the direction of the weakening test: this can only ever DOWNGRADE a
+# finding whose anchored hash is provably still in the log. A tampered chain
+# has no such hash, so it cannot reach the quieter branch.
+ANCHOR_BEHIND = "anchor_behind"
+ANCHOR_REWRITTEN = "anchor_rewritten"
+
+
+def classify_anchor(conn: sqlite3.Connection, log: EventLog, anchor: Anchor,
+                    task_id: str) -> str | None:
+    """None when the anchor agrees with the head, or there is no anchor."""
+    anchored = anchor.latest(task_id)
+    if not anchored:
+        return None
+    if log.head(task_id) == anchored:
+        return None
+    still_present = conn.execute(
+        "SELECT 1 FROM events WHERE task_id = ? AND hash = ? LIMIT 1",
+        (task_id, anchored),
+    ).fetchone()
+    return ANCHOR_BEHIND if still_present else ANCHOR_REWRITTEN
+
+
 def resume(
     conn: sqlite3.Connection, task_id: str, log: EventLog, anchor: Anchor
 ) -> None:
@@ -80,11 +121,17 @@ def resume(
 
     db_head = log.head(task_id)
     anchored = anchor.latest(task_id)
-    if anchored and db_head != anchored:
+    if classify_anchor(conn, log, anchor, task_id) == ANCHOR_REWRITTEN:
         raise IntegrityError(
-            f"Head does not match anchor — log may be rewritten "
-            f"(db={str(db_head)[:12]}, anchor={anchored[:12]})"
+            f"Head does not match anchor and the anchored hash is GONE from "
+            f"the log — history was rewritten "
+            f"(db={str(db_head)[:12]}, anchor={str(anchored)[:12]})"
         )
+    # An anchor that is merely BEHIND is not a reason to refuse to resume: the
+    # anchored hash is still in the chain, so nothing was rewritten and the
+    # task simply ran past its last checkpoint. Halting here would make every
+    # un-checkpointed task unresumable, which is a denial of service built out
+    # of a bookkeeping gap.
     # Now safe to project state and continue.
 
 
@@ -106,12 +153,32 @@ def verify_all(conn: sqlite3.Connection, log: EventLog, anchor: Anchor) -> list[
             findings.append(
                 {"task_id": task_id, "severity": "critical", "detail": f"chain break at seq {bad}"}
             )
-        elif anchored and head != anchored:
+            continue
+        state = classify_anchor(conn, log, anchor, task_id)
+        if state == ANCHOR_REWRITTEN:
             findings.append(
                 {
                     "task_id": task_id,
                     "severity": "critical",
-                    "detail": "head does not match anchor",
+                    "detail": ("head does not match anchor and the anchored "
+                               "hash is GONE from the log — history rewritten"),
+                }
+            )
+        elif state == ANCHOR_BEHIND:
+            findings.append(
+                {
+                    "task_id": task_id,
+                    "severity": "info",
+                    "detail": ("anchor is behind the head; the anchored hash "
+                               "is still in the chain, so nothing was "
+                               "rewritten. The task ran past its last "
+                               "checkpoint — DEFERRED D10"),
                 }
             )
     return findings
+
+
+def critical(findings: list[dict]) -> list[dict]:
+    """The channel that must stay empty. An alarm with a permanent backlog is
+    not an alarm, which is the whole of D17."""
+    return [f for f in findings if f.get("severity") == "critical"]
