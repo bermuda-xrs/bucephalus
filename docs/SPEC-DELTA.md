@@ -705,10 +705,32 @@ wired.
 and the tool owns the default. Every caller in the tree was already
 overriding it — five call sites, all tests — so nothing lost a fetcher.
 
-**Class:** the project's recurring shape, in a new place. A default that
-shadows the thing it is a default FOR is indistinguishable from a wired
-implementation until someone changes one of them, and the tests passed
-throughout because both paths returned the same text.
+**Class: the adjacency family, SECOND MECHANISM.** Every prior instance was a
+CHECK measuring something adjacent to what it claimed — a residual gate below
+its own rounding floor, an abort rule counting machine events instead of lost
+data, a dead-code audit counting a docstring mention as a call site. This one
+differs in mechanism and is identical in signature: a DEFAULT SHADOWING THE
+PATH IT DEFAULTS FOR. The branch existed, looked wired, and was unreachable;
+the tests were green because both paths returned the same value; and nobody
+was testing the property that distinguished them, because until Phase 4 there
+was no property that distinguished them.
+
+The shared signature is what to hunt for: **green tests, correct-looking
+code, and a property nobody is actually testing.** Recorded as design rule
+DR2 in INVARIANTS.
+
+**Sweep for other instances, 2026-09-07.** Three `getattr(ctx, X, None)`
+override seams exist in the tree:
+
+* `web_fetcher` — the instance, fixed.
+* `web_searcher` — never pre-set, so the default path is reachable. Clear.
+* `userdata` in `plan/review.py` — pre-set, but the fallback below it is
+  reached through the EMPTY-POLICY case rather than the `None` case, so the
+  policy.md path is live and exercised. Checked, not an instance.
+
+Constructor parameters of the form `x or default_x()` (`conn`, `tools`,
+`backends`, the verifier registry) are not this pattern: they have one
+consumer path rather than two, so there is no branch to be shadowed.
 
 ### C35. Budget enforcement granularity is one step, and a step got more expensive
 

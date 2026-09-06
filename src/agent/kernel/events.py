@@ -74,6 +74,11 @@ EVENT_TYPES = frozenset(
         # text goes into every future prompt, so an unaccounted change to it
         # is an unaccounted change to what the agent is.
         "memory.tampered",
+        # A scraped source fetched and parsed to nothing. Distinct from a
+        # search that honestly matched nothing, because a broken parser
+        # otherwise reads as a topic with no coverage - and G4 would ground a
+        # skill on it and call the skill grounded.
+        "tool.search_failed",
         "human.approved",
         "human.denied",
         "human.steered",

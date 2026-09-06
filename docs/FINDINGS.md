@@ -777,6 +777,60 @@ but "if it is kept, is it data or is it voice?"
 
 ---
 
+### 1.18 Minimum budget overshoot is one step, and one step scales with the tool manual
+
+The budget is checked BETWEEN steps. So a task cannot spend less than one
+step, whatever budget it was given, and one step includes the whole
+cache-stable prefix — which contains the tool manual.
+
+Measured 2026-09-07: a $0.001 budget with 16 tools registered produced
+`budget_exhausted` after exactly one model call, having spent $0.0100 — a 10x
+overshoot. The same test spent under $0.005 when the manual held 8 tools. The
+mechanism was correct in both cases; the manual doubled.
+
+**Why this is a finding and not a test repair.** The assertion that surfaced
+it read `cost_usd < 0.01`, a proxy for "it did not run away". Raising the
+number would have restored green and hidden the property. The test now
+asserts the mechanism — exactly one model call against six scripted actions —
+which is what was actually being claimed.
+
+**Practical scope.** `default_task_budget_usd` is 0.50, two orders above one
+step, so nothing binds today. It binds for any caller passing a budget near a
+single step, who gets one step regardless of what they asked for, and the
+threshold moves every time a tool is added. Tools are not free even when
+unused: they are in the prefix of every call.
+
+---
+
+### 1.19 A scraped source needs "parsed nothing" and "matched nothing" kept apart
+
+`web_search` reads DuckDuckGo's HTML endpoint, because every search API worth
+using needs a key and a key makes `--profile local` refuse to start. That
+makes retrieval a scraper, and a scraper breaks silently: the markup changes,
+the parser finds nothing, the caller sees zero results.
+
+Zero results from a working parser and zero from a broken one are
+indistinguishable to the caller and have OPPOSITE fixes — one means try a
+different query, the other means fix the parser. So the distinction is
+carried as a failure KIND (`parse_failure` against `transport_failure`)
+through the tool result, into `provenance.retrieval`, and onto the hash chain
+as `tool.search_failed`.
+
+**Why it is worth the machinery.** Without it a broken scraper reads as a
+topic with no coverage, and every later search in the run looks like an
+honest miss. The same shape as scoring a machine stall as a task failure: an
+instrument malfunction wearing the costume of a result.
+
+**Consequence for G4, noted not built.** `generate_skill` grounds on
+`ctx.research_retrieve(...)` and drafts from whatever comes back. A grounding
+step that returned nothing because the parser broke would produce an
+UNGROUNDED SKILL THAT LOOKS GROUNDED — provenance would record sources
+requested and zero retrieved, with nothing marking the difference between
+"nothing exists" and "retrieval malfunctioned". DEFERRED D19; it belongs with
+Phase 12, where skill provenance is the subject.
+
+---
+
 ## 8. Open research questions
 
 Recorded so they are not re-derived, and kept separate from findings because

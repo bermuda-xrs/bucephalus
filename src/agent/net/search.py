@@ -17,8 +17,12 @@ WHAT COMES BACK IS UNTRUSTED. Titles and snippets are attacker-authored text
 on any query an attacker can influence; a result list is a web page that
 happens to be shaped like data.
 
-The searcher is swappable: set `ctx.web_searcher` to anything with the same
-signature to use a real API.
+The searcher is swappable: set `ctx.web_searcher` to a callable taking
+(query, limit) to use a real API. There is deliberately no
+`default_searcher` wrapper — `tool_web_search` calls `search()` directly
+so it can read the failure KIND off the exception, and a wrapper that
+flattened errors into result rows would throw that away. An override
+supplies its own callable by definition, so a helper for it had no user.
 """
 
 from __future__ import annotations
@@ -43,8 +47,25 @@ _SNIPPET_RX = re.compile(
 _TAG_RX = re.compile(r"<[^>]+>")
 
 
+PARSE_FAILURE = "parse_failure"
+TRANSPORT_FAILURE = "transport_failure"
+BAD_QUERY = "bad_query"
+
+
 class SearchError(RuntimeError):
-    pass
+    """Carries WHY, because the two failures have opposite fixes.
+
+    `transport_failure` is the network being the network. `parse_failure` is
+    "the page arrived and this parser found nothing in it", which means the
+    markup changed and the scraper is broken. To a caller they look the same
+    and to a run record they must not: a scraper that silently breaks
+    otherwise reads as a topic with no coverage, and every later search on
+    that run looks like an honest miss.
+    """
+
+    def __init__(self, msg: str, kind: str = TRANSPORT_FAILURE):
+        super().__init__(msg)
+        self.kind = kind
 
 
 def _text(fragment: str) -> str:
@@ -69,7 +90,7 @@ def search(query: str, limit: int = 5, *, client=None) -> list[dict]:
     """Titles, URLs and snippets. Raises SearchError; never returns junk."""
     query = (query or "").strip()
     if not query:
-        raise SearchError("empty query")
+        raise SearchError("empty query", BAD_QUERY)
     limit = max(1, min(int(limit), MAX_RESULTS))
 
     wait_for_turn(ENDPOINT)
@@ -80,7 +101,8 @@ def search(query: str, limit: int = 5, *, client=None) -> list[dict]:
         r.raise_for_status()
         body = r.text
     except Exception as e:  # noqa: BLE001
-        raise SearchError(f"search failed: {type(e).__name__}: {e}") from e
+        raise SearchError(f"search failed: {type(e).__name__}: {e}",
+                          TRANSPORT_FAILURE) from e
 
     links = _RESULT_RX.findall(body)
     snippets = [_text(s) for s in _SNIPPET_RX.findall(body)]
@@ -91,7 +113,8 @@ def search(query: str, limit: int = 5, *, client=None) -> list[dict]:
             f"fetched {len(body)} bytes from the search endpoint and parsed 0 "
             "results. Either the query genuinely matched nothing or the "
             "result markup changed and this parser needs updating — check the "
-            "endpoint by hand before assuming the former."
+            "endpoint by hand before assuming the former.",
+            PARSE_FAILURE,
         )
 
     out = []
@@ -102,15 +125,3 @@ def search(query: str, limit: int = 5, *, client=None) -> list[dict]:
             "snippet": snippets[i] if i < len(snippets) else "",
         })
     return out
-
-
-def default_searcher(query: str, limit: int = 5) -> list[dict]:
-    """Assigned to ctx.web_searcher. Errors come back as data, not exceptions.
-
-    A failed search is an observation the agent should see and route around,
-    the same choice `default_fetcher` makes for the same reason.
-    """
-    try:
-        return search(query, limit)
-    except SearchError as e:
-        return [{"title": "[search failed]", "url": "", "snippet": str(e)}]

@@ -339,14 +339,55 @@ def test_search_unwraps_the_redirect_so_provenance_names_the_real_site():
     assert _real_url("https://plain.example/x") == "https://plain.example/x"
 
 
-def test_a_failed_search_comes_back_as_data_not_an_exception(monkeypatch):
+def test_a_failed_search_comes_back_as_data_carrying_its_kind(tmp_path, monkeypatch):
+    """A failed search is an observation the agent routes around, not an
+    exception that kills the task — and the KIND survives into the result,
+    the provenance, and the chain. Without that a broken scraper reads as a
+    topic with no coverage."""
     from agent.net import search as search_mod
+    import agent.execute.tools as tools_mod
 
-    monkeypatch.setattr(search_mod, "search",
-                        lambda *a, **k: (_ for _ in ()).throw(
-                            search_mod.SearchError("boom")))
-    out = search_mod.default_searcher("q")
-    assert out[0]["title"] == "[search failed]"
+    ctx = make_ctx(tmp_path)
+    t = new_task(ctx)
+    monkeypatch.setattr(
+        search_mod, "search",
+        lambda *a, **k: (_ for _ in ()).throw(
+            search_mod.SearchError("markup changed", search_mod.PARSE_FAILURE)))
+
+    out = tools_mod.tool_web_search(ctx, t, "anything")
+    assert out["ok"] is False
+    assert out["failure_kind"] == search_mod.PARSE_FAILURE
+    assert out["provenance"]["retrieval"] == "failed:parse_failure"
+    assert out["results"] == []
+
+    logged = ctx.conn.execute(
+        "SELECT payload_json FROM events WHERE task_id=? AND type='tool.search_failed'",
+        (t.id,)).fetchall()
+    assert logged, "a parse failure must reach the chain, not only the caller"
+    assert search_mod.PARSE_FAILURE in logged[0][0]
+    ctx.close()
+
+
+def test_an_honest_empty_result_is_not_a_failure(tmp_path, monkeypatch):
+    """The other side of the distinction. Zero results from a WORKING parser
+    is a successful search that found nothing, and must not be recorded as a
+    broken tool."""
+    from agent.net import search as search_mod
+    import agent.execute.tools as tools_mod
+
+    ctx = make_ctx(tmp_path)
+    t = new_task(ctx)
+    monkeypatch.setattr(search_mod, "search", lambda *a, **k: [])
+
+    out = tools_mod.tool_web_search(ctx, t, "a query matching nothing")
+    assert out["ok"] is True
+    assert out["results"] == []
+    assert out["provenance"]["retrieval"] == "searched"
+    assert "failure_kind" not in out
+    assert not ctx.conn.execute(
+        "SELECT 1 FROM events WHERE task_id=? AND type='tool.search_failed'",
+        (t.id,)).fetchall()
+    ctx.close()
 
 
 # ==========================================================================

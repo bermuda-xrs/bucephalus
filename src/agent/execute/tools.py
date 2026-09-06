@@ -383,14 +383,36 @@ def tool_web_search(ctx, task, query: str, limit: int = 5) -> dict:
     output taint is UNTRUSTED for the same reason web_fetch's is.
     """
     searcher = getattr(ctx, "web_searcher", None)
-    if searcher is None:
-        from ..net.search import default_searcher
+    if searcher is not None:
+        results = searcher(query, limit)
+        return {"ok": True, "query": query, "results": results,
+                "provenance": {"query": query, "n_results": len(results),
+                               "retrieval": "override", "fetched_at": time.time()}}
 
-        searcher = default_searcher
-    results = searcher(query, limit)
+    from ..net.search import SearchError, search
+
+    try:
+        results = search(query, limit)
+    except SearchError as e:
+        # THE DISTINCTION, carried into the record rather than left in an
+        # exception string. "The page fetched but parsed to nothing" and "the
+        # query matched nothing" look identical to a caller and have opposite
+        # fixes; a scraper that silently breaks otherwise reads as a topic
+        # with no coverage.
+        if task is not None:
+            ctx.log.append(task.id, "tool.search_failed",
+                           {"query": query[:200], "kind": e.kind,
+                            "error": str(e)[:400]})
+        return {"ok": False, "query": query, "results": [],
+                "failure_kind": e.kind, "error": str(e),
+                "provenance": {"query": query, "n_results": 0,
+                               "retrieval": f"failed:{e.kind}",
+                               "fetched_at": time.time()}}
     return {"ok": True, "query": query, "results": results,
             "provenance": {"query": query, "n_results": len(results),
-                           "fetched_at": time.time()}}
+                           # "searched" and "0 results" together is an honest
+                           # miss; "failed:parse_failure" is a broken tool.
+                           "retrieval": "searched", "fetched_at": time.time()}}
 
 
 def tool_glob(ctx, task, pattern: str, path: str = ".") -> dict:

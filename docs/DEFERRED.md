@@ -434,3 +434,28 @@ machinery for restricting what a run can see.
 **What would make it urgent:** any measurement path gaining a retrieval tool,
 or `search_history` entering the default toolset for a ladder run.
 
+## D19 — skill provenance cannot distinguish "no sources" from "retrieval broke"
+
+**Found:** 2026-09-07, while making `web_search` report parse failures
+separately from empty results.
+
+`generate_skill` grounds on `ctx.research_retrieve(pattern.description, k=5)`
+and drafts from whatever comes back. If the scraper's markup assumptions
+break, retrieval returns nothing, and the skill is drafted from model priors
+while its provenance records an empty source list — **an ungrounded skill
+that looks grounded.**
+
+The tool layer now distinguishes the two (FINDINGS 1.19), but
+`research_retrieve` flattens it: it collects `Source` objects and returns a
+list, so "no sources exist" and "retrieval malfunctioned" are both `[]`.
+
+**Why deferred rather than fixed:** no skill has been generated yet — M11 is
+unbuilt by design, the gate was built first — so nothing is currently
+mis-provenanced. The fix belongs with Phase 12, where portable skill
+provenance is the subject and the format has to carry the distinction anyway.
+
+**What would make it urgent:** the first real `generate_skill` run. It must
+not happen before this is closed, because a skill promoted on the strength of
+provenance that could not tell those apart is exactly the failure the gate
+exists to prevent.
+

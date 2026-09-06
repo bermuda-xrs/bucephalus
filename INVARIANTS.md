@@ -274,3 +274,45 @@ because an unbounded search is the ledger discipline defeated by accident
 rather than by attack.
 *Caught by:* `tests/test_web_tools.py`.
 
+---
+
+## Design rules
+
+Not per-run invariants with a test that fires — rules for the next person
+writing a control. Each is here because it has been violated more than once.
+
+**DR1. A control's scope must match the scope of what it protects.**
+
+Two instances, a day apart:
+
+* **D17.** The anchor is per TASK; bench runs never checkpoint per task. So
+  19 tasks drifted past their anchors doing nothing wrong, and the critical
+  channel filled with 19 permanent false alarms.
+* **The memory blessing.** The anchor is per CONFIG; memory is per USER. So
+  running `config.local.yaml` and then `config.openai.yaml` would have had
+  each flagging the other's perfectly good memory as tampered — the same
+  disease, one day after curing it.
+
+Both are the same mistake: a control stored at one granularity guarding
+something that lives at another. The failure is not a missed detection, it is
+a PERMANENT FALSE POSITIVE FROM ORDINARY USE, which is worse — it trains
+everyone to ignore the channel, and then the real alert arrives into a list
+nobody reads.
+
+Before adding a control, ask what it protects and at what granularity that
+thing lives, then store the control at exactly that granularity. If the two
+cannot be made to match, the control belongs somewhere else.
+
+**DR2. A default must not shadow the path it is a default for.**
+
+The adjacency family's second mechanism. `AgentContext` pre-set
+`web_fetcher = default_fetcher`, and `tool_web_fetch` began "if a fetcher is
+configured, use it" — so the configured branch ran every time and the tool's
+own path never did. Harmless while both did the same thing, and the instant
+one of them gained a feature the other became unreachable code that looked
+wired, with green tests throughout because both returned the same value.
+
+A seam is for OVERRIDING. If it is pre-set to the default, it is not a seam;
+it is a hard-coded path with a decoy branch beside it. Leave override seams
+unset and let the consumer own its default.
+
