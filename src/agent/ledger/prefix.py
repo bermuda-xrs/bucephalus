@@ -53,12 +53,20 @@ class PrefixBuilder:
         skills: list[dict],
         task_contract: dict,
         tool_manual: str = "",
+        memory: dict | None = None,
     ):
         self.system_contract = system_contract
         # MUST sort — skill dicts from SQLite come back in arbitrary order
         self.skills = sorted(skills, key=lambda s: (s["name"], s["version"]))
         self.task_contract = task_contract
         self.tool_manual = tool_manual
+        # A1 tier 1. A SNAPSHOT taken at task start, exactly like `skills`,
+        # never a live read of the files. A live read would let a memory_write
+        # during step 3 change the prefix at step 4 — a PrefixMutationError
+        # and a voided cache in the same breath. Because this is a snapshot,
+        # a mid-task write can move neither, by construction rather than by
+        # remembering not to.
+        self.memory = dict(memory or {})
 
     def build(self) -> str:
         parts = [self.system_contract.rstrip(), "\n\n"]
@@ -66,6 +74,11 @@ class PrefixBuilder:
             parts.append("<tools>\n")
             parts.append(self.tool_manual.rstrip())
             parts.append("\n</tools>\n\n")
+        if self.memory:
+            from ..memory.store import render_for_prefix
+
+            parts.append(render_for_prefix(self.memory))
+            parts.append("\n")
         for s in self.skills:
             parts.append(f'<skill name="{s["name"]}" v="{s["version"]}">\n')
             parts.append(s["body"].rstrip())

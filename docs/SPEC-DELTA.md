@@ -621,3 +621,62 @@ measured.
 **Class:** the same distinction as `machine_fault` versus `excluded`, in a
 different field. Absence of a measurement is not a measurement of zero.
 
+### C32. Untrusted memory is REFUSED, not queued — a deliberate deviation
+
+**The brief said:** an entry derived from `UNTRUSTED` content "may NOT enter
+tier 1 automatically. It requires human approval, routed through the existing
+approval queue."
+
+**What was built:** `memory_write` carries `max_arg_taint=USER`, the same
+ceiling as `write_file`, so the capability gate REFUSES untrusted-derived
+content outright and it never reaches the approval queue.
+
+**Why the deviation.** Queueing means putting a human one click away from
+writing attacker-controlled text into the stable prefix of every future
+session. The preview a human sees is one line of a tool call; the attack is
+designed to look reasonable in one line. That is a bad place to site a
+judgement call, and the standing rule is not to weaken a security check to
+make a phase work — setting a side-effecting memory tool's ceiling looser
+than `write_file`'s would be exactly that, on the one store that is in the
+prompt by design.
+
+The brief's own acceptance test says "the tier-1 write is **blocked or
+queued**", so refusal satisfies it, and refusal is the stricter branch.
+
+**What is not lost.** Untrusted-derived content still persists — in tier 2,
+which is where 3.3 says it belongs. `search_history` retrieves it on demand
+and stamps it `UNTRUSTED`, so it enters a later session as data rather than
+as the agent's own voice. The difference between the tiers is not whether the
+content survives; it is whether it survives as something the model is told to
+believe.
+
+**If you want the queue anyway:** it is one line, changing the ceiling to
+`UNTRUSTED`, and the existing gate already routes side-effecting untrusted
+calls to `needs_approval`. Say so and it changes. It is recorded here as a
+deviation rather than done silently.
+
+### C33. Tier 1 memory is disabled during measurement runs, and that is a real gap
+
+**Reality:** `isolate_retrieval` gives a benchmark attempt an EMPTY tier-1
+snapshot. So the measured system has the memory TOOLS and none of the
+persistence, which is not the shipped system.
+
+**Why it is the right trade.** A fact written by the control arm would
+otherwise be in the skill arm's prompt before the model does anything at all
+— not a subtle contamination, a direct one. And it compounds: memory persists
+across sessions, so a single run would poison every later run of the same
+suite.
+
+**Why the snapshot is empty rather than absent.** The prefix keeps its shape:
+same sections, same tool manual, same byte layout. Removing the memory block
+would change the prefix between measured and shipped, and this project
+measured that prefix structure moves pass rates by eight points across
+R0–R5 — so the cheap-looking option perturbs exactly the variable under
+study.
+
+**The honest statement of the gap:** this widens the "measured system is not
+the shipped system" list that already contains `auto_review`. It is recorded
+in every run record under `retrieval_isolation` so a reader never has to
+infer it, and `TOOLSET_VERSION` moved to 3 because the tool manual in the
+prefix changed even where behaviour did not.
+

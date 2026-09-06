@@ -259,6 +259,51 @@ def cmd_verify(ctx, args, console) -> int:
     return cmd_alerts(ctx, args, console)
 
 
+def cmd_memory(ctx, args, console) -> int:
+    """See and correct what the agent remembers about you.
+
+    Not decoration. Tier 1 goes into the prefix of every future session and
+    lives in the user data dir where nothing surfaces it, so without this the
+    only way to audit or remove an entry is to find the file by hand. A
+    persistent memory a person cannot read is a persistent memory they cannot
+    consent to.
+    """
+    from .memory.store import MemoryStore
+
+    if args.forget:
+        removed = []
+        for tier in sorted(MemoryStore.FILES):
+            kept = [e for e in ctx.memory.entries(tier)
+                    if args.forget.lower() not in e.text.lower()]
+            gone = [e for e in ctx.memory.entries(tier) if e not in kept]
+            if gone:
+                from .memory.store import _render
+                ctx.memory.path(tier).write_text(_render(kept), encoding="utf-8")
+                removed += [f"{tier}: {e.text}" for e in gone]
+        for line in removed:
+            console.print(f"[red]forgotten[/red] {line}")
+        if not removed:
+            console.print("nothing matched")
+        return 0
+
+    if args.consolidate:
+        for tier in sorted(MemoryStore.FILES):
+            out = ctx.memory.consolidate(tier)
+            console.print(f"{tier}: {out['before']} -> {out['after']} entries, "
+                          f"{out['chars']}/{out['cap']} chars")
+        return 0
+
+    for tier in sorted(MemoryStore.FILES):
+        entries = ctx.memory.entries(tier)
+        chars = len(ctx.memory.read_raw(tier))
+        console.print(f"[bold]{tier}[/bold]  {len(entries)} entries, "
+                      f"{chars}/{ctx.memory.cap(tier)} chars")
+        for e in entries:
+            console.print(f"  [dim][{e.taint.value}][/dim] {e.text}")
+    console.print(f"[dim]{ctx.memory.root}[/dim]")
+    return 0
+
+
 def cmd_search(ctx, args, console) -> int:
     """B4. `--rebuild` is the recovery path required by 2.3: the index is
     derived data, so when it disagrees with the log the log wins and the
@@ -519,6 +564,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     v = sub.add_parser("verify", help="verify every chain against the anchor")
     v.set_defaults(fn=cmd_verify)
+
+    mem = sub.add_parser("memory", help="show or correct persistent memory")
+    mem.add_argument("--forget", help="remove entries containing this text")
+    mem.add_argument("--consolidate", action="store_true")
+    mem.set_defaults(fn=cmd_memory)
 
     sr = sub.add_parser("search", help="search goals and answers from earlier runs")
     sr.add_argument("query", nargs="*")

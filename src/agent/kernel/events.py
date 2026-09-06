@@ -61,6 +61,15 @@ EVENT_TYPES = frozenset(
         # confused again - a stall recorded as a crash is scored as a
         # task failure, which is what aborted two Phase 2A attempts.
         "task.model_stalled",
+        # A1. Tier 1 is rendered into the stable prefix of every future
+        # session, so a change to it is a change to what the agent IS. The
+        # event carries a fingerprint over both memory FILES, which is what
+        # lets a modified MEMORY.md fail verification like any other state -
+        # over the files rather than the parsed entries, because a tampered
+        # line that fails to parse would otherwise be invisible, and that is
+        # precisely the line an attacker would write.
+        "memory.written",
+        "memory.consolidated",
         "human.approved",
         "human.denied",
         "human.steered",

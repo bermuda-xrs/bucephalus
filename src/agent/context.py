@@ -49,6 +49,14 @@ class AgentContext:
         self.tools = tools or default_registry()
         self.skills = SkillStore(self.conn, config.resolve(config.skills_path))
         self.userdata = UserStore(self.conn)
+        # A1 tier 1. In the USER DATA dir, not the repo: memory is the user's,
+        # it outlives any checkout, and a file the agent writes must never sit
+        # where a `git status` makes it look like source.
+        from .memory.store import MemoryStore
+        from .paths import user_data_dir
+
+        self.memory = MemoryStore(user_data_dir() / "memory")
+        self._memory_frozen: dict[str, dict] = {}
         self.telemetry = Telemetry(self.conn, cloud_backend_names(config),
                                    cache_reporting_backend_names(config))
         self.mesh = VerificationMesh(self)
@@ -123,6 +131,23 @@ class AgentContext:
         return cost
 
     # -- taint -------------------------------------------------------------
+
+    def freeze_memory(self, task_id: str) -> dict:
+        """Tier 1 as of task start, held for the life of the task.
+
+        The same discipline as `freeze_skills`, for the same reason: anything
+        the prefix is built from must not change while the task runs. Frozen
+        per task rather than per context because a delegated child is its own
+        task with its own start.
+        """
+        if task_id not in self._memory_frozen:
+            from .memory.store import tier1_snapshot
+
+            self._memory_frozen[task_id] = tier1_snapshot(
+                self.memory,
+                isolated=bool(getattr(self.config, "isolate_retrieval", False)),
+            )
+        return self._memory_frozen[task_id]
 
     def taint_tracker(self, task_id: str) -> TaintTracker:
         if task_id not in self._taint:

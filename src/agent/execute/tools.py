@@ -9,8 +9,11 @@ cannot be prompted out of walking through.
   | list_dir       | no             | UNTRUSTED     |
   | expand_artifact| no             | UNTRUSTED     |
   | search_history | no             | UNTRUSTED     |
+  | memory_read    | no             | UNTRUSTED     |
   | web_fetch      | no             | UNTRUSTED     |
   | write_file       | yes          | USER          |
+  | memory_write     | yes          | USER          |
+  | memory_consolidate | yes        | USER          |
   | run_code         | yes          | USER          |
   | append_to_outbox | yes          | USER          |
   | git_push         | yes          | TRUSTED       |
@@ -142,6 +145,95 @@ def tool_list_dir(ctx, task, path: str = ".") -> dict:
         (f"{e.name}/" if e.is_dir() else e.name) for e in p.iterdir()
     )
     return {"ok": True, "path": str(p), "entries": entries}
+
+
+def tool_memory_read(ctx, task, tier: str = "memory") -> dict:
+    """A1 tier 1. Read what is already in the prefix.
+
+    Redundant on purpose: tier 1 is ALREADY in the prompt, so this exists for
+    the case where the model wants to check what it will be writing against
+    before it writes. It reads the FROZEN snapshot rather than the files, so
+    the answer matches what the model can actually see this turn — reading
+    the live file would show a write that is not yet in context and invite
+    the model to reason about a prompt it does not have.
+    """
+    from ..memory.store import MemoryStore
+
+    if tier not in MemoryStore.FILES:
+        return {"ok": False, "error": f"unknown memory tier {tier!r}; expected "
+                                      f"one of {sorted(MemoryStore.FILES)}"}
+    frozen = ctx.freeze_memory(task.id) if task is not None else {}
+    return {"ok": True, "tier": tier, "content": frozen.get(tier, ""),
+            "note": ("this is the snapshot taken at task start, which is what "
+                     "is in your prompt; writes this turn are not in it")}
+
+
+def tool_memory_write(ctx, task, text: str, tier: str = "memory") -> dict:
+    """A1 tier 1, the write path. USER ceiling, like write_file.
+
+    Two walls, and the outer one is the real one:
+
+      * `max_arg_taint=USER` means the capability gate refuses untrusted
+        arguments before this function is entered. That is the injection
+        defence and it is the same ceiling `write_file` has.
+      * `MemoryStore.write` refuses `Taint.UNTRUSTED` again, for a caller
+        that reaches the store without the gate.
+
+    THE WRITE DOES NOT AFFECT THIS TURN. It lands on disk immediately and
+    becomes visible at the next session or compression boundary, because the
+    prefix is built from a snapshot frozen at task start. Saying so in the
+    result is not decoration: a model told nothing would reasonably assume
+    the fact is now in context and skip repeating it.
+    """
+    from ..memory.store import MemoryStore, MemoryTooLarge, UntrustedMemoryRefused
+
+    if tier not in MemoryStore.FILES:
+        return {"ok": False, "error": f"unknown memory tier {tier!r}"}
+    if getattr(ctx.config, "isolate_retrieval", False):
+        return {"ok": False,
+                "error": ("persistent memory is disabled for measurement "
+                          "runs: a fact written by one arm of a paired trial "
+                          "would be in the other arm's prompt")}
+    taint = ctx.taint_tracker(task.id).taint_of(text) if task is not None         else Taint.USER
+    try:
+        out = ctx.memory.write(tier, text, taint)
+    except UntrustedMemoryRefused as e:
+        return {"ok": False, "error": str(e), "taint": taint.value}
+    except (MemoryTooLarge, ValueError) as e:
+        return {"ok": False, "error": str(e)}
+
+    if task is not None:
+        ctx.log.append(task.id, "memory.written",
+                       {"tier": tier, "taint": taint.value,
+                        "fingerprint": ctx.memory.fingerprint(),
+                        "consolidated": len(out["consolidated"])})
+    out["ok"] = True
+    out["visible"] = "next session or compression boundary, not this turn"
+    return out
+
+
+def tool_memory_consolidate(ctx, task, tier: str = "memory") -> dict:
+    """De-duplicate, then evict oldest-first only if still over the cap.
+
+    Consolidation rather than truncation is the requirement, and the order is
+    the whole of it: evicting first would throw away a fact to make room for
+    its own duplicate. Every eviction is appended to the chain, so nothing
+    leaves tier 1 without a record.
+    """
+    from ..memory.store import MemoryStore
+
+    if tier not in MemoryStore.FILES:
+        return {"ok": False, "error": f"unknown memory tier {tier!r}"}
+    if getattr(ctx.config, "isolate_retrieval", False):
+        return {"ok": False, "error": "persistent memory is disabled for "
+                                      "measurement runs"}
+    out = ctx.memory.consolidate(tier)
+    if task is not None:
+        ctx.log.append(task.id, "memory.consolidated",
+                       {"tier": tier, "dropped": len(out["dropped"]),
+                        "fingerprint": ctx.memory.fingerprint()})
+    out["ok"] = True
+    return out
 
 
 def tool_search_history(ctx, task, query: str, limit: int = 5,
@@ -346,6 +438,43 @@ def default_registry() -> ToolRegistry:
             max_arg_taint=Taint.UNTRUSTED,
             output_taint=Taint.UNTRUSTED,
             description="pull back the full text of a compacted artifact by id",
+        )
+    )
+    r.register(
+        ToolSpec(
+            "memory_read",
+            tool_memory_read,
+            {"type": "object", "properties": {"tier": _STR}, "required": []},
+            side_effecting=False,
+            max_arg_taint=Taint.UNTRUSTED,
+            output_taint=Taint.TRUSTED,
+            description="read persistent memory (already in your prompt)",
+        )
+    )
+    r.register(
+        ToolSpec(
+            "memory_write",
+            tool_memory_write,
+            {"type": "object", "properties": {"text": _STR, "tier": _STR},
+             "required": ["text"]},
+            side_effecting=True,
+            # SAME CEILING AS write_file. Tier 1 is rendered into the stable
+            # prefix of every future session, so untrusted-derived content is
+            # refused rather than queued - see SPEC-DELTA C32.
+            max_arg_taint=Taint.USER,
+            output_taint=Taint.TRUSTED,
+            description="remember a fact for future sessions",
+        )
+    )
+    r.register(
+        ToolSpec(
+            "memory_consolidate",
+            tool_memory_consolidate,
+            {"type": "object", "properties": {"tier": _STR}, "required": []},
+            side_effecting=True,
+            max_arg_taint=Taint.USER,
+            output_taint=Taint.TRUSTED,
+            description="de-duplicate memory and evict the oldest if over cap",
         )
     )
     r.register(

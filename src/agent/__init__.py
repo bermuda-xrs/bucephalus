@@ -35,4 +35,10 @@ HARNESS_VERSION = 2
 #      same problem as one that cannot - and on a suite with repeated task
 #      shapes it is the difference between solving and recalling. Nothing
 #      published so far ran with it.
-TOOLSET_VERSION = 2
+#   3  2026-09-06: memory_read / memory_write / memory_consolidate (A1). An
+#      agent that carries facts between sessions is a different instrument
+#      again. Benchmark runs disable tier 1 entirely (isolate_retrieval), so
+#      a measured run has the TOOLS without the PERSISTENCE - which is
+#      exactly why the version has to move: the tool manual in the prefix
+#      differs from TOOLSET_VERSION 2 even when the behaviour does not.
+TOOLSET_VERSION = 3

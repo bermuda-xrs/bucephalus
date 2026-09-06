@@ -213,3 +213,33 @@ with a permanent backlog is not an alarm — and memory files now sit under
 this same chain.
 *Caught by:* `tests/test_anchor_behind_is_not_tampering.py`.
 
+## Added 2026-09-06 (A1 — persistent memory)
+
+**41. Tier 1 memory is frozen at task start.**
+The prefix is built from a snapshot, exactly as skills are, so a
+`memory_write` during a turn cannot move the prefix. Verified two ways: it
+does not trip PrefixGuard, and it does not move `cache_hit_ratio` — the
+second being the server's opinion rather than this process's own, which is
+what makes the first more than self-report.
+*Caught by:* `tests/test_memory.py`, `tests/test_memory_end_to_end.py`.
+
+**42. Untrusted-derived content never enters tier 1.**
+`memory_write` has the same `USER` ceiling as `write_file`, so the capability
+gate refuses it before the store is reached, and the store refuses it again.
+Tier 2 holds it instead and returns it stamped `UNTRUSTED`. A poisoned tier 1
+would be in every future prompt in every future session, including ones that
+never touch the web.
+*Caught by:* `tests/test_memory.py`.
+
+**43. A change to memory is on the hash chain.**
+Every write and consolidation appends an event carrying a fingerprint over
+both memory FILES — not the parsed entries, because a tampered line that
+fails to parse is exactly what an attacker would write.
+*Caught by:* `test_a_tampered_memory_file_no_longer_matches_the_chained_fingerprint`.
+
+**44. Tier 1 consolidates, never truncates.**
+Over the cap, entries are de-duplicated first and only then evicted
+oldest-first, each eviction recorded. Evicting first would discard a fact to
+make room for its own duplicate.
+*Caught by:* `test_duplicates_are_removed_before_anything_is_evicted`.
+

@@ -199,6 +199,7 @@ def run_task(ctx, task_id: str) -> TaskResult:
 
     guard = PrefixGuard()
     skills = ctx.freeze_skills(task)  # frozen at start — prefix stability
+    memory = ctx.freeze_memory(task.id)   # same reason, same moment
     entries: list[LedgerEntry] = list(ctx.seed_entries(task))
     plan = ctx.approved_plan(task)
     started = time.time()
@@ -234,6 +235,7 @@ def run_task(ctx, task_id: str) -> TaskResult:
                 skills,
                 json.loads(task.contract.model_dump_json()),
                 tool_manual=ctx.tools.manual(),
+                memory=memory,
             )
             guard.check(builder, task.id)
             prefix = builder.build()

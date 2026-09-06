@@ -125,6 +125,84 @@ replaced by stronger ones rather than deleted:
   none of them from today's runs, consistent with D10 — a manually stopped
   run never checkpoints. Logged, not chased; the freeze holds.
 
+## Phase 3 (A1) — persistent memory — 2026-09-06
+
+Three tiers: `USER.md` + `MEMORY.md` in the user data dir, always in the
+stable prefix; the Phase 2 FTS index; and an interface stub for tier 3.
+Tools: `memory_read`, `memory_write`, `memory_consolidate`, plus
+`alpha memory` so a person can read and correct what the agent believes
+about them.
+
+### The prefix constraint, satisfied by construction
+
+Tier 1 is snapshotted at task start, exactly as skills are frozen. A write
+during a turn lands on disk immediately and is invisible until the next
+session or compression boundary, because the builder holds a snapshot rather
+than reading the files. PrefixGuard cannot trip and the cache ratio cannot
+move — not because the code is careful but because the bytes are the same
+object.
+
+**Verified two ways**, and the second only became possible last phase: the
+mid-task write does not trip PrefixGuard, **and** it does not move
+`cache_hit_ratio`. PrefixGuard compares a fingerprint this process computed;
+the cache ratio is the server's opinion of whether the bytes it received were
+the bytes it had cached. Agreement between the two is what makes the claim
+more than self-report.
+
+### Taint — the security core
+
+**Untrusted-derived content is REFUSED from tier 1, not queued.** This is a
+deliberate deviation from 3.3, recorded as SPEC-DELTA C32. Queueing means
+putting a human one click away from writing attacker-controlled text into the
+prefix of every future session, and the preview they would judge is one line
+of a tool call — which is exactly what the attack is shaped to survive.
+`memory_write` therefore carries `max_arg_taint=USER`, the same ceiling as
+`write_file`; loosening it for the one store that is *in the prompt by design*
+would be weakening a check to make a phase work. The brief's own acceptance
+test says "blocked or queued", and blocked is the stricter branch. One line
+changes it if you want the queue.
+
+Nothing is lost: untrusted-derived content persists in tier 2, which is where
+3.3 puts it, and `search_history` returns it stamped `UNTRUSTED`. The tiers do
+not differ in whether the content survives — they differ in whether it
+survives as something the model is told to believe.
+
+Two walls, not one. The gate refuses before the store is entered; the store
+refuses again. A control that exists only at the boundary stops existing the
+moment someone adds a second boundary.
+
+**Memory is on the chain.** Every write appends an event carrying a
+fingerprint over both memory FILES — not the parsed entries, because a
+tampered line that fails to parse is precisely the line an attacker writes.
+Editing `MEMORY.md` by hand leaves the chain intact and the fingerprint
+disagreeing, and the disagreement is the signal.
+
+### The cap consolidates
+
+De-duplicate first, evict oldest-first only if still over. The order is the
+whole of it: evicting first would throw away a fact to make room for its own
+duplicate. Model-assisted summarisation would consolidate better and is
+deliberately absent — it would put a nondeterministic call inside the write
+path of the thing the prefix is built from.
+
+### Measurement runs have the tools and none of the persistence
+
+`isolate_retrieval` gives a benchmark attempt an empty tier-1 snapshot, so a
+fact written by the control arm cannot be in the skill arm's prompt. The
+snapshot is **empty rather than absent**: the prefix keeps its shape, because
+removing the block would change the bytes between measured and shipped and
+this project measured that prefix structure moves pass rates.
+
+This widens the "measured system is not the shipped system" list that already
+holds `auto_review`. Recorded in SPEC-DELTA C33 and in every run record.
+
+### Versions
+
+`TOOLSET_VERSION` **2 → 3**. `HARNESS_VERSION` unchanged — nothing here
+changes what counts as a pass.
+
+466 tests.
+
 ## Blockers before Phase 3 — retrieval isolation and D17 — 2026-09-06
 
 ### Cross-arm retrieval, closed by scoping rather than by disabling
