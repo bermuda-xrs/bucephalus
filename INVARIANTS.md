@@ -243,3 +243,34 @@ oldest-first, each eviction recorded. Evicting first would discard a fact to
 make room for its own duplicate.
 *Caught by:* `test_duplicates_are_removed_before_anything_is_evicted`.
 
+## Added 2026-09-07 (A2 — web tools and file ops)
+
+**45. Web content is UNTRUSTED at every stage, with no exception.**
+`web_fetch` and `web_search` stamp `UNTRUSTED` on output, which reaches both
+the artifact and the taint tracker by the one shared path in `loop.py`. A
+result list is a web page that happens to be shaped like data; titles and
+snippets are attacker-authored on any query an attacker can influence.
+*Caught by:* `tests/test_web_tools.py`, `tests/test_search_history.py`.
+
+**46. A fetched page cannot write itself into tier 1.**
+The realistic composition of A1 and A2: an agent reads a page saying
+"remember X", tries to persist X, and the capability gate refuses it because
+the page raised the task's taint. The content still persists in tier 2,
+stamped.
+*Caught by:* `test_a_fact_from_a_fetched_page_cannot_enter_tier_one`.
+
+**47. Fetched content carries provenance produced by the fetcher.**
+URL, final URL after redirects, fetch time, and a hash of the raw bytes,
+recorded on the artifact. Produced where the bytes arrive rather than
+reconstructed at the call site, which would record what was ASKED for — a
+different thing, and wrong exactly when it matters.
+*Caught by:* `test_provenance_is_recorded_on_the_artifact`.
+
+**48. Retrieval is bounded and polite.**
+robots.txt is honoured and fails OPEN when unreachable, because a site with
+no robots.txt has refused nothing. A declared `crawl-delay` raises our floor
+and never lowers it. `grep` and `glob` are bounded per file and overall,
+because an unbounded search is the ledger discipline defeated by accident
+rather than by attack.
+*Caught by:* `tests/test_web_tools.py`.
+

@@ -11,7 +11,11 @@ cannot be prompted out of walking through.
   | search_history | no             | UNTRUSTED     |
   | memory_read    | no             | UNTRUSTED     |
   | web_fetch      | no             | UNTRUSTED     |
+  | web_search     | no             | UNTRUSTED     |
+  | glob           | no             | UNTRUSTED     |
+  | grep           | no             | UNTRUSTED     |
   | write_file       | yes          | USER          |
+  | edit_file        | yes          | USER          |
   | memory_write     | yes          | USER          |
   | memory_consolidate | yes        | USER          |
   | run_code         | yes          | USER          |
@@ -21,7 +25,9 @@ cannot be prompted out of walking through.
 
 from __future__ import annotations
 
+import re
 import subprocess
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
@@ -29,6 +35,12 @@ from typing import Callable
 from ..kernel.types import Taint
 
 MAX_READ_CHARS = 200_000
+# A search returning fifty matches into context defeats the ledger
+# discipline; so does a grep. Bounded per file AND overall, because one
+# pathological file should not consume the whole budget.
+MAX_GLOB_HITS = 200
+MAX_GREP_HITS = 100
+MAX_GREP_PER_FILE = 20
 
 
 @dataclass
@@ -194,7 +206,8 @@ def tool_memory_write(ctx, task, text: str, tier: str = "memory") -> dict:
                 "error": ("persistent memory is disabled for measurement "
                           "runs: a fact written by one arm of a paired trial "
                           "would be in the other arm's prompt")}
-    taint = ctx.taint_tracker(task.id).taint_of(text) if task is not None         else Taint.USER
+    taint = (ctx.taint_tracker(task.id).taint_of(text)
+             if task is not None else Taint.USER)
     try:
         out = ctx.memory.write(tier, text, taint)
     except UntrustedMemoryRefused as e:
@@ -332,15 +345,135 @@ def tool_run_code(ctx, task, code: str, timeout_s: int = 30) -> dict:
 
 
 def tool_web_fetch(ctx, task, url: str) -> dict:
-    """Real fetches are opt-in. Everything returned is UNTRUSTED by construction."""
+    """Fetch a URL. Everything returned is UNTRUSTED by construction.
+
+    NOT summarised here. Every tool output already goes through
+    `condense_observation`, which quarantines when the taint is UNTRUSTED —
+    no tools in that call, only a reference crossing back. Wiring into the
+    existing path rather than around it is deliberate: a second
+    summarisation path would be a second place for the quarantine to be
+    forgotten, and the whole M8 defence keys off provenance this path
+    establishes.
+
+    `ctx.web_fetcher` stays overridable so tests need no network, but the
+    default is now a real fetcher rather than an error. G4 could not ground
+    anything while retrieval defaulted to "not configured".
+    """
     fetcher = getattr(ctx, "web_fetcher", None)
-    if fetcher is None:
-        return {
-            "ok": False,
-            "error": "no web fetcher configured; set ctx.web_fetcher to enable",
-        }
-    body = fetcher(url)
-    return {"ok": True, "url": url, "content": body}
+    if fetcher is not None:
+        return {"ok": True, "url": url, "content": fetcher(url)}
+
+    from ..net.fetch import FetchError, fetch_with_provenance
+
+    try:
+        got = fetch_with_provenance(url)
+    except FetchError as e:
+        # A refusal is an observation the agent should see and route around,
+        # not an exception that kills the task. robots.txt refusals land here
+        # too, and the message says which rule refused.
+        return {"ok": False, "url": url, "error": str(e)}
+    return {"ok": True, "url": url, "content": got["text"],
+            "provenance": got["provenance"]}
+
+
+def tool_web_search(ctx, task, query: str, limit: int = 5) -> dict:
+    """Search the web. Titles and snippets are attacker-authored text.
+
+    A result list is a web page that happens to be shaped like data, so the
+    output taint is UNTRUSTED for the same reason web_fetch's is.
+    """
+    searcher = getattr(ctx, "web_searcher", None)
+    if searcher is None:
+        from ..net.search import default_searcher
+
+        searcher = default_searcher
+    results = searcher(query, limit)
+    return {"ok": True, "query": query, "results": results,
+            "provenance": {"query": query, "n_results": len(results),
+                           "fetched_at": time.time()}}
+
+
+def tool_glob(ctx, task, pattern: str, path: str = ".") -> dict:
+    """Filenames matching a glob, inside artifact_scope."""
+    root = _resolve(ctx, path)
+    if not root.is_dir():
+        return {"ok": False, "error": f"not a directory: {path}"}
+    hits = sorted(str(h.relative_to(root)) for h in root.glob(pattern)
+                  if h.is_file())
+    return {"ok": True, "path": str(root), "pattern": pattern,
+            "matches": hits[:MAX_GLOB_HITS],
+            "truncated": len(hits) > MAX_GLOB_HITS, "total": len(hits)}
+
+
+def tool_grep(ctx, task, pattern: str, path: str = ".",
+              glob: str = "**/*") -> dict:
+    """Lines matching a regex, with file and line number.
+
+    Bounded twice — matches per file and matches overall — because an
+    unbounded grep is a way to put a whole repository into the context
+    window one line at a time, which is the ledger discipline defeated by
+    accident rather than by attack.
+    """
+    root = _resolve(ctx, path)
+    if not root.is_dir():
+        return {"ok": False, "error": f"not a directory: {path}"}
+    try:
+        rx = re.compile(pattern)
+    except re.error as e:
+        return {"ok": False, "error": f"bad regex {pattern!r}: {e}"}
+
+    hits: list[dict] = []
+    truncated = False
+    for f in sorted(root.glob(glob)):
+        if not f.is_file():
+            continue
+        try:
+            text = f.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        per_file = 0
+        for n, line in enumerate(text.splitlines(), 1):
+            if rx.search(line):
+                hits.append({"file": str(f.relative_to(root)), "line": n,
+                             "text": line.strip()[:300]})
+                per_file += 1
+                if per_file >= MAX_GREP_PER_FILE or len(hits) >= MAX_GREP_HITS:
+                    truncated = True
+                    break
+        if len(hits) >= MAX_GREP_HITS:
+            break
+    return {"ok": True, "path": str(root), "pattern": pattern,
+            "matches": hits, "truncated": truncated}
+
+
+def tool_edit_file(ctx, task, path: str, old: str, new: str,
+                   count: int = 1) -> dict:
+    """Replace an exact string. Refuses if it is absent or ambiguous.
+
+    Exact-match replacement rather than a diff or a line range, and the
+    refusals are the feature. An edit that silently matched nothing reports
+    success and changes nothing, which the model then builds on; an edit that
+    matched three places when one was meant is worse. Both are the same
+    failure this project keeps finding elsewhere — an operation that reports
+    a result adjacent to what it actually did.
+    """
+    p = _resolve(ctx, path)
+    if not p.exists():
+        return {"ok": False, "error": f"no such file: {path}"}
+    text = p.read_text(encoding="utf-8")
+    found = text.count(old)
+    if found == 0:
+        return {"ok": False, "error": (
+            f"the exact text to replace was not found in {path}. Read the "
+            "file and copy the target text verbatim, including indentation.")}
+    if found != count:
+        return {"ok": False, "error": (
+            f"the text to replace appears {found} times in {path} but count="
+            f"{count} was given. Include more surrounding context to make it "
+            "unique, or pass count={found} if every occurrence should change.")}
+    p.write_text(text.replace(old, new, found), encoding="utf-8")
+    return {"ok": True, "path": str(p), "replacements": found,
+            "bytes": len(text) - len(old) * found + len(new) * found}
 
 
 def tool_append_to_outbox(ctx, task, to: str, body: str) -> dict:
@@ -507,6 +640,59 @@ def default_registry() -> ToolRegistry:
             max_arg_taint=Taint.UNTRUSTED,
             output_taint=Taint.UNTRUSTED,
             description="fetch a URL; the result is always untrusted data",
+        )
+    )
+    r.register(
+        ToolSpec(
+            "web_search",
+            tool_web_search,
+            {"type": "object",
+             "properties": {"query": _STR, "limit": {"type": "integer"}},
+             "required": ["query"]},
+            side_effecting=False,
+            max_arg_taint=Taint.UNTRUSTED,
+            output_taint=Taint.UNTRUSTED,
+            description="search the web; titles and snippets are untrusted",
+        )
+    )
+    r.register(
+        ToolSpec(
+            "glob",
+            tool_glob,
+            {"type": "object",
+             "properties": {"pattern": _STR, "path": _STR},
+             "required": ["pattern"]},
+            side_effecting=False,
+            max_arg_taint=Taint.UNTRUSTED,
+            output_taint=Taint.UNTRUSTED,
+            description="list files matching a glob pattern",
+        )
+    )
+    r.register(
+        ToolSpec(
+            "grep",
+            tool_grep,
+            {"type": "object",
+             "properties": {"pattern": _STR, "path": _STR, "glob": _STR},
+             "required": ["pattern"]},
+            side_effecting=False,
+            max_arg_taint=Taint.UNTRUSTED,
+            output_taint=Taint.UNTRUSTED,
+            description="search file contents for a regex",
+        )
+    )
+    r.register(
+        ToolSpec(
+            "edit_file",
+            tool_edit_file,
+            {"type": "object",
+             "properties": {"path": _STR, "old": _STR, "new": _STR,
+                            "count": {"type": "integer"}},
+             "required": ["path", "old", "new"]},
+            side_effecting=True,
+            max_arg_taint=Taint.USER,
+            output_taint=Taint.TRUSTED,
+            description="replace an exact string in a file inside artifact_scope",
         )
     )
     r.register(

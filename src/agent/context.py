@@ -64,13 +64,20 @@ class AgentContext:
 
         self.phase: str = "execute"  # "plan" makes every write tool unreachable
         self.executing_backend: str | None = None
-        # Our own fetcher, on purpose: content must enter through the tool path
-        # so it lands in the ledger as UNTRUSTED and the gate can see where it
-        # came from. See net/fetch.py for why a server-side fetch tool is not
-        # a drop-in replacement.
-        from .net.fetch import default_fetcher
-
-        self.web_fetcher = default_fetcher
+        # An OVERRIDE SEAM, not the default. `tool_web_fetch` owns the default
+        # path so it can record provenance — URL after redirects, fetch time,
+        # content hash — which a plain text-returning callable cannot carry.
+        #
+        # This used to be pre-set to `default_fetcher`, which made the tool
+        # take the override branch on every call and left the provenance path
+        # unreachable: dead code that looked wired. Every caller in the tree
+        # was already overriding it, so nothing lost a fetcher by this change.
+        #
+        # Our own fetcher either way, on purpose: content must enter through
+        # the tool path so it lands in the ledger as UNTRUSTED and the gate
+        # can see where it came from. See net/fetch.py for why a server-side
+        # fetch tool is not a drop-in replacement.
+        self.web_fetcher = None
 
         self._taint: dict[str, TaintTracker] = {}
         self._frozen_skills: dict[str, list[dict]] = {}
@@ -256,7 +263,10 @@ class AgentContext:
             return sources[:k]
 
         for url in re.findall(r"https?://[^\s)>\]]+", query):
-            body = self.web_fetcher(url) if self.web_fetcher else ""
+            from .net.fetch import default_fetcher
+
+            fetch = self.web_fetcher or default_fetcher
+            body = fetch(url)
             if body and not body.startswith("[fetch failed]"):
                 sources.append(Source(url=url, content=body, retrieved=today))
             if len(sources) >= k:

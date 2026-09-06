@@ -114,7 +114,22 @@ def test_budget_stops_execution(ctx, workspace, scripted):
     result = run_task(ctx, task.id)
     assert result.status == "budget_exhausted"
     m = ctx.telemetry.metrics(task.id)
-    assert m.cost_usd < 0.01
+
+    # The property is the MECHANISM, not a dollar figure. Budget is checked
+    # between steps, so the smallest possible overshoot is one step's cost -
+    # and one step got more expensive as tools were added (16 of them, a
+    # 1,606-character manual in the prefix). This assertion used to read
+    # `cost_usd < 0.01`, which was a proxy for "it did not run away" and was
+    # overtaken by a legitimate change in step cost, not by a regression.
+    #
+    # Tuning the number up would have hidden exactly the thing worth knowing:
+    # at a budget near one step's cost the overshoot factor is large. It does
+    # not bite in practice - default_task_budget_usd is 0.50, two orders above
+    # a step - but a caller passing a very small budget gets one step anyway.
+    assert m.n_calls == 1, (
+        f"the budget must stop the task after ONE step, not {m.n_calls}; six "
+        "actions were scripted")
+    assert result.steps <= 1
 
 
 def test_failed_verification_appends_an_external_observation(ctx, workspace, scripted):

@@ -543,9 +543,18 @@ def execute_action(ctx, task, parsed: ParsedAction, step: int, plan=None) -> Led
 
     text = _render_result(result)
     taint = tool.output_taint
+    origin = {"tool": tool_name,
+              "args": {k: str(v)[:200] for k, v in args.items()}}
+    # A4.3. A tool that knows where its bytes came from says so, and the
+    # fetcher is the only layer that can: the final URL after redirects and
+    # the hash of what actually arrived. Reconstructing that at the call site
+    # would record what was ASKED for, which differs from what was received
+    # exactly when it matters. G4's skill provenance needs this — a skill
+    # generated from a page is only checkable if the page can be re-fetched.
+    if isinstance(result, dict) and isinstance(result.get("provenance"), dict):
+        origin["provenance"] = result["provenance"]
     aid = write_artifact(
-        ctx.conn, task.id, "tool_output", text, taint,
-        {"tool": tool_name, "args": {k: str(v)[:200] for k, v in args.items()}},
+        ctx.conn, task.id, "tool_output", text, taint, origin,
     )
     ctx.log.append(task.id, "artifact.written", {"id": aid, "kind": "tool_output"})
     ctx.taint_tracker(task.id).observe(text, taint)

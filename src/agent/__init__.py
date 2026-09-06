@@ -41,4 +41,10 @@ HARNESS_VERSION = 2
 #      a measured run has the TOOLS without the PERSISTENCE - which is
 #      exactly why the version has to move: the tool manual in the prefix
 #      differs from TOOLSET_VERSION 2 even when the behaviour does not.
-TOOLSET_VERSION = 3
+#   4  2026-09-07: web_search, a real web_fetch, glob, grep, edit_file (A2).
+#      The largest single jump so far. RETRIEVAL is the one that changes what
+#      a run can achieve - until now the agent could only reason from what it
+#      was given, and G4's "research-grounded skill generation" had nothing to
+#      ground on. A run that can look something up is not attempting the same
+#      problem as one that cannot.
+TOOLSET_VERSION = 4

@@ -25,9 +25,11 @@ This is a fetcher for a personal agent, not a crawler:
 
 from __future__ import annotations
 
+import hashlib
 import ipaddress
 import re
 import socket
+import time
 from html.parser import HTMLParser
 from urllib.parse import urlparse
 
@@ -93,8 +95,29 @@ def _is_public(host: str) -> bool:
 
 
 def fetch_url(url: str, *, max_bytes: int = MAX_BYTES, timeout_s: float = TIMEOUT_S,
-              allow_private: bool = False) -> str:
+              allow_private: bool = False, polite: bool = True) -> str:
     """Fetch one URL and return readable text. Raises FetchError on refusal."""
+    return fetch_with_provenance(
+        url, max_bytes=max_bytes, timeout_s=timeout_s,
+        allow_private=allow_private, polite=polite)["text"]
+
+
+def fetch_with_provenance(url: str, *, max_bytes: int = MAX_BYTES,
+                          timeout_s: float = TIMEOUT_S,
+                          allow_private: bool = False,
+                          polite: bool = True) -> dict:
+    """Text plus where it came from: URL, fetch time, content hash.
+
+    A4.3. Provenance is produced HERE rather than at the tool, because the
+    fetcher is the only layer that knows what was actually retrieved — the
+    final URL after redirects, and the hash of the bytes as decoded. A tool
+    reconstructing that from its own arguments would record what it ASKED
+    for, which is a different thing and the one that is wrong exactly when it
+    matters.
+
+    G4's skill provenance needs this: a skill generated from a page is only
+    checkable if the page it came from can be named and re-fetched.
+    """
     parsed = urlparse(url)
     if parsed.scheme not in ALLOWED_SCHEMES:
         raise FetchError(f"scheme {parsed.scheme!r} not allowed; use http or https")
@@ -103,11 +126,23 @@ def fetch_url(url: str, *, max_bytes: int = MAX_BYTES, timeout_s: float = TIMEOU
     if not allow_private and not _is_public(parsed.hostname):
         raise FetchError(f"refusing to fetch a private/loopback address: {parsed.hostname}")
 
+    waited = 0.0
+    if polite:
+        from .politeness import RobotsRefused, check_robots, wait_for_turn
+        try:
+            check_robots(url)
+        except RobotsRefused as e:
+            raise FetchError(str(e)) from e
+        waited = wait_for_turn(url)
+
+    fetched_at = time.time()
+    final_url = url
     try:
         with httpx.Client(follow_redirects=True, timeout=timeout_s,
                           headers={"User-Agent": "alpha-test-1/0.1 (personal agent)"}) as c:
             with c.stream("GET", url) as r:
                 r.raise_for_status()
+                final_url = str(r.url)
                 ctype = r.headers.get("content-type", "").lower()
                 if ctype and not any(t in ctype for t in TEXTY):
                     raise FetchError(f"content-type {ctype!r} is not text")
@@ -124,14 +159,32 @@ def fetch_url(url: str, *, max_bytes: int = MAX_BYTES, timeout_s: float = TIMEOU
     except Exception as e:  # noqa: BLE001
         raise FetchError(f"fetch failed: {type(e).__name__}: {e}") from e
 
+    text = raw
     if "html" in ctype or raw.lstrip()[:1] == "<":
         p = _Text()
         try:
             p.feed(raw)
-            return p.text()
+            text = p.text()
         except Exception:  # noqa: BLE001 - malformed HTML still yields its text
-            return raw
-    return raw
+            text = raw
+    return {
+        "text": text,
+        "provenance": {
+            "url": url,
+            # After redirects. A page fetched from a shortener is provenanced
+            # to where it actually came from, not to the shortener.
+            "final_url": final_url,
+            "fetched_at": fetched_at,
+            # Hash of the RAW bytes as decoded, before HTML was reduced to
+            # text: the extraction is ours and could change between versions,
+            # so hashing its output would make the same page hash differently
+            # after an unrelated edit here.
+            "content_sha256": hashlib.sha256(raw.encode("utf-8")).hexdigest(),
+            "bytes": len(raw.encode("utf-8")),
+            "content_type": ctype,
+            "rate_limit_waited_s": round(waited, 3),
+        },
+    }
 
 
 def default_fetcher(url: str) -> str:

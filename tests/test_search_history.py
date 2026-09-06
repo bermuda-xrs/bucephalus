@@ -268,7 +268,13 @@ def test_search_output_taint_reaches_the_tracker_by_the_shared_path():
         encoding="utf-8")
     assert src.count("tool.output_taint") == 1, (
         "more than one taint-stamping site means a tool can be exempted")
+    # Bounded by the FUNCTION rather than by a character count. The window
+    # was 700 characters and a comment pushed `write_artifact` past it, which
+    # made the test fail for a reason that had nothing to do with the
+    # property - a check whose result depends on how much prose sits between
+    # two statements is measuring the prose.
     i = src.index("taint = tool.output_taint")
-    window = src[i:i + 700]
+    end = src.index(chr(10) + "def ", i)
+    window = src[i:end]
     assert "write_artifact" in window and "observe(" in window, (
         "the stamped taint must reach both the artifact and the tracker")

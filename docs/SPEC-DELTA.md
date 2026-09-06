@@ -692,3 +692,41 @@ in every run record under `retrieval_isolation` so a reader never has to
 infer it, and `TOOLSET_VERSION` moved to 3 because the tool manual in the
 prefix changed even where behaviour did not.
 
+### C34. `ctx.web_fetcher` was pre-set, which made the tool's own path dead code
+
+**Reality:** `AgentContext` assigned `self.web_fetcher = default_fetcher` at
+construction, and `tool_web_fetch` began with "if a fetcher is configured, use
+it". So the configured branch ran on every call and the tool's own path never
+did. Harmless while both paths did the same thing; the moment Phase 4 added
+provenance to the tool's path, that path became unreachable code that looked
+wired.
+
+**Correct version:** `web_fetcher` is an OVERRIDE SEAM defaulting to `None`,
+and the tool owns the default. Every caller in the tree was already
+overriding it — five call sites, all tests — so nothing lost a fetcher.
+
+**Class:** the project's recurring shape, in a new place. A default that
+shadows the thing it is a default FOR is indistinguishable from a wired
+implementation until someone changes one of them, and the tests passed
+throughout because both paths returned the same text.
+
+### C35. Budget enforcement granularity is one step, and a step got more expensive
+
+**Reality:** `test_budget_stops_execution` asserted `cost_usd < 0.01` against
+a $0.001 budget — a loose sanity bound on overshoot. It began failing at
+$0.0100 not because enforcement broke but because the tool manual grew from 8
+tools to 16, so the prefix grew, so ONE step costs more.
+
+**Correct version:** the test asserts the mechanism — exactly one model call
+against six scripted actions — rather than a dollar figure. Tuning the number
+up would have hidden the thing worth knowing.
+
+**What is worth knowing:** budget is checked BETWEEN steps, so the minimum
+possible overshoot is one step's cost, and that cost scales with the tool
+manual. At `default_task_budget_usd: 0.50` this is two orders of magnitude
+away from binding. At a budget near one step's cost, a caller gets one step
+regardless of what they asked for.
+
+**Class:** not a defect. A real property that a proxy assertion was hiding,
+surfaced because the proxy finally broke.
+

@@ -74,6 +74,11 @@ KNOWN_INERT = {
 
     # --- small helpers, genuinely unused ----------------------------------
     "artifacts_for": "helper; superseded by ledger/artifacts.project().",
+    "reset":
+        "test-only hook clearing net/politeness.py's robots and rate-limit "
+        "caches, which are module-level and would otherwise leak between "
+        "tests. No production call site BY DESIGN: a reset reachable from a "
+        "real run is a way to bypass a site's crawl-delay.",
     "reset_injection_counter":
         "test-only helper for the ALPHA_INJECT_STALL fault-injection switch. "
         "Production has no call site BY DESIGN - a reset reachable from a "
