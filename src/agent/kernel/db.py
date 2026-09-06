@@ -293,6 +293,54 @@ CREATE TABLE IF NOT EXISTS deviations (
     discovery  TEXT NOT NULL,
     created_at REAL NOT NULL
 );
+
+-- ---------------------------------------------------------------------
+-- B4: full-text search over prior work. DERIVED DATA.
+--
+-- Nothing here is part of the hash chain, and nothing here may be. The
+-- chain covers `events`; this table is built from `tasks` and `artifacts`
+-- and can be dropped and rebuilt at any time without affecting
+-- verification. IF THE INDEX AND THE LOG DISAGREE, THE LOG WINS - see
+-- kernel/search.py:rebuild().
+--
+-- WHAT IS INDEXED, and why not everything:
+--   * task contracts   - the goal and success criterion, which is what a
+--                        person actually typed
+--   * answer/plan/doc  - what the run produced
+--
+-- NOT tool_output. It is 76% of artifact rows in the live database (347 of
+-- 460), it is machine-generated directory listings and program output, and
+-- indexing it would mean every search returns tool noise ahead of the two
+-- sentences someone wrote. High volume, low signal.
+--
+-- Maintained by TRIGGERS rather than by call sites. Two Python functions
+-- write artifacts today, but a third would silently stop indexing, and a
+-- derived table that is quietly incomplete is worse than none: a search that
+-- finds nothing looks identical to a session that never happened.
+CREATE VIRTUAL TABLE IF NOT EXISTS search_index USING fts5(
+    body,
+    source     UNINDEXED,      -- 'contract' | 'artifact'
+    ref        UNINDEXED,      -- task id, or artifact content hash
+    task_id    UNINDEXED,
+    kind       UNINDEXED,
+    created_at UNINDEXED,
+    tokenize = 'porter unicode61'
+);
+
+CREATE TRIGGER IF NOT EXISTS trg_search_task_ai AFTER INSERT ON tasks
+BEGIN
+    INSERT INTO search_index(body, source, ref, task_id, kind, created_at)
+    VALUES (new.contract_json, 'contract', new.id, new.id, 'contract',
+            new.created_at);
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_search_artifact_ai AFTER INSERT ON artifacts
+WHEN new.kind IN ('answer', 'plan', 'doc', 'skill_draft')
+BEGIN
+    INSERT INTO search_index(body, source, ref, task_id, kind, created_at)
+    VALUES (new.content, 'artifact', new.id, new.task_id, new.kind,
+            new.created_at);
+END;
 """
 
 

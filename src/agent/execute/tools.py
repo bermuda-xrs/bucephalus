@@ -8,6 +8,7 @@ cannot be prompted out of walking through.
   | read_file      | no             | UNTRUSTED     |
   | list_dir       | no             | UNTRUSTED     |
   | expand_artifact| no             | UNTRUSTED     |
+  | search_history | no             | UNTRUSTED     |
   | web_fetch      | no             | UNTRUSTED     |
   | write_file       | yes          | USER          |
   | run_code         | yes          | USER          |
@@ -141,6 +142,52 @@ def tool_list_dir(ctx, task, path: str = ".") -> dict:
         (f"{e.name}/" if e.is_dir() else e.name) for e in p.iterdir()
     )
     return {"ok": True, "path": str(p), "entries": entries}
+
+
+def tool_search_history(ctx, task, query: str, limit: int = 5,
+                        offset: int = 0) -> dict:
+    """B4 — search prior sessions.
+
+    OUTPUT IS UNTRUSTED, unconditionally. The index holds `answer` artifacts
+    that carry `taint=trusted` in their own table, and propagating that would
+    be the hole: an answer is trusted as the output of a verified run, not as
+    input to a later one, and its text may quote a page the agent fetched.
+    Pulling old content into a fresh context is a read, not a memory.
+
+    Bounded on purpose. `search.MAX_LIMIT` caps what any query can pull back,
+    because a tool that can paste fifty matches into the context defeats the
+    ledger discipline that makes the rest of this system affordable.
+    """
+    from ..kernel import search as search_mod
+
+    try:
+        hits = search_mod.search(ctx.conn, query, limit=limit, offset=offset)
+    except search_mod.SearchUnavailable as e:
+        return {"ok": False, "error": str(e)}
+    except ValueError as e:
+        # A malformed FTS5 query is a bad tool ARGUMENT, not a crash. Hand it
+        # back the way every other bad argument is handled.
+        return {"ok": False, "error": str(e)}
+
+    out = []
+    for h in hits:
+        d = h.as_dict()
+        if h.source == "contract":
+            d["snippet"] = search_mod.summarise_contract(
+                ctx.conn.execute(
+                    "SELECT contract_json FROM tasks WHERE id = ?", (h.ref,)
+                ).fetchone()[0])
+        out.append(d)
+    return {
+        "ok": True,
+        "query": query,
+        "results": out,
+        "count": len(out),
+        "truncated": len(out) == min(int(limit), search_mod.MAX_LIMIT),
+        "taint": "untrusted",
+        "note": ("results are UNTRUSTED: this is prior content re-entering a "
+                 "new context, not a trusted memory"),
+    }
 
 
 def tool_expand_artifact(ctx, task, id: str) -> dict:  # noqa: A002 - model-facing name
@@ -284,6 +331,21 @@ def default_registry() -> ToolRegistry:
             max_arg_taint=Taint.UNTRUSTED,
             output_taint=Taint.UNTRUSTED,
             description="pull back the full text of a compacted artifact by id",
+        )
+    )
+    r.register(
+        ToolSpec(
+            "search_history",
+            tool_search_history,
+            {"type": "object",
+             "properties": {"query": _STR,
+                            "limit": {"type": "integer"},
+                            "offset": {"type": "integer"}},
+             "required": ["query"]},
+            side_effecting=False,
+            max_arg_taint=Taint.UNTRUSTED,
+            output_taint=Taint.UNTRUSTED,
+            description="search goals and answers from earlier sessions",
         )
     )
     r.register(

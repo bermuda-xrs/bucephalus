@@ -356,3 +356,41 @@ can be trusted. The second unblocks several other things and is the better
 order.
 
 SPEC-DELTA C29.
+
+## D17 — `alpha verify` reports "head does not match anchor" as critical for tasks that were never re-checkpointed
+
+**Found:** 2026-09-06, while confirming that Phase 2's search index does not
+disturb the hash chain.
+
+**What it is:** 19 of 283 tasks in `agent.local.db` report
+`severity: critical — head does not match anchor`. The chain itself is fine.
+Measured on a copy of the database:
+
+    events before rebuild  : 7700
+    events after  rebuild  : 7700
+    heads changed          : 0
+    chain breaks           : 0
+    tasks never anchored   : 2 of 283
+    anchored but mismatched: 19
+
+So the chain verifies for every task and nothing is tampered. Those 19 tasks
+simply continued past their last `checkpoint()` — bench runs do not checkpoint
+per task — and the anchor file is behind, not wrong.
+
+**Why it matters:** the finding is emitted at `severity: critical`, the same
+level as an actual chain break. 19 permanent criticals in `alpha verify` is
+how a real one gets scrolled past. This is the project's own recurring defect
+class — a check whose label does not match what it measures — in the alarm
+that matters most.
+
+**Why deferred:** pre-existing, unrelated to any phase, and the freeze holds
+for anything a phase does not need. It also touches the checkpoint protocol,
+which is not something to change while corrections are landing around it.
+
+**The fix, when it happens:** separate "chain broken" from "anchor is behind".
+The second is `severity: info` at most, or is not reported at all for a task
+whose head is a descendant of the anchored hash.
+
+**Confirmed not caused by the search index:** the numbers above are before and
+after a full `rebuild()`.
+

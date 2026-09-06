@@ -125,6 +125,57 @@ replaced by stronger ones rather than deleted:
   none of them from today's runs, consistent with D10 — a manually stopped
   run never checkpoints. Logged, not chased; the freeze holds.
 
+## Phase 2 (B4) — FTS5 search over prior sessions — 2026-09-06
+
+`search_history`, an FTS5 index over what earlier runs were asked and what
+they produced. `alpha search <query>`, `--rebuild`, `--verify`.
+
+**Results are UNTRUSTED as a floor, not as a computation.** `answer`
+artifacts are stored `taint=trusted` and propagating that would have been the
+hole: an answer is trusted as the output of a verified run, not as input to a
+later one, and its text may quote a page the agent fetched three steps
+earlier. Search re-injects old content into a fresh context, which is a read,
+not a memory. A computed join would have returned TRUSTED for exactly the rows
+most worth attacking. The taint reaches the capability gate by the single
+shared site in `execute/loop.py` that every tool uses — pinned by a test, so a
+tool cannot be special-cased out of the gate.
+
+**What is indexed:** task contracts, and `answer`/`plan`/`doc`/`skill_draft`
+artifacts. **Not `tool_output`**, which is 348 of 460 artifact rows in the
+live database — directory listings and program output that would bury the two
+sentences a person actually wrote.
+
+**Maintained by SQL triggers, not by call sites.** Two Python functions write
+artifacts today; a third would silently stop indexing, and a derived table
+that is quietly incomplete is worse than none — a search that finds nothing
+looks exactly like a session that never happened.
+
+**The index is derived data and the log wins.** Verified rather than asserted,
+on a copy of the real database: 7700 events before a full rebuild, 7700 after,
+zero heads changed, zero chain breaks. `--verify` reports disagreement without
+repairing it, because a count mismatch means a write path bypassed the
+triggers — a defect to find, not a number to correct.
+
+**Bounded.** Default 5 results, hard cap 20, snippets capped at 400 chars,
+with an offset for paging. A tool that can paste fifty matches into context
+defeats the ledger discipline that makes the rest of this system affordable.
+
+**On "session":** there is no sessions table until Phase 9, so a session is
+the root of the task tree — a delegated child reports its parent's session.
+That is the column Phase 9 repoints; callers do not change.
+
+Real-data check: the index was empty on the existing database (the schema
+arrives on open, the rows do not), rebuilt to 395 rows from 283 contracts and
+112 artifacts, and found E03's escape-velocity task from a prior session.
+
+Found while verifying the chain: **D17**, 19 tasks reporting "head does not
+match anchor" at `severity: critical` when the chain is intact and the anchor
+is merely behind. Pre-existing, unrelated, logged not fixed.
+
+`HARNESS_VERSION` unchanged. `TOOLSET_VERSION` **bumped to 2** — a new tool
+changes what a run can achieve, and `report.py` already refuses to plot across
+it.
+
 ## Corrections to phase 1 — 2026-09-06
 
 Three corrections and two new recording requirements, all arising from what

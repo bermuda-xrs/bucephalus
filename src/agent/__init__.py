@@ -30,4 +30,9 @@ HARNESS_VERSION = 2
 #   1  2026-09-05: sympy 1.13.3. Added AFTER the Phase 2A reference
 #      measurement, which therefore ran at TOOLSET_VERSION 0 and is
 #      reflected in no published number here.
-TOOLSET_VERSION = 1
+#   2  2026-09-06: the `search_history` tool (B4). A run that can read what
+#      earlier runs were asked and what they answered is not attempting the
+#      same problem as one that cannot - and on a suite with repeated task
+#      shapes it is the difference between solving and recalling. Nothing
+#      published so far ran with it.
+TOOLSET_VERSION = 2

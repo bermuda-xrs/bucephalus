@@ -259,6 +259,55 @@ def cmd_verify(ctx, args, console) -> int:
     return cmd_alerts(ctx, args, console)
 
 
+def cmd_search(ctx, args, console) -> int:
+    """B4. `--rebuild` is the recovery path required by 2.3: the index is
+    derived data, so when it disagrees with the log the log wins and the
+    index is rebuilt from it. `--verify` reports a disagreement without
+    changing either, because a count mismatch means a write path bypassed the
+    triggers - a defect to find, not a number to quietly correct."""
+    from .kernel import search as search_mod
+
+    if args.rebuild:
+        n = search_mod.rebuild(ctx.conn)
+        console.print(f"search index rebuilt from the log: {n} rows")
+        return 0
+
+    status = search_mod.verify(ctx.conn)
+    if args.verify:
+        console.print_json(json.dumps(status))
+        return 0 if status["consistent"] else 1
+    if not status["consistent"]:
+        console.print(
+            f"[yellow]index has {status['indexed']} rows against "
+            f"{status['expected']} expected — run `alpha search --rebuild`. "
+            f"Results below may be incomplete.[/yellow]")
+
+    if not args.query:
+        console.print("nothing to search for; pass a query or --rebuild")
+        return 2
+    try:
+        hits = search_mod.search(ctx.conn, " ".join(args.query),
+                                 limit=args.limit, offset=args.offset)
+    except ValueError as e:
+        console.print(f"[red]{e}[/red]")
+        return 2
+    if not hits:
+        console.print("no matches")
+        return 0
+    for h in hits:
+        body = h.snippet
+        if h.source == "contract":
+            row = ctx.conn.execute(
+                "SELECT contract_json FROM tasks WHERE id = ?", (h.ref,)
+            ).fetchone()
+            if row:
+                body = search_mod.summarise_contract(row[0])
+        console.print(f"[dim]{h.session_id[:12]}·{h.task_id[:12]} "
+                      f"{h.kind}[/dim]  {body}")
+    console.print(f"[dim]{len(hits)} result(s), taint=untrusted[/dim]")
+    return 0
+
+
 def cmd_report(ctx, args, console) -> int:
     report = run_report(ctx.conn, ctx.telemetry, args.task_id)
     out_dir = Path(ctx.config.root) / "runs"
@@ -470,6 +519,16 @@ def build_parser() -> argparse.ArgumentParser:
 
     v = sub.add_parser("verify", help="verify every chain against the anchor")
     v.set_defaults(fn=cmd_verify)
+
+    sr = sub.add_parser("search", help="search goals and answers from earlier runs")
+    sr.add_argument("query", nargs="*")
+    sr.add_argument("--limit", type=int, default=10)
+    sr.add_argument("--offset", type=int, default=0)
+    sr.add_argument("--rebuild", action="store_true",
+                    help="rebuild the index from the log; the log always wins")
+    sr.add_argument("--verify", action="store_true",
+                    help="report index/log agreement without changing either")
+    sr.set_defaults(fn=cmd_search)
 
     rp = sub.add_parser("report", help="write the per-run JSON and CSV")
     rp.add_argument("task_id")
