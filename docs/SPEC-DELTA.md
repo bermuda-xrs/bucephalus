@@ -752,3 +752,32 @@ regardless of what they asked for.
 **Class:** not a defect. A real property that a proxy assertion was hiding,
 surfaced because the proxy finally broke.
 
+### C36. The dead-code audit credited method calls to module-level functions
+
+**Reality:** `_unreferenced()` collected every `ast.Attribute` node's `attr`
+as a reference. So `policy.describe()` — a method on a class added in Phase
+5 — marked the entirely unrelated `profiles.describe` as wired, and it
+silently left the unreferenced set.
+
+A FALSE NEGATIVE, which is the dangerous direction for this particular test:
+dead code looking wired is exactly what it exists to catch. The same shape as
+the docstring bug this function was already fixed for once — the check
+measured "the token appears", not "the system calls it".
+
+**Correct version:** an attribute counts only when its receiver is a name
+bound by an import in that file, which is what a module-qualified call looks
+like. `self.x` and `policy.x` no longer count; `search_mod.search(...)` still
+does.
+
+**What it found immediately.** Two genuinely dead functions that had been
+invisible:
+
+* `ledger/prefix.freeze_skills` — a second implementation, superseded by
+  `AgentContext.freeze_skills`, which the loop actually calls. It looked
+  wired because the audit credited `ctx.freeze_skills(task)` to it.
+* `kernel/integrity.resume` — **the resume protocol is inert.** DEFERRED
+  D20, and the more serious of the two.
+
+**Class:** adjacency again, and worth noting that the instrument catching
+adjacency bugs had one of its own. Tightening it paid for itself in seconds.
+

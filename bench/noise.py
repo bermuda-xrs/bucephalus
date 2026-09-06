@@ -30,9 +30,10 @@ import sys
 import time
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from agent.context import AgentContext  # noqa: E402
+from measurement import open_measurement  # noqa: E402
 from agent.execute.loop import run_task  # noqa: E402
 from agent.kernel.tasks import create_task  # noqa: E402
 from agent.kernel.types import Budget, TaskContract  # noqa: E402
@@ -692,7 +693,9 @@ def main() -> int:
                   "before the first task. Paging rewrites a seconds-based "
                   "measurement - one call has been seen 18x slower.")
 
-    ctx = AgentContext.open(args.config, profile=args.profile)
+    ctx = open_measurement(args.config, profile=args.profile, isolate=True,
+                           why="paired trials and noise floor: arms and runs "
+                               "must be independent observations")
 
     # RETRIEVAL ISOLATION, set here rather than read from a config file.
     #

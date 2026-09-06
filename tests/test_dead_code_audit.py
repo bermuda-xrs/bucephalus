@@ -43,6 +43,20 @@ KNOWN_INERT = {
     "measure_retrieval_precision":
         "M9.4 measures retrieval separately from quality. Never invoked, so "
         "'the right skill existed and was not retrieved' is unmeasured.",
+    "resume":
+        "M1.4/M1.5 THE RESUME PROTOCOL IS INERT. `integrity.resume()` verifies "
+        "the chain and halts on a break BEFORE a task continues, and nothing "
+        "imports it - `cli.py`, `server.py`, `loop.py` and `planner.py` each "
+        "import other names from that module and never this one. So resuming "
+        "a paused task does not verify its chain. Surfaced 2026-09-07 when "
+        "the audit stopped crediting method calls as module-function "
+        "references; the old rule counted `--resume` and prose mentions. "
+        "DEFERRED D20.",
+    "freeze_skills":
+        "A second implementation. `AgentContext.freeze_skills` is the one the "
+        "loop calls; this module-level version in ledger/prefix.py has no "
+        "caller. It looked wired only because the audit credited the METHOD "
+        "call `ctx.freeze_skills(task)` to it.",
     "calibrate":
         "CORRECTIONS 1.2 replaced tiktoken with a local estimator for in-loop "
         "budgeting PLUS the provider's count_tokens for calibration. The "
@@ -127,11 +141,43 @@ def _unreferenced() -> dict[str, Path]:
         if not f.exists():
             continue
         tree = ast.parse(f.read_text(encoding="utf-8"))
+
+        # Names bound by an import in THIS file. Used to decide whether an
+        # attribute access is a module-qualified call or a method call.
+        module_names: set[str] = set()
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                for a in node.names:
+                    module_names.add((a.asname or a.name).split(".")[0])
+            elif isinstance(node, ast.ImportFrom):
+                for a in node.names:
+                    module_names.add(a.asname or a.name)
+
         for node in ast.walk(tree):
             if isinstance(node, ast.Name):
                 refs.add(node.id)
             elif isinstance(node, ast.Attribute):
-                refs.add(node.attr)
+                # RECEIVER-AWARE, and this is the second bug fixed in this
+                # function rather than the first.
+                #
+                # Crediting every `X.name` as a reference to a module-level
+                # `name` means one METHOD anywhere can make an unrelated dead
+                # function look wired. It happened: `ToolPolicy.describe()`
+                # arrived in Phase 5 and `profiles.describe`, which still has
+                # no caller, silently left the unreferenced set.
+                #
+                # A false NEGATIVE, which is the dangerous direction for this
+                # test: dead code looking wired is exactly what it exists to
+                # catch. Same shape as the docstring bug this function was
+                # already fixed for once - the check measured "the token
+                # appears", not "the system calls it".
+                #
+                # So an attribute counts only when its receiver is a name an
+                # import bound in this file, which is what a module-qualified
+                # call looks like. `self.x` and `policy.x` no longer count.
+                recv = node.value
+                if isinstance(recv, ast.Name) and recv.id in module_names:
+                    refs.add(node.attr)
             elif isinstance(node, ast.alias):        # from x import y [as z]
                 refs.add(node.name.split(".")[-1])
                 if node.asname:

@@ -459,3 +459,44 @@ not happen before this is closed, because a skill promoted on the strength of
 provenance that could not tell those apart is exactly the failure the gate
 exists to prevent.
 
+## D20 — the resume protocol is inert: resuming a task does not verify its chain
+
+**Found:** 2026-09-07, by the dead-code audit, immediately after it was
+tightened to stop crediting method calls as references to module-level
+functions.
+
+`kernel/integrity.py:resume()` is M1.4/M1.5. It verifies the hash chain,
+appends `integrity.halt` and raises on a break, then compares head against
+anchor — all before a task is allowed to continue. **Nothing imports it.**
+`cli.py`, `control/server.py`, `execute/loop.py` and `plan/planner.py` each
+import other names from that module and never this one.
+
+So a paused task that is resumed goes straight into `run_task` without its
+chain being verified. The guarantee is written, tested, and never invoked —
+the same category as `record_holdout_gap`, and the reason
+`test_wired_invariants.py` exists.
+
+**Why it hid for so long.** Every textual search for it found something: the
+`--resume` CLI flag on `bench/noise.py` (ledger-row resumption, an unrelated
+mechanism), the phrase in `runlock.py`'s docstring, and the module's own
+docstring. The audit credited them all until the reference rule was made
+receiver-aware.
+
+**Noted against my own work:** the D17 fix two commits earlier modified
+`resume()` to stop refusing a merely-behind anchor. That change is correct
+and currently unreachable. The `verify_all` half of D17 IS wired — `alpha
+verify` and the `/alerts` endpoint both call it — so the reclassification is
+live; only the resume half is inert.
+
+**Why deferred rather than fixed:** wiring it is a design decision, not a
+line. There is no distinct "resume a paused task" entry point — `run_task`
+is called the same way for a fresh task and a resumed one, so the fix is
+either a check inside `run_task` that knows whether it is resuming, or a
+separate entry point. Choosing between those is Phase-shaped work and the
+freeze holds.
+
+**What would make it urgent:** any workflow that routinely pauses and
+resumes. Today paused tasks are resumed by hand, and `alpha verify` sweeps
+every chain on demand, so the exposure is a task resumed without anyone
+running that sweep first.
+

@@ -125,6 +125,92 @@ replaced by stronger ones rather than deleted:
   none of them from today's runs, consistent with D10 — a manually stopped
   run never checkpoints. Logged, not chased; the freeze holds.
 
+## Phase 5 (B3) — tool exposure, and D18 — 2026-09-07
+
+### Exposure is not existence
+
+An agent may be denied a tool it can still see. Refusal happens at dispatch,
+BEFORE the capability gate, and lands on the chain as `tool.not_exposed`.
+
+The order matters for what gets recorded: the gate asks "are these arguments
+safe for this tool", exposure asks "may this agent call this tool at all". A
+child denied `git_push` should be refused for not being allowed it, not for
+whatever its arguments happened to be tainted with.
+
+The tool stays in the manual on purpose. An agent that cannot SEE a tool
+works around its absence silently; an agent that is REFUSED leaves a record
+of what it tried, and the record is the auditable behaviour. It also keeps
+the prefix identical between parent and child.
+
+### Restrictions can only narrow
+
+Policies compose by UNION of denials — stated as allow-sets, an intersection.
+`restrict_tools` refuses a policy that would widen an existing one, because
+without that an agent could delegate to itself and come back with more
+authority than it started with.
+
+A delegated child loses: `delegate` (leaves cannot spawn), `clarify` (the
+human approved a parent task, not a conversation with a subagent they never
+opened), and both memory writers. `delegate` and `clarify` have no tool yet
+and are named anyway — the policy is the durable artifact, so a tool added
+later inherits the restriction instead of needing someone to remember it.
+
+Leaves-cannot-spawn is checked from the TASK TREE rather than a flag, so it
+cannot be bypassed by constructing a context differently. `artifact_scope`
+containment is by PATH, not string prefix: `work_other` is not inside `work`,
+though a prefix comparison would have allowed it.
+
+Isolation needed no separate inheritance and the test says so rather than
+assuming it: `visible_tasks` scopes to the task tree, and a child shares its
+parent's root by construction.
+
+### D18 — one door, and it will not open undeclared
+
+`bench/measurement.open_measurement` is now the only way a measurement path
+gets a context, and `isolate` is keyword-only with no default. Forgetting it
+is a TypeError at the call, not an unrestricted run discovered three hours
+later. `Config.isolate_retrieval` is tri-state: `None` means UNDECLARED,
+which is not `False` — false is "considered and not needed", none is "nobody
+thought about it".
+
+`ladder.py` declares `isolate=False` with a reason (scaffolding rungs on
+single tasks: no arms, no retrieval), which is the point — a reader can now
+tell that from nobody having thought about it.
+
+A test asserts no module under `bench/` calls `AgentContext.open` directly.
+Three call sites remembering a flag is not a fix; one door that will not open
+without the declaration is.
+
+### The audit had an adjacency bug of its own
+
+`ToolPolicy.describe()` made the unrelated, still-dead `profiles.describe`
+look wired, because the audit credited every attribute access to any
+same-named module function. A FALSE NEGATIVE — dead code looking wired is
+precisely what that test exists to catch. Attribute references now count only
+when the receiver is a name an import bound in that file.
+
+**It found two dead functions in seconds**, both previously invisible:
+
+* `ledger/prefix.freeze_skills`, a second implementation superseded by the
+  context method the loop actually calls.
+* **`kernel/integrity.resume` — the resume protocol is inert.** Nothing
+  imports it; four modules import other names from that file and never this
+  one. So a paused task that is resumed does not have its chain verified
+  first. Every textual search for it used to find the unrelated `--resume`
+  CLI flag, `runlock.py`'s docstring, or the module's own. DEFERRED D20.
+
+Noted against my own work: the D17 fix two commits earlier modified
+`resume()`. That change is correct and currently unreachable. D17's
+`verify_all` half IS wired — `alpha verify` and `/alerts` both call it — so
+the reclassification is live; only the resume half is inert.
+
+### Versions
+
+`TOOLSET_VERSION` unchanged — no tool added or removed; exposure changes who
+may call what, not what exists. `HARNESS_VERSION` unchanged.
+
+515 tests.
+
 ## Phase 4 (A2) — web tools and file ops — 2026-09-07
 
 Five tools: `web_search`, a real `web_fetch`, `glob`, `grep`, `edit_file`.

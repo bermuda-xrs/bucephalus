@@ -30,6 +30,8 @@ from ..ledger.entries import LedgerEntry, render_tail, sum_tokens
 from ..ledger.prefix import PrefixBuilder, PrefixGuard, SYSTEM_CONTRACT
 from ..ledger.semantic_cache import cached_op
 from ..security.capabilities import gate_tool_call, render_preview
+from ..security.exposure import ToolNotExposed
+from ..security.exposure import check as exposure_check
 from ..security.taint import QUARANTINE_PREFIX
 from ..tokens import count_tokens
 
@@ -479,6 +481,24 @@ def execute_action(ctx, task, parsed: ParsedAction, step: int, plan=None) -> Led
             taint=Taint.TRUSTED,
             label="registry",
         )
+
+    # B3. Exposure is checked BEFORE the capability gate, because they answer
+    # different questions and the order matters for what gets recorded. The
+    # gate asks "are these arguments safe for this tool"; exposure asks "may
+    # this agent call this tool at all". A child denied `git_push` should be
+    # refused for not being allowed it, not for whatever its arguments
+    # happened to be tainted with.
+    try:
+        exposure_check(ctx.tool_policy(task.id), tool_name)
+    except ToolNotExposed as e:
+        # Refused at dispatch and LOGGED. An agent that cannot see a tool
+        # works around its absence silently; an agent that is refused leaves
+        # a record of what it tried, and the record is the point.
+        ctx.log.append(task.id, "tool.not_exposed",
+                       {"tool": tool_name, "step": step,
+                        "policy": ctx.tool_policy(task.id).describe()})
+        return LedgerEntry.observation(
+            f"REFUSED: {e}", taint=Taint.TRUSTED, label="exposure")
 
     decision = gate_tool_call(ctx, task, tool, args, phase=ctx.phase)
 

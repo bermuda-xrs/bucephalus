@@ -274,6 +274,40 @@ because an unbounded search is the ledger discipline defeated by accident
 rather than by attack.
 *Caught by:* `tests/test_web_tools.py`.
 
+## Added 2026-09-07 (B3 — tool exposure, and D18)
+
+**49. Tool exposure is separate from tool existence, and refusals are logged.**
+An agent may be denied a tool it can still see in its manual. Refusal happens
+at dispatch, BEFORE the capability gate, and appends `tool.not_exposed`. The
+tool stays in the manual on purpose: an agent that cannot see a tool works
+around its absence silently, where a refused one leaves a record of what it
+tried, and the record is the auditable behaviour.
+*Caught by:* `tests/test_tool_exposure.py`.
+
+**50. Tool policies compose by UNION of denials and can only narrow.**
+A delegated child is denied everything its parent was denied plus the child
+defaults. `restrict_tools` refuses a policy that would widen an existing one —
+without that, an agent could delegate to itself and return with more
+authority than it started with.
+*Caught by:* `test_a_policy_cannot_be_widened`,
+`test_restrictions_compose_by_union_of_denials`.
+
+**51. A delegated child cannot spawn, widen its scope, or write tier-1 memory.**
+Leaves cannot delegate, checked from the TASK TREE rather than a flag so it
+cannot be bypassed by constructing a context differently. `artifact_scope` is
+inherited and containment is by PATH, not string prefix — `work_other` is not
+inside `work`. Isolation needs no separate inheritance: `visible_tasks`
+scopes to the task tree and a child shares its parent's root by construction.
+*Caught by:* `tests/test_tool_exposure.py`.
+
+**52. A measurement cannot start without declaring its isolation state.**
+`bench/measurement.open_measurement` is the only door, and `isolate` is
+keyword-only with no default, so forgetting it is a TypeError at the call
+rather than an unrestricted run found three hours later. `None` means
+UNDECLARED and is not the same as `False`: false is "considered and not
+needed", none is "nobody thought about it".
+*Caught by:* `test_no_measurement_module_opens_a_context_for_itself`.
+
 ---
 
 ## Design rules

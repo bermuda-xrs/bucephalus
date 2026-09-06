@@ -190,7 +190,11 @@ class Config(BaseModel):
     # a paired trial contaminated by someone editing the wrong config file is
     # precisely the failure it exists to remove. It lives here so every
     # persistence subsystem reads one flag rather than each inventing its own.
-    isolate_retrieval: bool = False
+    # None means UNDECLARED, and that is not the same as False. False is
+    # "considered and not needed"; None is "nobody thought about it". A
+    # measurement path must not be able to produce the second by accident -
+    # see bench/measurement.py.
+    isolate_retrieval: bool | None = None
     root: str = "."
     # Filled by load_config after enforcement; travels into every report.
     profile_provenance: dict[str, Any] = Field(default_factory=dict)

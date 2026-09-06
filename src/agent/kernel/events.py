@@ -79,6 +79,11 @@ EVENT_TYPES = frozenset(
         # otherwise reads as a topic with no coverage - and G4 would ground a
         # skill on it and call the skill grounded.
         "tool.search_failed",
+        # B3. A tool call refused because this agent is not permitted the
+        # tool at all, as distinct from a capability-gate denial about its
+        # ARGUMENTS. Recorded because the refusal is the auditable behaviour:
+        # an agent that cannot SEE a tool works around it silently.
+        "tool.not_exposed",
         "human.approved",
         "human.denied",
         "human.steered",

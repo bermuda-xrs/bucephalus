@@ -223,12 +223,12 @@ split, profile or executor.
 |---|---|
 | Branch | `measurement-2026-09-01` (off `main` at `148cd99`; no remote) |
 | Harness version | **2** — v3 was evaluated and **rejected**, see section 7 |
-| Toolset version | **3** — sympy 1.13.3, then `search_history`, then the memory tools |
-| Tests | **466 passing** |
+| Toolset version | **4** — sympy, `search_history`, the memory tools, then the web/file tools |
+| Tests | **515 passing** |
 | Working tree | clean |
 | Running | nothing |
-| Last completed step | **Iteration two, Phase 3 (persistent memory).** See CHANGELOG |
-| Next step | Phase 4 (web tools + file ops). Phase 6 (Docker) is PARKED — not installed |
+| Last completed step | **Iteration two, Phase 5 (tool exposure + D18).** See CHANGELOG |
+| Next step | Phase 10 (parallel tool execution), then 7, 8, 9, 11, 12. Phase 6 (Docker) is PARKED — not installed |
 
 ### Iteration two, so far
 
@@ -253,7 +253,10 @@ top-down; each entry states what it invalidates.
    task tree and empties tier-1 memory. Without it, the skill arm of a paired
    trial can look up the control arm's answer. `bench/noise.py` sets it
    itself, deliberately not from yaml.
-3. **A backend's adapter type never decides behaviour.** Branch on a declared
+3. **A measurement cannot start without declaring its isolation.**
+   `bench/measurement.open_measurement` is the only door and `isolate` has no
+   default. `None` means undeclared, which is not `False`.
+4. **A backend's adapter type never decides behaviour.** Branch on a declared
    capability — `needs_action_envelope`, `reports_prompt_cache` — never on
    `kind ==`. `tests/test_no_adapter_identity_branches.py` fails if a new one
    appears.

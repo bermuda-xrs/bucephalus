@@ -54,10 +54,11 @@ import time
 import urllib.request
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from agent import HARNESS_VERSION  # noqa: E402
-from agent.context import AgentContext  # noqa: E402
+from measurement import open_measurement  # noqa: E402
 from agent.execute.loop import ACTION_SCHEMA_HINT, run_task  # noqa: E402
 from agent.kernel.tasks import create_task  # noqa: E402
 from agent.kernel.types import Budget, TaskContract  # noqa: E402
@@ -357,7 +358,13 @@ def main() -> int:
     reaped = reap_orphans()
     print(f"reaped {len(reaped)} orphan(s); free {free_memory_gb():.1f} GB\n")
 
-    ctx = AgentContext.open(args.config, profile="local")
+    # Declared unisolated, not defaulted. The ladder measures SCAFFOLDING
+    # rungs on single tasks - there are no arms to cross-contaminate - and it
+    # carries no retrieval tool. Recorded so a reader can tell that from
+    # nobody having thought about it. D18.
+    ctx = open_measurement(args.config, profile="local", isolate=False,
+                           why="scaffolding rungs on single tasks: no arms, "
+                               "no retrieval")
     ctx.config.autonomy.auto_review = False
     ctx.config.autonomy.approve_scoped_writes = True
     ctx.config.backends["cloud"].model = args.model

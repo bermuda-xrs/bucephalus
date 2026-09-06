@@ -79,6 +79,9 @@ class AgentContext:
         # fetch tool is not a drop-in replacement.
         self.web_fetcher = None
 
+        # B3. Per TASK, not per context, because a delegated child runs on
+        # the same context as its parent and must not inherit its authority.
+        self._tool_policy: dict[str, object] = {}
         self._taint: dict[str, TaintTracker] = {}
         self._frozen_skills: dict[str, list[dict]] = {}
         self._gate_queue: list[str] = []
@@ -178,6 +181,30 @@ class AgentContext:
                 self.memory, isolated=isolated,
             )
         return self._memory_frozen[task_id]
+
+    def tool_policy(self, task_id: str):
+        """What this agent may call. Unrestricted unless something narrowed it."""
+        from .security.exposure import UNRESTRICTED
+
+        return self._tool_policy.get(task_id, UNRESTRICTED)
+
+    def restrict_tools(self, task_id: str, policy) -> None:
+        """Set a task's policy. Refuses to WIDEN an existing one.
+
+        The refusal is the invariant, not a nicety: if a policy could be
+        replaced rather than narrowed, an agent could delegate to itself and
+        come back with more authority than it started with.
+        """
+        from .security.exposure import ToolNotExposed
+
+        current = self._tool_policy.get(task_id)
+        if current is not None and not set(current.denied) <= set(policy.denied):
+            raise ToolNotExposed(
+                f"refusing to widen the tool policy for {task_id}: "
+                f"{sorted(set(current.denied) - set(policy.denied))} would "
+                "become available again. Policies may only narrow."
+            )
+        self._tool_policy[task_id] = policy
 
     def taint_tracker(self, task_id: str) -> TaintTracker:
         if task_id not in self._taint:

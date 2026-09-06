@@ -25,9 +25,10 @@ import sys
 import time
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from agent.context import AgentContext  # noqa: E402
+from measurement import open_measurement  # noqa: E402
 from agent.execute.loop import run_task  # noqa: E402
 from agent.instrument.report import pareto_points, write_calls_csv  # noqa: E402
 from agent.kernel.tasks import create_task  # noqa: E402
@@ -147,7 +148,9 @@ def run_arm(ctx, suite: list[dict], arm: str, skills_on: bool) -> dict:
 
 
 def cmd_arms(args) -> int:
-    ctx = AgentContext.open(args.config, profile=args.profile)
+    ctx = open_measurement(args.config, profile=args.profile,
+                           isolate=True,
+                           why="a measured arm must not read another's work")
     suite = load_suite(args.suite, ctx)
     out = {}
 
@@ -203,7 +206,9 @@ def cmd_paired(args) -> int:
         print(f"REFUSING TO START.\n{e}")
         return 2
 
-    ctx = AgentContext.open(args.config, profile=args.profile)
+    ctx = open_measurement(args.config, profile=args.profile,
+                           isolate=True,
+                           why="a measured arm must not read another's work")
 
     # The deputy comes OUT, exactly as it does for the noise floor. Two
     # reasons, and the first is fatal to the comparison:

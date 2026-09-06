@@ -96,8 +96,15 @@ def _args(skill_id, split=None, resume=False):
 
 
 def _wire(mod, monkeypatch, ctx, suite, on_trial):
-    monkeypatch.setattr(mod, "AgentContext", type("A", (), {
-        "open": staticmethod(lambda c, profile=None: ctx)}))
+    # The seam is `open_measurement`, not `AgentContext`, since D18: a
+    # measurement path may no longer open a context for itself. Patching here
+    # also keeps the isolation declaration in the path under test — the fake
+    # receives `isolate` and would fail loudly if run.py stopped passing it.
+    def fake_open(config, *, profile=None, isolate, why=""):
+        ctx.config.isolate_retrieval = isolate
+        return ctx
+
+    monkeypatch.setattr(mod, "open_measurement", fake_open)
     monkeypatch.setattr(mod, "load_suite", lambda spec, ctx=None: suite)
     monkeypatch.setattr(mod, "run_paired_trial", on_trial)
 

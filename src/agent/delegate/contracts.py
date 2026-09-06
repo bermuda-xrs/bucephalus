@@ -15,6 +15,7 @@ import json
 from dataclasses import dataclass, field
 
 from ..kernel.types import Budget, TaskContract
+from ..security.exposure import child_policy
 
 
 @dataclass
@@ -28,8 +29,59 @@ class SubtaskPlan:
     artifact_scope: list[str] = field(default_factory=list)
 
 
+def scope_widens(parent_scope: list[str], child_scope: list[str]) -> list[str]:
+    """Entries the child asked for that the parent does not already cover.
+
+    Path containment, not string equality: a parent scoped to `work` covers a
+    child asking for `work/sub`, and does not cover `work_other` — which a
+    prefix comparison on strings would wrongly allow.
+    """
+    import os
+    from pathlib import Path
+
+    if not parent_scope:
+        return []
+    roots = [Path(os.path.abspath(x)) for x in parent_scope]
+    out = []
+    for entry in child_scope:
+        p = Path(os.path.abspath(entry))
+        inside = False
+        for r in roots:
+            try:
+                p.relative_to(r)
+                inside = True
+                break
+            except ValueError:
+                if p == r:
+                    inside = True
+                    break
+        if not inside:
+            out.append(entry)
+    return out
+
+
 def may_delegate(ctx, task, subtask_plan: SubtaskPlan) -> tuple[bool, str]:
-    """All five. Fail any one, do it inline. Never split tightly-coupled work."""
+    """All five, plus the two structural refusals B3 adds.
+
+    The five original gates ask whether delegating is WORTH it. The two below
+    ask whether it is ALLOWED, and they come first because a refusal on
+    authority should not depend on whether the estimate happened to clear a
+    token threshold.
+    """
+    # LEAVES CANNOT SPAWN. Checked from the task tree rather than from a flag,
+    # so it cannot be bypassed by constructing a context differently: if this
+    # task has a parent, it is already a child.
+    if getattr(task, "parent_id", None):
+        return False, ("a delegated child may not delegate further; "
+                       "unbounded depth is how a coordination failure becomes "
+                       "a fork bomb")
+    # ARTIFACT SCOPE IS INHERITED, NEVER WIDENED.
+    widened = scope_widens(task.contract.artifact_scope,
+                           subtask_plan.artifact_scope or [])
+    if widened:
+        return False, (f"child asked for artifact_scope {widened} which the "
+                       f"parent's {task.contract.artifact_scope} does not "
+                       "cover; a child may narrow its scope, never widen it")
     if subtask_plan.estimated_irrelevant_tokens < ctx.config.limits.delegation_min_isolated_tokens:
         return False, "insufficient isolation benefit"
     if subtask_plan.output_schema is None:
@@ -88,10 +140,22 @@ def run_delegated(ctx, parent_task, subtask_plan: SubtaskPlan) -> DelegationResu
     child = create_task(
         ctx.conn, ctx.log, contract, subtask_plan.budget, parent_id=parent_task.id
     )
+
+    # B3. The child's authority is the parent's, narrowed. Union of denials,
+    # so a chain of delegations can only ever get smaller.
+    #
+    # Isolation needs no separate inheritance: `visible_tasks` scopes to the
+    # TASK TREE, and a child shares its parent's root by construction, so it
+    # sees exactly what the parent sees and cannot widen it by existing.
+    # Asserted in tests/test_tool_exposure.py rather than assumed.
+    policy = child_policy(ctx.tool_policy(parent_task.id))
+    ctx.restrict_tools(child.id, policy)
+
     ctx.log.append(
         parent_task.id,
         "delegation.opened",
-        {"child_task_id": child.id, "goal": subtask_plan.goal[:200]},
+        {"child_task_id": child.id, "goal": subtask_plan.goal[:200],
+         "child_policy": policy.describe()},
     )
 
     result = run_task(ctx, child.id)

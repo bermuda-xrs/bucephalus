@@ -224,13 +224,16 @@ def test_paired_enforces_the_declared_profile(monkeypatch, capsys, tmp_path):
     mod = _load_bench_run()
     seen: dict = {}
 
-    class FakeAgentContext:
-        @staticmethod
-        def open(config, profile=None):
-            seen["config"], seen["profile"] = config, profile
-            return _FakeCtx(profile or "mixed")
+    # Since D18 the seam is `open_measurement`: a measurement path may no
+    # longer open a context for itself. The property under test - that the
+    # DECLARED profile reaches the context - is unchanged, and `isolate` is
+    # captured too so this fails loudly if run.py ever stops declaring it.
+    def fake_open(config, *, profile=None, isolate, why=""):
+        seen["config"], seen["profile"] = config, profile
+        seen["isolate"] = isolate
+        return _FakeCtx(profile or "mixed")
 
-    monkeypatch.setattr(mod, "AgentContext", FakeAgentContext)
+    monkeypatch.setattr(mod, "open_measurement", fake_open)
     monkeypatch.setattr(mod, "load_suite", lambda spec, ctx=None: _fake_specs())
     monkeypatch.setattr(mod, "run_paired_trial", lambda *a, **k: None)
     monkeypatch.setattr(mod, "evaluate_skill",
@@ -257,12 +260,9 @@ def test_paired_split_filter_keeps_the_contamination_boundary(monkeypatch, capsy
     mod = _load_bench_run()
     ran: list[str] = []
 
-    class FakeAgentContext:
-        @staticmethod
-        def open(config, profile=None):
-            return _FakeCtx(profile or "mixed")
-
-    monkeypatch.setattr(mod, "AgentContext", FakeAgentContext)
+    monkeypatch.setattr(
+        mod, "open_measurement",
+        lambda config, *, profile=None, isolate, why="": _FakeCtx(profile or "mixed"))
     monkeypatch.setattr(mod, "load_suite", lambda spec, ctx=None: _fake_specs())
     monkeypatch.setattr(mod, "run_paired_trial",
                         lambda ctx, sid, spec, seed=None: ran.append(spec.key))
