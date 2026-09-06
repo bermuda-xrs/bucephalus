@@ -244,7 +244,7 @@ def create_app(ctx: AgentContext) -> FastAPI:
     def get_alerts() -> dict:
         """Integrity breaks and monitor findings. NOT approvals. Never merged."""
         return {
-            "integrity": verify_all(ctx.conn, ctx.log, ctx.anchor),
+            "integrity": verify_all(ctx.conn, ctx.log, ctx.anchor, ctx.memory),
             "monitor": monitor_flags(ctx.conn),
         }
 

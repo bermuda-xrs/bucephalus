@@ -142,9 +142,45 @@ def checkpoint(log: EventLog, anchor: Anchor, task_id: str) -> None:
         anchor.record(task_id, head)
 
 
-def verify_all(conn: sqlite3.Connection, log: EventLog, anchor: Anchor) -> list[dict]:
+def verify_memory(store) -> dict | None:
+    """Tier 1 against its last blessed fingerprint.
+
+    CRITICAL when it disagrees, and the severity is the point of D17 having
+    been cleared first: this alert arrives into an empty channel instead of
+    as the twentieth entry in a list nobody reads. Tier 1 is in the prefix of
+    every future session, so an unaccounted change to it is an unaccounted
+    change to what the agent IS.
+    """
+    from ..memory.store import INTACT, TAMPERED, check_fingerprint
+
+    state = check_fingerprint(store)
+    if state == INTACT:
+        return None
+    detail = (
+        "tier 1 memory does not match its last blessed fingerprint — the "
+        "files were changed outside memory_write, memory_consolidate or "
+        "`alpha memory`. Tier 1 is REFUSED on every task until this is "
+        "resolved; tasks still run, without persistent memory. Inspect with "
+        "`alpha memory`, then `alpha memory --accept` to bless the current "
+        "state or `--forget` to remove entries."
+    ) if state == TAMPERED else (
+        "tier 1 memory has content but no blessed fingerprint. Either it "
+        "predates the anchor record or it was placed there by something that "
+        "did not go through the write path; both are handled as tampering, "
+        "because text that cannot be accounted for still goes into every "
+        "future prompt. `alpha memory --accept` to bless it."
+    )
+    return {"task_id": "__memory__", "severity": "critical", "detail": detail}
+
+
+def verify_all(conn: sqlite3.Connection, log: EventLog, anchor: Anchor,
+               memory=None) -> list[dict]:
     """Sweep every task. Used by `alpha verify` and the /alerts endpoint."""
     findings = []
+    if memory is not None:
+        found = verify_memory(memory)
+        if found:
+            findings.append(found)
     for (task_id,) in conn.execute("SELECT id FROM tasks").fetchall():
         ok, bad = log.verify(task_id)
         anchored = anchor.latest(task_id)

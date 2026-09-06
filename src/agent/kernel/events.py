@@ -70,6 +70,10 @@ EVENT_TYPES = frozenset(
         # precisely the line an attacker would write.
         "memory.written",
         "memory.consolidated",
+        # Tier 1 did not match its last blessed fingerprint. CRITICAL: this
+        # text goes into every future prompt, so an unaccounted change to it
+        # is an unaccounted change to what the agent is.
+        "memory.tampered",
         "human.approved",
         "human.denied",
         "human.steered",

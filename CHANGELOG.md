@@ -125,6 +125,66 @@ replaced by stronger ones rather than deleted:
   none of them from today's runs, consistent with D10 — a manually stopped
   run never checkpoints. Logged, not chased; the freeze holds.
 
+## Memory tampering: specified behaviour — 2026-09-07
+
+The Phase 3 report said the fingerprint disagreement was "the signal" without
+saying what the system does about it. Now specified, implemented and injected.
+
+**Refuse to load tier 1, continue without it, raise CRITICAL.** Not a halt,
+and the distinction carries the design: a chain break destroys the ability to
+VERIFY, so anything concluded from the run is unfounded and stopping is the
+only honest response; memory tampering destroys the trustworthiness of ONE
+INPUT and the run stays fully auditable without it. Dropping a corrupted
+input and carrying on is what this system already does with a corrupted
+observation. Continuing with the content is the attack succeeding; halting
+turns a text file anyone can edit into a denial of service.
+
+Tier 1 is refused WHOLE. A file that cannot be accounted for is not partially
+trusted.
+
+CRITICAL is affordable only because D17 cleared that channel first — this
+alert arrives into an empty list rather than as the twentieth entry in one
+nobody reads.
+
+**A design bug the cross-session test caught.** The blessed fingerprint first
+lived in the run's ANCHOR. But the anchor path is per config and memory lives
+in the shared user data dir, so running `config.local.yaml` and then
+`config.openai.yaml` would have had each flagging the other's perfectly good
+memory as tampered — a permanent false critical produced by ordinary use,
+which is the D17 disease returning within a day of curing it. The blessing
+now lives beside the memory it describes.
+
+**What the fingerprint actually detects, stated honestly:** unaccounted
+CHANGE, not authenticated tampering. Anyone with write access to the memory
+directory can rewrite the blessing too, and at that point no local file
+helps. It catches the realistic set — a path other than the write path, a
+buggy tool, a sync conflict, an editor. The authenticated record is the hash
+chain: every `memory.written` event carries the fingerprint at write time and
+cannot be altered without breaking the chain.
+
+`alpha memory --accept` blesses a deliberate hand edit. Without it the only
+options would be a permanent critical or never touching your own files.
+
+### C33 amended
+
+"Empty rather than absent" preserves the prefix's SHAPE, not its size or
+content — an empty `<memory>` block and a populated one differ in bytes like
+any other text, and the shipped system's prefix at session 50 resembles the
+benchmark's at no session at all. Shape is still the right thing to preserve,
+because shape is what the harness-tax finding implicates, but the earlier
+wording implied byte-level equivalence and did not have it.
+
+This yields a prediction, logged as FINDINGS 8.1 rather than built: if prefix
+CONTENT moves pass rates and not merely prefix STRUCTURE, a session with
+populated tier-1 memory should differ measurably from one with an empty block
+on the same task. Two arms, one suite, no new machinery.
+
+FINDINGS 1.17 records the framing that settled the queue-versus-refuse
+question: the tiers do not differ in whether content survives, they differ in
+whether it survives as something the model is told to believe.
+
+475 tests.
+
 ## Phase 3 (A1) — persistent memory — 2026-09-06
 
 Three tiers: `USER.md` + `MEMORY.md` in the user data dir, always in the

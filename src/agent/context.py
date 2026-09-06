@@ -141,11 +141,34 @@ class AgentContext:
         task with its own start.
         """
         if task_id not in self._memory_frozen:
-            from .memory.store import tier1_snapshot
+            from .memory.store import INTACT, check_fingerprint, tier1_snapshot
 
+            isolated = bool(getattr(self.config, "isolate_retrieval", False))
+            state = check_fingerprint(self.memory)
+            if state != INTACT:
+                # REFUSE TO LOAD, CONTINUE WITHOUT IT.
+                #
+                # Not a halt, and the distinction is the point. A chain break
+                # destroys the ability to VERIFY, so anything concluded from
+                # the run is unfounded and stopping is the only honest move.
+                # Memory tampering destroys the trustworthiness of ONE INPUT,
+                # and the run stays fully auditable without it. Dropping a
+                # corrupted input and carrying on is what this system already
+                # does with a corrupted observation.
+                #
+                # Continuing WITH the content is the attack succeeding, and
+                # halting makes a text file anyone can edit into a denial of
+                # service. Degraded-but-safe is the third option and it is the
+                # right one.
+                self.log.append(task_id, "memory.tampered",
+                                {"state": state,
+                                 "recorded_present": (self.memory.root / ".fingerprint").exists(),
+                                 "current": self.memory.fingerprint(),
+                                 "action": "tier 1 refused; task continues "
+                                           "without persistent memory"})
+                isolated = True
             self._memory_frozen[task_id] = tier1_snapshot(
-                self.memory,
-                isolated=bool(getattr(self.config, "isolate_retrieval", False)),
+                self.memory, isolated=isolated,
             )
         return self._memory_frozen[task_id]
 

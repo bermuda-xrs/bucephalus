@@ -231,7 +231,7 @@ def cmd_approvals(ctx, args, console) -> int:
 def cmd_alerts(ctx, args, console) -> int:
     """Integrity alerts render differently from approvals. On purpose."""
     theme = load_theme(ctx)
-    findings = verify_all(ctx.conn, ctx.log, ctx.anchor)
+    findings = verify_all(ctx.conn, ctx.log, ctx.anchor, ctx.memory)
     if findings:
         body = "\n".join(f"{f['task_id'][:12]}: {f['detail']}" for f in findings)
         console.print(
@@ -280,10 +280,28 @@ def cmd_memory(ctx, args, console) -> int:
                 from .memory.store import _render
                 ctx.memory.path(tier).write_text(_render(kept), encoding="utf-8")
                 removed += [f"{tier}: {e.text}" for e in gone]
+        from .memory.store import record_fingerprint
+
+        record_fingerprint(ctx.memory)
         for line in removed:
             console.print(f"[red]forgotten[/red] {line}")
         if not removed:
             console.print("nothing matched")
+        return 0
+
+    if args.accept:
+        # Blessing a hand edit is a deliberate, visible act. Without it the
+        # only way to legitimately edit these files by hand would be to leave
+        # a permanent critical standing - which is how a real alert becomes
+        # background noise, the exact failure D17 was.
+        from .memory.store import check_fingerprint, record_fingerprint
+
+        before = check_fingerprint(ctx.memory)
+        for tier in sorted(MemoryStore.FILES):
+            for e in ctx.memory.entries(tier):
+                console.print(f"  [dim][{e.taint.value}][/dim] {e.text}")
+        fp = record_fingerprint(ctx.memory)
+        console.print(f"[green]accepted[/green] (was {before}) {fp[:16]}")
         return 0
 
     if args.consolidate:
@@ -568,6 +586,8 @@ def build_parser() -> argparse.ArgumentParser:
     mem = sub.add_parser("memory", help="show or correct persistent memory")
     mem.add_argument("--forget", help="remove entries containing this text")
     mem.add_argument("--consolidate", action="store_true")
+    mem.add_argument("--accept", action="store_true",
+                     help="bless the files as they are now (after a hand edit)")
     mem.set_defaults(fn=cmd_memory)
 
     sr = sub.add_parser("search", help="search goals and answers from earlier runs")

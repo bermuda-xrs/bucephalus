@@ -751,3 +751,73 @@ Recorded as an evidenced correction to the spec's laptop-tier assumption
 five tasks carried wall-outlier flags, and four of those are `budget_exhausted`
 — failures decided by a clock the instrument distrusted. And the dollar axis
 is `n/a`: every call cost $0.0000 under `--profile local`.
+
+---
+
+### 1.17 Memory tiers differ in what content is BELIEVED, not in what survives
+
+Phase 3 refuses untrusted-derived content from tier 1 rather than queueing it
+for approval, which was the brief. The reasoning generalises past this one
+decision and is worth stating on its own.
+
+Tier 1 is rendered into the stable prefix. Tier 2 is retrieved on demand and
+comes back stamped `UNTRUSTED`. A fact learned from a web page can live in
+either. So the tiers **do not differ in whether the content survives — they
+differ in whether it survives as something the model is told to believe.**
+
+That reframing is what settles the queue-versus-refuse question. Queueing
+sounds like the moderate option and is not: it puts a human one click from
+promoting attacker-controlled text into the prefix of every future session,
+judged on one line of a tool-call preview, which is precisely the surface a
+good injection is written to survive. Refusing costs nothing, because the
+content is still available through the tier that labels it.
+
+The same test applies to any future store: not "can this content be kept?"
+but "if it is kept, is it data or is it voice?"
+
+---
+
+## 8. Open research questions
+
+Recorded so they are not re-derived, and kept separate from findings because
+nothing here has been measured.
+
+### 8.1 Does prefix CONTENT move pass rates, or only prefix STRUCTURE?
+
+The harness-tax result (1.6) shows that scaffolding structure moves pass
+rates: R0 through R5 differ in how the task is framed, and the spread was
+eight points. What it does not separate is whether the *content* carried in
+the prefix matters comparably.
+
+The question became concrete in Phase 3. A benchmark run gets an empty
+tier-1 memory block while a real session at week ten carries a populated one,
+and both have the same prefix SHAPE. If content matters as much as structure,
+the two are not the same instrument, and every measured number is a number
+about the empty-memory case only.
+
+**The experiment:** the same task, twice, identical in every respect except
+that one arm's tier 1 holds plausible accumulated facts irrelevant to the
+task and the other's is empty. If pass rates differ, prefix content is a
+measurement variable and every published number needs the memory state
+attached to it, the way the profile already is.
+
+**Why it is worth doing rather than assuming:** the cheap assumption is that
+irrelevant context is harmless. This project has already found one case where
+the opposite held — the harness tax was 8pp of pure framing — and one where
+the intuitive answer was backwards (answer position, not response length,
+1.6). It is also cheap: two arms, one suite, no new machinery, and the
+memory state is already recorded per run.
+
+**Blocked on:** nothing technical. It is a Phase 9 candidate because
+compression is when tier 1 is rebuilt and the boundary is already being
+instrumented.
+
+### 8.2 Is `--profile local` measuring a different question than the spec asks?
+
+Adjacent to 8.1 and recorded for the same reason. The measured system now
+differs from the shipped one in at least three named ways: `auto_review` is
+off, tier-1 memory is empty, and retrieval is scoped to the attempt. Each is
+individually justified and each is recorded in the run record. What has never
+been measured is whether they interact — whether a system with all three
+disabled is meaningfully easier or harder than the one a user runs.
+

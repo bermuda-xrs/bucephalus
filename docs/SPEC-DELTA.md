@@ -667,12 +667,24 @@ otherwise be in the skill arm's prompt before the model does anything at all
 across sessions, so a single run would poison every later run of the same
 suite.
 
-**Why the snapshot is empty rather than absent.** The prefix keeps its shape:
-same sections, same tool manual, same byte layout. Removing the memory block
-would change the prefix between measured and shipped, and this project
-measured that prefix structure moves pass rates by eight points across
-R0–R5 — so the cheap-looking option perturbs exactly the variable under
-study.
+**Why the snapshot is empty rather than absent, stated precisely.** The
+prefix keeps its SHAPE — the same sections in the same order, the same tool
+manual. It does **not** keep its size or its content: an empty `<memory>`
+block and a populated one differ in bytes like any other text, and the
+shipped system's prefix at session 50 resembles the benchmark's at no
+session at all.
+
+So the claim is about structure, not byte-level equivalence, and the earlier
+wording implied more than it should have. Shape is the right thing to
+preserve because shape is what the harness-tax finding implicates — R0 to R5
+differ in scaffolding structure, not in how many characters of user content
+they carry. But "empty" narrows the gap; it does not close it.
+
+**A prediction this makes, worth checking in Phase 9.** If prefix content
+genuinely moves pass rates and not merely prefix structure, then a session
+with populated tier-1 memory should differ measurably from one with an empty
+block on the same task. Recorded as a research question in
+`docs/FINDINGS.md`, not work for now.
 
 **The honest statement of the gap:** this widens the "measured system is not
 the shipped system" list that already contains `auto_review`. It is recorded

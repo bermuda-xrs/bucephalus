@@ -175,6 +175,9 @@ class MemoryStore:
         exactly the shape an attacker would choose.
         """
         h = hashlib.sha256()
+        # Only the memory FILES. The blessing sidecar is deliberately not
+        # hashed: including it would mean writing the blessing changes the
+        # thing it blesses, and no fingerprint could ever match.
         for tier in sorted(self.FILES):
             h.update(tier.encode())
             h.update(b"\0")
@@ -185,6 +188,62 @@ class MemoryStore:
     def snapshot(self) -> dict:
         """What goes into the prefix. Taken once, at task start."""
         return {tier: self.read_raw(tier).rstrip() for tier in sorted(self.FILES)}
+
+
+# Tier 1's last known-good fingerprint, beside the memory it describes.
+#
+# NOT in the run's anchor, which was the first attempt and was wrong: the
+# anchor path is per config, memory lives in the user data dir and is shared,
+# so running config.local.yaml and then config.openai.yaml would have each
+# flagged the other's perfectly good memory as tampered. Caught by the
+# cross-session test, which is what that test is for.
+#
+# WHAT THIS DETECTS, STATED HONESTLY. Unaccounted CHANGE, not authenticated
+# tampering. Anyone with write access to the memory directory can edit this
+# file too, so it is no defence against an attacker already inside the user
+# data dir — at that point no local file helps. What it does catch is the
+# realistic set: the agent reaching the files by some path other than the
+# write path, a buggy tool, a sync conflict, an editor.
+#
+# The AUTHENTICATED record is the hash chain: every `memory.written` event
+# carries the fingerprint at the time of the write and cannot be rewritten
+# without breaking the chain. This file is the cheap startup check; the chain
+# is the evidence.
+BLESSED_FILE = ".fingerprint"
+
+INTACT = "intact"
+TAMPERED = "tampered"
+UNRECORDED = "unrecorded"
+
+
+def record_fingerprint(store: MemoryStore) -> str:
+    """Bless the current state. Called after every AUTHORISED mutation.
+
+    Authorised means `memory_write`, `memory_consolidate`, and
+    `alpha memory --forget/--accept`. A change that does not come through one
+    of those leaves the recorded hash behind, which is the whole detection.
+    """
+    fp = store.fingerprint()
+    (store.root / BLESSED_FILE).write_text(fp, encoding="utf-8")
+    return fp
+
+
+def check_fingerprint(store: MemoryStore) -> str:
+    """INTACT, TAMPERED, or UNRECORDED.
+
+    UNRECORDED with EMPTY files is the ordinary first-run case and is fine.
+    UNRECORDED with content present is not: memory that exists and was never
+    blessed either predates this check or was placed there by something that
+    did not go through the write path. Both are treated as tampering, because
+    "I cannot account for this text" is the same operational fact as "this
+    text was changed" — and either way it goes into every future prompt.
+    """
+    p = store.root / BLESSED_FILE
+    recorded = p.read_text(encoding="utf-8").strip() if p.exists() else None
+    if not recorded:
+        empty = all(not store.read_raw(t).strip() for t in store.FILES)
+        return INTACT if empty else UNRECORDED
+    return INTACT if recorded == store.fingerprint() else TAMPERED
 
 
 def tier1_snapshot(store: MemoryStore | None, isolated: bool) -> dict:

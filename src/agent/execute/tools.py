@@ -202,6 +202,9 @@ def tool_memory_write(ctx, task, text: str, tier: str = "memory") -> dict:
     except (MemoryTooLarge, ValueError) as e:
         return {"ok": False, "error": str(e)}
 
+    from ..memory.store import record_fingerprint
+
+    record_fingerprint(ctx.memory)
     if task is not None:
         ctx.log.append(task.id, "memory.written",
                        {"tier": tier, "taint": taint.value,
@@ -228,6 +231,9 @@ def tool_memory_consolidate(ctx, task, tier: str = "memory") -> dict:
         return {"ok": False, "error": "persistent memory is disabled for "
                                       "measurement runs"}
     out = ctx.memory.consolidate(tier)
+    from ..memory.store import record_fingerprint
+
+    record_fingerprint(ctx.memory)
     if task is not None:
         ctx.log.append(task.id, "memory.consolidated",
                        {"tier": tier, "dropped": len(out["dropped"]),
