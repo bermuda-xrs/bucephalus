@@ -163,3 +163,29 @@ for rather than substituting another task's.
 `order_seed` is part of the run signature, so a ledger written under one
 randomised order cannot be continued under another.
 *Caught by:* `tests/test_noise_durability.py`.
+
+## Added 2026-09-06 (iteration two, phase 1 + corrections)
+
+**35. A backend's adapter type never decides behaviour.**
+Branches ask about a declared CAPABILITY — `needs_action_envelope`,
+`reports_prompt_cache`, `reaches_a_remote_provider` — never about which class
+implements the backend. Two adapters can reach the same server running the
+same weights, so a class-name test flips while nothing about the model
+changes, and the run does not say so.
+*Caught by:* `tests/test_no_adapter_identity_branches.py`, which AST-walks
+`src/` and `bench/` and allows only the registry and one documented
+capability table.
+
+**36. An unmeasured quantity is null, never zero.**
+`cache_hit_ratio` is `None` when no backend on the task reports cache
+accounting. No alarm fires on `None`, no median includes it, and no historical
+run is back-filled with a number nobody measured.
+*Caught by:* `tests/test_cache_ratio_is_measured_or_null.py`.
+
+**37. A monitored invariant must be reachable on the hardware it runs on.**
+`cache_alarm` is not gated on spending money. A prefix mutation on a free
+local backend costs wall clock, which is this project's binding budget; gating
+the alarm on the cost axis that is structurally zero here made it dead on the
+only machine it has ever run on.
+*Caught by:* `test_the_alarm_is_no_longer_gated_on_spending_money`.
+

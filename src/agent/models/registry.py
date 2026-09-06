@@ -63,3 +63,13 @@ def cost_vector(backend: Backend, probe: bool = False) -> CostVector:
 
 def cloud_backend_names(config: Config) -> set[str]:
     return {n for n, c in config.backends.items() if c.trust_tier == "cloud"}
+
+
+def cache_reporting_backend_names(config: Config) -> set[str]:
+    """Backends that report prompt-cache accounting.
+
+    A declared capability (`reports_prompt_cache`), never inferred from the
+    adapter class. The same server behind two protocols reports it on one and
+    not the other, so the adapter type is the wrong question.
+    """
+    return {n for n, c in config.backends.items() if c.reports_prompt_cache}

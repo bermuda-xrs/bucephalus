@@ -25,7 +25,8 @@ from .kernel.integrity import Anchor
 from .kernel.tasks import spend
 from .kernel.types import ModelResponse, Taint
 from .ledger.entries import LedgerEntry
-from .models.registry import build_backends, cloud_backend_names
+from .models.registry import (build_backends, cache_reporting_backend_names,
+                              cloud_backend_names)
 from .router.cascade import Router
 from .security.taint import TaintTracker
 from .skills.store import SkillStore
@@ -48,7 +49,8 @@ class AgentContext:
         self.tools = tools or default_registry()
         self.skills = SkillStore(self.conn, config.resolve(config.skills_path))
         self.userdata = UserStore(self.conn)
-        self.telemetry = Telemetry(self.conn, cloud_backend_names(config))
+        self.telemetry = Telemetry(self.conn, cloud_backend_names(config),
+                                   cache_reporting_backend_names(config))
         self.mesh = VerificationMesh(self)
         self.router = Router(self)
 

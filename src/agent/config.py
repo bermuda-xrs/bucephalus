@@ -34,6 +34,20 @@ class BackendConfig(BaseModel):
     # which is loud, where a silent fallback would quietly change what was
     # asked for.
     max_tokens_field: Literal["max_tokens", "max_completion_tokens"] = "max_tokens"
+    # Does this backend report prompt-cache accounting at all?
+    #
+    # A declared capability, because the distinction it carries is one this
+    # project has already been burned by: `cache_hit_ratio` of 0.0 means
+    # "nothing was cached" on a backend that reports the number, and
+    # "unmeasured" on one that does not. Averaging those together, or firing
+    # an alarm on the second, is the same error as counting a machine fault
+    # as a task failure.
+    #
+    # Ollama's native /api/chat reports nothing; its /v1 shim reports
+    # `prompt_tokens_details.cached_tokens`; Anthropic reports
+    # `cache_read_input_tokens`. MEASURED 2026-09-06 for the first two —
+    # docs/evidence/phase1-openai-parity.json.
+    reports_prompt_cache: bool = False
     input_cost_per_mtok: float = 0.0
     output_cost_per_mtok: float = 0.0
     cache_read_per_mtok: float = 0.0

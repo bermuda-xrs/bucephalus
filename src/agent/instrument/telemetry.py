@@ -63,7 +63,11 @@ class TaskMetrics:
     paid_tokens: int = 0
     free_tokens: int = 0
     cost_usd: float = 0.0
-    cache_hit_ratio: float = 0.0
+    # None means UNMEASURED - no backend on this task reports cache
+    # accounting - and is not the same as 0.0, which means the backend
+    # reported that nothing was cached. A chart that averages them
+    # together is inventing data.
+    cache_hit_ratio: float | None = None
     wall_ms: int = 0
     verifier_pass_rate: float = 0.0
     escalation_rate: float = 0.0
@@ -77,7 +81,8 @@ class TaskMetrics:
             "paid_tokens": self.paid_tokens,
             "free_tokens": self.free_tokens,
             "cost_usd": round(self.cost_usd, 6),
-            "cache_hit_ratio": round(self.cache_hit_ratio, 4),
+            "cache_hit_ratio": (None if self.cache_hit_ratio is None
+                                else round(self.cache_hit_ratio, 4)),
             "wall_ms": self.wall_ms,
             "verifier_pass_rate": round(self.verifier_pass_rate, 4),
             "escalation_rate": round(self.escalation_rate, 4),
@@ -94,9 +99,15 @@ class Telemetry:
     # something is mutating the stable prefix and costs just went up ~10x.
     CACHE_ALARM_THRESHOLD = 0.30
 
-    def __init__(self, conn: sqlite3.Connection, cloud_backends: set[str]):
+    def __init__(self, conn: sqlite3.Connection, cloud_backends: set[str],
+                 cache_reporting_backends: set[str] | None = None):
         self.conn = conn
         self.cloud_backends = cloud_backends
+        # Which backends report prompt-cache accounting. Declared in
+        # config, never sniffed from the adapter class - see
+        # BackendConfig.reports_prompt_cache. Empty means nothing on this
+        # config can report it, so the ratio stays None.
+        self.cache_reporting = cache_reporting_backends or set()
 
     def metrics(self, task_id: str) -> TaskMetrics:
         m = TaskMetrics(task_id=task_id)
@@ -109,6 +120,7 @@ class Telemetry:
         cache_read = 0
         raw_input = 0
         escalated = 0
+        measurable = False
         for backend, ti, to, cr, cw, cost, wall, esc in rows:
             total = ti + to + cr + cw
             if backend in self.cloud_backends:
@@ -117,12 +129,18 @@ class Telemetry:
                 m.free_tokens += total
             m.cost_usd += cost
             m.wall_ms += wall
-            cache_read += cr
-            raw_input += ti
             escalated += esc
+            # Only calls on a backend that REPORTS caching enter the ratio.
+            # Mixing in calls from one that reports nothing would drag the
+            # ratio toward zero and read as a prefix mutation - an alarm
+            # firing on the absence of a measurement.
+            if backend in self.cache_reporting:
+                measurable = True
+                cache_read += cr
+                raw_input += ti
         m.n_calls = len(rows)
         denom = cache_read + raw_input
-        m.cache_hit_ratio = (cache_read / denom) if denom else 0.0
+        m.cache_hit_ratio = (cache_read / denom) if (measurable and denom) else None
         m.escalation_rate = (escalated / len(rows)) if rows else 0.0
 
         attempted = self._count_events(task_id, "verify.attempted")
@@ -138,8 +156,33 @@ class Telemetry:
         ).fetchone()[0]
 
     def cache_alarm(self, task_id: str) -> str | None:
+        """The monitored invariant, which until now could not fire.
+
+        TWO independent reasons it never did, and fixing either alone leaves
+        it dead:
+
+          1. No local backend reported cache accounting, so the ratio was a
+             constant 0.0 — indistinguishable from a total prefix mutation.
+             Phase 1 fixed that half: `/v1` reports it. The ratio is now None
+             when unmeasured, and an alarm cannot fire on None.
+          2. `paid_tokens > 0`, removed here. Under `--profile local` nothing
+             costs money, so that gate was never true and the alarm was
+             unreachable on every local run this project has ever done.
+
+        Reason 2 is worth being precise about, because the gate was not
+        arbitrary: the spec justified this alarm by COST — a prefix mutation
+        raises spend ~10x. On this hardware the same mutation is paid in
+        wall clock instead, re-processing a prompt the server had already
+        cached, and wall clock is the budget that actually binds. Gating a
+        correctness alarm on the axis that happens to be zero here meant the
+        one machine it ran on was the one machine it could not protect.
+
+        Widening when an alarm fires is a strengthening, and the None guard
+        is what keeps it from becoming noise.
+        """
         m = self.metrics(task_id)
-        if m.n_calls >= 3 and m.paid_tokens > 0 and m.cache_hit_ratio < self.CACHE_ALARM_THRESHOLD:
+        if (m.n_calls >= 3 and m.cache_hit_ratio is not None
+                and m.cache_hit_ratio < self.CACHE_ALARM_THRESHOLD):
             return (
                 f"cache_hit_ratio={m.cache_hit_ratio:.2f} below "
                 f"{self.CACHE_ALARM_THRESHOLD}: something is mutating the stable prefix"

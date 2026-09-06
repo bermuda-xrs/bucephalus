@@ -243,7 +243,7 @@ been evaluated at all.
 
 | Mechanism | Enforcement point | Enforced? | Effect measured? |
 |---|---|---|---|
-| Prefix stability | `PrefixGuard.check()`, constructed at `execute/loop.py:200`, raises `PrefixMutationError` on drift | **yes**, raises | **no** — and unmeasurable on Ollama, which has no cache accounting |
+| Prefix stability | `PrefixGuard.check()`, constructed at `execute/loop.py:200`, raises `PrefixMutationError` on drift | **yes**, raises | **now measurable, not yet measured at suite scale** — corrected 2026-09-06. This cell previously read "unmeasurable on Ollama, which has no cache accounting". That was WRONG: the accounting exists and the native protocol discards it. Through `/v1`, the same server on the same weights reported `cached_tokens` **5 then 205** across two identical calls on a 206-token prompt it had provably never seen, against **0 and 0** on `/api/chat`. `docs/evidence/phase1-openai-parity.json`, SPEC-DELTA C28 |
 | Deletion-based compaction | `compact()` at `execute/loop.py:249` and `context.py:290` | **yes** | **no** — no before/after token count is recorded per compaction |
 | Semantic cache | `cached_op()` at `execute/loop.py:594` | **yes** | **no** — hit rate is recorded but no token saving is attributed |
 | Code-as-action | inline in `execute/loop.py`; `run_code` batches tool calls into one program | **yes** | **no** — never compared against a one-tool-call-per-turn arm |
@@ -419,7 +419,7 @@ suites, or models. The format is a claim, not a demonstrated property.
 
 | Goal / component | Why |
 |---|---|
-| **G1 prefix-cache benefit** | Ollama has no prompt-cache accounting. `cache_read_tokens` is 0 across all 1,179 real calls and is populated *only* by the mock backend. The ratio is **unknown**, not zero |
+| ~~**G1 prefix-cache benefit**~~ | **MOVED OUT OF THIS LIST, 2026-09-06.** The reason given here — "Ollama has no prompt-cache accounting" — was false. Ollama has it; its *native* protocol does not report it. The OpenAI-compatible endpoint on the same server does, so the ratio is measurable on the local tier under `config.openai.yaml`. The historical statement stands for the runs it describes: `cache_read_tokens` is 0 across all 1,179 real calls, and those runs are recorded with `cache_hit_ratio: null` — **unmeasured, which is not zero** — rather than being back-filled. Still unmeasured *at suite scale*: no pass has yet run through the reporting adapter |
 | **G1 paid-token reduction** | No paid backend has ever been called. Requires an API key, a live Anthropic call, calibration, and ablation switches that do not exist |
 | **G1 routing / escalation** | One configured tier. The 8B alone is 7.64 GB resident against 3.6–6.4 GB free, so two models cannot be co-resident; a "routed" run would measure model swapping |
 | **8B at suite scale** | Does not fit. 7.64 GB resident at the harness's `num_ctx: 16384`. Measured, and recorded as SPEC-DELTA C20 |

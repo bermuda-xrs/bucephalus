@@ -125,6 +125,98 @@ replaced by stronger ones rather than deleted:
   none of them from today's runs, consistent with D10 — a manually stopped
   run never checkpoints. Logged, not chased; the freeze holds.
 
+## Corrections to phase 1 — 2026-09-06
+
+Three corrections and two new recording requirements, all arising from what
+phase 1 measured rather than from new scope.
+
+### The prefix-cache alarm can now fire, and had two independent reasons not to
+
+`Telemetry.cache_alarm` is a monitored invariant from M3.2 that has never
+fired once. Both reasons are now fixed and either alone would have left it
+dead:
+
+* No local backend reported cache accounting, so the ratio was a constant
+  0.0. Phase 1 measured that the SAME SERVER reports it over `/v1`.
+* It was gated on `paid_tokens > 0`, which is never true under
+  `--profile local`. The one machine this project runs on was the one machine
+  the alarm could not protect. The gate encoded the spec's COST axis; on this
+  hardware a prefix mutation is paid in wall clock. SPEC-DELTA C30.
+
+**`cache_hit_ratio` is now `float | None`.** `None` means unmeasured and is
+not the same as 0.0, which means a reporting backend saw nothing cached — the
+actual alarm condition. **Every run recorded before 2026-09-06 reads as null,
+not zero, and is NOT back-filled.** A chart must not treat them alike.
+SPEC-DELTA C31, invariant 36.
+
+Added: `cache_hit_ratio` per task and `cache_hit_ratio_median` per run in
+`bench/noise.py`, plus a `cache_drop` flag when a task falls below half the
+run's running median of measured tasks. Same shape as the wall-clock outlier
+detector, and a SIGNAL rather than a controller — the commit-ratio episode is
+the precedent for why.
+
+**No published number moves.** The reference measurement used no cache
+accounting and none is invented for it.
+
+### The class-name defect swept rather than found one at a time
+
+Three instances had been found individually — `profiles.enforce`,
+`execute/loop.py` (action schema), `plan/review.py` (deputy schema). The last
+two decide **what the model is asked**, which is worse than the first.
+
+An AST sweep of `src/` and `bench/` found no fourth instance. Two sites branch
+on adapter kind legitimately and both are recorded with reasoning:
+`models/registry.py` (it IS the registry) and `profiles.py`
+(`CLOUD_ONLY_KINDS`, a kind→capability table OR'd with an endpoint check that
+can only add to the cloud set). Three apparent hits are false positives —
+`parsed.kind == "final"` and the injection spec's `kind == "stall"` compare a
+differently-named `kind` against strings that are not adapter names.
+
+`tests/test_no_adapter_identity_branches.py` fails if a new one appears, and
+was verified by injecting one. Invariant 35.
+
+### The n_ctx hazard did not reach any published number
+
+Verified rather than assumed, and the retrospective half is honestly bounded:
+
+* `options.num_ctx` entered the native adapter in `8a68f4c`, 2026-08-19. The
+  earliest published evidence is 2026-08-26. `git log -S` finds exactly one
+  commit touching that string, so it was never removed. Every published run's
+  requests carried it.
+* The mechanism was verified live on a STOCK server
+  (`OLLAMA_CONTEXT_LENGTH:0`, default 4096): a native request carrying
+  `num_ctx: 16384` produced `n_ctx_slot = 16384`.
+* **What cannot be verified retrospectively:** `runs/ollama.log` is the GIN
+  access log only — no slot lines — and no run record captured the Ollama
+  version. So the mechanism is proven on 0.33.3 today, not read off the actual
+  runs. Nothing suggests the version then behaved differently, and it cannot
+  be checked. SPEC-DELTA C29.
+
+### Cold-load and context state are now recorded (4A, 4B)
+
+`bench/noise.py` preflight records whether the model was warm at start, the
+configured `keep_alive`, the configured context window, and — from
+`/api/ps` — what the server ACTUALLY allocated, warning loudly when the server
+window is below the configured one. A wall-clock cost axis cannot silently
+include a cold load in one arm and not the other, and the context window costs
+2.51 GB at 4096 against 3.61 GB at 16384 on a 15.5 GB machine.
+
+This also makes C29 catchable before a run rather than after: the check is not
+portable inside the adapter, but the bench preflight already knows it is
+talking to Ollama.
+
+### A crash phase 1 introduced, fixed
+
+`refresh_worker` called `b.endpoint.rstrip("/")`. On an `openai`-kind backend
+`endpoint` is `None`, so any run under `config.openai.yaml` would have died at
+the first worker refresh. Replaced with `_ollama_admin_base`, which handles
+either protocol and strips a `/v1` suffix.
+
+### Versions
+
+`HARNESS_VERSION` and `TOOLSET_VERSION` both unchanged. Nothing here adds a
+tool or library, and nothing changes what counts as a pass.
+
 ## Iteration one complete — 2026-09-05
 
 The reference measurement exists, the research question does not have an

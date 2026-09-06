@@ -107,6 +107,22 @@ ABORT_EXCLUDED_MAX = 3
 # future monotonic climb should be visible. It no longer decides the flag.
 WALL_OUTLIER_FACTOR = 3.0
 
+# A prefix mutation shows up as the cache ratio collapsing against the run's
+# own established level. Phase 1 made this observable for the first time: no
+# local backend reported cache accounting until the /v1 adapter, so the ratio
+# was a constant 0.0 and could not have signalled anything.
+#
+# Same shape as the wall-clock outlier and for the same reason - an ABSOLUTE
+# threshold cannot work here, because the healthy level depends on how much of
+# the prompt is prefix, which differs per suite. A drop against the run's own
+# running median is the comparison that means something.
+#
+# This is a SIGNAL, not a controller: it flags the task and does not abort.
+# The commit-ratio episode is the precedent - a real detector wired as a
+# controller produced 8 false aborts out of 10.
+CACHE_DROP_FRACTION = 0.5      # below half the running median is suspect
+MIN_CACHE_SAMPLES = 3          # no median, no judgement
+
 # L1. When to reload the model worker mid-run.
 #
 # Phase 2A aborted at task 23/30 because the worker's commitment grew
@@ -217,6 +233,11 @@ def run_once(ctx, spec: dict, run_ix: int) -> dict:
         "worker_rss_after_gb": worker_rss_gb(),
         "free_tokens": m.free_tokens,
         "cost_usd": m.cost_usd,
+        # None means UNMEASURED, not zero. Every run before 2026-09-06 has it
+        # null because no local backend reported cache accounting at all; a
+        # chart that treats those as 0% is inventing a prefix mutation that
+        # never happened.
+        "cache_hit_ratio": m.cache_hit_ratio,
     }
 
 
@@ -230,7 +251,7 @@ def refresh_worker(ctx) -> dict:
     slow because it paid for a reload is not a hard task.
     """
     b = ctx.config.backends["cloud"]
-    url = b.endpoint.rstrip("/") + "/api/generate"
+    url = _ollama_admin_base(b) + "/api/generate"
     t0 = time.time()
     before = worker_rss_gb()
     try:
@@ -246,6 +267,39 @@ def refresh_worker(ctx) -> dict:
                 "rss_before_gb": before, "rss_after_gb": worker_rss_gb()}
     return {"ok": True, "cost_s": round(time.time() - t0, 1),
             "rss_before_gb": before, "rss_after_gb": worker_rss_gb()}
+
+
+def _ollama_admin_base(b) -> str:
+    """The Ollama admin root for a backend, whichever protocol it speaks.
+
+    `endpoint` is None on an `openai`-kind backend and `base_url` carries a
+    /v1 suffix, so the previous `b.endpoint.rstrip("/")` raised AttributeError
+    the moment a run used config.openai.yaml. Introduced by phase 1 and caught
+    here rather than three hours into a pass.
+
+    Unload/reload and /api/ps are Ollama extensions with no OpenAI-protocol
+    equivalent, so this is deliberately Ollama-shaped. Against a server that
+    is not Ollama the calls fail and every caller already treats a failed
+    refresh as non-fatal.
+    """
+    url = (b.base_url or b.endpoint or "").rstrip("/")
+    return url[:-3].rstrip("/") if url.endswith("/v1") else url
+
+
+def _ollama_loaded(b) -> dict | None:
+    """What the server currently has resident, or None if it cannot say."""
+    import json as _json
+    import urllib.request
+    try:
+        with urllib.request.urlopen(
+                _ollama_admin_base(b) + "/api/ps", timeout=5.0) as r:
+            models = (_json.loads(r.read().decode("utf-8")) or {}).get("models") or []
+    except Exception:  # noqa: BLE001 - preflight telemetry is never fatal
+        return None
+    for m in models:
+        if m.get("name") == b.model or m.get("model") == b.model:
+            return m
+    return {}
 
 
 def _ollama_post(url: str, body: dict) -> None:
@@ -310,6 +364,7 @@ def run_with_backend_retry(ctx, spec: dict, run_ix: int, key: str) -> dict:
                 "commit_ratio_high": False, "wall_outlier": False,
                 "worker_rss_before_gb": None, "worker_rss_after_gb": None,
                 "free_tokens": 0, "cost_usd": 0.0,
+                "cache_hit_ratio": None,
             }
         except BackendError:
             break
@@ -332,6 +387,7 @@ def run_with_backend_retry(ctx, spec: dict, run_ix: int, key: str) -> dict:
                 "commit_ratio_high": False, "wall_outlier": False,
                 "worker_rss_before_gb": None, "worker_rss_after_gb": None,
                 "free_tokens": 0, "cost_usd": 0.0, "error": str(e),
+                "cache_hit_ratio": None,
             }
 
 
@@ -403,6 +459,16 @@ def ledger_path(out: str | Path) -> Path:
     """Sidecar beside the report: one JSON line per completed run."""
     p = Path(out)
     return p.with_suffix(p.suffix + ".partial.jsonl")
+
+
+def _median_or_none(values: list) -> float | None:
+    """None when there is nothing to take a median OF.
+
+    Not 0.0. An empty sample is not a measurement of zero, and this project
+    has already paid for that distinction once - see the note on
+    cache_hit_ratio.
+    """
+    return round(statistics.median(values), 4) if values else None
 
 
 def run_signature(args, n_specs: int) -> dict:
@@ -576,6 +642,7 @@ def main() -> int:
     # call sites now read the one function, and
     # tests/test_memory_gate_single_source.py fails if a third copy of the
     # rule appears.
+    exec_cfg = ctx.config.backends["cloud"]
     press = memory_pressure()
     if press:
         print(f"memory at start: {press.get('available_gb')} GB available, "
@@ -585,6 +652,36 @@ def main() -> int:
         rss0 = worker_rss_gb()
         if rss0 is not None:
             print(f"model worker resident at start: {rss0} GB")
+
+        # 4A/4B. Two things that silently change what a wall-clock number
+        # means, both recorded rather than assumed.
+        #
+        # COLD LOAD. A cold model costs ~30s against ~8s warm on this CPU.
+        # A pass that starts cold and one that starts warm are not comparable
+        # on the axis this project measures, and /v1 cannot set keep_alive
+        # per request at all (SPEC-DELTA C28) - it is the server's setting or
+        # nothing.
+        #
+        # CONTEXT. The window costs memory: 2.51 GB resident at ctx 4096
+        # against 3.61 GB at 16384, measured. On a 15.5 GB box that is a
+        # budget line, and on the OpenAI protocol the configured number is a
+        # claim about the server rather than a request (C29). /api/ps reports
+        # what the server ACTUALLY allocated, so the claim is checkable here
+        # even though it is not checkable portably inside the adapter.
+        loaded = _ollama_loaded(exec_cfg)
+        warm_at_start = None if loaded is None else bool(loaded)
+        server_ctx = (loaded or {}).get("context_length")
+        print(f"model warm at start: {warm_at_start}"
+              f"  keep_alive={exec_cfg.keep_alive!r}"
+              f"  configured ctx={exec_cfg.budgeted_window}"
+              f"  server ctx={server_ctx}")
+        if server_ctx is not None and server_ctx < exec_cfg.budgeted_window:
+            print(f"WARNING: the server allocated {server_ctx} tokens of "
+                  f"context but this config budgets against "
+                  f"{exec_cfg.budgeted_window}. M3.4's ceiling is computed "
+                  f"from a number the server will not honour, and Ollama "
+                  f"truncates silently. Start the server with "
+                  f"OLLAMA_CONTEXT_LENGTH={exec_cfg.budgeted_window}.")
         if (press.get("commit_ratio") or 0) >= COMMIT_RATIO_SUSPECT:
             print("WARNING: already at or above the suspect commit ratio "
                   "before the first task. Paging rewrites a seconds-based "
@@ -761,6 +858,23 @@ def main() -> int:
                 out["wall_vs_median"] = None
             if out["wall_outlier"]:
                 out["memory_suspect"] = True
+
+            # The prefix signal. Only over tasks where the ratio was actually
+            # MEASURED - mixing in nulls would drag the median toward nothing
+            # and fire on the absence of a measurement, which is the same
+            # error as scoring a machine fault as a task failure.
+            seen = [x["cache_hit_ratio"] for xs in results.values() for x in xs
+                    if x.get("cache_hit_ratio") is not None
+                    and not x.get("unmeasured")]
+            mine = out.get("cache_hit_ratio")
+            if mine is not None and len(seen) >= MIN_CACHE_SAMPLES:
+                cmed = statistics.median(seen)
+                out["cache_drop"] = bool(cmed > 0
+                                         and mine < CACHE_DROP_FRACTION * cmed)
+                out["cache_vs_median"] = round(mine / cmed, 2) if cmed else None
+            else:
+                out["cache_drop"] = False
+                out["cache_vs_median"] = None
             out["reload_before_this_task"] = bool(
                 reloads and reloads[-1]["before_task"] == key
                 and reloads[-1]["run"] == r)
@@ -768,7 +882,11 @@ def main() -> int:
             # Before the print, so a kill between them loses nothing.
             append_run(ledger, sig, out)
             flag = ""
-            if out.get("wall_outlier"):
+            if out.get("cache_drop"):
+                flag = (f"  !! CACHE RATIO {out.get('cache_hit_ratio'):.2f} at "
+                        f"{out.get('cache_vs_median')}x the run median "
+                        f"- the stable prefix may be mutating")
+            elif out.get("wall_outlier"):
                 flag = (f"  !! WALL OUTLIER {out.get('wall_vs_median')}x median "
                         f"- wall-clock suspect")
             elif out.get("memory_suspect"):
@@ -863,6 +981,22 @@ def main() -> int:
         # Per-task memory, summarised. Preflight numbers alone cannot show
         # pressure that arrived mid-run.
         "memory_suspect_keys": [r["key"] for r in rows if r.get("memory_suspect")],
+        # The prefix observable. `None` means this run could not measure it -
+        # every run before 2026-09-06 is null here, because no local backend
+        # reported cache accounting. Recorded at run level so the NEXT run on
+        # the same config can be compared against it; the per-task
+        # `cache_drop` flag is the within-run half of the same signal.
+        "cache_hit_ratio_median": _median_or_none(
+            [x["cache_hit_ratio"] for xs in results.values() for x in xs
+             if x.get("cache_hit_ratio") is not None
+             and not x.get("unmeasured")]),
+        "cache_measured_tasks": sum(
+            1 for xs in results.values() for x in xs
+            if x.get("cache_hit_ratio") is not None),
+        "cache_drop_keys": sorted(
+            k for k, xs in results.items()
+            if any(x.get("cache_drop") for x in xs)),
+        "cache_drop_fraction": CACHE_DROP_FRACTION,
         "min_free_gb_any_task": min(
             [r["min_free_gb"] for r in rows
              if r.get("min_free_gb") is not None] or [None]),

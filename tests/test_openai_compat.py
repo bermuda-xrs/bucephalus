@@ -303,6 +303,12 @@ def test_the_configs_differ_only_where_they_are_meant_to():
         ba, bb = dict(a["backends"][name]), dict(b["backends"][name])
         assert ba.pop("kind") == "ollama" and bb.pop("kind") == "openai"
         assert bb.pop("base_url") == ba.pop("endpoint") + "/v1"
+        # The one further difference that is a FINDING rather than drift:
+        # /v1 reports prompt-cache accounting and the native API does not.
+        # Asserted explicitly so that if it ever stops being true the test
+        # says so, instead of the field quietly joining the ignored set.
+        assert bb.pop("reports_prompt_cache") is True
+        assert "reports_prompt_cache" not in ba
         assert ba == bb, f"backend {name!r} differs beyond the adapter swap"
     for key in ("limits", "gate", "autonomy", "active_local_tier",
                 "compress_observations_over_tokens"):

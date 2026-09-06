@@ -20,6 +20,13 @@ def make_config(tmp_path: Path, **overrides) -> Config:
         backends={
             "cloud": BackendConfig(
                 kind="mock",
+                # The mock fakes a cached prefix on every call after the
+                # first, on purpose, so the telemetry path is exercised.
+                # It therefore DOES report cache accounting and has to say
+                # so, or test_cache_hit_ratio_above_threshold - the only
+                # check that prefix stability is observable at all - reads
+                # None and stops testing anything.
+                reports_prompt_cache=True,
                 model="mock-cloud",
                 input_cost_per_mtok=5.0,
                 output_cost_per_mtok=25.0,
@@ -32,6 +39,13 @@ def make_config(tmp_path: Path, **overrides) -> Config:
             ),
             "review": BackendConfig(
                 kind="mock",
+                # The mock fakes a cached prefix on every call after the
+                # first, on purpose, so the telemetry path is exercised.
+                # It therefore DOES report cache accounting and has to say
+                # so, or test_cache_hit_ratio_above_threshold - the only
+                # check that prefix stability is observable at all - reads
+                # None and stops testing anything.
+                reports_prompt_cache=True,
                 model="mock-review",
                 input_cost_per_mtok=3.0,
                 output_cost_per_mtok=15.0,
@@ -40,6 +54,13 @@ def make_config(tmp_path: Path, **overrides) -> Config:
             ),
             "local": BackendConfig(
                 kind="mock",
+                # The mock fakes a cached prefix on every call after the
+                # first, on purpose, so the telemetry path is exercised.
+                # It therefore DOES report cache accounting and has to say
+                # so, or test_cache_hit_ratio_above_threshold - the only
+                # check that prefix stability is observable at all - reads
+                # None and stops testing anything.
+                reports_prompt_cache=True,
                 model="mock-local",
                 trust_tier="local",
                 context_window=120000,
@@ -48,6 +69,13 @@ def make_config(tmp_path: Path, **overrides) -> Config:
             ),
             "laptop": BackendConfig(
                 kind="mock",
+                # The mock fakes a cached prefix on every call after the
+                # first, on purpose, so the telemetry path is exercised.
+                # It therefore DOES report cache accounting and has to say
+                # so, or test_cache_hit_ratio_above_threshold - the only
+                # check that prefix stability is observable at all - reads
+                # None and stops testing anything.
+                reports_prompt_cache=True,
                 model="mock-laptop",
                 trust_tier="local",
                 context_window=32768,

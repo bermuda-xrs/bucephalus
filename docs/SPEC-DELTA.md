@@ -573,3 +573,51 @@ the backend that needed the window.
 
 **Class:** a capability the abstraction cannot carry. Worth stating plainly
 rather than letting "one adapter for everything" imply otherwise.
+
+### C30. The prefix-cache alarm was dead twice over, and one half was a spec assumption
+
+**Reality:** `Telemetry.cache_alarm` has existed since M3.2 as a monitored
+invariant — a prefix mutation raises cost roughly 10x, so the ratio collapsing
+is the signal. It has never fired, and could not have, for two independent
+reasons:
+
+1. No local backend reported cache accounting, so `cache_hit_ratio` was a
+   constant 0.0. That is indistinguishable from total prefix mutation, so the
+   number could not be acted on either way.
+2. The alarm was gated on `paid_tokens > 0`. Under `--profile local` nothing
+   costs money, so the gate was never true. **The only machine this project
+   runs on is the one machine the alarm could not protect.**
+
+Reason 2 is the interesting one, because the gate was not careless. The spec
+justifies this alarm by COST. On this hardware the same mutation is paid in
+wall clock instead — re-processing a prompt the server had already cached —
+and wall clock is the budget that actually binds here. The gate encoded the
+spec's cost axis, and this machine has a different one.
+
+**Correct version:** the ratio is `None` when no backend on the task reports
+cache accounting, and a number when one does. The alarm fires on a number
+below threshold regardless of whether the tokens were paid for, and never
+fires on `None`. Widening when an alarm can fire is a strengthening; the
+`None` guard is what stops it becoming noise.
+
+**Class:** spec error of the same family as C23 — a stated criterion measuring
+something adjacent to what it claimed. "Caching matters because money" is
+true of the spec's deployment and false of this one.
+
+### C31. `cache_hit_ratio: 0.0` meant two different things and a chart could not tell
+
+**Reality:** the field was a float with no null. Every run before 2026-09-06
+recorded 0.0, meaning "nothing reported it". A run through the new adapter
+recording 0.0 would mean "the backend reported that nothing was cached" —
+the actual alarm condition. Averaging or plotting those together invents a
+prefix mutation that never happened.
+
+**Correct version:** `float | None`. `None` is unmeasured. Historical runs are
+left as they are and read as null rather than being back-filled with a number
+nobody measured. `bench/noise.py` records the ratio per task and a run-level
+median, and the drop detector medians only over tasks where it was actually
+measured.
+
+**Class:** the same distinction as `machine_fault` versus `excluded`, in a
+different field. Absence of a measurement is not a measurement of zero.
+

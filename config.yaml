@@ -6,6 +6,7 @@ backends:
   cloud:
     kind: anthropic
     model: "claude-opus-5"          # spec said claude-sonnet-4-6; verified current
+    reports_prompt_cache: true      # cache_read_input_tokens; UNVERIFIED like the rest of this adapter
     input_cost_per_mtok: 5.00
     output_cost_per_mtok: 25.00
     cache_read_per_mtok: 0.50       # ~0.1x input
@@ -22,6 +23,7 @@ backends:
   review:                            # M13.3 auto-review — MUST differ from the executor
     kind: anthropic
     model: "claude-sonnet-5"
+    reports_prompt_cache: true      # cache_read_input_tokens; UNVERIFIED like the rest of this adapter
     input_cost_per_mtok: 3.00
     output_cost_per_mtok: 15.00
     cache_read_per_mtok: 0.30
