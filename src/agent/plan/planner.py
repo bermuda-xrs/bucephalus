@@ -212,7 +212,10 @@ def approve_plan(ctx, task, plan: Plan, edits: list[dict] | None = None) -> Plan
         "plan.approved",
         {"plan_id": plan.id, "hash": plan.id, "edits": edits or []},
     )
-    ctx.anchor.record(task.id, f"plan:{plan.id}")
+    # Its OWN key. Sharing the task id with `checkpoint()` meant whichever
+    # wrote last won, which broke the resume check one way and silently
+    # disabled the check below the other way. See Anchor.latest_chain.
+    ctx.anchor.record(f"plan:{task.id}", plan.id)
     return plan
 
 
@@ -259,7 +262,15 @@ def verify_plan_pin(ctx, task) -> Plan:
             f"approved plan was modified after approval "
             f"(stored={row[2][:12]}, recomputed={recomputed[:12]})"
         )
-    anchored = ctx.anchor.latest(task.id)
-    if anchored and anchored.startswith("plan:") and anchored[5:] != recomputed:
-        raise IntegrityError("approved plan hash does not match the anchor")
+    # Reads the namespaced key, so a chain checkpoint can no longer hide this
+    # check by being written after the pin. The legacy form is still accepted
+    # for anchor files written before the keys were separated.
+    anchored = ctx.anchor.latest(f"plan:{task.id}")
+    if anchored is None:
+        legacy = ctx.anchor.latest(task.id)
+        anchored = legacy[5:] if legacy and legacy.startswith("plan:") else None
+    if anchored and anchored != recomputed:
+        raise IntegrityError(
+            f"approved plan hash does not match the anchor "
+            f"(anchor={anchored[:12]}, recomputed={recomputed[:12]})")
     return plan

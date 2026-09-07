@@ -19,7 +19,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Any
 
-from ..kernel.integrity import IntegrityError, checkpoint
+from ..kernel.integrity import IntegrityError, checkpoint, resume
 from ..kernel.receipts import execute_once, idempotency_key
 from ..models.ollama import ModelStall
 from ..kernel.tasks import load_task, set_status, spend
@@ -196,6 +196,37 @@ def parse_action(text: str) -> ParsedAction:
 
 def run_task(ctx, task_id: str) -> TaskResult:
     task = load_task(ctx.conn, task_id)
+
+    # D20 — THE VERIFICATION DOOR. Every path by which a task's execution
+    # continues comes through here, so this is where the chain is checked.
+    #
+    # `integrity.resume()` is M1.4/M1.5 and was INERT: written, tested, and
+    # imported by nothing, so a paused task resumed without its chain ever
+    # being verified. It is called here rather than at the three continuation
+    # call sites (`alpha run`, and the control plane's two) because a door
+    # each caller must remember to walk through is a door someone forgets —
+    # and Phase 8 (a channel reviving a parked task) and Phase 11 (a
+    # scheduled wake) would each have added another caller to remember.
+    #
+    # BEFORE `set_status`, deliberately: the chain is verified as it stands,
+    # not after this run has already appended to it.
+    #
+    # A FRESH task passes trivially — an empty chain verifies and has no
+    # anchor — so there is no fresh-versus-resumed branch to get wrong. That
+    # absence is the point: a check that only runs on the resumed path is a
+    # check nobody exercises until the day it matters.
+    try:
+        resume(ctx.conn, task.id, ctx.log, ctx.anchor)
+    except IntegrityError:
+        # Same response as a break found mid-run: halt, and do not sweep. A
+        # broken chain destroys the ability to VERIFY, so a pass graded from
+        # the workspace would rest on evidence that failed its own check.
+        # Distinct from an anchor merely BEHIND, which `resume` allows
+        # through — that is a task which never checkpointed, and refusing it
+        # would reintroduce the denial of service D17 removed.
+        set_status(ctx.conn, ctx.log, task, TaskStatus.FAILED, "integrity_halt")
+        raise
+
     set_status(ctx.conn, ctx.log, task, TaskStatus.RUNNING)
     checkpoint(ctx.log, ctx.anchor, task.id)
 

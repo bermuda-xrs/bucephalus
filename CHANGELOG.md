@@ -125,6 +125,68 @@ replaced by stronger ones rather than deleted:
   none of them from today's runs, consistent with D10 — a manually stopped
   run never checkpoints. Logged, not chased; the freeze holds.
 
+## D20 — resume is verified, and D21 found underneath it — 2026-09-07
+
+### The door
+
+`integrity.resume()` is now called from the top of `run_task`, before
+`set_status`. Every one of the nine call sites inherits it, and so will the
+two Phase 8 and 11 will add — which is why it is there rather than at the
+three continuation call sites. A door each caller must remember is a door
+someone forgets, and retrofitting onto three entry points is exactly what the
+channel and cron work would have turned into five.
+
+A fresh task passes trivially: an empty chain verifies and has no anchor. No
+fresh-versus-resumed branch, deliberately — a check that only runs on the
+resumed path is one nobody exercises until the day it matters.
+
+Behaviour per the memory precedent, and both directions are tested by
+injection: a chain break HALTS and records `integrity.halt`; an anchor merely
+BEHIND proceeds, because a task that never checkpointed is not a tampered one
+and refusing it would reintroduce the denial of service D17 removed; a
+rewritten history halts even though every link still hashes correctly.
+
+### No published number came from an unverified resume — verified, not inferred
+
+Across all 283 tasks in the live database, **zero entered `RUNNING` more than
+once.** `set_status(RUNNING)` is the first statement in `run_task`, so a
+second call on the same task id always leaves a second transition; the
+absence of any proves no task was ever continued after interruption.
+
+`bench/noise.py --resume` creates NEW tasks for the remaining specs rather
+than continuing old ones. That is why the 2A run was safe, and also why the
+dead function looked wired: **the word "resume" covered two mechanisms, and
+the healthy one hid the broken one.** FINDINGS 1.20.
+
+### D21 — wiring it exposed a live defect it had been hiding
+
+`checkpoint()` wrote chain heads to the anchor under the task id.
+`approve_plan()` wrote `plan:<hash>` under the SAME key. Append-only log, so
+the last writer won — and the two readers then failed in OPPOSITE directions:
+
+* the resume check saw a `plan:` value, could not find it among the task's
+  event hashes, and called the history rewritten. Any task with an approved
+  plan would have halted on resume.
+* `verify_plan_pin` saw a chain head, found it did not start with `plan:`,
+  and silently skipped its own check. Since `run_task` checkpoints every run,
+  the pin stopped being latest after the first step — so **that half of plan
+  verification has effectively never fired.**
+
+The first is why it all stayed hidden: the inert function was ALSO broken, and
+nothing called it, so neither fact could surface. Wiring one revealed the
+other.
+
+Fixed rather than deferred, because it blocked D20. Plan pins have their own
+key; `Anchor.latest_chain()` returns only 64-hex values so existing anchor
+files keep working without migrating an append-only log.
+
+**A third DR1 instance** — a namespace collision rather than a granularity
+mismatch, with the identical consequence: a control reporting on something
+other than what it guards. DR1 updated to say "under a key nothing else
+writes".
+
+Invariants 53, 54. 524 tests. `resume` leaves KNOWN_INERT.
+
 ## Phase 5 (B3) — tool exposure, and D18 — 2026-09-07
 
 ### Exposure is not existence

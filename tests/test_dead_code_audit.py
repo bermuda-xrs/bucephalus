@@ -43,15 +43,6 @@ KNOWN_INERT = {
     "measure_retrieval_precision":
         "M9.4 measures retrieval separately from quality. Never invoked, so "
         "'the right skill existed and was not retrieved' is unmeasured.",
-    "resume":
-        "M1.4/M1.5 THE RESUME PROTOCOL IS INERT. `integrity.resume()` verifies "
-        "the chain and halts on a break BEFORE a task continues, and nothing "
-        "imports it - `cli.py`, `server.py`, `loop.py` and `planner.py` each "
-        "import other names from that module and never this one. So resuming "
-        "a paused task does not verify its chain. Surfaced 2026-09-07 when "
-        "the audit stopped crediting method calls as module-function "
-        "references; the old rule counted `--resume` and prose mentions. "
-        "DEFERRED D20.",
     "freeze_skills":
         "A second implementation. `AgentContext.freeze_skills` is the one the "
         "loop calls; this module-level version in ledger/prefix.py has no "

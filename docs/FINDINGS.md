@@ -831,6 +831,33 @@ Phase 12, where skill provenance is the subject.
 
 ---
 
+### 1.20 G6 is still "measured in anger", and the resume it rested on was a different mechanism
+
+`RELEASE.md` marks G6 (durability) measured because a killed run resumed from
+the fsynced ledger. D20 then found that `integrity.resume()` — the function
+that verifies a chain before a task continues — had no caller, which raised
+the question of whether that claim rested on an unverified resume.
+
+**It did not, and this is verified rather than inferred.** Across all 283
+tasks in the live database, ZERO entered `RUNNING` more than once.
+`set_status(RUNNING)` is the first statement in `run_task`, so a second call
+on the same task id always leaves a second `task.status_changed` event; the
+absence of any means no task was ever continued after interruption.
+
+**The two mechanisms are different things sharing a word.**
+`bench/noise.py --resume` skips ledger rows already written and creates NEW
+tasks for the remaining specs. It never continues an existing task, so
+`integrity.resume()` was never the thing being exercised. G6's claim is about
+the LEDGER surviving a kill, which it does and which the test proves; it was
+never a claim about chain-verified task continuation.
+
+So the finding is not that a published number is wrong. It is that **the word
+"resume" covered two mechanisms, and the healthy one kept the broken one
+hidden** — every textual search for `resume` found the CLI flag. That is what
+made the dead-code audit's receiver-aware fix pay for itself in seconds.
+
+---
+
 ## 8. Open research questions
 
 Recorded so they are not re-derived, and kept separate from findings because

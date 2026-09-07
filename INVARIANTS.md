@@ -308,6 +308,24 @@ UNDECLARED and is not the same as `False`: false is "considered and not
 needed", none is "nobody thought about it".
 *Caught by:* `test_no_measurement_module_opens_a_context_for_itself`.
 
+## Added 2026-09-07 (D20 — verified resume)
+
+**53. A task's execution never continues without its chain being verified.**
+`run_task` calls `integrity.resume()` before marking the task RUNNING, so
+every caller inherits the check — including the ones Phase 8 and Phase 11
+will add. A break halts and records `integrity.halt`; an anchor merely BEHIND
+proceeds, because a task that never checkpointed is not a tampered one.
+*Caught by:* `tests/test_resume_is_verified.py`, which injects all three
+conditions rather than reasoning about them.
+
+**54. One key in the anchor means one kind of record.**
+Chain heads are written under the task id; plan pins under `plan:<task id>`.
+Sharing the keyspace meant the last writer won, which made the resume check
+call a plan pin a rewrite AND made the plan-pin check silently skip whenever
+a checkpoint followed it.
+*Caught by:* `test_a_plan_pin_does_not_read_as_a_rewritten_chain`,
+`test_the_plan_pin_check_survives_a_later_checkpoint`.
+
 ---
 
 ## Design rules
@@ -333,9 +351,17 @@ a PERMANENT FALSE POSITIVE FROM ORDINARY USE, which is worse — it trains
 everyone to ignore the channel, and then the real alert arrives into a list
 nobody reads.
 
+* **The anchor keyspace (D21).** Chain checkpoints and plan pins were both
+  written under the task id, so the last writer won — and the two readers
+  failed in OPPOSITE directions, one crying tampering and one silently
+  skipping itself. A namespace collision rather than a granularity mismatch,
+  with the identical consequence: a control reporting on something other than
+  what it guards.
+
 Before adding a control, ask what it protects and at what granularity that
-thing lives, then store the control at exactly that granularity. If the two
-cannot be made to match, the control belongs somewhere else.
+thing lives, then store the control at exactly that granularity, under a key
+nothing else writes. If the two cannot be made to match, the control belongs
+somewhere else.
 
 **DR2. A default must not shadow the path it is a default for.**
 

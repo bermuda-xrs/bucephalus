@@ -21,6 +21,12 @@ class IntegrityError(RuntimeError):
     """Raised when the chain or the anchor disagrees with the database."""
 
 
+def _is_chain_hash(value: str) -> bool:
+    """A sha256 hex digest, which is what `checkpoint()` writes and nothing
+    else in the anchor file looks like."""
+    return len(value) == 64 and all(c in "0123456789abcdef" for c in value)
+
+
 class Anchor:
     """Stores the latest known-good chain head per task.
 
@@ -51,6 +57,39 @@ class Anchor:
             _, tid, h = parts
             if tid == task_id:
                 latest = h
+        return latest
+
+    def latest_chain(self, task_id: str) -> str | None:
+        """The last CHAIN HEAD recorded for this task, ignoring anything else.
+
+        The anchor file is a flat (time, key, value) log, and for a long time
+        two different kinds of record shared one keyspace: `checkpoint()`
+        wrote a chain head under the task id, and plan approval wrote
+        `plan:<hash>` under the SAME task id. Whichever came last won.
+
+        That broke both readers, in opposite directions:
+
+          * the resume check saw a `plan:` value, could not find it among the
+            task's event hashes, and concluded the history had been rewritten
+          * `verify_plan_pin` saw a chain head, found it did not start with
+            `plan:`, and SILENTLY SKIPPED its own anchor check — and since
+            `run_task` checkpoints on every run, the plan pin stopped being
+            the latest entry after the first step, so that check has
+            effectively never fired
+
+        Plan pins now live under their own key. This filter stays because
+        existing anchor files still hold the old entries, and a migration to
+        fix a log that is append-only by design is worse than a reader that
+        knows what a chain head looks like: 64 hex characters.
+        """
+        latest = None
+        for line in self.path.read_text(encoding="utf-8").splitlines():
+            parts = line.split("	")
+            if len(parts) != 3:
+                continue
+            _, tid, value = parts
+            if tid == task_id and _is_chain_hash(value):
+                latest = value
         return latest
 
     def all_tasks(self) -> set[str]:
@@ -91,7 +130,7 @@ ANCHOR_REWRITTEN = "anchor_rewritten"
 def classify_anchor(conn: sqlite3.Connection, log: EventLog, anchor: Anchor,
                     task_id: str) -> str | None:
     """None when the anchor agrees with the head, or there is no anchor."""
-    anchored = anchor.latest(task_id)
+    anchored = anchor.latest_chain(task_id)
     if not anchored:
         return None
     if log.head(task_id) == anchored:
@@ -120,7 +159,7 @@ def resume(
         raise IntegrityError(f"Chain broken at seq {bad_seq}")
 
     db_head = log.head(task_id)
-    anchored = anchor.latest(task_id)
+    anchored = anchor.latest_chain(task_id)
     if classify_anchor(conn, log, anchor, task_id) == ANCHOR_REWRITTEN:
         raise IntegrityError(
             f"Head does not match anchor and the anchored hash is GONE from "

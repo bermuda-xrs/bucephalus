@@ -500,3 +500,58 @@ resumes. Today paused tasks are resumed by hand, and `alpha verify` sweeps
 every chain on demand, so the exposure is a task resumed without anyone
 running that sweep first.
 
+**RESOLVED 2026-09-07.** `resume()` is called from the top of `run_task`,
+before `set_status`, so every one of the nine call sites inherits it and the
+two future ones (a channel reviving a parked task, a scheduled wake) will
+too. Put there rather than at the three continuation call sites because a
+door each caller must remember is a door someone forgets — and retrofitting
+onto three entry points is what the Phase 8 and 11 work would have made five.
+
+A fresh task passes trivially: an empty chain verifies and has no anchor, so
+there is no fresh-versus-resumed branch. That absence is deliberate — a check
+that only runs on the resumed path is one nobody exercises until the day it
+matters.
+
+**No published number came from an unverified resume, verified rather than
+inferred.** Across all 283 tasks in the live database, ZERO entered `RUNNING`
+more than once. `set_status(RUNNING)` is the first thing `run_task` does, so
+a second call on the same task id always leaves a second transition; the
+absence of any is proof no task was ever continued. `bench/noise.py --resume`
+creates NEW tasks for the remaining specs rather than continuing old ones,
+which is both why the 2A run was safe and why the word "resume" made the dead
+function look wired.
+
+**Wiring it exposed a live defect it had been hiding: D21.**
+
+## D21 — RESOLVED ON SIGHT: two kinds of record shared one anchor key
+
+**Found:** 2026-09-07, the moment `resume()` was wired and the test suite ran.
+
+`checkpoint()` wrote a chain head to the anchor under the task id.
+`approve_plan()` wrote `plan:<hash>` under the SAME task id. The anchor file
+is an append-only (time, key, value) log, so whichever was written last won.
+
+This broke both readers, in opposite directions:
+
+* **The resume check** read a `plan:` value, could not find it among the
+  task's event hashes, and concluded the history had been rewritten. Any task
+  with an approved plan would have halted on resume.
+* **`verify_plan_pin`** read a chain head, found it did not start with
+  `plan:`, and silently skipped its own anchor check. Since `run_task`
+  checkpoints on every run, the plan pin stopped being the latest entry after
+  the first step — so **that half of plan verification has effectively never
+  fired.**
+
+The first is why the whole thing stayed hidden: the inert function was also
+broken, and nothing called it, so neither fact could surface. It took wiring
+one to reveal the other.
+
+**Fixed, not deferred**, because it was blocking D20 rather than adjacent to
+it. Plan pins now use their own key. `Anchor.latest_chain()` returns only
+values that look like a chain head — 64 hex characters — so existing anchor
+files keep working without migrating an append-only log.
+
+**A third instance of DR1.** Not a scope mismatch this time but a NAMESPACE
+one: two kinds of record in a single keyspace, with the same consequence — a
+control that reports on something other than what it is guarding.
+
