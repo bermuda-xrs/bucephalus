@@ -599,3 +599,57 @@ Phase 10 is queued.
 **The sweep above is the half of the work already done**, recorded so whoever
 takes it does not repeat it.
 
+## D23 — RESOLVED ON SIGHT: an arm could not read an artifact another arm wrote first
+
+**Found:** 2026-09-07, by the DR1 keyspace sweep (I2), in code I added in
+Phase 5.
+
+`artifacts.id` is `sha256(content)[:32]` and rows are written with
+`INSERT OR IGNORE`, so two tasks producing identical bytes share ONE row, and
+that row keeps the FIRST writer's `task_id`. The Phase 5 scope check on
+`expand_artifact` asked "does the row's task_id fall in the visible set",
+which answers a different question from "did this task produce it".
+
+Not hypothetical. Both arms of a paired trial run `list_dir` against an
+identically-reset workspace and get byte-identical output, so the second arm
+was refused access to **its own artifact**.
+
+**Why that is worse than an inconvenience:** it is arm ASYMMETRY produced by
+the rule meant to prevent cross-arm contamination. One arm could expand its
+tool output and the other could not — a difference between the arms that has
+nothing to do with the skill under test, which is exactly the property a
+paired trial assumes away.
+
+**Fixed rather than deferred**, because it was live, mine, and silently
+degrading the measurement the project exists for. Authorship is now read
+from the event log: `artifact.written` is appended per task, on the hash
+chain, carrying the id. The chain already recorded the right thing; the row
+never could.
+
+**A fourth DR1 instance**, and the one the design rule predicted: a
+content-addressed keyspace shared across tasks with an owner column that
+records only the first writer.
+
+## D24 — two tasks cannot approve identical plans
+
+**Found:** 2026-09-07, by the same sweep. Not fixed.
+
+`plans.id` is the content hash of the plan body, and it is the PRIMARY KEY.
+The body contains no task id, so two tasks with the same objective and steps
+produce the same id and the second `INSERT` raises
+`UNIQUE constraint failed: plans.id`.
+
+**It fails LOUDLY**, which is why this is logged rather than fixed — a crash
+at approval time is recoverable and visible, where the artifact version of
+the same collision was silent and corrupting.
+
+**Not currently reachable in any measurement path:** `config.local.yaml` sets
+`plan_required: false` and no bench entry point drafts plans. It becomes
+reachable the moment a paired trial runs with planning on, where both arms
+would draft the same plan for the same task and the second approval would
+crash.
+
+**The fix when it is needed** is the same shape as D21 and D23: key the row
+by what it belongs to, not only by what it contains — `(id, task_id)` rather
+than `id` alone.
+

@@ -319,9 +319,15 @@ def tool_expand_artifact(ctx, task, id: str) -> dict:  # noqa: A002 - model-faci
     # path open, so the check goes on the read itself.
     allowed = visible_tasks(ctx, task)
     if allowed is not None and art.get("task_id") not in allowed:
-        return {"ok": False,
-                "error": (f"artifact {id} belongs to another task attempt and "
-                          "is out of scope for this run")}
+        # The row's task_id is the FIRST writer's, and artifacts are
+        # content-addressed, so a second task producing identical bytes does
+        # not own the row it created. Authorship comes from the event log.
+        from ..kernel.scope import wrote_artifact
+
+        if not wrote_artifact(ctx.conn, allowed, id):
+            return {"ok": False,
+                    "error": (f"artifact {id} belongs to another task attempt "
+                              "and is out of scope for this run")}
     return {
         "ok": True,
         "id": id,

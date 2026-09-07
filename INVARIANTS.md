@@ -318,6 +318,13 @@ proceeds, because a task that never checkpointed is not a tampered one.
 *Caught by:* `tests/test_resume_is_verified.py`, which injects all three
 conditions rather than reasoning about them.
 
+**55. Authorship is read from the chain, not from a deduplicated row.**
+`expand_artifact` decides scope from `artifact.written` events, which are
+appended per task. The `artifacts` row is content-addressed and keeps only
+the first writer, so it answers a different question.
+*Caught by:*
+`test_an_arm_can_expand_an_artifact_whose_bytes_another_arm_wrote_first`.
+
 **54. One key in the anchor means one kind of record.**
 Chain heads are written under the task id; plan pins under `plan:<task id>`.
 Sharing the keyspace meant the last writer won, which made the resume check
@@ -358,9 +365,31 @@ nobody reads.
   with the identical consequence: a control reporting on something other than
   what it guards.
 
+* **Content-addressed rows (D23).** `artifacts.id` is a hash of the content
+  and rows are deduplicated with `INSERT OR IGNORE`, so the `task_id` column
+  records only the FIRST writer. A scope check reading it asked "who owns the
+  row" when it meant "who produced this" — and both arms of a paired trial
+  produce identical `list_dir` output, so the second arm was refused its own
+  artifact.
+
+**The sweep, 2026-09-07.** Every shared keyspace, reported even where clean:
+
+| keyspace | key shape | collides? |
+|---|---|---|
+| anchor | task id, and `plan:<task id>` | **was** — D21, fixed |
+| `artifacts.id` | `sha256(content)[:32]` | **was** — D23, fixed |
+| `plans.id` | hash of the plan body | **yes, loudly** — D24, logged |
+| `receipts.idempotency_key` | includes the task id | clean |
+| `semantic_cache.key` | `hash(op, input)`, taint-checked on read | clean |
+| `search_index` | derived, rebuilt from the log | clean |
+| memory blessing | one file per user store | clean |
+| `skills UNIQUE(name, version)` | intended dedup | clean by design |
+
 Before adding a control, ask what it protects and at what granularity that
 thing lives, then store the control at exactly that granularity, under a key
-nothing else writes. If the two cannot be made to match, the control belongs
+nothing else writes. Where a key is derived from CONTENT, ask separately who
+produced it — content addressing deduplicates rows and therefore discards
+every writer after the first. If the two cannot be made to match, the control belongs
 somewhere else.
 
 **DR2. A default must not shadow the path it is a default for.**

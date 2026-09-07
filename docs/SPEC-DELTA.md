@@ -781,3 +781,38 @@ invisible:
 **Class:** adjacency again, and worth noting that the instrument catching
 adjacency bugs had one of its own. Tightening it paid for itself in seconds.
 
+### C37. Invariant 17 was published and never enforced
+
+**Reality:** invariant 17 says the approved plan hash is verified before every
+step. `verify_plan_pin` did two comparisons — the recomputed hash against the
+one stored in the `plans` table, and against the copy in the anchor — and the
+second was written as `if anchored.startswith("plan:")`.
+
+`checkpoint()` wrote chain heads under the same anchor key, and `run_task`
+checkpoints on every run. So after the first step the latest anchor entry was
+a chain head, the `startswith` was False, and **the anchor comparison was
+skipped silently, every time, for the life of the project** (D21).
+
+**What was actually lost.** The database comparison kept working, so a plan
+body edited in the table was still caught. What stopped working is the
+out-of-band copy — which is the entire reason an anchor exists. A writer with
+database access could edit the plan AND its stored `approved_hash`, and the
+check would have agreed with itself.
+
+**Correct version:** plan pins have their own anchor key, so a later
+checkpoint cannot displace them. Verified by injection rather than
+inspection, because a green suite had proved nothing about this check for as
+long as it had existed: `tests/test_plan_pin_is_enforced.py` leaves the
+database internally consistent and dissents only in the anchor, and that test
+FAILS against the pre-fix code.
+
+**Class:** not a coverage gap. A published invariant that was never enforced,
+which is a different and worse thing — the two-touch model rests on it.
+
+**A note on how the test was written.** The first version of the anchor-half
+test forged `approved_hash`, which trips the database comparison first and
+never reaches the anchor at all. It passed against the pre-D21 code. Running
+the new tests against the OLD code is what caught it; without that step the
+file would have looked like five green tests covering an invariant that two
+of them never touched.
+

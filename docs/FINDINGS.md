@@ -858,6 +858,74 @@ made the dead-code audit's receiver-aware fix pay for itself in seconds.
 
 ---
 
+### 1.21 M7.4 is one rule of four actually enforced
+
+The anti-gaming rules exist to police generated skills — a skill fitted to
+the checks it can see is the failure this whole apparatus expects. Their
+current state:
+
+| rule | mechanism | enforced? |
+|---|---|---|
+| 1. different authors for skill and its tests | `assert_different_authors` | **yes** |
+| 2. visible/held-out gap recorded | `record_holdout_gap` | **no — no caller** |
+| 3. isomorphic verification | `verify_isomorphic` | **no — no caller** |
+| 4. trusted-tier actions never auto-reviewed | the gate | **yes** |
+
+Rules 2 and 3 are inert: written, unit-tested, and never invoked. So no
+verification in this project has ever been cross-checked against a second
+verifier, and no promotion has ever carried a measured visible/held-out gap —
+every one records `gaming_check: NOT MEASURED`.
+
+**Why they are grouped here rather than left in DEFERRED.** Individually each
+is a deferred item. Together they are a scope statement about the whole
+verification layer: **half of M7.4 has never run**, and the half that has not
+is the half aimed at generated skills specifically.
+
+**The gate, same shape as D19's.** The first real `generate_skill` run must
+not precede M7.4 being genuinely enforced. A generated skill is precisely what
+rules 2 and 3 exist to police, and promoting one on the strength of a gate
+that is half inert would produce exactly the result the gate was built to
+prevent — with a provenance record saying it passed.
+
+Three of the project's own guarantees have now been found tested into looking
+alive: `record_holdout_gap`, `integrity.resume` (fixed, D20) and
+`verify_isomorphic`. The pattern is not carelessness about testing; it is
+that a unit test proves a function works and says nothing about whether the
+system calls it. `test_wired_invariants.py` exists for this and did not cover
+these three.
+
+---
+
+### 1.22 A word that covers two mechanisms makes the working one an alibi
+
+`integrity.resume()` — chain verification before a task continues — had no
+caller for the life of the project. It was not hidden by obscurity. It was
+hidden by a NAME COLLISION with a healthy mechanism:
+
+* `bench/noise.py --resume` skips ledger rows already written and creates new
+  tasks for the rest. It works, it is tested, and it is exercised on every
+  long run.
+* `runlock.py`'s docstring discusses resuming.
+* the module's own docstring names the resume protocol.
+
+So every textual search for `resume` found something real, working, and
+irrelevant. The dead-code audit credited all of them until its reference rule
+was made receiver-aware.
+
+**The general hazard:** when one word names two mechanisms, the working one
+is an alibi for the broken one. Every grep confirms the word is alive; none
+of them distinguishes which thing is alive. This is the same shape as the
+adjacency family — a check answering a question adjacent to the one asked —
+moved from code into vocabulary.
+
+**Where to expect it next:** `--resume` versus `resume()` is now separated.
+Remaining candidates in this tree are `verify` (chain verification, task
+verifiers, and plan-pin verification are three different things sharing a
+verb) and `check` (capability gate, exposure, verifiers). Both are worth
+naming precisely before the next mechanism is added under one of them.
+
+---
+
 ## 8. Open research questions
 
 Recorded so they are not re-derived, and kept separate from findings because

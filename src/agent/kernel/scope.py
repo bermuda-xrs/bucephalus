@@ -104,3 +104,38 @@ def isolation_state(ctx) -> dict:
             "paired trial"
         ),
     }
+
+
+def wrote_artifact(conn: sqlite3.Connection, task_ids: set[str],
+                   artifact_id: str) -> bool:
+    """Did any of these tasks PRODUCE this artifact?
+
+    Artifacts are content-addressed and written with INSERT OR IGNORE, so two
+    tasks that produce identical bytes share one row and the row keeps the
+    FIRST writer's task_id. Asking "who owns the row" therefore answers a
+    different question from "who produced this", and the difference is not
+    hypothetical: both arms of a paired trial run `list_dir` against an
+    identically-reset workspace and get byte-identical output, so the second
+    arm was refused access to its own artifact.
+
+    That is arm ASYMMETRY produced by the isolation rule meant to prevent
+    cross-arm contamination — one arm could expand its output and the other
+    could not, which is its own way of making the two runs incomparable.
+
+    The event log already records the right thing: `artifact.written` is
+    appended per task, on the hash chain, carrying the id. So authorship is
+    read from there rather than from a deduplicated row.
+    """
+    if not task_ids:
+        return False
+    marks = ",".join("?" * len(task_ids))
+    row = conn.execute(
+        f"""SELECT 1 FROM events
+            WHERE type = 'artifact.written'
+              AND task_id IN ({marks})
+              AND json_extract(payload_json, '$.id') = ?
+            LIMIT 1""",
+        (*sorted(task_ids), artifact_id),
+    ).fetchone()
+    return row is not None
+

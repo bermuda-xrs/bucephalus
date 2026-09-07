@@ -227,3 +227,50 @@ def test_scoping_does_not_shorten_an_in_scope_result_set(conn):
     out = tool_search_history(ctx, Task("t_mine"), "marker", limit=5)
     assert len(out["results"]) == 5
     assert all(r["task_id"] == "t_mine" for r in out["results"])
+
+
+def test_an_arm_can_expand_an_artifact_whose_bytes_another_arm_wrote_first(conn):
+    """D23. Artifacts are content-addressed with INSERT OR IGNORE, so two arms
+    producing identical bytes share ONE row that keeps the FIRST writer's
+    task_id. Asking who owns the row answers a different question from who
+    produced it.
+
+    Not hypothetical: both arms run `list_dir` against an identically-reset
+    workspace and get byte-identical output. The skill arm was refused access
+    to its own artifact — arm ASYMMETRY created by the rule meant to prevent
+    cross-arm contamination, which is its own way of making two runs
+    incomparable.
+    """
+    import time as _t
+    from agent.kernel.types import Taint
+    from agent.ledger.artifacts import write_artifact
+
+    make_attempt(conn, "t_first", "same goal")
+    make_attempt(conn, "t_second", "same goal")
+    SAME = chr(10).join(["work/", "output/", "input.json"])
+
+    aid = write_artifact(conn, "t_first", "tool_output", SAME,
+                         Taint.UNTRUSTED, {"tool": "list_dir"})
+    again = write_artifact(conn, "t_second", "tool_output", SAME,
+                           Taint.UNTRUSTED, {"tool": "list_dir"})
+    assert aid == again, "content addressing means one row"
+
+    # Authorship comes from the chain, which records it per task.
+    for tid in ("t_first", "t_second"):
+        conn.execute(
+            "INSERT INTO events(task_id, seq, type, payload_json, prev_hash,"
+            " hash, created_at) VALUES (?,?,?,?,?,?,?)",
+            (tid, 99, "artifact.written", json.dumps({"id": aid,
+                                                      "kind": "tool_output"}),
+             "x", "y", _t.time()))
+    conn.commit()
+
+    ctx = Ctx(conn, isolate=True)
+    assert tool_expand_artifact(ctx, Task("t_second"), aid)["ok"] is True, (
+        "an arm must be able to expand output it produced, even when an "
+        "earlier arm produced the same bytes first")
+
+    make_attempt(conn, "t_stranger", "unrelated")
+    assert tool_expand_artifact(ctx, Task("t_stranger"), aid)["ok"] is False, (
+        "and a task that never wrote it must still be refused")
+
