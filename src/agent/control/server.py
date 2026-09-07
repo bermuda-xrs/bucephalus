@@ -149,8 +149,11 @@ def create_app(ctx: AgentContext) -> FastAPI:
     @app.get("/tasks/{task_id}/stream")
     def stream(task_id: str, last_event_id: str | None = Header(default=None)) -> StreamingResponse:
         since = int(last_event_id) if last_event_id and last_event_id.isdigit() else -1
+        # live=True HERE and nowhere else: an SSE client wants the tail, and
+        # every in-process caller wants the history and an end.
         return StreamingResponse(
-            stream_events(ctx, task_id, since_seq=since), media_type="text/event-stream"
+            stream_events(ctx, task_id, since_seq=since, live=True),
+            media_type="text/event-stream",
         )
 
     @app.post("/tasks/{task_id}/plan")

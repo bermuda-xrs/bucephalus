@@ -653,3 +653,24 @@ crash.
 by what it belongs to, not only by what it contains — `(id, task_id)` rather
 than `id` alone.
 
+## D25 — the Anthropic adapter accepts `on_chunk` and ignores it
+
+**Found:** 2026-09-07, while wiring B5 through every adapter.
+
+`AnthropicBackend.complete` takes the `on_chunk` argument so the `Backend`
+protocol stays honest, and does nothing with it: that adapter does not stream,
+and making it stream means rewriting a request path that has NEVER MADE A LIVE
+CALL. Its module docstring already carries the UNVERIFIED banner.
+
+**Consequence:** a `--profile mixed` run shows nothing on any surface until a
+turn completes. Local runs — which is every run this project has done — are
+unaffected.
+
+**Why deferred:** rewriting an unexercised path to add a feature nobody can
+test is how an adapter acquires a second unverified claim. It should be done
+in the same session as the first real Anthropic call, so the streaming path
+and the request shape are verified together.
+
+**What would make it urgent:** any surface work aimed at a cloud tier, or the
+G1 measurement, which needs a paid backend anyway.
+

@@ -13,7 +13,9 @@ dependencies = [
     "fastapi>=0.110",
     "uvicorn>=0.29",
     "scipy>=1.13",            # McNemar / binomtest for the skill gate
-    "sympy==1.13.3",          # SANDBOX LIBRARY, pinned: model-written
+    "sympy==1.13.3",
+  # A8 - the TUI. Python-only, no new runtime.
+  "textual>=0.80",          # SANDBOX LIBRARY, pinned: model-written
                               # code imports it. See TOOLSET_VERSION -
                               # an unpinned version would let two runs
                               # import different code under one

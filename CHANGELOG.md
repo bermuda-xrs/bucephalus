@@ -187,6 +187,109 @@ writes".
 
 Invariants 53, 54. 524 tests. `resume` leaves KNOWN_INERT.
 
+## Phase 7 (B5 + A8) — streaming and a terminal surface — 2026-09-07
+
+### 7.3, answered: the contract is the vocabulary, not the transport
+
+The TUI imports the kernel directly AND renders through
+`control.events.to_client_event`, the same mapping the SSE endpoint uses.
+
+That is not a compromise between the two options in the brief; it is the
+observation that they answer different questions. Making the TUI speak HTTP
+would mean every TUI user runs a SERVER — a bound port, gated by
+`ALPHA_ALLOW_REMOTE`, about to have a message channel in front of it — to
+look at a task on their own machine. The maintenance benefit the brief wanted
+is real, but it does not come from the transport; it comes from two surfaces
+agreeing on what an event MEANS. Sharing the vocabulary buys that without the
+port.
+
+It also inherits a security property rather than reimplementing one:
+`to_client_event` refuses to emit `monitor.*`, so the out-of-band monitor
+stays invisible to this surface for free. A TUI reading the raw event log
+would have had to remember, and forgetting is how M8.3 gets undone.
+
+### Streaming was true and insufficient — MEASURED
+
+The adapters have streamed since the stall-detector rewrite; every surface
+waited for the joined string. Now a bus fans chunks out to any number of
+listeners, and the SSE endpoint tails it live rather than replaying history
+and closing.
+
+Then the measurement changed the design. Warm granite4.1:3b on Ollama /v1,
+two calls differing only in output length:
+
+| | total | first chunk | streaming window | silent |
+|---|---|---|---|---|
+| 60 tokens | 3.4s | 2.4s | 1.0s | **71%** |
+| 400 tokens | 3.8s | 2.4s | 1.4s | **63%** |
+
+**Time to first token is roughly fixed at ~2.4s and does not scale with
+output**, so it is prompt evaluation, not generation. The streaming window
+grows; the silent head does not shrink. A cold load put it at 7.1s of an 8.0s
+call.
+
+So a surface that reacts only to tokens shows nothing for most of a short
+turn — the exact problem streaming was added to solve. The loop now publishes
+a `waiting` event before dispatching the call, and the surface spins the
+theme frames until the first token. Those frames had been loaded and unused
+since the theme shipped; the measurement gave them a job. SPEC-DELTA C38,
+`docs/evidence/phase7-streaming-latency.json`.
+
+### The surface
+
+One screen, four tabs, and a budget bar that is always visible — switching
+screens to check a budget is how you stop checking the budget.
+
+**Alerts are not approvals**, enforced structurally: two separate lists on
+`RunState` rather than one list with a severity field, so they cannot be
+rendered alike by accident. `danger` is reserved and a test greps the surface
+for any other use. The alert COUNT sits on the always-visible bar, not only
+in a tab someone has to think to open.
+
+**The budget bar shows the worst axis, not the average.** A task at 5% of its
+money and 99% of its clock is about to stop, and 52% would describe neither
+thing that is true.
+
+**Rules live in `tui/model.py`, with no Textual in sight**, so every one of
+them is testable without driving a terminal — a test that needed a display is
+a test nobody runs. The app itself was still driven headless to confirm all
+five surfaces mount and render.
+
+### The banner never reaches a prompt
+
+Enforced two ways: structurally, that no prompt-building module imports the
+surface layer; and behaviourally, by grepping EVERY prompt sent during a real
+task for the banner's own lines. **Verified by injecting the banner into
+`PrefixBuilder`** and confirming the test fails.
+
+Not paranoia about ASCII art. The banner is the most obviously decorative
+thing in the system, so if it can reach a prompt then anything can.
+
+### A defect I introduced and caught
+
+`stream_events` gained live tailing with `live=True` as the DEFAULT, which
+turned "give me the events" into "give me events forever" under an unchanged
+signature. Every existing caller joins the result into a string, so the suite
+hung rather than failed. `live=False` now, with the SSE endpoint opting in —
+DR2, and caught only because the symptom was a hang. The same mistake
+returning a subtly different value would have been much quieter. SPEC-DELTA
+C39.
+
+Also: `bus.forget` was written, had no caller, and the dead-code audit said
+so. Deleted, and the real risk it was gesturing at — a backlog dict keyed by
+task id growing forever — fixed by bounding the number of retained tasks.
+
+### Versions
+
+`TOOLSET_VERSION` unchanged: no tool added, and the model cannot see any of
+this. `HARNESS_VERSION` unchanged. `textual` is the one new dependency,
+Python-only, no new runtime.
+
+D25 records that the Anthropic adapter accepts `on_chunk` and ignores it, so
+a `--profile mixed` run still shows nothing until a turn completes.
+
+574 tests.
+
 ## Phase 10 (A5) — parallel tool execution — 2026-09-07
 
 One new tool, `parallel`, taking a list of read-only calls.

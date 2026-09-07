@@ -34,6 +34,7 @@ from ..security.exposure import ToolNotExposed
 from ..security.exposure import check as exposure_check
 from ..security.taint import QUARANTINE_PREFIX
 from ..tokens import count_tokens
+from .. import stream
 
 COMPRESS_PREFIX = """\
 You compress tool output. You have no tools and you cannot act.
@@ -324,6 +325,14 @@ def run_task(ctx, task_id: str) -> TaskResult:
                 },
             )
 
+            # MEASURED 2026-09-07: time to first token is a roughly fixed
+            # ~2.4s of prompt evaluation on this hardware, independent of how
+            # much is generated - 63-71% of a short turn is silent even with
+            # streaming on. So a surface needs to know the call STARTED, not
+            # only that tokens eventually arrived, or it shows nothing for
+            # most of the turn and looks hung.
+            stream.publish(task.id, "waiting", {"step": step,
+                                                "backend": backend.name})
             resp = backend.complete(
                 prefix,
                 tail,
@@ -331,8 +340,17 @@ def run_task(ctx, task_id: str) -> TaskResult:
                 max_tokens=backend.default_max_tokens(),
                 temperature=0.0,
                 schema=step_schema,
+                on_chunk=stream.token_sink(task.id),
             )
             ctx.record(task, resp, purpose="step")
+            stream.publish(task.id, "step", {
+                "step": step, "backend": backend.name,
+                "output_tokens": resp.usage.output_tokens,
+                "spent_usd": round(task.budget.spent_usd, 6),
+                "spent_seconds": round(task.budget.spent_seconds, 1),
+                "budget_usd": task.budget.usd,
+                "budget_seconds": task.budget.seconds,
+            })
             ctx.log.append(
                 task.id,
                 "model.returned",

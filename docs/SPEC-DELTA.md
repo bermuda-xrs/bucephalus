@@ -816,3 +816,44 @@ the new tests against the OLD code is what caught it; without that step the
 file would have looked like five green tests covering an invariant that two
 of them never touched.
 
+### C38. Streaming removes the wait during generation, not the wait before it
+
+**Reality:** B5 asks for token-by-token output, and the obvious reading is
+that a surface stops looking hung. MEASURED against granite4.1:3b on Ollama
+0.33.3, warm, two calls differing only in output length:
+
+| | max_output_tokens | total | first chunk | streaming window | silent |
+|---|---|---|---|---|---|
+| short | 60 | 3.4s | 2.4s | 1.0s | **71%** |
+| long | 400 | 3.8s | 2.4s | 1.4s | **63%** |
+
+Time to first token is roughly FIXED and does not scale with output, so it is
+prompt evaluation rather than generation. The streaming window grows with
+output; the silent head does not shrink. A cold load measured 7.1s of an 8.0s
+call, so the fraction is worse on a cold tier.
+
+**Correct version:** streaming alone does not satisfy the intent. The loop
+publishes a `waiting` event before dispatching the model call, and the
+surface spins the theme's frames until the first token arrives. Without it a
+surface reacting only to tokens shows nothing for most of a short turn — the
+exact problem streaming was added to solve.
+
+**Class:** not a defect. A claim that was true and insufficient, which is
+worth separating from a claim that was false. `docs/evidence/phase7-streaming-latency.json`.
+
+### C39. `stream_events` was briefly changed from "the events" to "events forever"
+
+**Reality:** making the SSE endpoint tail live output meant `stream_events`
+looped on a queue rather than returning. `live=True` was the default, so every
+existing caller — all of which do `"".join(stream_events(...))` — hung, and
+the test suite stopped rather than failed.
+
+**Correct version:** `live=False` is the default and the SSE endpoint opts in.
+The in-process callers want the history and an end; only an SSE client wants
+the tail.
+
+**Class:** DR2. A default that silently changes what an unchanged call DOES,
+so the caller looks correct and behaves differently. Caught immediately here
+because the new behaviour was a hang rather than a wrong value — the same
+mistake returning a subtly different result would have been much quieter.
+

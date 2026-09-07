@@ -41,6 +41,7 @@ class MockBackend(BackendBase):
         max_tokens: int = 4096,
         temperature: float = 0.0,
         schema: dict | None = None,
+        on_chunk=None,
     ) -> ModelResponse:
         t0 = time.time()
         self.prompts.append(prefix + "\n" + tail)
@@ -55,6 +56,13 @@ class MockBackend(BackendBase):
             text = self._script[-1]
         else:
             text = '<final>{"answer": "mock"}</final>'
+
+        if on_chunk is not None:
+            # Chunked so a surface built against the mock behaves like one
+            # built against a real backend. A mock that returned everything in
+            # one call would let a display bug survive every test.
+            for i in range(0, len(text), 24):
+                on_chunk(text[i:i + 24])
 
         in_tok = count_tokens(prefix) + count_tokens(tail)
         # Pretend the prefix cached after the first call, so cache metrics move.

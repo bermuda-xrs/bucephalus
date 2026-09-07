@@ -357,6 +357,36 @@ verified by injecting interleaved execution.
 run record. A task that read five files at once is not comparable with one
 that read them in turn, and wall clock is the cost axis.
 
+## Added 2026-09-07 (B5 + A8 — streaming and the terminal surface)
+
+**59. The banner is display-only and never reaches a prompt.**
+Loaded by `tui/theme.py`, which no prompt-building module imports. Enforced
+two ways: a structural check that the prompt path does not import the surface
+layer, and a test that greps EVERY prompt sent during a real task for the
+banner's own lines. Verified by injecting the banner into `PrefixBuilder`
+and confirming the test fails.
+*Caught by:* `tests/test_tui.py`.
+
+**60. Integrity alerts never share a collection or a colour with approvals.**
+Two separate lists on `RunState`, not one list with a severity field, so they
+cannot be accidentally rendered alike. `danger` is reserved and a test greps
+the surface for any other use of it. The alert COUNT sits on the
+always-visible budget bar, not only in a tab someone has to think to open.
+*Caught by:* `tests/test_tui.py`.
+
+**61. A display can never fail a task.**
+The stream bus drops a listener that raises rather than propagating it, and
+bus events are published outside the adapters' error handling. A broken
+surface is a broken surface, not a failed run.
+*Caught by:* `test_a_listener_that_raises_cannot_fail_the_task`.
+
+**62. The live bus is a view, never the record.**
+Nothing published on it enters the hash chain, and nothing on it may be read
+back to claim what happened. Bounded twice — per task, and in how many tasks
+are retained — because a buffer of model output keyed by task id with no
+ceiling is a leak that only shows after a long day.
+*Caught by:* `test_the_bus_is_not_the_record`.
+
 ---
 
 ## Design rules

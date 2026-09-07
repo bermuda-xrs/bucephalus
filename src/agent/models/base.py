@@ -7,7 +7,7 @@ cache breakpoint correctly. Do not concatenate them in caller code.
 from __future__ import annotations
 
 import time
-from typing import Protocol, runtime_checkable
+from typing import Callable, Protocol, runtime_checkable
 
 from ..config import BackendConfig
 from ..kernel.types import ModelResponse, TokenUsage
@@ -27,7 +27,11 @@ class Backend(Protocol):
         max_tokens: int = 4096,
         temperature: float = 0.0,
         schema: dict | None = None,
+        on_chunk: Callable[[str], None] | None = None,
     ) -> ModelResponse: ...
+    # `on_chunk` is B5. Optional and keyword-friendly so the fourteen existing
+    # call sites are untouched: a surface that wants live output asks for it,
+    # and nothing that does not care has to know it exists.
 
     def measure_throughput(self) -> float: ...
 

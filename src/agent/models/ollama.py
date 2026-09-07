@@ -50,6 +50,7 @@ class OllamaBackend(BackendBase):
         max_tokens: int = 4096,
         temperature: float = 0.0,
         schema: dict | None = None,
+        on_chunk=None,
     ) -> ModelResponse:
         t0 = time.time()
         options: dict = {
@@ -119,6 +120,14 @@ class OllamaBackend(BackendBase):
                     piece = (chunk.get("message") or {}).get("content") or ""
                     if piece:
                         parts.append(piece)
+                        if on_chunk is not None:
+                            # Emitted as it arrives, before the done-check, so
+                            # a watcher sees the last chunk too. Never inside
+                            # a try that would swallow it into the generic
+                            # backend-error branch: `stream.publish` already
+                            # drops a failing listener, and a display must not
+                            # be able to fail a task.
+                            on_chunk(piece)
                     watch.count(piece)
                     if chunk.get("done"):
                         final = chunk

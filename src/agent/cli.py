@@ -259,6 +259,22 @@ def cmd_verify(ctx, args, console) -> int:
     return cmd_alerts(ctx, args, console)
 
 
+def cmd_tui(ctx, args, console) -> int:
+    """A8. Imports the kernel, renders through the control plane's vocabulary.
+
+    See src/agent/tui/__init__.py for why that is the contract worth sharing
+    rather than HTTP: making the TUI speak HTTP would mean every TUI user
+    binds a port to look at a task on their own machine.
+    """
+    try:
+        from .tui.app import run as run_tui
+    except ImportError:
+        console.print("[red]the TUI needs textual:[/red] pip install textual")
+        return 1
+    run_tui(ctx, args.task_id)
+    return 0
+
+
 def cmd_memory(ctx, args, console) -> int:
     """See and correct what the agent remembers about you.
 
@@ -582,6 +598,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     v = sub.add_parser("verify", help="verify every chain against the anchor")
     v.set_defaults(fn=cmd_verify)
+
+    tui = sub.add_parser("tui", help="terminal UI: live output, tools, budget")
+    tui.add_argument("task_id", nargs="?", default=None)
+    tui.set_defaults(fn=cmd_tui)
 
     mem = sub.add_parser("memory", help="show or correct persistent memory")
     mem.add_argument("--forget", help="remove entries containing this text")

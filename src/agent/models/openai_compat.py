@@ -113,6 +113,7 @@ class OpenAICompatibleBackend(BackendBase):
         max_tokens: int = 4096,
         temperature: float = 0.0,
         schema: dict | None = None,
+        on_chunk=None,
     ) -> ModelResponse:
         t0 = time.time()
         body: dict = {
@@ -192,6 +193,8 @@ class OpenAICompatibleBackend(BackendBase):
                         finish_reason = choices[0].get("finish_reason") or finish_reason
                     if piece:
                         parts.append(piece)
+                        if on_chunk is not None:
+                            on_chunk(piece)
                     watch.count(piece)
                     # `finish_reason` marks the end of generation, but a
                     # usage-bearing chunk normally follows it, so the loop

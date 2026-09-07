@@ -63,7 +63,14 @@ class AnthropicBackend(BackendBase):
         max_tokens: int = 4096,
         temperature: float = 0.0,
         schema: dict | None = None,
+        on_chunk=None,
     ) -> ModelResponse:
+        # `on_chunk` is ACCEPTED AND IGNORED here, and that is a real gap
+        # rather than an oversight: this adapter does not stream, so honouring
+        # it would mean rewriting a code path that has never made a live call.
+        # Accepting the argument keeps the Backend protocol honest; DEFERRED
+        # D25 records that a `--profile mixed` run shows nothing until a turn
+        # completes.
         t0 = time.time()
 
         kwargs: dict = {

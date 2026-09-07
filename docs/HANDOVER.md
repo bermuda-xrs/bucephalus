@@ -224,11 +224,11 @@ split, profile or executor.
 | Branch | `measurement-2026-09-01` (off `main` at `148cd99`; no remote) |
 | Harness version | **2** — v3 was evaluated and **rejected**, see section 7 |
 | Toolset version | **5** — sympy, `search_history`, memory, web/file tools, then `parallel` |
-| Tests | **551 passing** |
+| Tests | **574 passing** |
 | Working tree | clean |
 | Running | nothing |
-| Last completed step | **Iteration two, Phase 10 (parallel tools).** See CHANGELOG |
-| Next step | Phase 7 (streaming + TUI), then 8 (STOP before live), 9, 11, 12. Phase 6 (Docker) is PARKED — not installed |
+| Last completed step | **Iteration two, Phase 7 (streaming + TUI).** See CHANGELOG |
+| Next step | Phase 8 (Telegram) — **STOP before it goes live**. Then 9, 11, 12. Phase 6 (Docker) is PARKED — not installed |
 
 ### Iteration two, so far
 

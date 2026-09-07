@@ -1,0 +1,29 @@
+{
+  "when": "2026-09-07",
+  "what": "time to first streamed token, granite4.1:3b via Ollama 0.33.3 /v1",
+  "why": "B5 claims live output. The claim is true and insufficient: streaming removes the wait DURING generation, not the wait before it, and on this hardware the second dominates a short turn.",
+  "method": "one warm model, two calls differing only in max_output_tokens, timestamps taken in the on_chunk callback",
+  "runs": [
+    {
+      "label": "short",
+      "max_output_tokens": 60,
+      "chunks": 16,
+      "total_s": 3.4,
+      "first_chunk_s": 2.4,
+      "streaming_window_s": 1.0,
+      "silent_fraction": 0.71
+    },
+    {
+      "label": "long",
+      "max_output_tokens": 400,
+      "chunks": 23,
+      "total_s": 3.8,
+      "first_chunk_s": 2.4,
+      "streaming_window_s": 1.4,
+      "silent_fraction": 0.63
+    }
+  ],
+  "finding": "time to first token is roughly FIXED at ~2.4s and does not scale with output length, so it is prompt evaluation rather than generation. The streaming window grows with output (1.0s -> 1.4s) while the silent head does not shrink.",
+  "consequence": "a surface that reacts only to tokens shows nothing for 63-71% of a short turn. The loop now publishes a `waiting` event before the model call and the TUI spins the theme's frames until the first token.",
+  "caveat": "one model, one machine, warm. A cold load put first-token at 7.1s of an 8.0s call in an earlier measurement, so the silent fraction is worse on a cold tier, not better."
+}
