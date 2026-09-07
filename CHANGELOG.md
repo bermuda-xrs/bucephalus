@@ -187,6 +187,74 @@ writes".
 
 Invariants 53, 54. 524 tests. `resume` leaves KNOWN_INERT.
 
+## Phase 10 (A5) — parallel tool execution — 2026-09-07
+
+One new tool, `parallel`, taking a list of read-only calls.
+
+**Why a tool rather than multiple action blocks.** Parsing several `<action>`
+blocks from one reply would change the action protocol, which is MEASURED —
+`action_protocol` is a per-backend config value with a recorded reason, and
+the harness-tax work is about exactly this kind of prompt-shape change. A tool
+leaves the protocol untouched.
+
+### The exclusions are the design
+
+**No model calls, at any pool size.** One Ollama instance on CPU inference:
+concurrent generation contends for the same cores. Parallelising the model
+would not make the system faster, it would make the measurement meaningless.
+Asserted structurally rather than by intention — every batchable tool is
+non-side-effecting, and none of them calls the model.
+
+**No side-effecting tools**, refused for the whole batch rather than skipped.
+Idempotency receipts assume ordered execution, and two writes racing for one
+receipt key is a corrupt state rather than a slow one.
+
+**No nesting**, because one level is the entire win.
+
+### 10.5 — gated before anything runs
+
+Every call passes exposure AND the capability gate before the first one
+executes. One refusal means nothing runs, the refusal is recorded on the
+chain, and the result says `applied: False`.
+
+A batch that partially applied would be worse than one that failed: the model
+would see some results and no clear signal the rest were refused. Verified by
+injecting the defect — moving execution up beside the gating — and confirming
+the test catches it.
+
+### 10.6 — shared keyspaces under concurrency
+
+Checked rather than assumed, and the answer is that concurrency never reaches
+them:
+
+* **the search index** is written by SQLite TRIGGERS, in the same statement as
+  the row it derives from. There is one writer per source row and no
+  application code in the path, so last-write-wins does not arise.
+* **the semantic cache** is written by `condense_observation`, which runs once
+  per action at the ledger level — after the batch returns, on the calling
+  thread. A test runs a batch and asserts it added no cache rows.
+* **the shared connection** (`check_same_thread=False`, for the control
+  plane's threadpool) is exercised with eight concurrent readers mixing
+  `search_history` and `read_file`, asserting every result is intact.
+
+### Sequential where it is measured
+
+`open_measurement` pins `max_parallel_tools` to 1 and `bench/noise.py` records
+it. Wall clock is the cost axis, so a task that read five files at once is not
+comparable with one that read them in turn — and a reader must not have to
+infer which happened.
+
+At width 1 there is no pool at all rather than a pool of one, so no scheduler
+sits in the path a benchmark times.
+
+### Versions
+
+`TOOLSET_VERSION` **4 → 5**. The tool adds no new capability — every member of
+a batch was already callable alone — but it changes what a second of wall
+clock buys. `HARNESS_VERSION` unchanged.
+
+551 tests.
+
 ## Phase 5 (B3) — tool exposure, and D18 — 2026-09-07
 
 ### Exposure is not existence

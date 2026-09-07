@@ -14,6 +14,7 @@ cannot be prompted out of walking through.
   | web_search     | no             | UNTRUSTED     |
   | glob           | no             | UNTRUSTED     |
   | grep           | no             | UNTRUSTED     |
+  | parallel       | no             | UNTRUSTED     |
   | write_file       | yes          | USER          |
   | edit_file        | yes          | USER          |
   | memory_write     | yes          | USER          |
@@ -41,6 +42,9 @@ MAX_READ_CHARS = 200_000
 MAX_GLOB_HITS = 200
 MAX_GREP_HITS = 100
 MAX_GREP_PER_FILE = 20
+# A batch bigger than this puts more into one observation than the ledger
+# discipline allows, which is the same reason grep is bounded.
+MAX_PARALLEL_CALLS = 12
 
 
 @dataclass
@@ -382,6 +386,102 @@ def tool_web_fetch(ctx, task, url: str) -> dict:
             "provenance": got["provenance"]}
 
 
+def tool_parallel(ctx, task, calls: list | None = None, step: int = 0) -> dict:
+    """A5 — run several READ-ONLY tool calls at once.
+
+    Reading five files concurrently is faster regardless of how many model
+    instances exist, and that is the whole of the win being claimed. What is
+    NOT here is equally deliberate:
+
+    **No model calls, at any pool size.** One Ollama instance on CPU inference:
+    concurrent generation contends for the same cores, and wall clock is the
+    only cost axis this project has. Parallelising the model would not make
+    the system faster, it would make the measurement meaningless.
+
+    **No side-effecting tools.** Idempotency receipts assume ordered
+    execution, and two writes racing for the same receipt key is a corrupt
+    state rather than a slow one. Refused for the whole batch, not skipped.
+
+    **EVERY call is gated BEFORE ANY call runs.** Concurrency is a new way for
+    a check to be skipped for one call while passing for another, so the
+    checks are not merely repeated per call — they all happen first, and one
+    refusal means nothing executes. A batch that partially applied would be a
+    worse outcome than a batch that failed: the model would see some results
+    and no clear signal that the rest were refused.
+    """
+    from concurrent.futures import ThreadPoolExecutor
+
+    from ..security.exposure import UNRESTRICTED, ToolNotExposed
+    from ..security.exposure import check as exposure_check
+
+    calls = list(calls or [])
+    if not calls:
+        return {"ok": False, "error": "parallel needs a non-empty `calls` list"}
+    width = max(1, int(getattr(ctx.config.limits, "max_parallel_tools", 4)))
+    if len(calls) > MAX_PARALLEL_CALLS:
+        return {"ok": False,
+                "error": (f"{len(calls)} calls exceeds the cap of "
+                          f"{MAX_PARALLEL_CALLS}; a batch that large puts more "
+                          "into context than the ledger discipline allows")}
+
+    # ---- phase 1: resolve and gate EVERYTHING. Nothing has run yet.
+    from ..security.capabilities import gate_tool_call
+
+    planned = []
+    for i, c in enumerate(calls):
+        if not isinstance(c, dict) or not c.get("tool"):
+            return {"ok": False, "error": f"call {i} has no `tool`"}
+        name = c["tool"]
+        args = c.get("args") or {}
+        if name == "parallel":
+            return {"ok": False,
+                    "error": "parallel may not nest; one level is the win"}
+        spec = ctx.tools.get(name)
+        if spec is None:
+            return {"ok": False, "error": f"call {i}: no such tool {name!r}"}
+        if spec.side_effecting:
+            return {"ok": False, "error": (
+                f"call {i}: {name} is side-effecting and may not run in a "
+                "batch. Idempotency receipts assume ordered execution.")}
+        policy = ctx.tool_policy(task.id) if task is not None else UNRESTRICTED
+        try:
+            exposure_check(policy, name)
+        except ToolNotExposed as e:
+            if task is not None:
+                ctx.log.append(task.id, "tool.not_exposed",
+                               {"tool": name, "step": step, "in_batch": True})
+            return {"ok": False, "denied": name, "error": str(e),
+                    "applied": False}
+        decision = gate_tool_call(ctx, task, spec, args, phase=ctx.phase)
+        if decision.verdict != "allow":
+            if task is not None:
+                ctx.log.append(task.id, "human.denied",
+                               {"tool": name, "reason": decision.reason,
+                                "in_batch": True})
+            return {"ok": False, "denied": name, "error": (
+                f"DENIED by the capability gate: {decision.reason}. The whole "
+                "batch was refused; nothing ran."), "applied": False}
+        planned.append((name, args, spec))
+
+    # ---- phase 2: run. Every call already passed every check.
+    def _one(item):
+        name, args, spec = item
+        try:
+            return {"tool": name, "args": args, "result": spec.fn(ctx, task, **args)}
+        except Exception as e:  # noqa: BLE001 - one bad call must not kill the batch
+            return {"tool": name, "args": args,
+                    "result": {"ok": False, "error": f"{type(e).__name__}: {e}"}}
+
+    if width == 1 or len(planned) == 1:
+        results = [_one(x) for x in planned]
+    else:
+        with ThreadPoolExecutor(max_workers=min(width, len(planned))) as pool:
+            results = list(pool.map(_one, planned))
+
+    return {"ok": True, "n": len(results), "width": width,
+            "results": results, "applied": True}
+
+
 def tool_web_search(ctx, task, query: str, limit: int = 5) -> dict:
     """Search the web. Titles and snippets are attacker-authored text.
 
@@ -668,6 +768,25 @@ def default_registry() -> ToolRegistry:
             max_arg_taint=Taint.UNTRUSTED,
             output_taint=Taint.UNTRUSTED,
             description="fetch a URL; the result is always untrusted data",
+        )
+    )
+    r.register(
+        ToolSpec(
+            "parallel",
+            tool_parallel,
+            {"type": "object",
+             "properties": {"calls": {"type": "array", "items": {
+                 "type": "object",
+                 "properties": {"tool": _STR, "args": {"type": "object"}},
+                 "required": ["tool"]}}},
+             "required": ["calls"]},
+            side_effecting=False,
+            max_arg_taint=Taint.UNTRUSTED,
+            # UNTRUSTED because the batch carries whatever its members return,
+            # and the most tainted member decides. Stamping anything lower
+            # would launder a web_fetch through a batch.
+            output_taint=Taint.UNTRUSTED,
+            description="run several read-only tools at once",
         )
     )
     r.register(

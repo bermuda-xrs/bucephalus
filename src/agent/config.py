@@ -133,6 +133,16 @@ class Limits(BaseModel):
     max_refinement_iterations: int = 6
     max_steps: int = 24
     delegation_min_isolated_tokens: int = 1000
+    # A5. How many non-model tool calls `parallel` may run at once. 1 is
+    # sequential, which is what a measurement run gets: wall clock IS this
+    # project's cost axis, so a task that read five files at once is not
+    # comparable with one that read them in turn. Recorded in the run record
+    # either way — `bench/measurement.py` sets it and reports it.
+    #
+    # MODEL calls are never parallelised at any value. One Ollama instance on
+    # CPU: concurrent generation contends for the same cores and corrupts the
+    # only cost axis this project has.
+    max_parallel_tools: int = 4
 
 
 class GateConfig(BaseModel):

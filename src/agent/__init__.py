@@ -47,4 +47,8 @@ HARNESS_VERSION = 2
 #      was given, and G4's "research-grounded skill generation" had nothing to
 #      ground on. A run that can look something up is not attempting the same
 #      problem as one that cannot.
-TOOLSET_VERSION = 4
+#   5  2026-09-07: the `parallel` tool (A5). It adds no new CAPABILITY - every
+#      tool in a batch was already callable one at a time - but it changes
+#      what a second of wall clock buys, and wall clock is this project's cost
+#      axis. Measurement runs pin it to width 1 and record the setting.
+TOOLSET_VERSION = 5

@@ -47,6 +47,11 @@ def open_measurement(config, *, profile: str | None, isolate: bool,
     """
     ctx = AgentContext.open(config, profile=profile)
     ctx.config.isolate_retrieval = bool(isolate)
+    # A5/10.3. Wall clock IS the cost axis here, so a task that read five
+    # files at once is not comparable with one that read them in turn.
+    # Sequential for every measurement, and reported either way — the run
+    # record must never leave a reader to infer which it was.
+    ctx.config.limits.max_parallel_tools = 1
     ctx.measurement_isolation_reason = why or (
         "isolated: a paired trial requires arms to be independent"
         if isolate else "unisolated: declared, and NOT valid for a paired trial")

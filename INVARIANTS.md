@@ -333,6 +333,30 @@ a checkpoint followed it.
 *Caught by:* `test_a_plan_pin_does_not_read_as_a_rewritten_chain`,
 `test_the_plan_pin_check_survives_a_later_checkpoint`.
 
+## Added 2026-09-07 (A5 — parallel tool execution)
+
+**56. Only read-only tools run in a batch, and never a model call.**
+`parallel` refuses any side-effecting tool for the whole batch — idempotency
+receipts assume ordered execution, and two writes racing for one receipt key
+is a corrupt state rather than a slow one. No batchable tool calls the model:
+one Ollama instance on CPU, where concurrent generation contends for the same
+cores and corrupts the only cost axis this project has.
+*Caught by:* `tests/test_parallel_tools.py`.
+
+**57. Every call in a batch is gated before any call runs.**
+Exposure and the capability gate are per call, and concurrency is a new way
+for a check to be skipped for one call while passing for another. One refusal
+means nothing executes: a batch that partially applied would be worse than
+one that failed, because the model would see some results and no clear signal
+that the rest were refused. The refusal is recorded, not only returned.
+*Caught by:* `test_a_denied_call_refuses_the_whole_batch_and_nothing_runs`,
+verified by injecting interleaved execution.
+
+**58. A measurement run executes tools sequentially, and records that it did.**
+`max_parallel_tools` is pinned to 1 by `open_measurement` and reported in the
+run record. A task that read five files at once is not comparable with one
+that read them in turn, and wall clock is the cost axis.
+
 ---
 
 ## Design rules

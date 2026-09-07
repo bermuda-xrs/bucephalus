@@ -1023,6 +1023,9 @@ def main() -> int:
         # retrieve the other's answer is not a paired trial, and the record is
         # where that is established.
         "retrieval_isolation": _isolation_state(ctx),
+        # A5. 1 means every tool call ran in turn. Recorded because wall
+        # clock is the cost axis and concurrency changes what a second means.
+        "max_parallel_tools": ctx.config.limits.max_parallel_tools,
         "min_free_gb_any_task": min(
             [r["min_free_gb"] for r in rows
              if r.get("min_free_gb") is not None] or [None]),
