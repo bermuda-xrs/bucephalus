@@ -555,3 +555,47 @@ files keep working without migrating an append-only log.
 one: two kinds of record in a single keyspace, with the same consequence — a
 control that reports on something other than what it is guarding.
 
+## D22 — the dead-code audit never looks at methods, and M7.4 rule 3 is inert
+
+**Found:** 2026-09-07, by re-running the improved audit against what it had
+been blind to rather than only against the case that prompted the fix.
+
+`_unreferenced()` iterates `ast.parse(f).body`, so it sees module-level
+functions and **no methods at all**. A one-off sweep of the 128 public
+methods in `src/agent` found 14 with no production reference. Most are
+explainable:
+
+* `_Text.handle_data` / `handle_starttag` / `handle_endtag` — `HTMLParser`
+  callbacks, invoked by the stdlib. False positives.
+* `AccessGuard.dispatch` — ASGI middleware, invoked by the framework.
+* `ExternalMemoryProvider.recall` / `remember` and the `NoExternalProvider`
+  pair — tier 3 is an interface with no implementation by design (A1 3.5).
+* `HoldoutRegistry.contains_any` — test-only, and its docstring says so.
+* `Anchor.all_tasks`, `BackendBase.set_throughput`, `ToolRegistry.read_only`,
+  `SkillStore.by_status`, `EventLog.last_of_type`,
+  `AgentContext.gate_queue` — small helpers with no caller.
+
+**One is not explainable, and it is the reason this entry exists.**
+
+`VerificationMesh.verify_isomorphic` is **M7.4 rule 3** — verify the same
+property two independent ways, and treat disagreement as a finding rather
+than averaging it away. It has a test (`test_m7_assure.py:119`) and **no
+production call site.** So no verification in this project has ever been
+cross-checked against a second verifier, and "isomorphic disagreement" has
+never been able to appear.
+
+Same category as `record_holdout_gap`: an inert guarantee, tested into
+looking alive. The audit's own principle applies — *a test that a function
+works is not a test that the system calls it* — and the audit could not
+apply it here because it does not read methods.
+
+**Why deferred rather than fixed:** two separate pieces of work. Extending
+the audit to methods needs the framework-callback false positives handled
+(decorator-less ASGI and HTMLParser hooks look identical to dead code from
+the AST), and wiring rule 3 is a design question about which verifier pairs
+are genuinely isomorphic for a given task — not a line. The freeze holds and
+Phase 10 is queued.
+
+**The sweep above is the half of the work already done**, recorded so whoever
+takes it does not repeat it.
+
