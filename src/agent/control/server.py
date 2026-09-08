@@ -245,10 +245,20 @@ def create_app(ctx: AgentContext) -> FastAPI:
 
     @app.get("/alerts")
     def get_alerts() -> dict:
-        """Integrity breaks and monitor findings. NOT approvals. Never merged."""
+        """Integrity breaks, monitor findings, and dropped channel messages.
+
+        NOT approvals, and three separate keys rather than one list with a
+        severity field. A broken chain, a monitor finding and a stranger
+        messaging the bot mean three different things, and a client that
+        received them merged would have to un-merge them to render them
+        correctly — which is how they end up rendered alike.
+        """
+        from ..channel.telegram import recent_drops
+
         return {
             "integrity": verify_all(ctx.conn, ctx.log, ctx.anchor, ctx.memory),
             "monitor": monitor_flags(ctx.conn),
+            "channel_drops": recent_drops(ctx.conn, limit=25),
         }
 
     @app.get("/metrics/{task_id}")

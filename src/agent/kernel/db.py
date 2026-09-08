@@ -49,6 +49,11 @@ CREATE TABLE IF NOT EXISTS tasks (
     contract_json   TEXT NOT NULL,
     status          TEXT NOT NULL,     -- pending|running|paused|done|failed|halted
     budget_json     TEXT NOT NULL,
+    -- A4. Where this task came from: 'local' or a channel name. DURABLE, and
+    -- never updated. Restrictions are derived from it at check time rather
+    -- than applied at creation, so a parked channel task that outlives the
+    -- process it was created in comes back restricted. See security/origin.py.
+    origin          TEXT NOT NULL DEFAULT 'local',
     created_at      REAL NOT NULL,
     updated_at      REAL NOT NULL
 );
@@ -341,6 +346,47 @@ BEGIN
     VALUES (new.content, 'artifact', new.id, new.task_id, new.kind,
             new.created_at);
 END;
+
+-- A4. Messages from senders who are not on the allowlist. DROPPED, not
+-- queued: no task row, nothing a human can later approve by mistake.
+--
+-- A separate table rather than an event, for two reasons that both matter.
+-- `events.task_id` is NOT NULL and references a task, and a drop by
+-- definition has no task; inventing one to hold the record would create
+-- exactly the queued object this is supposed to avoid. And the events table
+-- feeds `search_index`, so a drop recorded there would be retrievable later
+-- by `search_history` — an unauthenticated stranger writing into the corpus
+-- the agent reads is the contamination vector Phase 2 spent its time closing.
+--
+-- The BODY IS NOT STORED. A hash and a length are enough to recognise a
+-- repeat or prove what arrived; the text itself is attacker-controlled and
+-- keeping it buys nothing that a hash does not.
+CREATE TABLE IF NOT EXISTS channel_drops (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    channel     TEXT NOT NULL,
+    sender      TEXT NOT NULL,
+    reason      TEXT NOT NULL,
+    body_sha256 TEXT NOT NULL,
+    body_len    INTEGER NOT NULL,
+    created_at  REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_drops_created ON channel_drops(created_at);
+
+-- A4. Where to send a task's approval request back to. ROUTING, not a claim
+-- about what happened, so it is a plain table and not an event.
+--
+-- Durable for the same reason `tasks.origin` is. A channel task parks far
+-- more often than a local one, and the whole point of parking is that it
+-- costs nothing to wait — so the wait routinely outlives the process. Held in
+-- memory, this fails closed rather than open (the approval stays pending),
+-- but it fails: the human is never asked, and a task nobody was asked about
+-- waits forever.
+CREATE TABLE IF NOT EXISTS channel_routes (
+    task_id     TEXT PRIMARY KEY REFERENCES tasks(id),
+    channel     TEXT NOT NULL,
+    chat_id     TEXT NOT NULL,
+    created_at  REAL NOT NULL
+);
 """
 
 
@@ -361,8 +407,34 @@ def connect(db_path: str | Path) -> sqlite3.Connection:
     return conn
 
 
+# Columns added after a database may already exist. `CREATE TABLE IF NOT
+# EXISTS` does not alter a table that is already there, so a schema change to
+# an existing column list is invisible without this — and the failure mode is
+# a query that raises on someone else's machine and nowhere in the suite.
+#
+# ADD COLUMN with a constant default is the one ALTER SQLite does cheaply and
+# without rewriting the table. Anything beyond that belongs in a real
+# migration, and this list is kept short so that stays true.
+_ADDED_COLUMNS = (
+    ("tasks", "origin", "TEXT NOT NULL DEFAULT 'local'"),
+)
+
+
+def _add_missing_columns(conn: sqlite3.Connection) -> list[str]:
+    added = []
+    for table, column, decl in _ADDED_COLUMNS:
+        cols = {r[1] for r in conn.execute(f"PRAGMA table_info({table})")}
+        if not cols:
+            continue  # table not created yet; the schema will include it
+        if column not in cols:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {decl}")
+            added.append(f"{table}.{column}")
+    return added
+
+
 def init_schema(conn: sqlite3.Connection) -> None:
     conn.executescript(SCHEMA_SQL)
+    _add_missing_columns(conn)
     conn.commit()
 
 

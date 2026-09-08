@@ -16,6 +16,7 @@ import os
 from pathlib import Path
 
 from ..kernel.types import GateDecision, Taint
+from .origin import is_channel
 
 # Paths no task may ever write, whatever its artifact_scope says.
 PROTECTED_DIRS = ("anchor", "skills_store")
@@ -101,7 +102,13 @@ def gate_tool_call(ctx, task, tool, args: dict, phase: str = "execute") -> GateD
         # sufficient, a scoped USER-taint write proceeds without a deputy or a
         # human. Untrusted arguments never qualify — those are the injection
         # case and they were refused by the taint ceiling above.
+        # A4.2 — NEVER auto-proceed from a channel. This branch is the other
+        # auto-proceed path besides the deputy, and it is easy to forget
+        # because it is a config flag rather than a model call. A task whose
+        # goal was written by someone who is not at this keyboard does not get
+        # a scoped write on the strength of a setting they cannot see.
         if (getattr(ctx.config.autonomy, "approve_scoped_writes", False)
+                and not is_channel(getattr(task, "origin", None))
                 and arg_taint.level <= Taint.USER.level
                 and task.contract.artifact_scope):
             return GateDecision.allow_(

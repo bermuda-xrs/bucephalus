@@ -150,3 +150,17 @@ ui:
   background_image: "./assets/bg.png"    # web/desktop surfaces only
   background_opacity: 0.15
   spinner: "braille"
+
+channels:                           # A4 — inbound message channels
+  telegram:
+    # OFF. Turning this on makes the agent reachable by whoever is on the
+    # allowlist below, from anywhere. Read security/origin.py before you do.
+    enabled: false
+    # EMPTY MEANS NOBODY, not everybody. Put your own numeric Telegram user
+    # id here — the one @userinfobot reports — as a string.
+    allowed_senders: []
+    # The bot token is NOT in this file and must not be put here. A config
+    # file is the thing people paste into an issue.
+    token_env: "ALPHA_TELEGRAM_TOKEN"
+    poll_timeout_s: 25              # long poll; no webhook, no bound port
+    artifact_scope: ["work"]

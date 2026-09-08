@@ -10,6 +10,162 @@
 Dates are commit dates. `0.1.0` is not released yet — see "Unreleased" for
 what still stands between here and a first iteration.
 
+## Phase 8 (A4) — Telegram, stopped before it goes live — 2026-09-08
+
+**Invalidates no published number.** `HARNESS_VERSION` stays 2 and
+`TOOLSET_VERSION` stays **5**: no tool was added, removed, or changed, and the
+model cannot see any of this. A channel task is denied six existing tools; a
+denial is not a registry change, and the tool manual is byte-identical.
+
+**STOP HONOURED.** Nothing here has run against a real bot token. Every path
+is driven end to end through `FakeTransport`; `HttpTransport` is written and
+unexercised, marked UNVERIFIED in its docstring, and filed as D26.
+
+### The structural decision, which is the whole phase
+
+Phase 5 already provides `ctx.restrict_tools(task_id, policy)`, and the
+obvious way to build a restricted channel toolset is to call it when the bot
+creates the task. **That is wrong, and it took a test to see it.**
+
+`_tool_policy` is a dict in process memory. A task row is durable. A channel
+task parks for a human far more often than a local one does — A4.2 requires
+it to — so it spends most of its life waiting, and a restart between the park
+and the approval brings it back UNRESTRICTED with nothing in the record
+saying it ever was otherwise.
+
+So `tasks.origin` is a column, and `ctx.tool_policy` derives the floor from
+that row on every read, unioned with anything narrower. The FACT is stored;
+the RULE is derived. Storing the rule instead would freeze each task under
+whatever the policy was the day it was created, and the tasks most likely to
+be sitting parked are the oldest ones.
+
+This is DR1 on an axis the previous four instances did not have. Those were a
+key too WIDE. This is a lifetime too SHORT. Recorded under DR1 in INVARIANTS
+rather than as a new rule: same question, asked about time instead of space.
+
+### What a channel task loses, and which wall stops what
+
+| tool | stopped by | why the other wall does not |
+|---|---|---|
+| `run_code` | exposure | **taint does not cover it.** An untrusted argument cannot reach a USER-ceiling tool — but the model can write its own code, quoting nothing, and that is USER taint. The taint wall stops the attacker's BYTES, not the attacker's intent laundered through the model's paraphrase |
+| `memory_write`, `memory_consolidate` | exposure **and** taint | both, deliberately. Tier 1 is in the prefix of every future session |
+| `git_push` | exposure, tier, and taint | already TRUSTED-tier; denied as well because a wall you can see beats one you have to reason about |
+| `append_to_outbox` | exposure | the channel is already an egress path; a second one addressed by the model is how a chat message becomes an email to somebody else |
+| `delegate` | exposure | no tool yet. Named so one added later inherits it |
+
+Writes are **not** denied. `write_file` and `edit_file` stay available and
+park for a human, because a channel task that cannot produce anything is a
+channel that does nothing. Content quoted from the message is refused on
+taint; content in the model's own words parks. That asymmetry is the design.
+
+### Never auto-proceed — both paths, not just the deputy
+
+`auto_review` is skipped for a channel task and the skip is logged as
+`review.skipped`, because "no review event" and "review declined on principle"
+look identical in a log that only records what ran.
+
+The second path was the easy one to miss: `approve_scoped_writes` in the
+capability gate is a **config flag**, not a model call, and it auto-allows a
+scoped USER-taint write. A stranger's task does not get a write on the
+strength of a setting they cannot see.
+
+### Two defects found in existing code
+
+**An approval decision could be re-decided.** `resolve_approval` had no guard
+on the current status, so a `deny` after an `approve` flipped the row and
+appended a second, contradictory `human.*` event. Invisible in the console,
+where an approval is a row in a live list that disappears once decided. An
+inline button stays in the chat forever and stays tappable. The chain would
+not have caught it either: both events append validly and hash correctly, and
+the log would simply contain a human approving and then denying the same
+action with nothing to say which one the executor acted on.
+
+**A test of mine was blind to WAL — C41.** The check that a dropped message's
+body is not stored read `Path(db_path).read_bytes()`. In WAL mode a
+just-committed row is in the `-wal` sidecar, not the main file, so injecting
+the defect left the test GREEN. It measured "the main database FILE does not
+contain it" and reported "the DATABASE does not contain it". Fixed to assert
+on the columns and scan every file SQLite writes, after a checkpoint, with a
+guard that the scanned set is not empty. Swept the suite: it was the only
+database-file byte scan. The same mistake bit again ten minutes later, when
+`cp agent.local.db` read back zero of its 283 tasks.
+
+### C42 — the unreachable handler I nearly shipped
+
+`TaskPaused` is raised in the gate and **caught by `run_task`**, which returns
+a `TaskResult` with `status="paused"`. The bot's first draft wrapped the call
+in `except TaskPaused` to send the approval buttons — a handler that could
+never run, so the bot would have reported "paused" and never sent a button,
+making channel approval impossible while every test of the pieces passed.
+
+C34's shape one phase later. Caught by reading `run_task`'s handlers rather
+than trusting its signature, which is the check C34 said to make.
+
+### The same lifetime mistake, caught a second time
+
+The chat to send an approval back to was a dict on the bot. That fails CLOSED
+rather than open — the approval stays pending — but it still fails: the human
+is never asked, and a task nobody was asked about waits forever. Parking is
+supposed to be free; a park nobody hears about is not free, it is lost.
+
+`channel_routes` is a table, and `resend_pending()` re-asks at startup for
+every channel approval still waiting. Local approvals are skipped: a local
+task parks the same way and must not be pushed to somebody's phone.
+
+Worth naming as a separate instance because it is the same question — how
+long does the thing this serves exist — asked about ROUTING rather than about
+a control, and I only asked it because the policy had just taught me to.
+
+### Long polling, not a webhook
+
+A webhook needs a public HTTPS endpoint: bind non-loopback, terminate TLS, and
+put a service that can rewrite the reviewer's policy on the open internet
+behind one bearer token. Long polling makes an outbound request and waits.
+Nothing in `agent/channel/` binds, listens, or imports the control plane —
+asserted by AST, not by intention — and `ALPHA_ALLOW_REMOTE` is untouched.
+
+### Drops are evidence, not a queue
+
+An unknown sender creates **no task, no approval, and no event**. A row in
+`channel_drops` holds the channel, the sender, a reason, a SHA-256 and a
+length — never the body, because `events` feeds the FTS index that
+`search_history` reads, and a dropped message stored there would be an
+unauthenticated stranger writing into the corpus the agent can search. The
+table is capped at 500 rows because outsiders write it; it is the only place
+in this database they can cause growth. And a stranger gets **no reply**: a
+bot that answers "you are not authorised" tells anyone sweeping user ids that
+this account is a live bot with an allowlist.
+
+`recent_drops` is read by `alpha alerts` and `GET /alerts` as a **third key**,
+never merged with integrity or monitor findings — the dead-code audit caught
+it unwired, correctly.
+
+### Measurement
+
+`open_measurement` now pins channels **off**, for the same reason it pins
+`max_parallel_tools = 1`: a measured run with an inbound channel open is not a
+controlled run, because anyone on the allowlist can create tasks in the same
+database while the trial is going. The run record states `channels_enabled`
+alongside `retrieval_isolation`, so a reader never has to infer it.
+
+### Migration
+
+`tasks.origin` is the first column added to an existing table.
+`CREATE TABLE IF NOT EXISTS` does not alter a table that is already there, so
+`init_schema` now runs a short `ADD COLUMN` list. Verified against a
+hand-built pre-phase schema **and** against the real 283-task, 7,700-event
+measurement database: all 283 rows read `local`, and all 283 chains still
+verify.
+
+### Tests
+
+**610 passing** (was 577). 33 new in `tests/test_channel.py`.
+
+Ten of them were run against the defect each claims to catch, by reverting
+one change at a time. **Two came back green and were rewritten** — C41 above,
+and a poison-message test whose revert was behaviourally identical to the
+original, so it proved nothing about the ordering it claimed to test.
+
 ## Iteration two, phase 1 — one adapter for the OpenAI protocol — 2026-09-06
 
 **Invalidates no published number.** `HARNESS_VERSION` stays 2 and

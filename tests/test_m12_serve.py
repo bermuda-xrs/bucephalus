@@ -119,12 +119,20 @@ def test_task_lifecycle_over_http(server):
 
 
 def test_alerts_and_approvals_are_separate_endpoints(server):
-    """An integrity break is not a permission request; they never merge."""
+    """An integrity break is not a permission request; they never merge.
+
+    A4 added a third kind — a message from a sender who is not on the
+    allowlist. It gets its own key for the same reason the first two do: a
+    client that received them merged would have to un-merge them to render
+    them correctly, which is how they end up rendered alike. The exact key set
+    is asserted, so a future kind arriving by accident shows up here.
+    """
     a = _get(server + "/alerts", timeout=10).json()
-    assert set(a) == {"integrity", "monitor"}
+    assert set(a) == {"integrity", "monitor", "channel_drops"}
 
     p = _get(server + "/approvals", timeout=10).json()
     assert "pending" in p and "integrity" not in p
+    assert "channel_drops" not in p, "a drop is not something to approve"
 
 
 def test_unknown_task_is_404(server):

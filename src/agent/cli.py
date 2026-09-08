@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import time
 import tomllib
@@ -230,6 +231,8 @@ def cmd_approvals(ctx, args, console) -> int:
 
 def cmd_alerts(ctx, args, console) -> int:
     """Integrity alerts render differently from approvals. On purpose."""
+    from .channel.telegram import recent_drops
+
     theme = load_theme(ctx)
     findings = verify_all(ctx.conn, ctx.log, ctx.anchor, ctx.memory)
     if findings:
@@ -251,6 +254,23 @@ def cmd_alerts(ctx, args, console) -> int:
             t.add_column(c, overflow="fold")
         for f in flags[:20]:
             t.add_row(f["task_id"][:12], f["severity"], f["finding"][:80])
+        console.print(t)
+
+    # A4. Messages from senders who are not on the allowlist. A THIRD section,
+    # not merged into either of the two above: a stranger messaging the bot is
+    # neither a broken chain nor a monitor finding, and the whole reason this
+    # command renders integrity differently from approvals is that things
+    # which mean different things must not come to look alike.
+    #
+    # It is also the only reader this table has. A drop log nobody can see is
+    # a record kept for its own sake.
+    drops = recent_drops(ctx.conn, limit=10)
+    if drops:
+        t = Table(title="dropped channel messages (no task was created)")
+        for c in ("channel", "sender", "reason", "bytes"):
+            t.add_column(c, overflow="fold")
+        for d in drops:
+            t.add_row(d["channel"], d["sender"], d["reason"], str(d["body_len"]))
         console.print(t)
     return 1 if findings else 0
 
@@ -538,6 +558,40 @@ def cmd_serve(ctx, args, console) -> int:
     return 0
 
 
+def cmd_channel(ctx, args, console) -> int:
+    """A4 — run the Telegram bot. NEVER RUN AGAINST A LIVE TOKEN IN THIS
+    PROGRAM: the phase stops here by instruction, and this command exists so
+    the stop is a decision someone makes rather than a thing left unbuilt.
+
+    Three refusals before a single byte leaves the machine, each naming what
+    to do about it, because a bot that starts half-configured is a bot
+    listening to strangers.
+    """
+    from .channel.telegram import build
+    from .security.origin import CHANNEL_DENIED
+
+    cfg = ctx.config.channels.telegram
+    if not cfg.enabled:
+        console.print("channels.telegram.enabled is false. Nothing started.")
+        return 2
+    if not cfg.allowed_senders:
+        console.print(
+            "channels.telegram.allowed_senders is empty, which means NOBODY. "
+            "Add your own Telegram user id before starting the bot.")
+        return 2
+    if not os.environ.get(cfg.token_env):
+        console.print(
+            f"no bot token: set {cfg.token_env}. It must not go in config.yaml.")
+        return 2
+
+    bot = build(ctx)
+    console.print(
+        f"telegram bot polling; {len(cfg.allowed_senders)} allowed sender(s); "
+        f"channel tasks are denied {', '.join(sorted(CHANNEL_DENIED))}")
+    bot.serve_forever()
+    return 0
+
+
 def cmd_monitor(ctx, args, console) -> int:
     from .assure.monitor import run_monitor
 
@@ -647,6 +701,9 @@ def build_parser() -> argparse.ArgumentParser:
     mo = sub.add_parser("monitor", help="run the out-of-band monitor over a task")
     mo.add_argument("task_id")
     mo.set_defaults(fn=cmd_monitor)
+
+    ch = sub.add_parser("channel", help="run the Telegram bot (long poll)")
+    ch.set_defaults(fn=cmd_channel)
 
     sv = sub.add_parser("serve", help="run the control plane")
     sv.add_argument("--host", default="127.0.0.1")

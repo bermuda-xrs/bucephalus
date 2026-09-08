@@ -387,6 +387,67 @@ are retained — because a buffer of model output keyed by task id with no
 ceiling is a leak that only shows after a long day.
 *Caught by:* `test_the_bus_is_not_the_record`.
 
+## Added 2026-09-08 (A4 — the message channel)
+
+**63. A task's origin is on its ROW, and its restrictions are derived from
+that row at check time.**
+Never installed into process memory at creation. `_tool_policy` is a dict in
+one process; a task row is durable and a parked task spends most of its life
+waiting for a human. Deriving the floor on read also makes it unbypassable
+rather than merely un-widened — a caller who never calls `restrict_tools` at
+all still gets the floor.
+*Caught by:* `test_the_restriction_survives_the_process_that_created_it`.
+
+**64. Every inbound channel message is UNTRUSTED, and the taint is seeded
+where the task runs, not where it arrived.**
+`ctx.taint_tracker` observes the goal of a channel task as untrusted content
+the first time anyone asks for the tracker. The bot is one caller; this is the
+choke point every execution path goes through. The cost is real and intended:
+a channel task cannot write a file whose content is quoted from the request.
+*Caught by:* `test_the_message_is_untrusted_not_user`.
+
+**65. A channel task never auto-proceeds. BOTH paths, not just the deputy.**
+`auto_review` is skipped and logged as `review.skipped`; the
+`approve_scoped_writes` fast path in the capability gate is also refused. The
+second is the easier one to miss because it is a config flag rather than a
+model call.
+*Caught by:* `test_the_deputy_never_sees_a_channel_task`,
+`test_approve_scoped_writes_does_not_apply_to_a_channel_task`.
+
+**66. A message from a sender who is not on the allowlist creates nothing.**
+No task, no approval, no event. A row in `channel_drops` holding a hash and a
+length — never the body, because `events` feeds the FTS index and a dropped
+message stored there would be a stranger writing into the corpus the agent
+can search. Bounded, because unauthenticated senders write those rows.
+*Caught by:* `test_an_unknown_sender_is_dropped_and_leaves_nothing_to_approve`,
+`test_the_dropped_message_body_is_nowhere_in_the_database`.
+
+**67. An approval decision is final.**
+`resolve_approval` refuses a second decision instead of applying it. A console
+approval vanishes from a live list once decided; an inline button stays in the
+chat forever and stays tappable. Without the guard the chain would have held
+two validly-appended, correctly-hashed, contradictory human decisions.
+*Caught by:* `test_a_stale_button_cannot_re_decide`.
+
+**68. The sender is re-verified at DECISION time, not only at receipt.**
+The button outlives the allowlist. Checking only on arrival makes a removal
+take effect for new requests and not for pending ones, which is the wrong way
+round: the pending ones are the ones with an action attached.
+*Caught by:* `test_the_sender_is_re_verified_at_approval_time`.
+
+**69. Where to send a task's approval back to is durable too.**
+`channel_routes`, not a dict on the bot, and `resend_pending()` re-asks at
+startup. The memory version fails closed rather than open, and still fails:
+the human is never asked. Local approvals are skipped — a local task parks the
+same way and must not be pushed to a phone.
+*Caught by:* `test_a_task_parked_before_a_restart_is_asked_about_again`.
+
+**70. A channel adds no listening surface.**
+Long polling, not a webhook. Nothing in `agent/channel/` binds, listens, or
+imports the control plane, and `ALPHA_ALLOW_REMOTE` is untouched.
+*Caught by:* `test_the_channel_binds_nothing`,
+`test_allow_remote_is_untouched_by_this_phase`.
+
 ---
 
 ## Design rules
@@ -445,6 +506,14 @@ nothing else writes. Where a key is derived from CONTENT, ask separately who
 produced it — content addressing deduplicates rows and therefore discards
 every writer after the first. If the two cannot be made to match, the control belongs
 somewhere else.
+
+A4 found DR1's other axis. The four instances above were all a key too WIDE —
+a control shared with something that also writes it. The channel gave the
+mirror image: a LIFETIME too short. Restricting a channel task by calling
+`ctx.restrict_tools()` at creation is correct in scope and wrong in duration,
+because the control lives in one process and the task row outlives every
+process that touches it. Ask both questions: what does this protect, and for
+how long does that thing exist.
 
 **DR2. A default must not shadow the path it is a default for.**
 

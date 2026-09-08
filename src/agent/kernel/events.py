@@ -97,6 +97,19 @@ EVENT_TYPES = frozenset(
         "review.requested",
         "review.decided",
         "deviation.detected",
+        # A4. The deputy was SKIPPED because this task came over a channel.
+        # Recorded rather than silent: "no review event" and "review declined
+        # on principle" look identical in a log that only records what ran,
+        # and the second is the claim the phase is making.
+        "review.skipped",
+        # A4.3. Who pressed the button, re-verified against the allowlist at
+        # the moment of the decision. The approval row says WHAT was decided;
+        # this says WHO, on a channel where the person deciding need not be
+        # the person who asked.
+        "channel.approved_by",
+        # A4.3. A decision arriving over a channel from a sender the
+        # allowlist no longer contains, or on an approval already decided.
+        "channel.refused",
     }
 )
 

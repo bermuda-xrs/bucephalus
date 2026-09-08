@@ -674,3 +674,46 @@ and the request shape are verified together.
 **What would make it urgent:** any surface work aimed at a cloud tier, or the
 G1 measurement, which needs a paid backend anyway.
 
+## D26 — the Telegram transport has never made a live call
+
+**Found:** 2026-09-08, by instruction. Phase 8 carries a STOP before a real
+bot token.
+
+`HttpTransport` is written and unexercised. Everything above it — the
+allowlist, the drop path, task creation, the park, the buttons, the callback,
+the re-verification, the finality guard — is driven end to end through
+`FakeTransport`, so the LOGIC is tested and the four HTTP calls are not.
+
+**Consequence:** the shape of Telegram's `getUpdates` response, the exact
+`inline_keyboard` payload, and the callback_data round trip are asserted
+against my reading of the API rather than against the API. Same standing as
+the Anthropic adapter (D25), marked the same way in the module docstring.
+
+**Why deferred:** running it needs a real bot token, which is the user's
+decision, not mine.
+
+**What closes it:** one session with a token and a private chat. Check first
+that `getUpdates` returns `{"ok": true, "result": [...]}` with `update_id`
+where this expects it, and that a pressed button delivers `callback_query.data`
+unchanged. Those two are the only places a wrong guess is silent rather than
+loud.
+
+## D27 — one task at a time, and the bot has no queue
+
+**Found:** 2026-09-08, building A4.1.
+
+`serve_forever` runs a task inline before polling again, so a second message
+arriving during a run waits for the poll rather than being queued. The chain
+lock is process-wide and single-writer by design (`kernel/db.py`), so
+concurrent runs are not available anyway.
+
+**Consequence:** two allowlisted people using the bot at once get serialised,
+with no acknowledgement that they are waiting. Acceptable for a personal bot
+with a short allowlist; not acceptable for anything wider.
+
+**Why deferred:** a queue is not the fix — the single-writer chain lock is the
+real constraint, and the honest version of this is the claim-then-execute
+receipt protocol already described in `kernel/db.py`. Building a queue in
+front of a lock that serialises anyway would look like concurrency and deliver
+none.
+

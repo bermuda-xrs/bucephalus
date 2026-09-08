@@ -30,6 +30,7 @@ from ..ledger.entries import LedgerEntry, render_tail, sum_tokens
 from ..ledger.prefix import PrefixBuilder, PrefixGuard, SYSTEM_CONTRACT
 from ..ledger.semantic_cache import cached_op
 from ..security.capabilities import gate_tool_call, render_preview
+from ..security.origin import is_channel
 from ..security.exposure import ToolNotExposed
 from ..security.exposure import check as exposure_check
 from ..security.taint import QUARANTINE_PREFIX
@@ -708,7 +709,18 @@ def _adjudicate(ctx, task, tool, args, decision: GateDecision, step: int, plan) 
     arg_taint = tracker.args_taint(args)
     human_only = tier_of(ctx, tool.name) in ctx.config.autonomy.human_only_tiers
 
-    if ctx.config.autonomy.auto_review and not human_only:
+    # A4.2 — a channel task never reaches the deputy. The deputy is a model,
+    # and the premise of a channel is that its input was written by someone
+    # who is not at this keyboard; a model adjudicating a decision that
+    # attacker text has already influenced is the one place a human is worth
+    # the wait. This is a wider rule than "TRUSTED always parks", on purpose:
+    # the tool's tier says how dangerous the ACTION is, and origin says how
+    # much the REQUEST can be trusted, and those are different questions.
+    if is_channel(task.origin):
+        ctx.log.append(task.id, "review.skipped",
+                       {"tool": tool.name, "step": step, "origin": task.origin,
+                        "reason": "channel-originated task parks for a human"})
+    elif ctx.config.autonomy.auto_review and not human_only:
         ctx.log.append(
             task.id,
             "review.requested",

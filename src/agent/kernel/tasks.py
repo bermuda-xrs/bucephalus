@@ -19,6 +19,10 @@ class Task:
     contract: TaskContract
     status: TaskStatus
     budget: Budget
+    # A4. 'local', or the name of the channel this arrived over. Read from the
+    # row rather than held in process memory, because the restrictions derived
+    # from it must outlive the process — see security/origin.py.
+    origin: str = "local"
 
     @property
     def goal(self) -> str:
@@ -37,19 +41,30 @@ def create_task(
     budget: Budget,
     parent_id: str | None = None,
     task_id: str | None = None,
+    origin: str = "local",
 ) -> Task:
     task_id = task_id or new_task_id()
     now = time.time()
+    # A child inherits its parent's origin. A channel task that delegates must
+    # not launder its restrictions off by opening a subtask, and the union in
+    # `tool_policy` only holds if the child is a channel task too.
+    if parent_id:
+        row = conn.execute(
+            "SELECT origin FROM tasks WHERE id=?", (parent_id,)
+        ).fetchone()
+        if row and row[0] and row[0] != "local":
+            origin = row[0]
     conn.execute(
         """INSERT INTO tasks(id, parent_id, contract_json, status, budget_json,
-                             created_at, updated_at)
-           VALUES (?,?,?,?,?,?,?)""",
+                             origin, created_at, updated_at)
+           VALUES (?,?,?,?,?,?,?,?)""",
         (
             task_id,
             parent_id,
             contract.model_dump_json(),
             TaskStatus.PENDING.value,
             budget.model_dump_json(),
+            origin,
             now,
             now,
         ),
@@ -58,14 +73,16 @@ def create_task(
     log.append(
         task_id,
         "task.created",
-        {"contract": json.loads(contract.model_dump_json()), "parent_id": parent_id},
+        {"contract": json.loads(contract.model_dump_json()),
+         "parent_id": parent_id, "origin": origin},
     )
-    return Task(task_id, parent_id, contract, TaskStatus.PENDING, budget)
+    return Task(task_id, parent_id, contract, TaskStatus.PENDING, budget, origin)
 
 
 def load_task(conn: sqlite3.Connection, task_id: str) -> Task:
     row = conn.execute(
-        "SELECT id, parent_id, contract_json, status, budget_json FROM tasks WHERE id=?",
+        """SELECT id, parent_id, contract_json, status, budget_json, origin
+           FROM tasks WHERE id=?""",
         (task_id,),
     ).fetchone()
     if row is None:
@@ -76,6 +93,7 @@ def load_task(conn: sqlite3.Connection, task_id: str) -> Task:
         contract=TaskContract.model_validate_json(row[2]),
         status=TaskStatus(row[3]),
         budget=Budget.model_validate_json(row[4]),
+        origin=row[5] or "local",
     )
 
 

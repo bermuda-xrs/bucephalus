@@ -170,6 +170,32 @@ class AutonomyConfig(BaseModel):
     approve_scoped_writes: bool = False
 
 
+class TelegramConfig(BaseModel):
+    """A4. Off by default, and fail-closed when on.
+
+    `allowed_senders` EMPTY MEANS NOBODY. Not everybody. The other reading is
+    the classic way an allowlist becomes decoration: someone turns the channel
+    on before filling in the list, and an empty-means-open default hands the
+    bot to whoever finds it first. There is a test for this specific value.
+
+    The bot token is NOT here and never will be. It lives in an environment
+    variable, because a config file is the thing people paste into an issue.
+    """
+
+    enabled: bool = False
+    allowed_senders: list[str] = Field(default_factory=list)
+    token_env: str = "ALPHA_TELEGRAM_TOKEN"
+    # Long poll, not a webhook: a webhook needs a public HTTPS endpoint, which
+    # means binding a non-loopback interface and putting this project's
+    # control plane on the internet. Polling adds no listening surface at all.
+    poll_timeout_s: int = 25
+    artifact_scope: list[str] = Field(default_factory=lambda: ["work"])
+
+
+class ChannelConfig(BaseModel):
+    telegram: TelegramConfig = Field(default_factory=TelegramConfig)
+
+
 class UIConfig(BaseModel):
     theme: str = "./themes/default.toml"
     banner_art: str = "./assets/banner.ans"
@@ -194,6 +220,7 @@ class Config(BaseModel):
     gate: GateConfig = Field(default_factory=GateConfig)
     autonomy: AutonomyConfig = Field(default_factory=AutonomyConfig)
     ui: UIConfig = Field(default_factory=UIConfig)
+    channels: ChannelConfig = Field(default_factory=ChannelConfig)
     # Retrieval isolation for measurement runs. See kernel/scope.py.
     #
     # NOT normally set from yaml: `bench/noise.py` turns it on itself, because

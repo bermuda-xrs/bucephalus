@@ -52,6 +52,13 @@ def open_measurement(config, *, profile: str | None, isolate: bool,
     # Sequential for every measurement, and reported either way — the run
     # record must never leave a reader to infer which it was.
     ctx.config.limits.max_parallel_tools = 1
+    # A4. A measured run with an inbound channel open is not a controlled run:
+    # anyone on the allowlist can create tasks in the same database while the
+    # trial is going, and the arms are then sharing a workspace with somebody's
+    # phone. Pinned OFF here rather than merely recorded, for the same reason
+    # max_parallel_tools is pinned - the run record should never have to say
+    # "a stranger could have written to this and we hope they did not".
+    ctx.config.channels.telegram.enabled = False
     ctx.measurement_isolation_reason = why or (
         "isolated: a paired trial requires arms to be independent"
         if isolate else "unisolated: declared, and NOT valid for a paired trial")

@@ -857,3 +857,61 @@ so the caller looks correct and behaves differently. Caught immediately here
 because the new behaviour was a hang rather than a wrong value — the same
 mistake returning a subtly different result would have been much quieter.
 
+### C40. A restriction installed at creation is shorter-lived than what it restricts
+
+**Reality:** Phase 5 gives `ctx.restrict_tools(task_id, policy)`, and the
+obvious way to build A4.2's restricted toolset is to call it when the bot
+creates the task. That is what a delegated child does and it is correct there,
+because a child is created and run inside one process.
+
+A channel task is not. It parks for a human — which A4.2 requires it to do far
+more often than a local task — and `_tool_policy` is a dict in process memory.
+Restart between the park and the approval and the task comes back
+UNRESTRICTED, with nothing in the record saying it ever was otherwise.
+
+**Correct version:** the ORIGIN is a column on `tasks`, and `ctx.tool_policy`
+derives the floor from it on every read, unioned with anything narrower. The
+fact is stored; the rule is derived. Storing the rule instead would freeze
+each task under whatever the policy was on the day it was created, and the
+tasks most likely to be sitting parked are the oldest ones.
+
+**Class:** DR1, on an axis the first four instances did not have. Those were a
+key too wide. This is a lifetime too short. Recorded in INVARIANTS under DR1
+rather than as a new rule, because it is the same question asked about time
+instead of space.
+
+### C41. A test that scanned the database file was blind to WAL
+
+**Reality:** `test_the_dropped_message_body_is_nowhere_in_the_database` read
+`Path(db_path).read_bytes()` and asserted the marker was absent. The database
+runs in WAL mode, so a just-committed row is in the `-wal` sidecar and not in
+the main file at all. Injecting the defect — storing the message body verbatim
+in place of its hash — left the test GREEN.
+
+**Correct version:** assert on the columns AND scan every file SQLite writes,
+after `wal_checkpoint(TRUNCATE)`, with a guard that the scanned set is not
+empty. Swept the suite for other database-file byte scans: this was the only
+one.
+
+**Class:** adjacency. It measured "the main database FILE does not contain it"
+and reported "the DATABASE does not contain it". Found only by running the new
+test against the defect it was written for. The same mistake bit a second time
+ten minutes later, copying the real measurement database with `cp agent.local.db`
+and reading back zero of its 283 tasks.
+
+### C42. `except TaskPaused` around `run_task` is unreachable
+
+**Reality:** `TaskPaused` is raised in the gate and CAUGHT BY `run_task`,
+which converts it into a `TaskResult` with `status="paused"` and an
+`approval_id`. The bot's first draft wrapped the call in `except TaskPaused`
+to send the approval buttons. That handler could never run: the bot would
+have reported "paused" and never sent a button, so no channel approval would
+ever have been possible.
+
+**Correct version:** read the returned result. `if result.status == "paused"
+and result.approval_id`.
+
+**Class:** C34's shape one phase later — a branch that reads as wired and
+cannot execute. Caught by reading `run_task`'s handlers rather than trusting
+its signature, which is the check C34 said to make.
+

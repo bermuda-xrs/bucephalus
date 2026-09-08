@@ -82,6 +82,7 @@ class AgentContext:
         # B3. Per TASK, not per context, because a delegated child runs on
         # the same context as its parent and must not inherit its authority.
         self._tool_policy: dict[str, object] = {}
+        self._origin: dict[str, str] = {}
         self._taint: dict[str, TaintTracker] = {}
         self._frozen_skills: dict[str, list[dict]] = {}
         self._gate_queue: list[str] = []
@@ -182,11 +183,39 @@ class AgentContext:
             )
         return self._memory_frozen[task_id]
 
-    def tool_policy(self, task_id: str):
-        """What this agent may call. Unrestricted unless something narrowed it."""
-        from .security.exposure import UNRESTRICTED
+    def task_origin(self, task_id: str) -> str:
+        """Where this task came from. From the ROW, not from memory.
 
-        return self._tool_policy.get(task_id, UNRESTRICTED)
+        Cached because it is read on every tool call and can never change —
+        there is no UPDATE path for the column, by design.
+        """
+        if task_id not in self._origin:
+            row = self.conn.execute(
+                "SELECT origin FROM tasks WHERE id=?", (task_id,)
+            ).fetchone()
+            self._origin[task_id] = (row[0] if row and row[0] else "local")
+        return self._origin[task_id]
+
+    def tool_policy(self, task_id: str):
+        """What this agent may call: the ORIGIN FLOOR, plus anything narrower.
+
+        The floor is applied on READ rather than written into `_tool_policy`
+        at creation, and that is the whole A4 structural argument. A policy
+        installed at creation lives in this process; the task row outlives it.
+        Deriving here means a channel task parked overnight and resumed by a
+        restarted process is still a channel task.
+
+        It also makes the floor unbypassable rather than merely un-widened:
+        `restrict_tools` refuses to widen, but a caller that never calls it at
+        all would previously have got UNRESTRICTED. Now it gets the floor.
+        """
+        from .security.origin import policy_for
+
+        floor = policy_for(self.task_origin(task_id))
+        extra = self._tool_policy.get(task_id)
+        if extra is None:
+            return floor
+        return extra.narrowed_by(floor.denied, floor.reason)
 
     def restrict_tools(self, task_id: str, policy) -> None:
         """Set a task's policy. Refuses to WIDEN an existing one.
@@ -207,8 +236,33 @@ class AgentContext:
         self._tool_policy[task_id] = policy
 
     def taint_tracker(self, task_id: str) -> TaintTracker:
+        """Per-task provenance, seeded from the task's ORIGIN.
+
+        A4.2 — a message from a channel is UNTRUSTED, not USER. The goal of a
+        channel task IS that message, so it is observed as untrusted content
+        the first time anyone asks for the tracker. Doing it here rather than
+        in the bot is the same argument as `tool_policy`: this is the choke
+        point every execution path goes through, and the bot is one caller.
+
+        The consequence is deliberate and worth stating plainly: any tool
+        argument that quotes the message carries UNTRUSTED, so a channel task
+        cannot write a file whose content is copied from the request. It can
+        read, search, fetch, and answer. That is what "strictest surface in
+        the project" costs, and softening it here would make the taint tier a
+        label rather than a control.
+        """
         if task_id not in self._taint:
-            self._taint[task_id] = TaintTracker()
+            from .security.origin import is_channel
+
+            tracker = TaintTracker()
+            if is_channel(self.task_origin(task_id)):
+                row = self.conn.execute(
+                    "SELECT contract_json FROM tasks WHERE id=?", (task_id,)
+                ).fetchone()
+                if row:
+                    goal = json.loads(row[0]).get("goal", "")
+                    tracker.observe(goal, Taint.UNTRUSTED)
+            self._taint[task_id] = tracker
         return self._taint[task_id]
 
     # -- skills ------------------------------------------------------------
@@ -442,12 +496,31 @@ class AgentContext:
         ]
 
     def resolve_approval(self, approval_id: str, approve: bool) -> dict:
+        """A decision is FINAL. Deciding twice is refused, not applied.
+
+        A4.3 found this. In the console an approval is a row in a live list
+        that disappears once decided, so nobody could press it twice. An
+        inline button in a chat stays on screen forever — scroll back a week
+        and the Approve is still there, still tappable, and the second press
+        was landing: the UPDATE had no guard on the current status, so a
+        `deny` after an `approve` silently flipped the row and appended a
+        second, contradictory human decision to the chain.
+
+        The chain would not have caught it either. Both events are validly
+        appended and hash correctly; the log would simply contain a human
+        approving and then denying the same action, with nothing to say which
+        one the executor acted on.
+        """
         row = self.conn.execute(
-            "SELECT task_id, tool FROM approvals WHERE id=?", (approval_id,)
+            "SELECT task_id, tool, status FROM approvals WHERE id=?", (approval_id,)
         ).fetchone()
         if row is None:
             raise KeyError(approval_id)
-        task_id, tool = row
+        task_id, tool, status = row
+        if status != "pending":
+            return {"approval_id": approval_id, "task_id": task_id,
+                    "approved": status == "approved", "already_decided": True,
+                    "decision": status}
         self.conn.execute(
             "UPDATE approvals SET status=?, decided_at=? WHERE id=?",
             ("approved" if approve else "denied", time.time(), approval_id),
@@ -463,4 +536,5 @@ class AgentContext:
         from .kernel.integrity import checkpoint
 
         checkpoint(self.log, self.anchor, task_id)
-        return {"approval_id": approval_id, "task_id": task_id, "approved": approve}
+        return {"approval_id": approval_id, "task_id": task_id,
+                "approved": approve, "already_decided": False}
