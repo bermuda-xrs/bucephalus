@@ -85,7 +85,6 @@ class AgentContext:
         self._origin: dict[str, str] = {}
         self._taint: dict[str, TaintTracker] = {}
         self._frozen_skills: dict[str, list[dict]] = {}
-        self._gate_queue: list[str] = []
 
     # -- construction ------------------------------------------------------
 
@@ -262,6 +261,30 @@ class AgentContext:
                 if row:
                     goal = json.loads(row[0]).get("goal", "")
                     tracker.observe(goal, Taint.UNTRUSTED)
+            # DR1, LIFETIME AXIS. Everything this task has observed as
+            # untrusted, REBUILT FROM THE RECORD rather than remembered.
+            #
+            # The tracker used to be a dict entry in one process. A resumed
+            # task in a new process started with an empty one, and got away
+            # with it only because a resumed task also forgets its own history
+            # - two gaps cancelling. Phase 9 persists history across session
+            # boundaries, which ends the cancellation, so this is fixed first.
+            #
+            # From `artifact.written` EVENTS, not artifact rows: rows are
+            # content-addressed and keep the first writer only (D23), while the
+            # event carries this write's own taint since 2026-09-13. An older
+            # event has no taint field, and then the row's is the best there is.
+            for content, ev_taint, row_taint in self.conn.execute(
+                """SELECT a.content, json_extract(e.payload_json, '$.taint'),
+                          a.taint
+                   FROM events e
+                   JOIN artifacts a ON a.id = json_extract(e.payload_json, '$.id')
+                   WHERE e.task_id = ? AND e.type = 'artifact.written'
+                   ORDER BY e.seq""",
+                (task_id,),
+            ):
+                if (ev_taint or row_taint) == Taint.UNTRUSTED.value:
+                    tracker.observe(content, Taint.UNTRUSTED)
             self._taint[task_id] = tracker
         return self._taint[task_id]
 
@@ -271,16 +294,67 @@ class AgentContext:
         return self.skills.promoted()
 
     def set_frozen_skills(self, task_id: str, skills: list[dict]) -> None:
+        """An ASSIGNED skill set: one arm of a paired trial. Recorded on the
+        chain the moment it is assigned - the empty set included, because
+        "frozen to nothing" and "never frozen" must not look alike."""
         self._frozen_skills[task_id] = list(skills)
+        self._record_frozen_skills(task_id, skills, source="assigned")
+
+    def _record_frozen_skills(self, task_id: str, skills: list[dict],
+                              source: str) -> None:
+        self.log.append(task_id, "skills.frozen", {
+            "source": source,
+            "skills": [{"id": s.get("id", ""), "name": s["name"],
+                        "version": s["version"]} for s in skills],
+        })
+
+    def _recorded_skills(self, task_id: str) -> list[dict] | None:
+        """The set this task was frozen with, rebuilt byte-for-byte; None if
+        it was never frozen.
+
+        A skill id IS the hash of its body, and `load(verify=True)` checks it,
+        so loading by id is already a byte-level commitment. Anything that no
+        longer loads raises SkillSetChanged rather than being substituted.
+        """
+        from .skills.store import SkillIntegrityError, SkillSetChanged
+
+        row = self.conn.execute(
+            """SELECT payload_json FROM events
+               WHERE task_id=? AND type='skills.frozen'
+               ORDER BY seq DESC LIMIT 1""", (task_id,)).fetchone()
+        if row is None:
+            return None
+        out = []
+        for ref in json.loads(row[0])["skills"]:
+            try:
+                s = self.skills.load(ref["id"], verify=True)
+            except (KeyError, SkillIntegrityError) as e:
+                raise SkillSetChanged(
+                    f"task {task_id} was frozen with {ref['name']} "
+                    f"v{ref['version']} ({ref['id'][:12]}); {e}") from e
+            out.append(s)
+        return out
 
     def freeze_skills(self, task) -> list[dict]:
-        """Frozen at task start — a promotion mid-task would void the cache."""
+        """Frozen at task start — a promotion mid-task would void the cache.
+
+        And DURABLE. This was a dict entry, which for a paired trial meant the
+        arm assignment lived in one process: a control arm resumed elsewhere
+        would have retrieved the promoted skills and become a skill arm, and a
+        skill arm testing a CANDIDATE would have lost it, since retrieval only
+        returns promoted skills. Both silently. See `skills.frozen`.
+        """
         if task.id in self._frozen_skills:
             chosen = self._frozen_skills[task.id]
         else:
-            from .skills.retrieve import retrieve
+            recorded = self._recorded_skills(task.id)
+            if recorded is not None:
+                chosen = recorded
+            else:
+                from .skills.retrieve import retrieve
 
-            chosen = retrieve(self, task.contract.goal)
+                chosen = retrieve(self, task.contract.goal)
+                self._record_frozen_skills(task.id, chosen, source="retrieved")
             self._frozen_skills[task.id] = chosen
         for s in chosen:
             self.log.append(
@@ -302,11 +376,16 @@ class AgentContext:
             if sid:
                 self.skills.record_invocation(sid, task_id, success)
 
-    def enqueue_for_gate(self, skill_id: str) -> None:
-        self._gate_queue.append(skill_id)
-
     def gate_queue(self) -> list[str]:
-        return list(self._gate_queue)
+        """Candidates waiting for the gate. DERIVED from the store.
+
+        This was a list on the context that `generate_skill` appended to, so
+        "handed to the gate" held for exactly as long as the generating process
+        lived - and nothing in production ever read it. A candidate's status IS
+        the queue: durable, the thing the gate changes, and unable to disagree
+        with itself.
+        """
+        return [s["id"] for s in self.skills.by_status("candidate")]
 
     def record_promotion(self, skill_id: str, detail: dict) -> None:
         path = Path(self.config.root) / "runs" / "promotions.jsonl"

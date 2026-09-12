@@ -137,8 +137,8 @@ def generate_skill(ctx, pattern: TaskPattern, sources: list[Source] | None = Non
     # The held-out set is registered where no prompt builder can reach it.
     ctx.mesh.holdouts.store(skill_id, holdout)
 
-    # 5. Hand to the gate. The gate decides. Not this function.
-    ctx.enqueue_for_gate(skill_id)
+    # 5. Stored as a candidate, which IS the hand-off: `ctx.gate_queue()` reads
+    # status. The gate decides. Not this function.
     return skill_id
 
 

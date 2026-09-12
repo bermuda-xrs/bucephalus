@@ -114,6 +114,10 @@ EVENT_TYPES = frozenset(
         # because policy narrowed since, or a denial handed back to the model.
         # The approval row says what was decided; this says what came of it.
         "approval.consumed",
+        # The skill set a task's prefix is built from, INCLUDING the empty set,
+        # recorded once when it is frozen. For a paired trial this is the ARM
+        # ASSIGNMENT, and it used to live only in process memory.
+        "skills.frozen",
     }
 )
 

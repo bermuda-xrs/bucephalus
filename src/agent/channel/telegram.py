@@ -59,6 +59,12 @@ MAX_RECORDED_BODY = 4096
 # hard, oldest first: the recent ones are the ones anybody looks at.
 MAX_DROPS = 500
 
+# How many claimed update ids to remember. Telegram only redelivers updates it
+# has not seen confirmed - at most one batch - so this needs to cover recent
+# history, not all of it. Bounded because every update, a stranger's included,
+# is claimed here.
+MAX_SEEN_UPDATES = 1000
+
 
 class Transport(Protocol):
     """The four Telegram calls this needs. A protocol so the tests can drive
@@ -190,7 +196,36 @@ class TelegramBot:
         self.ctx = ctx
         self.tx = transport
         self.cfg = cfg or ctx.config.channels.telegram
-        self.offset = 0
+        # FROM THE TABLE. In memory, a restart polled from 0 and Telegram
+        # redelivered everything it had not seen confirmed.
+        self.offset = self._resume_offset()
+
+    def _resume_offset(self) -> int:
+        row = self.ctx.conn.execute(
+            "SELECT MAX(update_id) FROM channel_updates WHERE channel=?",
+            (TELEGRAM,)).fetchone()
+        return (row[0] + 1) if row and row[0] is not None else 0
+
+    def _claim(self, update_id: int) -> bool:
+        """True the first time an update is seen, False on a redelivery.
+
+        CLAIM THEN HANDLE, so the failure is at-most-once: a crash between the
+        claim and the handler loses that one message, and its sender re-sends.
+        The other order turns a crash during a 40-second run - the long window
+        in `serve_forever` - into a second task from one message, and a task
+        can have side effects where a lost message has none.
+        """
+        cur = self.ctx.conn.execute(
+            """INSERT OR IGNORE INTO channel_updates(channel, update_id, seen_at)
+               VALUES (?,?,?)""", (TELEGRAM, int(update_id), time.time()))
+        claimed = cur.rowcount == 1
+        self.ctx.conn.execute(
+            """DELETE FROM channel_updates WHERE channel=? AND rowid NOT IN
+               (SELECT rowid FROM channel_updates WHERE channel=?
+                ORDER BY update_id DESC LIMIT ?)""",
+            (TELEGRAM, TELEGRAM, MAX_SEEN_UPDATES))
+        self.ctx.conn.commit()
+        return claimed
 
     # -- routing ------------------------------------------------------------
 
@@ -399,7 +434,11 @@ class TelegramBot:
             self.offset, timeout if timeout is not None else self.cfg.poll_timeout_s)
         out = []
         for u in updates:
-            self.offset = max(self.offset, u.get("update_id", 0) + 1)
+            uid = u.get("update_id", 0)
+            self.offset = max(self.offset, uid + 1)
+            if not self._claim(uid):
+                out.append({"action": "duplicate", "update_id": uid})
+                continue
             try:
                 out.append(self.handle_update(u))
             except Exception as e:  # noqa: BLE001 — one bad update, not the bot

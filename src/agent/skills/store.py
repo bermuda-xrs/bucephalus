@@ -24,6 +24,14 @@ from ..kernel.events import canonical, sha256_hex
 MAX_MODULES = 3
 
 
+class SkillSetChanged(RuntimeError):
+    """A resumed task's recorded skill set cannot be loaded byte-for-byte.
+
+    Running it under a different set would silently turn one arm of a paired
+    trial into the other, so the task does not run.
+    """
+
+
 class SkillIntegrityError(RuntimeError):
     """A skill body on disk does not match its content hash."""
 

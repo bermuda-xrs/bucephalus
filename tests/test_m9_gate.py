@@ -212,7 +212,12 @@ def test_generator_cannot_promote(ctx):
 
     src = inspect.getsource(generate)
     assert "promote(" not in src, "the generator must never call promote"
-    assert "enqueue_for_gate" in src, "the generator must hand off to the gate"
+    # The hand-off used to be `ctx.enqueue_for_gate`, a list in process memory
+    # that nothing in production read. A candidate's STATUS is the queue now
+    # (`ctx.gate_queue()` derives it), so the static fact worth pinning is
+    # that the generator stores candidates. tests/test_lifetime.py checks the
+    # queue survives a restart.
+    assert 'status="candidate"' in src, "the generator must hand off to the gate"
 
 
 # ---------------------------------------------------------------------------

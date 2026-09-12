@@ -31,6 +31,7 @@ from ..ledger.prefix import PrefixBuilder, PrefixGuard, SYSTEM_CONTRACT
 from ..ledger.semantic_cache import cached_op
 from ..security.capabilities import gate_tool_call, render_preview
 from ..security.origin import is_channel
+from ..skills.store import SkillSetChanged
 from ..security.exposure import ToolNotExposed
 from ..security.exposure import check as exposure_check
 from ..security.taint import QUARANTINE_PREFIX
@@ -233,7 +234,13 @@ def run_task(ctx, task_id: str) -> TaskResult:
     checkpoint(ctx.log, ctx.anchor, task.id)
 
     guard = PrefixGuard()
-    skills = ctx.freeze_skills(task)  # frozen at start — prefix stability
+    try:
+        skills = ctx.freeze_skills(task)  # frozen at start — prefix stability
+    except SkillSetChanged:
+        # A resumed attempt whose recorded skills no longer load with the same
+        # bytes. Under a different set it would be a different arm.
+        set_status(ctx.conn, ctx.log, task, TaskStatus.FAILED, "skill_set_changed")
+        raise
     memory = ctx.freeze_memory(task.id)   # same reason, same moment
     entries: list[LedgerEntry] = list(ctx.seed_entries(task))
     plan = ctx.approved_plan(task)
@@ -722,7 +729,12 @@ def _perform(ctx, task, tool, tool_name: str, args: dict, step: int) -> LedgerEn
     aid = write_artifact(
         ctx.conn, task.id, "tool_output", text, taint, origin,
     )
-    ctx.log.append(task.id, "artifact.written", {"id": aid, "kind": "tool_output"})
+    # The TAINT is recorded per write, on the chain. The artifact row is
+    # content-addressed and keeps only the FIRST writer's taint (D23's shape),
+    # so rebuilding a task's taint state from rows would answer for the wrong
+    # writer. See AgentContext.taint_tracker.
+    ctx.log.append(task.id, "artifact.written",
+                   {"id": aid, "kind": "tool_output", "taint": taint.value})
     ctx.taint_tracker(task.id).observe(text, taint)
 
     rendered, via = condense_observation(ctx, task, text, taint, aid)

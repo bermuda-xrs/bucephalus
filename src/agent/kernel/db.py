@@ -391,6 +391,18 @@ CREATE TABLE IF NOT EXISTS channel_routes (
     chat_id     TEXT NOT NULL,
     created_at  REAL NOT NULL
 );
+
+-- A4. Which inbound updates have been claimed. Telegram confirms an update
+-- only when the NEXT getUpdates asks for a higher offset, so a process that
+-- dies after handling a message and before polling again is sent the same
+-- message on restart. With the offset held in memory that was a second task
+-- from one message. Bounded like channel_drops: strangers' updates land here.
+CREATE TABLE IF NOT EXISTS channel_updates (
+    channel     TEXT NOT NULL,
+    update_id   INTEGER NOT NULL,
+    seen_at     REAL NOT NULL,
+    PRIMARY KEY (channel, update_id)
+);
 """
 
 
