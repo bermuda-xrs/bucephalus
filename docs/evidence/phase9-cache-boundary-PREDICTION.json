@@ -1,0 +1,36 @@
+{
+  "when": "2026-09-13",
+  "stated_before_measurement": true,
+  "committed_on_top_of": "f6f7348",
+  "what": "cache behaviour at the Phase 9 session boundary, stated before anything was measured",
+  "boundary_as_built": "The session boundary sits at the existing deletion-compaction point (enforce_ceiling -> 'compact'). In order: a one-call memory flush, compact() unchanged, the session row closed, a child opened with a FRESH tier-1 snapshot, the prefix rebuilt from it. No summarizer runs: see the Phase 9 design STOP in CHANGELOG.",
+  "the_instructions_framing": "A prefix rebuild should MISS the cache. If cache_hit_ratio does not drop at the compression boundary, the prefix did not actually change and the rebuild is not doing what it claims.",
+  "refinement_and_why": "True for a cache keyed on the whole prefix block - Anthropic's, and the test suite's mock - and only when the rebuild changes bytes. The server measured here (Ollama over /v1, llama.cpp-style KV reuse) caches the longest common TOKEN prefix of the WHOLE prompt, tail included. The boundary rewrites the tail (compaction tombstones older entries), so the cache drops at the boundary even when the prefix is byte-identical. On this server a drop does not prove the prefix changed; the DEPTH at which reuse stops does. So the predictions below are about depth, with a control condition in which the prefix does not change.",
+  "conditions": {
+    "A_memory_changed": "the flush writes one tier-1 fact, so the child's snapshot differs from the parent's",
+    "B_memory_unchanged": "the flush writes nothing, so the child's snapshot equals the parent's"
+  },
+  "definitions": {
+    "cached_k": "server-reported cached prompt tokens on step call k",
+    "prompt_k": "server-reported prompt tokens on step call k",
+    "H": "server tokens in the action-hint suffix the loop appends after the tail; it moves every call, so it is the one part of the previous prompt that cannot be reused",
+    "ref_prefix": "server prompt tokens for a request whose system message is the pre-boundary prefix and whose user message is empty, same tools argument",
+    "ref_first_diff": "the same, with the system message truncated at the first byte where the post-boundary prefix differs from the pre-boundary one",
+    "T": 64
+  },
+  "predictions": {
+    "P1_within_a_session": "For consecutive step calls with no boundary or flush between them: cached_k >= prompt_(k-1) - (H + T). Each call reuses essentially all of the previous one.",
+    "P2_boundary_memory_unchanged": "First step call after the boundary, condition B: ref_prefix - T <= cached < cached of the last step call before the boundary. The whole prefix is reused; the drop comes from the tail rewrite alone.",
+    "P3_boundary_memory_changed": "First step call after the boundary, condition A: |cached - ref_first_diff| <= T, and cached_A < cached_B - T. Reuse stops at the memory block, which follows the system contract and the tool manual.",
+    "P4_recovery": "The step call after the boundary call returns to P1 against the boundary call's prompt.",
+    "P5_block_cache": "On a whole-prefix block cache (the mock; the Anthropic model of caching): condition A's first call after the boundary is a full miss (cache_read 0, cache_write = the new prefix), condition B's a full hit. Checked offline in tests/test_sessions.py rather than here."
+  },
+  "what_would_falsify": {
+    "P2": "cached < ref_prefix - T under condition B: the rebuild changed prefix bytes it had no reason to change - a volatile in the prefix",
+    "P3_high": "cached >= ref_prefix - T under condition A: the new snapshot never reached the prefix, so the rebuild is not doing what it claims",
+    "P3_low": "cached < ref_first_diff - T: something EARLIER in the prefix than the memory block changed as well",
+    "P1": "cached_k well short of prompt_(k-1) - (H + T): the tail is not append-only between steps, or the server does not reuse across calls at all"
+  },
+  "method": "Decisions scripted, prefill real. Each prompt the loop builds is sent to the real server with max_tokens=1, so the cache numbers are the server's response to exactly the bytes the loop produced; which files are read and whether the flush writes are scripted, so the two conditions differ only in the flush. A temporary database and a temporary memory directory: the user's real tier-1 memory is never touched. An unrelated prompt evicts the slot before each condition. Reference lengths are measured after both runs, so they cannot warm anything.",
+  "server": "Ollama 0.34.0 on 127.0.0.1:11435 (earlier phases measured 0.33.3), granite4.1:3b over /v1, which reports cached_tokens (measured in Phase 1)"
+}
