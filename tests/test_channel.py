@@ -679,3 +679,26 @@ def test_the_denied_set_names_only_tools_that_exist_or_are_declared(ctx):
     registered = set(ctx.tools.names())
     unknown = CHANNEL_DENIED - registered - {"delegate"}
     assert not unknown, f"denies tools that do not exist: {sorted(unknown)}"
+
+
+# =========================================================================
+# CORRECTION to the Phase 8 report, 2026-09-13
+# =========================================================================
+
+def test_an_approval_pressed_in_the_chat_makes_the_action_happen(bot):
+    """The claim Phase 8 made and had not established.
+
+    Phase 8 said approval over the channel worked end to end. Every channel
+    test that pressed approve then queued a `<final>` for the resumed run, so
+    none of them ever checked whether the APPROVED ACTION ran. It did not:
+    nothing in the codebase read an approval once it was decided, and the
+    resumed task would have re-issued the call and parked again, sending a
+    fresh button, forever. See `_release_decided` in execute/loop.py.
+    """
+    tid, approval_id = _park(bot)
+    bot.ctx.backends["cloud"].queue('<final>{"answer": "done"}</final>')
+    bot.handle_update(callback(approval_id))
+
+    out = Path(bot.ctx.config.root) / "work" / "p.txt"
+    assert out.exists() and out.read_text(encoding="utf-8") == "model wording"
+    assert bot.ctx.pending_approvals(tid) == [], "no second button for one call"

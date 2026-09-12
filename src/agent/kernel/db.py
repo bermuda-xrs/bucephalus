@@ -181,7 +181,11 @@ CREATE TABLE IF NOT EXISTS approvals (
     reason      TEXT NOT NULL,
     status      TEXT NOT NULL,          -- pending|approved|denied
     decided_at  REAL,
-    created_at  REAL NOT NULL
+    created_at  REAL NOT NULL,
+    -- When the resumed task ACTED on the decision. A decision nobody reads is
+    -- a decision with no effect, which is what every approval was until
+    -- 2026-09-13: see execute/loop.py `_release_decided`.
+    consumed_at REAL
 );
 CREATE INDEX IF NOT EXISTS idx_approvals_status ON approvals(status);
 
@@ -417,6 +421,7 @@ def connect(db_path: str | Path) -> sqlite3.Connection:
 # migration, and this list is kept short so that stays true.
 _ADDED_COLUMNS = (
     ("tasks", "origin", "TEXT NOT NULL DEFAULT 'local'"),
+    ("approvals", "consumed_at", "REAL"),
 )
 
 

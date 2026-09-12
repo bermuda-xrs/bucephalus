@@ -247,6 +247,10 @@ def run_task(ctx, task_id: str) -> TaskResult:
     charged_s = 0.0          # wall clock already charged to the budget
 
     try:
+        # Human decisions made while this task was parked, acted on BEFORE the
+        # model gets a turn. See `_release_decided`.
+        entries.extend(_release_decided(ctx, task))
+
         for step in range(ctx.config.limits.max_steps):
             # Charge WALL CLOCK, not summed model time. The budget is a real
             # deadline: sandbox execution and verification cost the operator
@@ -520,6 +524,87 @@ def _verify(ctx, task, artifact: str):
     return r.passed, r
 
 
+def _release_decided(ctx, task) -> list[LedgerEntry]:
+    """Act on the human decisions made while this task was parked.
+
+    FOUND 2026-09-13, and the worst defect of the phase: before this, NOTHING
+    READ AN APPROVAL ONCE IT WAS DECIDED. A task parked; a human pressed
+    approve; the decision was finalised, re-verified, anchored and logged; the
+    task resumed from its goal; the model re-issued the call; the gate parked
+    it again under a NEW approval. The approved action never happened.
+    Measured, not inferred: run 1 parks, approve, run 2 issues the identical
+    call and parks again, and the file is never written.
+
+    Every test of the approval path checked that the decision was RECORDED -
+    finality, sender re-verification, who approved - and none checked that it
+    had an EFFECT. The adjacency family in its plainest form: a status value
+    written by three code paths and read by none.
+
+    The rule derived from the fact:
+
+      approved  execute the recorded call through `_perform`, so it gets the
+                same write-before-act, receipt and observation as any other.
+                The receipt key uses the step it parked at, so a crash between
+                executing and marking it consumed cannot perform it twice.
+      denied    hand the refusal back as an observation, so the resumed run
+                knows a human said no rather than rediscovering it by asking.
+
+    What a human CANNOT approve past is re-checked first: exposure, and the
+    gate's hard denials (taint ceiling, protected paths, scope). A task whose
+    policy narrowed while it was parked does not get the old authority back
+    because someone approved under the old policy. `needs_approval` is the
+    only verdict a human's decision covers.
+    """
+    rows = ctx.conn.execute(
+        """SELECT id, step_id, tool, args_json, status FROM approvals
+           WHERE task_id=? AND status IN ('approved', 'denied')
+             AND consumed_at IS NULL
+           ORDER BY created_at, id""",
+        (task.id,),
+    ).fetchall()
+    out: list[LedgerEntry] = []
+    for approval_id, step_id, tool_name, args_json, status in rows:
+        args = json.loads(args_json)
+        tool = ctx.tools.get(tool_name)
+        if status == "denied":
+            preview = render_preview(tool, args) if tool else tool_name
+            entry = LedgerEntry.observation(
+                f"A human DENIED {preview}. Do not attempt the same outcome "
+                "by another route.",
+                taint=Taint.TRUSTED, label="human")
+            outcome = "denied"
+        else:
+            refusal = None
+            if tool is None:
+                refusal = f"{tool_name} is no longer registered"
+            else:
+                try:
+                    exposure_check(ctx.tool_policy(task.id), tool_name)
+                    d = gate_tool_call(ctx, task, tool, args, phase="execute")
+                    if d.verdict == "deny":
+                        refusal = d.reason
+                except ToolNotExposed as e:
+                    refusal = str(e)
+            if refusal is not None:
+                entry = LedgerEntry.observation(
+                    f"A human approved {tool_name}, but it is no longer "
+                    f"permitted: {refusal}",
+                    taint=Taint.TRUSTED, label="human")
+                outcome = "void"
+            else:
+                entry = _perform(ctx, task, tool, tool_name, args,
+                                 int(step_id or 0))
+                outcome = "executed"
+        ctx.conn.execute("UPDATE approvals SET consumed_at=? WHERE id=?",
+                         (time.time(), approval_id))
+        ctx.conn.commit()
+        ctx.log.append(task.id, "approval.consumed",
+                       {"approval_id": approval_id, "tool": tool_name,
+                        "decision": status, "outcome": outcome})
+        out.append(entry)
+    return out
+
+
 def execute_action(ctx, task, parsed: ParsedAction, step: int, plan=None) -> LedgerEntry:
     """Gate, review, execute exactly once, record. In that order."""
     tool_name = "run_code" if parsed.kind == "code" else parsed.tool
@@ -571,6 +656,17 @@ def execute_action(ctx, task, parsed: ParsedAction, step: int, plan=None) -> Led
                 decision.reason, taint=Taint.TRUSTED, label="review"
             )
 
+    return _perform(ctx, task, tool, tool_name, args, step)
+
+
+def _perform(ctx, task, tool, tool_name: str, args: dict, step: int) -> LedgerEntry:
+    """Execute a call that has ALREADY been cleared, and record it.
+
+    Split out of `execute_action` so a human-approved call released on resume
+    goes through the same write-before-act, receipt and observation path as a
+    call cleared in the same turn. Two copies of this would be two places for
+    the receipt protocol to drift apart.
+    """
     # Write-before-act, then execute at most once across all replays.
     key = idempotency_key(task.id, step, tool_name, args)
     ctx.log.append(

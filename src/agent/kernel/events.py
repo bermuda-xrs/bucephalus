@@ -110,6 +110,10 @@ EVENT_TYPES = frozenset(
         # A4.3. A decision arriving over a channel from a sender the
         # allowlist no longer contains, or on an approval already decided.
         "channel.refused",
+        # A human decision ACTED ON by the resumed task: executed, voided
+        # because policy narrowed since, or a denial handed back to the model.
+        # The approval row says what was decided; this says what came of it.
+        "approval.consumed",
     }
 )
 
