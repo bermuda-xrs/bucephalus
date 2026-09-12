@@ -126,3 +126,16 @@ def test_cache_does_not_launder_taint(ctx):
 
     _, hit2 = cached_op(ctx.conn, "summarize", "payload text", Taint.UNTRUSTED, fn)
     assert hit2 is True
+
+
+def test_the_mock_cache_has_an_opinion_about_the_bytes(ctx):
+    """The mock stands in for the server whose cache_hit_ratio is the
+    independent check on prefix stability. Keyed on the bytes, or it checks
+    nothing - see MockBackend.complete."""
+    b = ctx.backends["cloud"]
+    first = b.complete("PREFIX-A", "t1").usage
+    again = b.complete("PREFIX-A", "t2").usage
+    other = b.complete("PREFIX-B", "t3").usage
+    assert first.cache_read_tokens == 0 and first.cache_write_tokens > 0
+    assert again.cache_read_tokens > 0 and again.cache_write_tokens == 0
+    assert other.cache_read_tokens == 0, "a different prefix must be a miss"

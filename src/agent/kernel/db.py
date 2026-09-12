@@ -459,3 +459,28 @@ def open_db(db_path: str | Path) -> sqlite3.Connection:
     conn = connect(db_path)
     init_schema(conn)
     return conn
+
+
+def snapshot(conn: sqlite3.Connection, dest: str | Path) -> Path:
+    """Copy a LIVE database correctly: SQLite's backup API, not a file copy.
+
+    A copy of `agent.db` alone loses every row still in `agent.db-wal` - the
+    most recent rows, which are the ones evidence is usually about. This
+    project did it twice in ten minutes (C41): once in a test that then could
+    not fail, once in a `cp` that read back zero of 283 tasks. Copying all
+    three files by hand is racy while a writer is live; the backup API takes a
+    consistent snapshot through the same locks every connection uses.
+
+    Refuses to overwrite. Evidence preservation that silently replaces earlier
+    evidence is the other way to get this wrong.
+    """
+    dest = Path(dest)
+    if dest.exists():
+        raise FileExistsError(f"{dest} exists; refusing to overwrite evidence")
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    out = sqlite3.connect(str(dest))
+    try:
+        conn.backup(out)
+    finally:
+        out.close()
+    return dest

@@ -32,6 +32,7 @@ class MockBackend(BackendBase):
         self._responder = responder
         self.calls: list[dict] = []
         self.prompts: list[str] = []
+        self._cached_prefixes: set[str] = set()
 
     def complete(
         self,
@@ -65,13 +66,22 @@ class MockBackend(BackendBase):
                 on_chunk(text[i:i + 24])
 
         in_tok = count_tokens(prefix) + count_tokens(tail)
-        # Pretend the prefix cached after the first call, so cache metrics move.
-        cached = count_tokens(prefix) if len(self.calls) > 1 else 0
+        # A prefix cache keyed on the prefix BYTES, the way a provider's is.
+        #
+        # This used to report a hit on every call after the first, whatever
+        # arrived. That made `test_cache_hit_ratio_above_threshold` - called in
+        # conftest the only check that prefix stability is observable at all -
+        # pass with the prefix MUTATED ON EVERY CALL: injected 2026-09-13,
+        # still green. A mock that caches regardless of the bytes has no
+        # opinion about the bytes. A changed prefix is now a miss and a write.
+        hit = prefix in self._cached_prefixes
+        self._cached_prefixes.add(prefix)
+        cached = count_tokens(prefix) if hit else 0
         usage = TokenUsage(
             input_tokens=in_tok - cached,
             output_tokens=count_tokens(text),
             cache_read_tokens=cached,
-            cache_write_tokens=count_tokens(prefix) if len(self.calls) == 1 else 0,
+            cache_write_tokens=0 if hit else count_tokens(prefix),
         )
         return self._response(text, usage, t0, {"mock": True})
 

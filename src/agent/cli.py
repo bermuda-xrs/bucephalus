@@ -592,6 +592,19 @@ def cmd_channel(ctx, args, console) -> int:
     return 0
 
 
+def cmd_snapshot(ctx, args, console) -> int:
+    """Preserve the database as evidence, including rows still in its WAL.
+
+    Use this rather than copying `agent.db`: a file copy of a live WAL
+    database drops the newest rows without any error (C41).
+    """
+    from .kernel.db import snapshot
+
+    out = snapshot(ctx.conn, args.dest)
+    console.print(f"snapshot written to {out} (WAL-safe, via the backup API)")
+    return 0
+
+
 def cmd_monitor(ctx, args, console) -> int:
     from .assure.monitor import run_monitor
 
@@ -701,6 +714,10 @@ def build_parser() -> argparse.ArgumentParser:
     mo = sub.add_parser("monitor", help="run the out-of-band monitor over a task")
     mo.add_argument("task_id")
     mo.set_defaults(fn=cmd_monitor)
+
+    snp = sub.add_parser("snapshot", help="copy the database as evidence, WAL-safe")
+    snp.add_argument("dest", help="where to write the copy; never overwritten")
+    snp.set_defaults(fn=cmd_snapshot)
 
     ch = sub.add_parser("channel", help="run the Telegram bot (long poll)")
     ch.set_defaults(fn=cmd_channel)

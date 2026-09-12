@@ -12,7 +12,9 @@
     │                                                                  │
     │  To verify: set ANTHROPIC_API_KEY, run one trivial task with     │
     │  --profile mixed, and confirm the temperature omission and the   │
-    │  thinking/effort handling are accepted rather than 400'd.        │
+    │  thinking/effort handling are accepted rather than 400'd, AND    │
+    │  that tokens reach a surface while the turn is still running.    │
+    │  Streaming (D25, 2026-09-13) is part of the unverified path.     │
     └──────────────────────────────────────────────────────────────────┘
 
 
@@ -65,12 +67,6 @@ class AnthropicBackend(BackendBase):
         schema: dict | None = None,
         on_chunk=None,
     ) -> ModelResponse:
-        # `on_chunk` is ACCEPTED AND IGNORED here, and that is a real gap
-        # rather than an oversight: this adapter does not stream, so honouring
-        # it would mean rewriting a code path that has never made a live call.
-        # Accepting the argument keeps the Backend protocol honest; DEFERRED
-        # D25 records that a `--profile mixed` run shows nothing until a turn
-        # completes.
         t0 = time.time()
 
         kwargs: dict = {
@@ -101,8 +97,29 @@ class AnthropicBackend(BackendBase):
             # disabling thinking is rejected above `high` effort
             kwargs["thinking"] = {"type": "disabled"}
 
-        resp = self.client.messages.create(**kwargs)
+        # D25 - ALWAYS STREAM, on one path. Two reasons, either sufficient:
+        #   * a surface needs tokens as they arrive. The non-streaming call
+        #     showed a `--profile mixed` user nothing until a turn completed,
+        #     where Phase 7 measured 63-71% of a SHORT local turn as silent.
+        #   * the SDK REFUSES a non-streaming request whose max_tokens implies
+        #     more than about ten minutes - ValueError, before anything is
+        #     sent - and this adapter sends max(max_tokens, max_output_tokens).
+        #     The old path would have been refused outright at large output
+        #     ceilings, and nothing here could have noticed without a key.
+        # `text_stream` yields text deltas only; thinking deltas are not the
+        # answer, matching `extract_text`. The final message carries content,
+        # usage and stop_reason exactly as `create()` returned them, so nothing
+        # after this block changes.
+        with self.client.messages.stream(**kwargs) as stream:
+            for text in stream.text_stream:
+                if on_chunk is not None and text:
+                    on_chunk(text)
+            resp = stream.get_final_message()
 
+        # Server-side refusal FALLBACKS are deliberately not enabled. A refusal
+        # answered by a different model would be recorded under this backend's
+        # model name, and the run record's claim about which model produced
+        # the output would be false. A refusal is reported, not rerouted.
         if getattr(resp, "stop_reason", None) == "refusal":
             details = getattr(resp, "stop_details", None)
             cat = getattr(details, "category", None) if details else None

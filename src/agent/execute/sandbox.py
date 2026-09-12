@@ -52,6 +52,34 @@ def _posix_limits(timeout_s: int):  # pragma: no cover - not reachable on Window
     return apply
 
 
+# SQLite files that carry CONTENT beside a database. The newest rows of a WAL
+# database are in `-wal`, so a file copied on its own arrives without them -
+# C41's shape, in the one place this project copies user files. `-shm` is left
+# out on purpose: it is an index SQLite rebuilds, and a copied one can carry
+# another process's lock state.
+CARRIED_SIDECARS = ("-wal", "-journal")
+
+
+def _mirror_sidecars(sandbox_main: Path, original_main: Path,
+                     changed: list[str]) -> None:
+    """Make the original's sidecars match the sandbox's, exactly.
+
+    Copy back what exists; REMOVE what the sandbox no longer has. A main file
+    copied back beside the original's older `-wal` would let SQLite replay
+    stale frames onto newer pages on the next open.
+    """
+    for s in CARRIED_SIDECARS:
+        a = sandbox_main.with_name(sandbox_main.name + s)
+        b = original_main.with_name(original_main.name + s)
+        if a.exists():
+            if not b.exists() or a.read_bytes() != b.read_bytes():
+                shutil.copy2(a, b)
+                changed.append(str(b))
+        elif b.exists():
+            b.unlink()
+            changed.append(str(b))
+
+
 def link_into(workdir: str, path: str, rel: str | None = None) -> dict | None:
     """Expose one allowed path inside the sandbox workdir.
 
@@ -76,6 +104,10 @@ def link_into(workdir: str, path: str, rel: str | None = None) -> dict | None:
             shutil.copytree(src, dest, dirs_exist_ok=True)
         else:
             shutil.copy2(src, dest)
+            for s in CARRIED_SIDECARS:
+                side = src.with_name(src.name + s)
+                if side.exists():
+                    shutil.copy2(side, dest.with_name(dest.name + s))
         return {"mode": "copy", "src": str(src), "dest": str(dest)}
 
 
@@ -96,10 +128,14 @@ def _copy_back(entries: list[dict]) -> list[str]:
                     if not out.exists() or out.read_bytes() != f.read_bytes():
                         shutil.copy2(f, out)
                         changed.append(str(out))
+            for f in dest.rglob("*"):
+                if f.is_file() and not f.name.endswith(CARRIED_SIDECARS):
+                    _mirror_sidecars(f, src / f.relative_to(dest), changed)
         else:
             if not src.exists() or src.read_bytes() != dest.read_bytes():
                 shutil.copy2(dest, src)
                 changed.append(str(src))
+            _mirror_sidecars(dest, src, changed)
     return changed
 
 
