@@ -10,6 +10,72 @@
 Dates are commit dates. `0.1.0` is not released yet — see "Unreleased" for
 what still stands between here and a first iteration.
 
+## Phase 11 (A3) - cron - 2026-09-13
+
+**Invalidates no published number.** `HARNESS_VERSION` 2, `TOOLSET_VERSION` 5:
+no tool changed. A scheduled task is a new ORIGIN, not a new tool.
+
+### The schedule is a fact; the next fire is derived (11.5)
+
+Two tables and nothing held in memory: `schedules` (the spec and the task each
+firing creates) and `schedule_firings` (one row per occurrence dealt with,
+fired or missed). The next fire is computed on every read from the spec and
+the latest recorded occurrence; no column stores it, and a test says so. The
+supervisor keeps no queue either - what to run is derived from rows, including
+parked tasks a human has since decided.
+
+### Claim before acting
+
+Each occurrence is written before its task exists, under a primary key that
+refuses a second claim - two supervisors, or one restarted mid-wake, cannot both
+fire it. The restart test models the crash that matters: the supervisor dies
+after firing and before running; the restarted one does not fire again, runs
+the claimed task, and fires the next occurrence on time.
+
+### No backlog (11.3)
+
+A dark window is logged as ONE missed row - the span and a count - and never
+replayed. Only an occurrence within a two-minute grace fires. A run still
+pending or parked when its next occurrence arrives is not joined by a copy:
+that occurrence is missed, with the reason, so a task parked at 3am does not
+become sixty parked tasks by 4.
+
+### Unattended (11.2, 11.6)
+
+A scheduled task has origin `schedule`. It never auto-proceeds - the deputy and
+the scoped-write fast path are skipped for every unattended origin, channel or
+schedule, whatever the config says. At a boundary it parks and raises a
+notification (`alpha notifications`); once a human decides, the next wake resumes
+it and - since `f11be4d` - the decision is acted on. Its tool floor is derived
+from the origin: no `git_push`, `append_to_outbox`, `memory_write`,
+`memory_consolidate` or `delegate`. `run_code` stays, because a side-effecting
+call from an unattended task parks for a human anyway.
+
+11.2's premise that auto-review is unbuilt is corrected in C51: the deputy
+exists and was scoped out; the rule now holds by origin either way.
+
+### Telemetry (11.4)
+
+Every run record's provenance carries `origin`, and a scheduled run's names its
+schedule and occurrence.
+
+### Not built
+
+The supervisor does not consult the measurement lock: the lock cannot be probed
+without being taken, and a probe that can abort a measurement is worse than none
+(C52, D34).
+
+`alpha schedule add|list|remove`, `alpha supervise [--once]`,
+`alpha notifications`.
+
+### Tests
+
+**707 passing.** 20 new in `tests/test_schedule.py`. Ten
+injected defects - derivation from creation, no primary key, no grace, a copy
+joining a parked run, parking without notifying, never resuming a decided task,
+the deputy deciding, the scoped-write fast path, no floor, no origin in the
+record - every listed test red for each.
+
 ## Registers, D25, Phase 9 (B1), and the file-path sweep - 2026-09-13
 
 **Invalidates no published number - verified, not inferred.** No published

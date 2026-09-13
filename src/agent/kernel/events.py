@@ -127,6 +127,12 @@ EVENT_TYPES = frozenset(
         # refused. Recorded because the alternative is a fact that vanished at
         # compression with no record of why.
         "memory.flush_refused",
+        # A3. This task was created by a schedule: which one, and which
+        # occurrence. What lets scheduled runs separate from interactive ones.
+        "schedule.fired",
+        # 11.2. A task that parked with nobody watching, and the notification
+        # raised for it.
+        "notification.raised",
     }
 )
 

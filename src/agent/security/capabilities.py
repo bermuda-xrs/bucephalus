@@ -19,7 +19,7 @@ import re
 from pathlib import Path
 
 from ..kernel.types import GateDecision, Taint
-from .origin import is_channel
+from .origin import is_unattended
 
 # Paths no task may ever write, whatever its artifact_scope says.
 PROTECTED_DIRS = ("anchor", "skills_store")
@@ -278,7 +278,9 @@ def gate_tool_call(ctx, task, tool, args: dict, phase: str = "execute") -> GateD
         # goal was written by someone who is not at this keyboard does not get
         # a scoped write on the strength of a setting they cannot see.
         if (getattr(ctx.config.autonomy, "approve_scoped_writes", False)
-                and not is_channel(getattr(task, "origin", None))
+                # ...and not from a timer either (11.2): an unattended task
+                # gets no fast path, whatever this flag says.
+                and not is_unattended(getattr(task, "origin", None))
                 and arg_taint.level <= Taint.USER.level
                 and task.contract.artifact_scope):
             return GateDecision.allow_(

@@ -224,11 +224,11 @@ split, profile or executor.
 | Branch | `measurement-2026-09-01` (off `main` at `148cd99`; no remote) |
 | Harness version | **2** — v3 was evaluated and **rejected**, see section 7 |
 | Toolset version | **5** — sympy, `search_history`, memory, web/file tools, then `parallel` |
-| Tests | **687 passing** |
+| Tests | **707 passing** |
 | Working tree | clean |
 | Running | nothing |
-| Last completed step | **Iteration two, Phase 9 (sessions)**, 9.2 withdrawn, and the file-path sweep (C50). See CHANGELOG |
-| Next step | Phase 11 (cron), then 12 once D19 closes. Phase 6 (Docker) PARKED - it is also what closes D32. D26 holds two unexercised live paths: a bot token and an API key close both |
+| Last completed step | **Iteration two, Phase 11 (cron).** See CHANGELOG |
+| Next step | Phase 12 (portable skills) needs D19 closed first. Phase 6 (Docker) PARKED - it also closes D32. D26 holds two unexercised live paths: a bot token and an API key close both |
 
 ### Iteration two, so far
 

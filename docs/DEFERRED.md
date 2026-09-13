@@ -822,3 +822,15 @@ system block, so the layout that is cheap depends on the provider.
 **Why not changed:** moving tier 1 out of the system text changes prefix
 STRUCTURE, which this project measured moving pass rates (the harness tax). That
 is a HARNESS_VERSION change and needs its own STOP.
+
+## D34 - the supervisor and a measurement can share the machine
+
+**Found:** 2026-09-13, building 11.
+
+A scheduled task that fires during a measurement competes for the same CPU,
+and wall clock is this project's cost axis - the run lock exists because
+contention can manufacture `budget_exhausted` on a task that would finish. The
+supervisor does not consult the lock, because the lock cannot be probed without
+being taken (C52). Until a non-intrusive signal exists - a measurement writing
+a marker the supervisor reads, say - do not leave `alpha supervise` running
+through a measurement, and the run record cannot yet prove it was not.

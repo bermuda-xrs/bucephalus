@@ -619,6 +619,69 @@ def cmd_lineage(ctx, args, console) -> int:
     return 0
 
 
+def cmd_schedule(ctx, args, console) -> int:
+    """A3 - add, list or remove a schedule. `alpha supervise` fires them."""
+    from . import schedule as sched
+
+    if args.action == "add":
+        if not args.spec or not args.goal:
+            console.print('usage: alpha schedule add "<cron>" "<goal>"')
+            return 2
+        lim = ctx.config.limits
+        sid = sched.add(ctx.conn, args.spec,
+                        TaskContract(goal=args.goal,
+                                     artifact_scope=args.scope or ["work"]),
+                        Budget(usd=args.budget_usd or lim.default_task_budget_usd,
+                               seconds=args.budget_seconds
+                               or lim.default_task_budget_seconds))
+        nxt = sched.next_fire(ctx.conn, sched.get(ctx.conn, sid))
+        console.print(f"{sid}  {args.spec}  next "
+                      f"{time.strftime('%Y-%m-%d %H:%M', time.localtime(nxt))}")
+        return 0
+    if args.action == "remove":
+        ok = sched.remove(ctx.conn, args.id or "")
+        console.print("removed" if ok else "no such active schedule")
+        return 0 if ok else 1
+    rows = sched.active(ctx.conn)
+    if not rows:
+        console.print("no schedules")
+    for s in rows:
+        nxt = sched.next_fire(ctx.conn, s)
+        goal = json.loads(s["contract_json"])["goal"]
+        console.print(f"{s['id']}  {s['spec']:<16} next "
+                      f"{time.strftime('%Y-%m-%d %H:%M', time.localtime(nxt))}  "
+                      f"{goal[:50]}")
+    return 0
+
+
+def cmd_supervise(ctx, args, console) -> int:
+    """A3 - the supervisor. Wakes, derives what is due, fires and runs it."""
+    from . import schedule as sched
+
+    console.print(f"supervising {len(sched.active(ctx.conn))} schedule(s), "
+                  f"waking every {args.tick:g}s")
+    sched.supervise(ctx, tick_s=args.tick, once=args.once,
+                    report=lambda r: console.print(r))
+    return 0
+
+
+def cmd_notifications(ctx, args, console) -> int:
+    """11.2 - what parked while nobody was watching."""
+    from . import schedule as sched
+
+    rows = sched.notifications(ctx.conn, unseen_only=not args.all)
+    if not rows:
+        console.print("nothing new")
+    for n in rows:
+        d = n["detail"]
+        console.print(f"{n['id']}  {n['kind']:<7} {n['task_id'][:12]}  "
+                      f"{d.get('tool', '')}  {d.get('preview', '')[:60]}  "
+                      f"-> alpha approvals --decide {d.get('approval_id', '')}")
+    if args.seen:
+        sched.mark_seen(ctx.conn, [n["id"] for n in rows])
+    return 0
+
+
 def cmd_monitor(ctx, args, console) -> int:
     from .assure.monitor import run_monitor
 
@@ -728,6 +791,27 @@ def build_parser() -> argparse.ArgumentParser:
     mo = sub.add_parser("monitor", help="run the out-of-band monitor over a task")
     mo.add_argument("task_id")
     mo.set_defaults(fn=cmd_monitor)
+
+    sc = sub.add_parser("schedule", help="add, list or remove a scheduled task")
+    sc.add_argument("action", choices=["add", "list", "remove"])
+    sc.add_argument("spec", nargs="?",
+                    help="cron: minute hour day-of-month month day-of-week")
+    sc.add_argument("goal", nargs="?")
+    sc.add_argument("--id")
+    sc.add_argument("--scope", nargs="*")
+    sc.add_argument("--budget-usd", type=float)
+    sc.add_argument("--budget-seconds", type=int)
+    sc.set_defaults(fn=cmd_schedule)
+
+    sp = sub.add_parser("supervise", help="fire scheduled tasks as they fall due")
+    sp.add_argument("--tick", type=float, default=30.0)
+    sp.add_argument("--once", action="store_true", help="one wake, then exit")
+    sp.set_defaults(fn=cmd_supervise)
+
+    nt = sub.add_parser("notifications", help="what parked while nobody watched")
+    nt.add_argument("--all", action="store_true")
+    nt.add_argument("--seen", action="store_true", help="mark them seen")
+    nt.set_defaults(fn=cmd_notifications)
 
     lin = sub.add_parser("lineage", help="a task's sessions, parent to child")
     lin.add_argument("task_id")

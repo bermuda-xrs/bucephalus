@@ -433,6 +433,39 @@ WHEN NEW.parent_id IS NOT NULL
 BEGIN
     SELECT RAISE(ABORT, 'a session may only descend from a session of the same task');
 END;
+
+-- A3. A schedule is a FACT; its next fire is DERIVED on read and stored
+-- nowhere (schedule.py). A removal is a fact too, not a delete.
+CREATE TABLE IF NOT EXISTS schedules (
+    id            TEXT PRIMARY KEY,
+    spec          TEXT NOT NULL,        -- five-field cron, local time
+    contract_json TEXT NOT NULL,        -- the task each firing creates
+    budget_json   TEXT NOT NULL,
+    created_at    REAL NOT NULL,
+    removed_at    REAL
+);
+-- One row per occurrence DEALT WITH: fired, or missed. The primary key is what
+-- makes a double fire impossible rather than unlikely - two supervisors, or one
+-- restarted mid-wake, cannot both claim an occurrence.
+CREATE TABLE IF NOT EXISTS schedule_firings (
+    schedule_id   TEXT NOT NULL REFERENCES schedules(id),
+    occurrence    INTEGER NOT NULL,     -- the slot's epoch, not when it ran
+    outcome       TEXT NOT NULL,        -- fired | missed
+    task_id       TEXT REFERENCES tasks(id),
+    detail_json   TEXT NOT NULL,
+    recorded_at   REAL NOT NULL,
+    PRIMARY KEY (schedule_id, occurrence)
+);
+-- 11.2: a scheduled task that parks raises one of these. The row is the fact
+-- a delivery channel reads; the approval it points at is where a human acts.
+CREATE TABLE IF NOT EXISTS notifications (
+    id            TEXT PRIMARY KEY,
+    task_id       TEXT REFERENCES tasks(id),
+    kind          TEXT NOT NULL,
+    detail_json   TEXT NOT NULL,
+    created_at    REAL NOT NULL,
+    seen_at       REAL
+);
 """
 
 

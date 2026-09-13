@@ -48,6 +48,38 @@ TELEGRAM = "telegram"
 # Origins reachable by someone who is not at the keyboard.
 CHANNEL_ORIGINS = frozenset({TELEGRAM})
 
+# A3. A task whose trigger is a timer. Its goal was written by the owner, so
+# its bytes are not a stranger's - what changes at 3am is that NOBODY IS
+# WATCHING.
+SCHEDULE = "schedule"
+
+# Origins with nobody present when the task runs: a channel task's author is
+# not at this keyboard, a scheduled task's author is asleep. Neither may
+# auto-proceed - no deputy, no scoped-write fast path - because both remove the
+# permission layer for exactly the tasks running with nobody there (11.2).
+UNATTENDED_ORIGINS = CHANNEL_ORIGINS | {SCHEDULE}
+
+# What a scheduled task loses (11.6). NOT the channel's list, because the risk
+# is not a stranger's instruction; it is that nothing done tonight is looked at
+# until morning. So the floor removes what cannot be undone or reviewed after
+# the fact:
+#
+#   git_push            outward and irreversible
+#   append_to_outbox    an egress path addressed by the model
+#   memory_write        tier 1 is in every future prompt; changing what the
+#   memory_consolidate  agent believes while nobody watches is not routine work
+#   delegate            unbounded fan-out from a timer
+#
+# `run_code` is NOT here. A scheduled report may need to compute, and a
+# side-effecting call from an unattended task parks for a human anyway.
+SCHEDULE_DENIED = frozenset({
+    "git_push",
+    "append_to_outbox",
+    "memory_write",
+    "memory_consolidate",
+    "delegate",
+})
+
 # What a channel-originated task loses. Each line is a reason, not a list.
 #
 #   run_code            see the module docstring: the taint ceiling does not
@@ -88,8 +120,14 @@ def is_channel(origin: str | None) -> bool:
     return (origin or LOCAL) in CHANNEL_ORIGINS
 
 
+def is_unattended(origin: str | None) -> bool:
+    return (origin or LOCAL) in UNATTENDED_ORIGINS
+
+
 def policy_for(origin: str | None) -> ToolPolicy:
     """The floor for this origin. Unioned with any narrower policy on read."""
+    if (origin or LOCAL) == SCHEDULE:
+        return ToolPolicy(denied=SCHEDULE_DENIED, reason="scheduled task, unattended")
     if not is_channel(origin):
         # The SINGLETON, not an equal copy. A fresh `ToolPolicy()` compares
         # equal and would pass every test that uses `==`; the identity is what

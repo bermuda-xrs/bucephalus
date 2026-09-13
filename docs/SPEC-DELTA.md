@@ -1094,3 +1094,27 @@ routes and as complete as the record allows for the fifth.
 guarding one ROUTE to some bytes while another route to the same bytes stays
 open. C41 was its storage form (the connection versus the file), C45 its first
 file form; this is the general case.
+
+### C51. 11.2 said auto-review is unbuilt; the code has it
+
+**Reality:** 11.2 says a scheduled task at a USER boundary parks indefinitely
+because auto-review is unbuilt. The M13.3 deputy exists and runs: 14 decisions
+in the measurement record. It was scoped out of this iteration, which is a
+different fact from unbuilt.
+
+**Correct version:** the conclusion stands and is now a rule rather than a
+consequence of absence. Every UNATTENDED origin - a channel or a schedule -
+skips the deputy and the scoped-write fast path by origin, whatever the config
+says, so if the deputy is ever brought back in scope it still cannot decide for
+a task with nobody present. A parked scheduled task notifies and waits.
+
+### C52. The measurement lock cannot be consulted without being taken
+
+**Reality:** the natural guard - a supervisor that does not fire while a
+measurement holds `.measurement.lock` - needs to know whether the lock is held.
+An OS advisory lock can only be probed by trying to take it, and a supervisor
+that briefly takes it every wake can collide with a measurement starting at
+that instant, which then aborts with `RunLockBusy`.
+
+**Correct version:** not built. A probe that can abort the thing it protects is
+worse than no probe. DEFERRED D34.

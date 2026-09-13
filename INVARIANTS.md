@@ -525,6 +525,40 @@ A boundary is the only thing that replaces it, and the only place a deferred
 memory write becomes visible.
 *Caught by:* `test_a_resumed_task_keeps_its_sessions_memory_snapshot`.
 
+## Added 2026-09-13 (A3 - cron)
+
+**84. A schedule is a fact; its next fire is derived and stored nowhere.**
+Every wake computes the first occurrence of the spec after the latest one
+recorded in `schedule_firings`. No column holds a computed next-fire time.
+*Caught by:* `test_a_restart_neither_double_fires_nor_drops_the_next`,
+`test_the_next_fire_is_stored_nowhere`.
+
+**85. An occurrence is claimed before it acts, and only once.**
+A primary key on (schedule, occurrence) refuses a second claim, so two
+supervisors or one restarted mid-wake cannot both fire it. At-most-once: a
+claimed occurrence whose task was created before a crash is run by the next
+wake, because what to run is derived from rows.
+*Caught by:* `test_an_occurrence_can_be_claimed_only_once`.
+
+**86. A missed window is logged once and never replayed.**
+Occurrences that passed while nothing watched become ONE missed row per wake,
+with the span and a count. Only an occurrence within the grace fires; a run
+still pending or parked is not joined by a second copy.
+*Caught by:* `test_a_dark_window_is_logged_once_and_not_replayed`,
+`test_an_occurrence_older_than_the_grace_is_missed_not_fired`,
+`test_a_parked_run_is_not_joined_by_a_copy_every_minute`.
+
+**87. An unattended task never auto-proceeds - channel or schedule.**
+No deputy, no scoped-write fast path. A scheduled task at a boundary parks,
+raises a notification, and is resumed by the next wake once a human decides.
+*Caught by:* `test_a_boundary_parks_notifies_and_the_approval_is_actionable`,
+`test_the_deputy_never_sees_a_scheduled_task`.
+
+**88. A scheduled task's tool floor is derived from its origin, and every run
+record carries its origin.**
+*Caught by:* `test_the_scheduled_origin_derives_a_tool_floor`,
+`test_scheduled_runs_are_separable_in_telemetry`.
+
 ---
 
 ## Design rules

@@ -52,6 +52,16 @@ def provenance(conn: sqlite3.Connection, task_id: str, config=None) -> dict:
     if config is not None:
         out["profile"] = config.profile
         out["profile_provenance"] = config.profile_provenance
+    # 11.4. Where the task came from travels with every record, so a scheduled
+    # run never averages into an interactive one - and a scheduled run says
+    # which schedule and which occurrence produced it.
+    row = conn.execute("SELECT origin FROM tasks WHERE id=?", (task_id,)).fetchone()
+    out["origin"] = row[0] if row and row[0] else "local"
+    fired = conn.execute(
+        """SELECT payload_json FROM events WHERE task_id=? AND type='schedule.fired'
+           ORDER BY seq LIMIT 1""", (task_id,)).fetchone()
+    if fired:
+        out["schedule"] = json.loads(fired[0])
     return out
 
 

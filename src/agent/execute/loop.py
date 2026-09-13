@@ -30,7 +30,7 @@ from ..ledger.entries import LedgerEntry, render_tail, sum_tokens
 from ..ledger.prefix import PrefixBuilder, PrefixGuard, SYSTEM_CONTRACT
 from ..ledger.semantic_cache import cached_op
 from ..security.capabilities import gate_tool_call, render_preview
-from ..security.origin import is_channel
+from ..security.origin import is_unattended
 from ..skills.store import SkillSetChanged
 from ..security.exposure import ToolNotExposed
 from ..security.exposure import check as exposure_check
@@ -947,10 +947,15 @@ def _adjudicate(ctx, task, tool, args, decision: GateDecision, step: int, plan,
     # the wait. This is a wider rule than "TRUSTED always parks", on purpose:
     # the tool's tier says how dangerous the ACTION is, and origin says how
     # much the REQUEST can be trusted, and those are different questions.
-    if is_channel(task.origin):
+    # 11.2 widened this from channel tasks to every UNATTENDED origin. A
+    # scheduled task hitting a boundary at 3am parks and notifies; approving it
+    # automatically "to make cron useful" removes the permission layer for
+    # exactly the tasks running with nobody present.
+    if is_unattended(task.origin):
         ctx.log.append(task.id, "review.skipped",
                        {"tool": tool.name, "step": step, "origin": task.origin,
-                        "reason": "channel-originated task parks for a human"})
+                        "reason": f"{task.origin} task: nobody is watching, so "
+                                  "it parks for a human"})
     elif ctx.config.autonomy.auto_review and not human_only:
         ctx.log.append(
             task.id,
