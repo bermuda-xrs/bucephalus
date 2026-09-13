@@ -143,44 +143,91 @@ class AgentContext:
     # -- taint -------------------------------------------------------------
 
     def freeze_memory(self, task_id: str) -> dict:
-        """Tier 1 as of task start, held for the life of the task.
+        """Tier 1 as of the start of the CURRENT SESSION, held for its life.
 
         The same discipline as `freeze_skills`, for the same reason: anything
-        the prefix is built from must not change while the task runs. Frozen
+        the prefix is built from must not change while a session runs. Frozen
         per task rather than per context because a delegated child is its own
         task with its own start.
+
+        HELD ON THE SESSION ROW since Phase 9. It was a dict entry, so a task
+        resumed in another process re-read tier 1 as it stood NOW - writes
+        made after the task started, which Phase 3 promised would stay
+        invisible until the next boundary, appeared early. DR1's lifetime
+        axis once more. A boundary (`rotate_session`) is now the only thing
+        that replaces a snapshot.
         """
         if task_id not in self._memory_frozen:
-            from .memory.store import INTACT, check_fingerprint, tier1_snapshot
+            from .kernel import sessions
 
-            isolated = bool(getattr(self.config, "isolate_retrieval", False))
-            state = check_fingerprint(self.memory)
-            if state != INTACT:
-                # REFUSE TO LOAD, CONTINUE WITHOUT IT.
-                #
-                # Not a halt, and the distinction is the point. A chain break
-                # destroys the ability to VERIFY, so anything concluded from
-                # the run is unfounded and stopping is the only honest move.
-                # Memory tampering destroys the trustworthiness of ONE INPUT,
-                # and the run stays fully auditable without it. Dropping a
-                # corrupted input and carrying on is what this system already
-                # does with a corrupted observation.
-                #
-                # Continuing WITH the content is the attack succeeding, and
-                # halting makes a text file anyone can edit into a denial of
-                # service. Degraded-but-safe is the third option and it is the
-                # right one.
-                self.log.append(task_id, "memory.tampered",
-                                {"state": state,
-                                 "recorded_present": (self.memory.root / ".fingerprint").exists(),
-                                 "current": self.memory.fingerprint(),
-                                 "action": "tier 1 refused; task continues "
-                                           "without persistent memory"})
-                isolated = True
-            self._memory_frozen[task_id] = tier1_snapshot(
-                self.memory, isolated=isolated,
-            )
+            open_row = sessions.current(self.conn, task_id)
+            if open_row is not None:
+                self._memory_frozen[task_id] = json.loads(open_row["memory_json"])
+            else:
+                snap = self._snapshot_memory(task_id)
+                sessions.open_session(self.conn, self.log, task_id, snap)
+                self._memory_frozen[task_id] = snap
         return self._memory_frozen[task_id]
+
+    def _snapshot_memory(self, task_id: str) -> dict:
+        """Tier 1 as it stands now, tamper-checked. Taken when a session opens."""
+        from .memory.store import INTACT, check_fingerprint, tier1_snapshot
+
+        isolated = bool(getattr(self.config, "isolate_retrieval", False))
+        state = check_fingerprint(self.memory)
+        if state != INTACT:
+            # REFUSE TO LOAD, CONTINUE WITHOUT IT.
+            #
+            # Not a halt, and the distinction is the point. A chain break
+            # destroys the ability to VERIFY, so anything concluded from the
+            # run is unfounded and stopping is the only honest move. Memory
+            # tampering destroys the trustworthiness of ONE INPUT, and the run
+            # stays fully auditable without it. Dropping a corrupted input and
+            # carrying on is what this system already does with a corrupted
+            # observation.
+            #
+            # Continuing WITH the content is the attack succeeding, and halting
+            # makes a text file anyone can edit into a denial of service.
+            # Degraded-but-safe is the third option and it is the right one.
+            self.log.append(task_id, "memory.tampered",
+                            {"state": state,
+                             "recorded_present": (self.memory.root / ".fingerprint").exists(),
+                             "current": self.memory.fingerprint(),
+                             "action": "tier 1 refused; task continues "
+                                       "without persistent memory"})
+            isolated = True
+        return tier1_snapshot(self.memory, isolated=isolated)
+
+    def rotate_session(self, task_id: str, seed_artifact: str | None,
+                       detail: dict) -> dict:
+        """A BOUNDARY: close this session, open a child with a FRESH snapshot.
+
+        The only place tier 1 is re-read mid-task, and therefore the only place
+        a deferred memory write - Phase 3's promise - becomes visible.
+        """
+        from .kernel import sessions
+
+        self.freeze_memory(task_id)          # guarantees an open session
+        parent = sessions.current(self.conn, task_id)
+        sessions.close(self.conn, self.log, parent["id"], "boundary")
+        snap = self._snapshot_memory(task_id)
+        changed = snap != json.loads(parent["memory_json"])
+        child = sessions.open_session(
+            self.conn, self.log, task_id, snap, parent_id=parent["id"],
+            reason="boundary", seed_artifact=seed_artifact,
+            detail={**detail, "memory_changed": changed})
+        self._memory_frozen[task_id] = snap
+        return {"parent": parent["id"], "child": child,
+                "memory_changed": changed, "memory": snap}
+
+    def end_session(self, task_id: str, reason: str) -> None:
+        """The task is finished with, so its session ends with it."""
+        from .kernel import sessions
+
+        row = sessions.current(self.conn, task_id)
+        if row is not None:
+            sessions.close(self.conn, self.log, row["id"], reason)
+        self._memory_frozen.pop(task_id, None)
 
     def task_origin(self, task_id: str) -> str:
         """Where this task came from. From the ROW, not from memory.

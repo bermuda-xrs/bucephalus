@@ -118,6 +118,15 @@ EVENT_TYPES = frozenset(
         # recorded once when it is frozen. For a paired trial this is the ARM
         # ASSIGNMENT, and it used to live only in process memory.
         "skills.frozen",
+        # B1. A session boundary: one closes, its child opens. The opening
+        # event carries what happened AT the boundary - the flush outcome,
+        # what compaction tombstoned, whether tier 1 changed.
+        "session.opened",
+        "session.closed",
+        # 9.4. A fact offered to tier 1 in the pre-compaction flush and
+        # refused. Recorded because the alternative is a fact that vanished at
+        # compression with no record of why.
+        "memory.flush_refused",
     }
 )
 

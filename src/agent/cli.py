@@ -605,6 +605,20 @@ def cmd_snapshot(ctx, args, console) -> int:
     return 0
 
 
+def cmd_lineage(ctx, args, console) -> int:
+    """B1 - a task's sessions, parent to child."""
+    from .kernel import sessions
+
+    rows = sessions.for_task(ctx.conn, args.task_id)
+    if not rows:
+        console.print("no sessions for that task")
+        return 1
+    for r in rows:
+        chain = " -> ".join(s[:10] for s in sessions.lineage(ctx.conn, r["id"]))
+        console.print(f"{r['id']}  {r['status']:<6} {r['opened_reason']:<8} {chain}")
+    return 0
+
+
 def cmd_monitor(ctx, args, console) -> int:
     from .assure.monitor import run_monitor
 
@@ -714,6 +728,10 @@ def build_parser() -> argparse.ArgumentParser:
     mo = sub.add_parser("monitor", help="run the out-of-band monitor over a task")
     mo.add_argument("task_id")
     mo.set_defaults(fn=cmd_monitor)
+
+    lin = sub.add_parser("lineage", help="a task's sessions, parent to child")
+    lin.add_argument("task_id")
+    lin.set_defaults(fn=cmd_lineage)
 
     snp = sub.add_parser("snapshot", help="copy the database as evidence, WAL-safe")
     snp.add_argument("dest", help="where to write the copy; never overwritten")

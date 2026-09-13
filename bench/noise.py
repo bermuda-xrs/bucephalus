@@ -1026,6 +1026,12 @@ def main() -> int:
         # A4. Which inbound channels could create tasks in this database while
         # the run was going. Same argument as retrieval_isolation: a reader
         # must never have to infer whether somebody's phone was an input.
+        # B1. Where a session boundary falls and what happens at it. Under
+        # isolation the flush cannot write, so the prefix a measured task sees
+        # is byte-identical across a boundary; recorded rather than inferred.
+        "session_boundary": ("at deletion compaction: memory flush (skipped "
+                             "under isolation), compact() unchanged, session "
+                             "rotated; no summarizer"),
         "channels_enabled": sorted(
             n for n in ("telegram",)
             if getattr(getattr(ctx.config.channels, n, None), "enabled", False)),

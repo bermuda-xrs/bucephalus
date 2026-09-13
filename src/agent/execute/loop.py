@@ -23,7 +23,7 @@ from ..kernel.integrity import IntegrityError, checkpoint, resume
 from ..kernel.receipts import execute_once, idempotency_key
 from ..models.ollama import ModelStall
 from ..kernel.tasks import load_task, set_status, spend
-from ..kernel.types import GateDecision, Taint, TaskStatus
+from ..kernel.types import GateDecision, Taint, TaskStatus, join_taint
 from ..ledger.artifacts import project, write_artifact
 from ..ledger.compact import compact, enforce_ceiling
 from ..ledger.entries import LedgerEntry, render_tail, sum_tokens
@@ -294,7 +294,9 @@ def run_task(ctx, task_id: str) -> TaskResult:
                 ctx.config.limits.context_fill_ratio,
             )
             if action == "compact":
-                entries = compact(entries, target_tokens=int(window * 0.20))
+                entries, memory, guard, builder, prefix = _session_boundary(
+                    ctx, task, entries, window, step, plan, skills, builder,
+                    prefix)
             elif action == "delegate":
                 entries = ctx.handle_overflow_by_delegation(task, entries)
 
@@ -318,13 +320,7 @@ def run_task(ctx, task_id: str) -> TaskResult:
             # enable would silently stop sending the schema — same model, same
             # task, a different question asked. Same defect class as a profile
             # that is whatever config happened to be on disk.
-            step_schema = None
-            if backend.cfg.needs_action_envelope:
-                if getattr(backend.cfg, "action_protocol", "json") == "tags":
-                    tail = tail + "\n" + ACTION_TAG_HINT
-                else:
-                    step_schema = ACTION_SCHEMA
-                    tail = tail + "\n" + ACTION_SCHEMA_HINT
+            tail, step_schema = _envelope(backend, tail)
             # Write-before-act: the intent is committed before the call.
             ctx.log.append(
                 task.id,
@@ -529,6 +525,132 @@ def _final_sweep(ctx, task, status: str, best_answer, steps: int) -> TaskResult:
 def _verify(ctx, task, artifact: str):
     r = ctx.mesh.verify(task, artifact)
     return r.passed, r
+
+
+def _envelope(backend, tail: str) -> tuple[str, dict | None]:
+    """The action protocol a backend needs, MEASURED per backend (see the step
+    code in `run_task`). Shared with the flush so both calls ask one question."""
+    if backend.cfg.needs_action_envelope:
+        if getattr(backend.cfg, "action_protocol", "json") == "tags":
+            return tail + "\n" + ACTION_TAG_HINT, None
+        return tail + "\n" + ACTION_SCHEMA_HINT, ACTION_SCHEMA
+    return tail, None
+
+
+FLUSH_NOTE = """\
+<note>
+The older observations above are about to be compacted: they will be replaced
+by references you can expand. If a fact in them must outlive this task,
+persist it now with ONE memory_write action; it will be in your context from
+the next step. If nothing needs keeping, reply with the single word NOTHING.
+</note>"""
+
+
+def _flush_memory(ctx, task, builder, prefix: str, entries, step: int, plan):
+    """9.4 - one chance to persist a fact before compaction deletes its source.
+
+    A REFUSAL IS RECORDED, never dropped. Tier 1 refuses untrusted-derived text
+    (Phase 3), so a model that tries to keep a fact copied from a web page is
+    refused - correctly - and the fact is then gone, because its observation is
+    about to become a reference. Silently, that is a fact that vanished at
+    compression with no record of why. So a refusal writes
+    `memory.flush_refused` on the chain AND puts an observation in the child's
+    tail saying what was refused and why.
+
+    NEVER PARKS. A flush that needed a human would park the task mid-boundary.
+    It is one chance, not a conversation, so `needs_approval` without a
+    deputy's approval is a refusal here.
+
+    Skipped - visibly, in the boundary's event - where tier 1 cannot be
+    written: under isolation it is disabled, and exposure may deny it (a
+    channel task, a delegated child).
+    """
+    if getattr(ctx.config, "isolate_retrieval", False):
+        return [], {"flush": "skipped", "why": "tier 1 is disabled under isolation"}
+    try:
+        exposure_check(ctx.tool_policy(task.id), "memory_write")
+    except ToolNotExposed as e:
+        return [], {"flush": "skipped", "why": str(e)}
+
+    backend = ctx.router.choose("step", task, step)
+    tail, schema = _envelope(backend, render_tail(entries) + "\n\n" + FLUSH_NOTE)
+    ctx.log.append(task.id, "model.called",
+                   {"backend": backend.name, "purpose": "memory_flush",
+                    "step": step, "prefix_fp": builder.fingerprint()})
+    resp = backend.complete(prefix, tail, ctx.tools.schemas(),
+                            max_tokens=backend.default_max_tokens(),
+                            temperature=0.0, schema=schema,
+                            on_chunk=stream.token_sink(task.id))
+    ctx.record(task, resp, purpose="memory_flush")
+    ctx.log.append(task.id, "model.returned",
+                   {"backend": backend.name, "purpose": "memory_flush",
+                    "output_tokens": resp.usage.output_tokens})
+
+    parsed = parse_action(resp.text)
+    if parsed.kind != "action" or parsed.tool != "memory_write":
+        return [], {"flush": "nothing"}
+
+    tool = ctx.tools.get("memory_write")
+    d = gate_tool_call(ctx, task, tool, parsed.args, phase="execute")
+    if d.verdict == "needs_approval":
+        d = _adjudicate(ctx, task, tool, parsed.args, d, step, plan, park=False)
+    if d.verdict != "allow":
+        ctx.log.append(task.id, "memory.flush_refused",
+                       {"step": step, "reason": d.reason,
+                        "preview": render_preview(tool, parsed.args)})
+        return [LedgerEntry.observation(
+            "A fact offered to persistent memory before compaction was "
+            f"REFUSED: {d.reason}. It was not stored, and the observations it "
+            "came from are now references only.",
+            taint=Taint.TRUSTED, label="memory_flush")], \
+            {"flush": "refused", "why": d.reason}
+
+    before = ctx.memory.fingerprint()
+    entry = _perform(ctx, task, tool, "memory_write", parsed.args, step)
+    return [entry], {"flush": "written" if ctx.memory.fingerprint() != before
+                     else "failed"}
+
+
+def _session_boundary(ctx, task, entries, window, step, plan, skills, builder,
+                      prefix):
+    """9.3/9.4 - THE SESSION BOUNDARY, at the compaction point that already existed.
+
+    In order, each for a stated reason:
+      1. FLUSH. One model call before anything is deleted, in which the model
+         may persist ONE fact to tier 1. After step 2 the observations it came
+         from are references only, so this is the last moment it is in context.
+      2. COMPACT, unchanged (9.1): deletion with tombstones. No summarizer. The
+         tail of this loop holds only observations - the model's own turns are
+         never ledger entries - so there is no conversation history for a
+         summarizer to touch without touching tool output. That is the Phase 9
+         design STOP.
+      3. ROTATE. The session row is closed; a child opens with a FRESH tier-1
+         snapshot and a record of what seeded it.
+      4. REBUILD the prefix from the child's snapshot under a new PrefixGuard.
+         A boundary is the one place the prefix may legitimately change, and
+         the only way a fact flushed in step 1 reaches it.
+    """
+    flushed, record = _flush_memory(ctx, task, builder, prefix, entries, step, plan)
+    entries = compact(entries, target_tokens=int(window * 0.20)) + flushed
+    tombstoned = sum(1 for e in entries if e.kind == "tombstone")
+    # The seed is a RECORD of what the child starts from: referenced by the
+    # session row, committed to by `session.opened` on the chain. It gets no
+    # `artifact.written` event, deliberately: that event feeds the taint
+    # rebuild, and a seed holds the objective and tombstone text beside the
+    # observations, so observing it as untrusted in a restarted process would
+    # make words from the task's own goal untrusted there and not here - the
+    # lifetime asymmetry this phase spent its first half removing.
+    seed = write_artifact(
+        ctx.conn, task.id, "session_seed", render_tail(entries),
+        join_taint(*(e.taint for e in entries)), {"step": step})
+    rot = ctx.rotate_session(task.id, seed, {**record, "step": step,
+                                             "tombstoned": tombstoned})
+    guard = PrefixGuard()
+    builder = PrefixBuilder(
+        SYSTEM_CONTRACT, skills, json.loads(task.contract.model_dump_json()),
+        tool_manual=ctx.tools.manual(), memory=rot["memory"])
+    guard.check(builder, task.id)
+    return entries, rot["memory"], guard, builder, builder.build()
 
 
 def _release_decided(ctx, task) -> list[LedgerEntry]:
@@ -809,7 +931,8 @@ def condense_observation(ctx, task, text: str, taint: Taint, aid: str) -> tuple[
     return body, backend.name
 
 
-def _adjudicate(ctx, task, tool, args, decision: GateDecision, step: int, plan) -> GateDecision:
+def _adjudicate(ctx, task, tool, args, decision: GateDecision, step: int, plan,
+                park: bool = True) -> GateDecision:
     """Either the deputy decides, or the task parks for a human."""
     from ..plan.review import ReviewRequest, auto_review, tier_of
 
@@ -851,6 +974,11 @@ def _adjudicate(ctx, task, tool, args, decision: GateDecision, step: int, plan) 
             return GateDecision.deny(d.to_agent())
         # escalate → fall through and park
 
+    if not park:
+        # A call that cannot wait for a human - the pre-compaction flush - is
+        # refused rather than parked. See `_flush_memory`.
+        return GateDecision.deny(
+            f"{tool.name} needs a human, and this call cannot wait for one")
     approval_id = ctx.request_approval(task, tool, args, decision.reason, step)
     raise TaskPaused(approval_id, f"approval required for {tool.name}")
 
@@ -882,6 +1010,10 @@ def finish(
         "model_stalled": TaskStatus.FAILED,
     }
     set_status(ctx.conn, ctx.log, task, mapping.get(status, TaskStatus.FAILED), status)
+    # The session ends with the task. A PAUSED task keeps its session open, so
+    # a resume continues it under the same tier-1 snapshot (kernel/sessions.py).
+    if mapping.get(status, TaskStatus.FAILED) != TaskStatus.PAUSED:
+        ctx.end_session(task.id, status)
     checkpoint(ctx.log, ctx.anchor, task.id)
 
     # M9.5 needs this or decay has no data: without invocation records every

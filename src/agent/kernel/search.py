@@ -24,11 +24,12 @@ ledger discipline this project is built on - the point of storing content by
 reference is that the agent does not carry it all at once. A search returning
 more text than the compaction saves is a regression wearing a feature's hat.
 
-WHAT "SESSION" MEANS HERE. There is no sessions table yet; Phase 9 introduces
-one with parent/child lineage. Today a session is the ROOT of a task tree -
-`tasks.parent_id` walked to the top - so a delegated subtask reports the same
-session as its parent. When real session rows arrive this is the column that
-gets repointed, and callers do not change.
+WHAT "SESSION" MEANS HERE. Repointed in Phase 9, deliberately. A hit names the
+FIRST session of its task tree's root task - the stable name of that whole
+lineage, so one conversation's hits are not split across the ids a boundary
+rotates to. A task with no session rows (every task before 2026-09-13, and
+any never run through the loop) still reports its tree's root task id, which is
+what a session was before rows existed. Display only: nothing scopes on it.
 """
 
 from __future__ import annotations
@@ -81,7 +82,15 @@ class Hit:
 
 
 def _session_of(conn: sqlite3.Connection, task_id: str) -> str:
-    """Root of the task tree. See the module docstring on what a session is."""
+    """The lineage a hit belongs to. See the module docstring.
+
+    What reads it: `Hit.session_id`, which is DISPLAY - the CLI prints it and
+    `search_history` returns it. Nothing scopes on it: retrieval isolation
+    scopes on the task tree (kernel/scope.py), so this repoint cannot widen
+    what an attempt can read.
+    """
+    from .sessions import root_session
+
     row = conn.execute(
         """WITH RECURSIVE up(id, parent_id) AS (
                SELECT id, parent_id FROM tasks WHERE id = ?
@@ -91,7 +100,8 @@ def _session_of(conn: sqlite3.Connection, task_id: str) -> str:
            SELECT id FROM up WHERE parent_id IS NULL LIMIT 1""",
         (task_id,),
     ).fetchone()
-    return row[0] if row else task_id
+    root = row[0] if row else task_id
+    return root_session(conn, root) or root
 
 
 def search(conn: sqlite3.Connection, query: str, limit: int = DEFAULT_LIMIT,

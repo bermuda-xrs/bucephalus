@@ -403,6 +403,36 @@ CREATE TABLE IF NOT EXISTS channel_updates (
     seen_at     REAL NOT NULL,
     PRIMARY KEY (channel, update_id)
 );
+
+-- B1. One context-window lifetime of one task attempt. A boundary closes a
+-- session and opens a child: a lineage chain, never a rewritten transcript.
+-- See kernel/sessions.py.
+CREATE TABLE IF NOT EXISTS sessions (
+    id              TEXT PRIMARY KEY,
+    task_id         TEXT NOT NULL REFERENCES tasks(id),
+    parent_id       TEXT REFERENCES sessions(id),
+    status          TEXT NOT NULL,          -- open | closed
+    opened_reason   TEXT NOT NULL,          -- start | boundary
+    seed_artifact   TEXT,                   -- what a boundary left the child
+    memory_json     TEXT NOT NULL,          -- the tier-1 snapshot of its prefix
+    created_at      REAL NOT NULL,
+    closed_at       REAL
+);
+CREATE INDEX IF NOT EXISTS idx_sessions_task ON sessions(task_id);
+-- At most one open session per task: a boundary closes before it opens.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_sessions_one_open
+    ON sessions(task_id) WHERE status = 'open';
+-- 9.7, IN THE SCHEMA rather than in a function someone must remember to call:
+-- a session may only descend from a session of the SAME task. What a boundary
+-- seeds a child with is derived content, and derived content inherits its
+-- attempt's scope. A missing parent is refused by the same rule.
+CREATE TRIGGER IF NOT EXISTS sessions_same_attempt
+BEFORE INSERT ON sessions
+WHEN NEW.parent_id IS NOT NULL
+ AND (SELECT task_id FROM sessions WHERE id = NEW.parent_id) IS NOT NEW.task_id
+BEGIN
+    SELECT RAISE(ABORT, 'a session may only descend from a session of the same task');
+END;
 """
 
 
