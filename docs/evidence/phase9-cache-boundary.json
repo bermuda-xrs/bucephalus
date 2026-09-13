@@ -1,0 +1,229 @@
+{
+  "when": "2026-09-13 09:42",
+  "prediction": "docs/evidence/phase9-cache-boundary-PREDICTION.json",
+  "prediction_commit": "ca990ed 2026-09-13T01:34:47+09:00",
+  "prediction_sha256": "215cefcd9ebfa8b2284a0afdbc4c890811f21cc02c61f9ebc517fe0dfd8367e8",
+  "server": "Ollama 0.34.0",
+  "model": "granite4.1:3b",
+  "method": "decisions scripted, prefill real (max_tokens=1 per prompt the loop built); temporary db and memory per condition; an eviction prompt before each; references measured last",
+  "T": 64,
+  "B_prefix_unchanged_at_boundary": true,
+  "A_prefix_changed_at_boundary": true,
+  "conditions": {
+    "A_memory_changed": {
+      "status": "done",
+      "wall_s": 282.6,
+      "sessions": 2,
+      "boundary_event": {
+        "flush": "written",
+        "memory_changed": true,
+        "memory_sha256": "672432aed76314a7124f17373073b9e55cffab4ea2259cc4ce75b7131b8f2738",
+        "parent_id": "s_87cda733483a4cd7",
+        "reason": "boundary",
+        "seed_artifact": "8ebd0eb2fb4d23ffe57cd8c9a0169f88",
+        "session_id": "s_65d882e0c4924772",
+        "step": 4,
+        "tombstoned": 3
+      },
+      "rows": [
+        {
+          "flush": false,
+          "prefix_sha256": "634c5c2164cf8deb",
+          "prompt": 1823,
+          "cached": 5,
+          "wall_ms": 54904
+        },
+        {
+          "flush": false,
+          "prefix_sha256": "634c5c2164cf8deb",
+          "prompt": 2426,
+          "cached": 1755,
+          "wall_ms": 26921
+        },
+        {
+          "flush": false,
+          "prefix_sha256": "634c5c2164cf8deb",
+          "prompt": 3029,
+          "cached": 2358,
+          "wall_ms": 28868
+        },
+        {
+          "flush": false,
+          "prefix_sha256": "634c5c2164cf8deb",
+          "prompt": 3632,
+          "cached": 2961,
+          "wall_ms": 31451
+        },
+        {
+          "flush": true,
+          "prefix_sha256": "634c5c2164cf8deb",
+          "prompt": 4307,
+          "cached": 3564,
+          "wall_ms": 35454
+        },
+        {
+          "flush": false,
+          "prefix_sha256": "a77fa13b836eacdc",
+          "prompt": 2816,
+          "cached": 698,
+          "wall_ms": 76741
+        },
+        {
+          "flush": false,
+          "prefix_sha256": "a77fa13b836eacdc",
+          "prompt": 3419,
+          "cached": 2748,
+          "wall_ms": 27900
+        }
+      ]
+    },
+    "B_memory_unchanged": {
+      "status": "done",
+      "wall_s": 181.7,
+      "sessions": 2,
+      "boundary_event": {
+        "flush": "nothing",
+        "memory_changed": false,
+        "memory_sha256": "897a1483a7111f436bde4a68dbdd5a59c0a308d69d57cbc2e2f277b566f21ec3",
+        "parent_id": "s_9c2dd488408f4104",
+        "reason": "boundary",
+        "seed_artifact": "387bd7634bb8b242cb3a20e584d4d1f3",
+        "session_id": "s_2d01b709ba8b44fd",
+        "step": 4,
+        "tombstoned": 3
+      },
+      "rows": [
+        {
+          "flush": false,
+          "prefix_sha256": "634c5c2164cf8deb",
+          "prompt": 1823,
+          "cached": 1755,
+          "wall_ms": 4865
+        },
+        {
+          "flush": false,
+          "prefix_sha256": "634c5c2164cf8deb",
+          "prompt": 2426,
+          "cached": 1755,
+          "wall_ms": 24371
+        },
+        {
+          "flush": false,
+          "prefix_sha256": "634c5c2164cf8deb",
+          "prompt": 3029,
+          "cached": 2358,
+          "wall_ms": 27039
+        },
+        {
+          "flush": false,
+          "prefix_sha256": "634c5c2164cf8deb",
+          "prompt": 3632,
+          "cached": 2961,
+          "wall_ms": 28780
+        },
+        {
+          "flush": true,
+          "prefix_sha256": "634c5c2164cf8deb",
+          "prompt": 4307,
+          "cached": 3564,
+          "wall_ms": 32866
+        },
+        {
+          "flush": false,
+          "prefix_sha256": "634c5c2164cf8deb",
+          "prompt": 2729,
+          "cached": 1756,
+          "wall_ms": 36319
+        },
+        {
+          "flush": false,
+          "prefix_sha256": "634c5c2164cf8deb",
+          "prompt": 3332,
+          "cached": 2661,
+          "wall_ms": 27161
+        }
+      ]
+    }
+  },
+  "references": {
+    "ref_prefix": 1729,
+    "ref_first_diff": 1662,
+    "H": 64,
+    "first_diff_char": 2860,
+    "memory_block_char": 2837,
+    "prefix_chars": 3131
+  },
+  "evaluation": {
+    "P1_within_a_session": {
+      "ok": true,
+      "pairs": [
+        {
+          "prev_prompt": 1823,
+          "cached": 1755,
+          "floor": 1695,
+          "ok": true
+        },
+        {
+          "prev_prompt": 2426,
+          "cached": 2358,
+          "floor": 2298,
+          "ok": true
+        },
+        {
+          "prev_prompt": 3029,
+          "cached": 2961,
+          "floor": 2901,
+          "ok": true
+        },
+        {
+          "prev_prompt": 1823,
+          "cached": 1755,
+          "floor": 1695,
+          "ok": true
+        },
+        {
+          "prev_prompt": 2426,
+          "cached": 2358,
+          "floor": 2298,
+          "ok": true
+        },
+        {
+          "prev_prompt": 3029,
+          "cached": 2961,
+          "floor": 2901,
+          "ok": true
+        }
+      ]
+    },
+    "P2_boundary_memory_unchanged": {
+      "cached_first_after": 1756,
+      "ref_prefix": 1729,
+      "cached_last_step_before": 2961,
+      "ok": true
+    },
+    "P3_boundary_memory_changed": {
+      "cached_first_after": 698,
+      "ref_first_diff": 1662,
+      "cached_first_after_B": 1756,
+      "ok": false
+    },
+    "P4_recovery": {
+      "ok": true,
+      "pairs": [
+        {
+          "prev_prompt": 2816,
+          "cached": 2748,
+          "floor": 2688,
+          "ok": true
+        },
+        {
+          "prev_prompt": 2729,
+          "cached": 2661,
+          "floor": 2601,
+          "ok": true
+        }
+      ]
+    }
+  },
+  "verdict": "FAILED: P3_boundary_memory_changed"
+}

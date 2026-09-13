@@ -10,6 +10,128 @@
 Dates are commit dates. `0.1.0` is not released yet — see "Unreleased" for
 what still stands between here and a first iteration.
 
+## Registers, D25, Phase 9 (B1), and the file-path sweep - 2026-09-13
+
+**Invalidates no published number - verified, not inferred.** No published
+number depended on a human approval, a plan pin, or any file route into
+protected state: FINDINGS 1.24 and SPEC-DELTA C50 give the record searches.
+`HARNESS_VERSION` 2 and `TOOLSET_VERSION` 5 are unchanged: no tool was added or
+altered. D26 remains a STOP.
+
+### M13's two touch points were inert - a scope correction (FINDINGS 1.24)
+
+Approve a plan, then get a result, was the design. What ran was approve a plan,
+then get a result REGARDLESS. The approval half was fully inert: nothing ever
+read a decided approval, so approving never made an action happen and denying
+never told the task (`f11be4d`; this corrects the Phase 8 report). The plan-pin
+half was half inert: the anchor side never fired (D21), though the database side
+did. In the 283-task record there are ZERO human decisions; the three tasks that
+ever parked were never decided and appear in no evidence file; the one approved
+plan's task appears in none either.
+
+### The file path went round every query-path control (C50, DR3)
+
+Retrieval isolation and argument scoping guard the QUERY path. Four file routes
+reached the same bytes: `read_file` from a root-wide or empty scope (only the
+ACTIVE config's database was protected, so `agent.local.db` was open under
+`config.yaml`); `grep`/`glob` with the path OMITTED, which searched the whole
+project from a narrow scope because the gate never saw the defaulted `"."`; a
+file-glob with `..`, which pathlib follows; and `run_code`, whose sandbox
+guarded writes and never reads. Every protected location is now enumerated and
+unreachable by every route from root, empty and narrow scopes; the gate checks
+EFFECTIVE arguments and refuses any path that contains protected state, not only
+one that is inside it. The sandbox hook is a door, not a wall - D32, which is
+Phase 6. `grep` and `glob` were never called in the measurement record, which
+ends a day before they existed.
+
+This is the adjacency family's fourth mechanism, now DR3: a control guarding
+one route to some bytes while another route to the same bytes stays open.
+
+### DR1: two named axes, eleven instances
+
+Four on WIDTH (D17, the memory blessing, D21, D23), seven on LIFETIME
+(`_tool_policy`, the chat binding, `_taint`, `_frozen_skills`, the poll offset,
+`_gate_queue`, `_memory_frozen`). The one to remember: the paired-trial ARM
+ASSIGNMENT - the measurement apparatus itself held durable state in process
+memory. Store the fact, derive the rule.
+
+### The storage layer (C41 generalised), D25, FINDINGS 1.23
+
+Nothing in the repository copies or ships the database. `alpha snapshot` uses
+the backup API. The sandbox carries a database's `-wal` in both directions. The
+Anthropic adapter streams on one path (the SDK would have refused the old one at
+large ceilings); unverified, carried by D26. FINDINGS 1.23: the taint wall stops
+the attacker's bytes, exposure stops the attacker's authority, and neither sees
+intent laundered into an allowed call - that is where a human stands.
+
+### The mock could not see a prefix change
+
+Exactly one test depended on it: `test_cache_hit_ratio_above_threshold`, both of
+its assertions, vacuous until `f6f7348`. The five tests in
+`test_cache_ratio_is_measured_or_null`, `test_memory`'s ratio check,
+`test_m2_instrument`'s cost tests and `test_openai_compat`'s parse feed
+synthetic usage or a fake HTTP server and never touched the mock. No published
+conclusion rested on it: published cache figures come from real servers
+(Phase 1's `/v1` parity, and 9.6 below), and byte-level prefix stability rests
+on PrefixGuard, which never read the mock's cache.
+
+### Phase 9 - built
+
+Sessions, lineage (`alpha lineage`), the pre-compaction flush with visible
+refusals that never park, per-session tier-1 snapshots, 9.7 in the schema (a
+trigger and a partial unique index), search's session label repointed.
+
+### 9.2 - withdrawn (C49)
+
+By decision, not deferral. The ledger holds no conversation, and summarizing it
+would summarize exactly what 9.1 forbids. A child session is seeded BY
+REFERENCE: its parent, the tail as compaction left it, a snapshot carrying what
+the flush persisted.
+
+### 9.6 - the prediction, then the measurement
+
+**Method.** The prediction was committed on its own first (`ca990ed`), then
+measured at `5c1a40d` by `bench/cache_boundary.py`, which refuses to run on an
+uncommitted or edited prediction.
+
+**Against the prediction as stated:** P1 held - every call reused exactly
+`prev_prompt - 68`, the 64-token hint plus 4 template tokens. P2 held - with
+memory unchanged the boundary call reused 1,756 against a floor of 1,665; the
+drop is the tail rewrite alone. P4 held. **P3 FAILED** - with memory changed,
+reuse stopped at **698** tokens where the prediction said 1,662 +/- 64. (Its
+comparison clause, 698 < 1,756 - 64, held.)
+
+**Why - a finding about the prediction's reference, not the rebuild, not the
+server.** The rebuild did what it claims: the first differing character of the
+prefix is 2,860, inside the memory block that starts at 2,837, and condition B's
+prefix is byte-identical. The prediction's own falsifier - "something earlier in
+the prefix changed" - is refuted by that comparison. The served template renders
+the tool schemas AFTER the system text (`system + "\n\n" + tools`), so my
+reference, the prompt tokens of `prefix[:2860]` with the tools argument, counted
+about 966 schema tokens as preceding the memory block. They follow it. A probe
+injected divergences and found reuse exact to within 2 tokens in the real order:
+mid-user 2,000 against 2,006; tool manual 244 = 1,209 - 966 + 1; memory block
+698 = 1,662 - 966 + 2.
+
+**A rebuild that did not miss would mean the rebuild was not rebuilding.** It
+missed - deeper than predicted - and the control condition did not miss its
+prefix at all.
+
+**The consequence is worth more than the prediction:** on this template every
+tier-1 change re-prefills the whole ~966-token tool-schema block. The boundary
+cost 77 s with a memory change against 36 s without, on wall clock, which is this
+project's cost axis. See DEFERRED D33. Evidence:
+`docs/evidence/phase9-cache-boundary.json`, `phase9-cache-reuse-probe.json`.
+
+### Tests
+
+**687 passing** (was 610). Seventy-seven new. Forty-one injected
+defects, each reverting one change; every listed test went red against each.
+The injections also caught two defects in my own tests before they shipped: the
+code-route test read a refusal's echoed traceback as a leak, and the write test
+treated a write that would park for a human as unreachable - which, since
+`f11be4d`, it is not. A protected write must be DENIED.
+
 ## Phase 8 (A4) — Telegram, stopped before it goes live — 2026-09-08
 
 **Invalidates no published number.** `HARNESS_VERSION` stays 2 and

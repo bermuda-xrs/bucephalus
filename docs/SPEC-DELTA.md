@@ -915,3 +915,182 @@ and result.approval_id`.
 cannot execute. Caught by reading `run_task`'s handlers rather than trusting
 its signature, which is the check C34 said to make.
 
+### C43. Nothing read an approval once it was decided
+
+**Reality:** M12 parks a task for a human and records the decision -
+`resolve_approval` updates the row, appends `human.approved`, anchors it. A
+resumed task started from its goal; the model re-issued the call; the gate
+parked it again under a NEW approval. Measured: run 1 parks, approve, run 2
+issues the identical call and parks again, and the file is never written. No
+code anywhere read `status='approved'`.
+
+**Correct version:** `_release_decided` at the top of `run_task`, before the
+model's first turn, acts on every decided, unconsumed approval: executes it
+through the ordinary receipt path, keyed on the parked step so it happens at
+most once, or hands a denial back as an observation. Exposure and the gate's
+hard denials are re-checked first. `approvals.consumed_at` and
+`approval.consumed` record what came of each decision.
+
+**Class:** adjacency in its plainest form - a status value written by three
+code paths and read by none. Every test of the approval path asserted that a
+decision was RECORDED; none that it had an EFFECT. It also corrects the Phase 8
+report: the channel's approval tests pressed approve and then queued a
+`<final>`, so none of them ran the approved action. The deputy and
+`approve_scoped_writes` allow in the same turn and were never affected, so no
+benchmark number rested on a human approval.
+
+### C44. The mock cached regardless of the bytes
+
+**Reality:** `MockBackend` reported a cache hit on every call after the first,
+whatever prefix arrived. `test_cache_hit_ratio_above_threshold` - described in
+conftest as the only check that prefix stability is observable at all - passed
+with the prefix mutated on EVERY call. Injected, and still green.
+
+**Correct version:** the mock's cache is keyed on the prefix bytes; a changed
+prefix is a miss and a write. The same injection now turns the test red.
+
+**Class:** adjacency - a stand-in for an independent opinion that had no
+opinion. Found while designing 9.6, whose offline half needed a mock that could
+be wrong.
+
+### C45. The agent's database was readable as a file
+
+**Reality:** retrieval isolation scoped `search_history` and `expand_artifact`
+to the attempt. Nothing protected the database itself. Under
+`isolate_retrieval`, a task with `artifact_scope: ["."]` - or none, which allows
+every path - could `read_file("agent.db")` and `read_file("agent.db-wal")`, and
+read the other arm's goal. No tool call in the 283-task record ever named a
+`.db` path, so no published number used it.
+
+**Correct version:** `state_paths()` protects the configured database and every
+SQLite sidecar, the anchor, the skills store and tier-1 memory, by resolved
+path.
+
+**Class:** adjacency twice over. Isolation scoped the retrieval TOOLS, not the
+thing retrieved. And `anchor/` was protected by its conventional NAME, so an
+`anchor_path` configured anywhere else was protected by nothing. Found by the
+storage-layer sweep C41 asked for, which also found the sandbox copying a
+database without its `-wal`.
+
+### C46. The Anthropic adapter would have been refused by its own SDK
+
+**Reality:** the adapter called `messages.create()` non-streaming with
+`max_tokens = max(max_tokens, cfg.max_output_tokens)`. The SDK refuses a
+non-streaming request whose max_tokens implies more than about ten minutes -
+`ValueError`, before anything is sent - so at a large output ceiling the path
+would never have made a request. Unverifiable without a key, and a second
+unverified claim sitting under the first.
+
+**Correct version:** one streaming path through `messages.stream()`, text deltas
+forwarded to `on_chunk`, the final message post-processed exactly as before.
+Still UNVERIFIED against the live API; D26 now carries it.
+
+### C47. Phase 9 assumed a conversation the loop does not keep
+
+**Reality:** 9.2 asks for summarization of CONVERSATION HISTORY ONLY, beside
+9.1's rule that summarization must never touch tool output. Every ledger entry
+construction site in `src/` was checked: the loop appends only OBSERVATIONS -
+tool results, verifier and parser notes, refusals, reviews, delegation results,
+released decisions. The model's own turns are never ledger entries, and its raw
+output is not persisted anywhere (`model.returned` records a token count). The
+only notes are the pinned objective and plan. There is no conversation history
+distinct from tool output, so 9.2 cannot be met without breaking 9.1.
+
+**What was built:** everything that does not depend on the answer - sessions,
+lineage, rotation, the flush, per-session snapshots, the cross-attempt
+constraint, the cache boundary - at the compaction point that already existed.
+**What was not:** any summarizer. A design STOP; the options are in the Phase 9
+report and DEFERRED D30.
+
+**Class:** not a defect in the code; a premise in the specification, found by
+checking it rather than building to it.
+
+### C48. The 9.6 prediction failed its depth clause, and the error was the reference
+
+**Reality:** P3 predicted that with tier 1 changed, cache reuse at the boundary
+would stop at the first changed byte of the prefix - 1,662 +/- 64 tokens, taken
+as the server's prompt-token count for the prefix truncated there, with the
+same tools argument. Reuse stopped at 698. P1, P2 and P4 held.
+
+**Correct version:** the served template renders tool schemas AFTER the system
+text, so "tokens before byte 2,860 of the prefix" is not "tokens of prefix[:2860]
+plus the tools" - the schemas are not before it. Measured in the real order,
+reuse is exact to within 2 tokens at three injected divergence points
+(`bench/cache_reuse_probe.py`). The prediction's structure held; its reference
+did not.
+
+**Class:** adjacency, in my own measurement definition - a reference measuring
+something next to what it claimed. Caught because the prediction was committed
+before the measurement and its falsifiers were specific enough to be refuted: the
+stated reading of a low P3 ("something earlier changed") was contradicted by the
+byte comparison the script also made.
+
+### C49. 9.2 is WITHDRAWN - a decision, not a deferral
+
+**By instruction, 2026-09-13, and recorded so no later session reintroduces
+it as a missing feature.** 9.2 asked for summarization of conversation history.
+The ledger holds no conversation: every other class of content is stored by
+reference and projected, and what remains in the tail is tool output (C47). The
+summarizer existed to bound context growth, and deletion-based compaction
+already bounds it - by the method the research supports and 9.1 protects.
+Summarizing here would mean summarizing exactly what 9.1 forbids summarizing:
+the two requirements are not in tension, one is the negation of the other
+applied to the only content that exists.
+
+**What lineage was for is kept, without a summarizer:** rotation, parent-child
+provenance, the flush boundary, a prefix-rebuild point. A child session is
+seeded BY REFERENCE: its `parent_id`, the tail as compaction left it
+(tombstones, which are references that keep exact strings), and a fresh
+tier-1 snapshot carrying whatever the flush persisted. No generated text, so
+nothing an exact string can be lost to.
+
+**The one content class where a summarizer could ever be warranted** is
+cross-TASK history in a conversation spanning tasks - a Telegram chat, a TUI
+session - which does not exist yet: each message is an independent task. If
+that history is ever carried, it is human-agent exchange rather than
+trajectory, and that is where the question would reopen. Not before.
+
+### C50. The file path went round every control built on the query path
+
+**Reality:** retrieval isolation (the blocker before Phase 3) and argument
+scoping (Phase 5) guard the QUERY path - `search_history`, `expand_artifact`,
+the arguments a caller passes. The FILE path reached the same bytes four ways,
+each measured from a narrow `["work"]` scope under isolation unless noted:
+
+| route | how | reached |
+|---|---|---|
+| `read_file` | a root-wide or empty scope | every project state file; only the ACTIVE config's db was protected (C45), so `agent.local.db` was open under `config.yaml` |
+| `grep` / `glob`, path omitted | the gate never saw the defaulted `"."` | the graders, from a NARROW scope |
+| file-glob containing `..` | pathlib follows it | the graders, from a narrow scope |
+| `run_code` | the sandbox hook guarded writes, never reads; a subprocess runs outside the hook | anything on the machine, from any scope |
+
+**Correct version:** protected state is enumerated - every config's databases
+and sidecars, the anchors, skills (held-out checks included), tier-1 memory and
+its blessing, `grading/`, `bench/`, `runs/`, `docs/evidence/`, `.alpha_token`,
+`.env`, every `config*.yaml`, `policy.md`, and the task's own `grader_dir`. The
+gate checks EFFECTIVE arguments, defaults included; refuses any path that is,
+lies inside, or CONTAINS protected state; refuses file-globs with `..`; refuses
+`run_code` whose scope would link state into its sandbox. The sandbox child
+refuses reads, sqlite connections, directory listings and process starts
+against protected paths. `tests/test_state_unreachable.py` covers every
+location, every route, from root, empty and narrow scopes.
+
+**The limit, stated:** the sandbox hook lives in the process it polices. It
+closes the door to a model that reaches for a file; it is not a boundary
+against code written to defeat it (ctypes). That is Phase 6's container,
+parked - DEFERRED D32.
+
+**Whether any published number used a file route - verified as far as the
+record allows.** `grep` and `glob` were never called: the record's last event
+is 2026-09-06, a day before they existed. No `read_file` preview names a
+protected location. All 281 measured scope entries are under `work/`. For
+`run_code`, only the first 200 characters of each program are recorded: across
+all 313, no `sqlite3`, `subprocess`, absolute path, `..` path, directory walk
+or grader reference, every literal `open()` target is under `work/`, and no
+tool output carries a SQLite header or grader text. That is complete for four
+routes and as complete as the record allows for the fifth.
+
+**Class:** a fourth adjacency mechanism, now DR3 in INVARIANTS: a control
+guarding one ROUTE to some bytes while another route to the same bytes stays
+open. C41 was its storage form (the connection versus the file), C45 its first
+file form; this is the general case.

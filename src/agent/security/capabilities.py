@@ -12,7 +12,10 @@ cannot be talked into it, because the check is not a judgment the model makes.
 
 from __future__ import annotations
 
+import functools
+import inspect
 import os
+import re
 from pathlib import Path
 
 from ..kernel.types import GateDecision, Taint
@@ -25,6 +28,46 @@ PROTECTED_FILES = ("config.yaml", "policy.md", ".env")
 # Everything SQLite writes beside a database. In WAL mode the NEWEST rows live
 # in `-wal`, so protecting the main file alone protects the oldest part.
 DB_FILES = ("", "-wal", "-shm", "-journal")
+
+# Project-level locations holding state the scope and isolation checks exist to
+# protect, relative to the project root. Every one was readable by FILE path
+# from a root-wide or empty scope until 2026-09-13 - the query path was guarded
+# and the file path was not.
+PROJECT_STATE = (
+    "anchor", "skills_store",               # integrity; held-out skill checks
+    "grading", "bench",                     # graders, expected answers, harness
+    "runs", "docs/evidence",                # other attempts' results; published ones
+    ".alpha_token", ".env", "policy.md",    # control-plane secret, credentials, policy
+    "cal.json", ".token_calibration.json", ".measurement.lock",
+)
+
+
+@functools.lru_cache(maxsize=32)
+def _sibling_state(root: str, stamps: tuple) -> tuple[str, ...]:
+    """Every config in the project root, and the state EACH one names.
+
+    Protecting only the ACTIVE config's database left the others as ordinary
+    files: under config.yaml, `agent.local.db` - the 283-task measurement
+    database - was readable. Cached on the configs' names and mtimes.
+    """
+    import yaml
+
+    out: list[str] = []
+    for name, _ in stamps:
+        path = Path(root) / name
+        out.append(str(path))
+        try:
+            raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        except Exception:  # noqa: BLE001 - an unreadable config names nothing
+            continue
+        for key in ("db_path", "anchor_path", "skills_path"):
+            v = raw.get(key) if isinstance(raw, dict) else None
+            if not v:
+                continue
+            q = Path(v) if Path(v).is_absolute() else Path(root) / v
+            out += ([str(q) + s for s in DB_FILES] if key == "db_path"
+                    else [str(q)])
+    return tuple(out)
 
 
 def state_paths(ctx) -> tuple[Path, ...]:
@@ -46,13 +89,36 @@ def state_paths(ctx) -> tuple[Path, ...]:
     protected by nothing. A control keyed on a name protects the default.
     """
     cfg = ctx.config
+    root = Path(os.path.abspath(cfg.root))
     db = str(cfg.resolve(cfg.db_path))
     out = [Path(db + s) for s in DB_FILES]
     out += [cfg.resolve(cfg.anchor_path), cfg.resolve(cfg.skills_path)]
+    # Item 2's sweep widened this from the active config's state to all of it:
+    # every config's databases, the graders, the run records, the secrets.
+    out += [root / rel for rel in PROJECT_STATE]
+    try:
+        stamps = tuple(sorted((c.name, c.stat().st_mtime)
+                              for c in root.glob("config*.yaml")))
+    except OSError:
+        stamps = ()
+    out += [Path(p) for p in _sibling_state(str(root), stamps)]
     mem = getattr(getattr(ctx, "memory", None), "root", None)
     if mem is not None:
         out.append(Path(mem))
     return tuple(Path(os.path.abspath(p)) for p in out)
+
+
+def task_state_paths(ctx, task) -> tuple[Path, ...]:
+    """The project's state, plus THIS task's own grader.
+
+    `grader_dir` must lie outside artifact_scope (TaskContract), which a
+    root-wide or empty scope makes impossible - so it is protected directly.
+    """
+    out = state_paths(ctx)
+    grader = getattr(getattr(task, "contract", None), "grader_dir", None)
+    if grader:
+        out += (Path(os.path.abspath(ctx.config.resolve(grader))),)
+    return out
 
 
 def within_scope(args: dict, artifact_scope: list[str], root: str = ".") -> tuple[bool, str]:
@@ -69,10 +135,48 @@ def within_scope(args: dict, artifact_scope: list[str], root: str = ".") -> tupl
     return True, ""
 
 
+_PATH_KEYS = frozenset({"path", "file", "filename", "dir", "directory", "dest",
+                        "src", "target"})
+
+
 def _looks_like_path(key: str, value) -> bool:
     if not isinstance(value, str):
         return False
-    return key in {"path", "file", "filename", "dir", "directory", "dest", "src", "target"}
+    return key in _PATH_KEYS
+
+
+def _effective_args(tool, args: dict) -> dict:
+    """The arguments the tool will ACTUALLY run with, defaults included.
+
+    FOUND 2026-09-13: `grep(pattern=...)` with no `path` searched the whole
+    project from a narrow ["work"] scope, under isolation, and read the
+    graders - its `path` defaulted to "." AFTER the gate had looked. A check
+    that sees only what the caller chose to pass is bypassed by passing
+    nothing.
+    """
+    eff = dict(args)
+    fn = getattr(tool, "fn", None)
+    if fn is None:
+        return eff
+    try:
+        params = inspect.signature(fn).parameters
+    except (TypeError, ValueError):
+        return eff
+    for name, prm in params.items():
+        if name in _PATH_KEYS and name not in eff and isinstance(prm.default, str):
+            eff[name] = prm.default
+    return eff
+
+
+# File-glob arguments, by tool. pathlib FOLLOWS ".." inside a pattern, so for
+# scope purposes a pattern is a path: glob("../grading/**/*") from a narrow
+# scope listed the graders, and grep's `glob` read them.
+_GLOB_ARGS = {"glob": "pattern", "grep": "glob"}
+
+
+def _escapes(pattern: str) -> bool:
+    return (".." in re.split(r"[\\/]", pattern) or os.path.isabs(pattern)
+            or pattern.startswith(("/", "\\")))
 
 
 def _is_within(p: Path, root: Path) -> bool:
@@ -91,7 +195,10 @@ def is_protected(path_value: str, root: str = ".",
         return True
     if p.name.lower() in PROTECTED_FILES:
         return True
-    return any(_is_within(p, s) for s in state)
+    # INSIDE protected state, or CONTAINING it. The second half is what stops
+    # traversal from above: `grep(path=".")` never names the database, it just
+    # walks into it.
+    return any(_is_within(p, s) or _is_within(s, p) for s in state)
 
 
 def gate_tool_call(ctx, task, tool, args: dict, phase: str = "execute") -> GateDecision:
@@ -114,20 +221,41 @@ def gate_tool_call(ctx, task, tool, args: dict, phase: str = "execute") -> GateD
             f"args are {arg_taint.value}"
         )
 
+    # EFFECTIVE arguments, defaults included - see _effective_args.
+    eff = _effective_args(tool, args)
     state = None
-    for key, value in args.items():
+    for key, value in eff.items():
         if not _looks_like_path(key, value):
             continue
         if state is None:
-            state = state_paths(ctx)   # only when a path is actually present
+            state = task_state_paths(ctx, task)   # only when a path is present
         if is_protected(str(value), ctx.config.root, state):
             return GateDecision.deny(
-                f"{key}={value!r} is a protected path: the agent's own state "
-                "(database, anchor, skills, memory, config), which no task may "
-                "read or write"
+                f"{key}={value!r} is a protected path: it is, contains, or lies "
+                "inside the agent's own state (databases, anchor, skills, "
+                "memory, graders, run records, config, secrets), which no task "
+                "may read or write"
             )
 
-    ok, why = within_scope(args, task.contract.artifact_scope, ctx.config.root)
+    glob_key = _GLOB_ARGS.get(getattr(tool, "name", ""))
+    pattern = eff.get(glob_key) if glob_key else None
+    if isinstance(pattern, str) and _escapes(pattern):
+        return GateDecision.deny(
+            f"{glob_key}={pattern!r} leaves its directory: a file pattern may "
+            "not contain '..' or be absolute, because pathlib follows it")
+
+    if getattr(tool, "name", "") == "run_code":
+        # The sandbox LINKS every artifact_scope entry into its working
+        # directory, so a scope that contains protected state carries it in
+        # whole: ["."] brings the databases, the graders and the token.
+        state = state or task_state_paths(ctx, task)
+        for s in task.contract.artifact_scope:
+            if is_protected(s, ctx.config.root, state):
+                return GateDecision.deny(
+                    f"run_code with artifact_scope {s!r}: that scope contains "
+                    "the agent's own state, and the sandbox would link it in")
+
+    ok, why = within_scope(eff, task.contract.artifact_scope, ctx.config.root)
     if not ok:
         return GateDecision.deny(why)
 

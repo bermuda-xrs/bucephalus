@@ -448,6 +448,83 @@ imports the control plane, and `ALPHA_ALLOW_REMOTE` is untouched.
 *Caught by:* `test_the_channel_binds_nothing`,
 `test_allow_remote_is_untouched_by_this_phase`.
 
+## Added 2026-09-13 (the registers, D25, and B1 - sessions)
+
+**71. A human decision has an effect.**
+A decided approval is released when its task resumes, before the model's first
+turn: executed through the ordinary receipt path (keyed on the parked step, so
+at most once), or handed back as a denial. Exposure and the gate's hard denials
+are re-checked first - a policy that narrowed while the task was parked voids
+the approval rather than being overridden by it.
+*Caught by:* `tests/test_decisions_take_effect.py`.
+
+**72. A task's taint state is rebuilt from the record, per write.**
+From its own `artifact.written` events, which carry that write's taint - not
+from artifact rows, which keep only the first writer's.
+*Caught by:* `tests/test_lifetime.py`.
+
+**73. A paired trial's arm assignment is durable, the empty set included.**
+A resumed attempt whose recorded skills will not reload byte-for-byte fails
+rather than running under a different set.
+*Caught by:* `tests/test_lifetime.py`.
+
+**74. A channel update is claimed at most once, and the poll offset survives
+a restart.**
+*Caught by:* `tests/test_lifetime.py`.
+
+**75. The agent's own state is not a file any task may read or write.**
+Protected by CONFIGURED path, not conventional name: the database and every
+SQLite sidecar, the anchor, the skills store, tier-1 memory. An empty or
+root-wide artifact_scope does not reach them.
+*Caught by:* `tests/test_storage_layer.py`.
+
+**76. A database crosses the sandbox whole.**
+Its `-wal` and `-journal` travel with it, and are mirrored exactly on copy-back
+so a stale `-wal` cannot be replayed onto newer pages.
+*Caught by:* `tests/test_storage_layer.py`.
+
+**77. Evidence is copied through the backup API, never over earlier evidence.**
+*Caught by:* `tests/test_storage_layer.py`.
+
+**78. The mock's prefix cache is keyed on the prefix bytes.**
+It is the stand-in for the server whose cache ratio is the independent opinion
+of prefix stability; a mock that caches whatever arrives has no opinion.
+*Caught by:* `test_the_mock_cache_has_an_opinion_about_the_bytes`, and
+`test_cache_hit_ratio_above_threshold` is now red under a per-call mutation.
+
+**79. The Anthropic adapter streams, on one path.**
+*Caught by:* `tests/test_anthropic_streaming.py` - against a fake client. The
+live path is D26.
+
+**80. A session belongs to exactly one task, and a task has at most one open
+session.**
+Both in the schema: a trigger refuses a parent from another task, a partial
+unique index refuses a second open session. What a boundary seeds a child with
+is derived content, and derived content inherits its attempt's scope.
+*Caught by:* `tests/test_sessions.py`.
+
+**81. The pre-compaction flush is one chance, and its outcome is never
+silent.**
+A refusal writes `memory.flush_refused` and tells the model in the child's
+tail. A flush that would need a human is refused, never parked. Where tier 1
+cannot be written it is skipped, and the boundary's event says why.
+*Caught by:* `tests/test_sessions.py`.
+
+**83. Protected state is unreachable by FILE path from any scope.**
+Every config's databases and sidecars, anchors, skills, memory and its
+blessing, graders, the harness, run records, published evidence, secrets and
+configs, and the task's own grader. The gate checks EFFECTIVE arguments
+(defaults included), refuses a path that is, lies inside, or contains protected
+state, refuses file-globs with `..`, and refuses `run_code` whose scope would
+link state into its sandbox; the sandbox refuses protected reads, sqlite
+connections, listings and process starts. Not an adversary boundary - D32.
+*Caught by:* `tests/test_state_unreachable.py`.
+
+**82. A session's tier-1 snapshot lives on its row.**
+A boundary is the only thing that replaces it, and the only place a deferred
+memory write becomes visible.
+*Caught by:* `test_a_resumed_task_keeps_its_sessions_memory_snapshot`.
+
 ---
 
 ## Design rules
@@ -455,7 +532,15 @@ imports the control plane, and `ALPHA_ALLOW_REMOTE` is untouched.
 Not per-run invariants with a test that fires — rules for the next person
 writing a control. Each is here because it has been violated more than once.
 
-**DR1. A control's scope must match the scope of what it protects.**
+**DR1. A control's scope must match the scope of what it protects - in WIDTH
+and in LIFETIME.**
+
+Two axes, one question: what does this control protect, and does it live where
+that thing lives? Asked about space, it finds a key too wide. Asked about time,
+it finds a holder too short-lived.
+
+### Axis 1 - WIDTH: a key shared with something else
+
 
 Two instances, a day apart:
 
@@ -507,13 +592,72 @@ produced it — content addressing deduplicates rows and therefore discards
 every writer after the first. If the two cannot be made to match, the control belongs
 somewhere else.
 
-A4 found DR1's other axis. The four instances above were all a key too WIDE —
-a control shared with something that also writes it. The channel gave the
-mirror image: a LIFETIME too short. Restricting a channel task by calling
-`ctx.restrict_tools()` at creation is correct in scope and wrong in duration,
-because the control lives in one process and the task row outlives every
-process that touches it. Ask both questions: what does this protect, and for
-how long does that thing exist.
+### Axis 2 - LIFETIME: a holder that dies before the thing it holds state about
+
+Found by A4, named 2026-09-13. Restricting a channel task with
+`ctx.restrict_tools()` at creation is right in scope and wrong in duration: the
+control lived in one process and the task row outlives every process that
+touches it. The damage has the same shape as axis 1's - not a crash, a quiet
+wrong answer - but it arrives on RESTART, which is exactly when nobody is
+watching: a parked task waiting for a human spends most of its life there.
+
+**The transferable rule: store the FACT, derive the RULE.** Facts do not go
+stale. A stored rule freezes each row under whatever policy existed when it was
+written, and the rows most likely to be sitting parked are the oldest.
+
+**The sweep, 2026-09-13.** Every in-memory structure holding state about
+something durable, reported even where clean:
+
+| holder | state about | what a restart did | now |
+|---|---|---|---|
+| `_tool_policy` | a channel task's restrictions | parked channel task came back unrestricted | floor derived from `tasks.origin` (Phase 8) |
+| bot chat binding | who to ask | approval requests never delivered | `channel_routes` (Phase 8) |
+| `_taint` | what a task observed as untrusted | empty tracker; latent only because a resumed task also forgot its history - two gaps cancelling, which Phase 9 would have ended | rebuilt from `artifact.written` events, which now carry each write's own taint |
+| `_frozen_skills` | the paired-trial ARM ASSIGNMENT | a resumed control arm retrieved promoted skills; a skill arm testing a candidate lost it | `skills.frozen` event, empty set included; a set that will not reload byte-for-byte fails the task |
+| bot poll offset | which messages became tasks | crash mid-run: the message redelivered, a second task | `channel_updates`, claimed at-most-once |
+| `_gate_queue` | candidates awaiting the gate | forgotten - and read by nothing in production | derived from `status='candidate'` |
+| `_memory_frozen` | a task's tier-1 snapshot | deferred memory writes visible early | on the session row (Phase 9) |
+
+Clean, with the reason:
+
+| holder | why it is fine |
+|---|---|
+| `_origin` | a cache of a column that is never updated |
+| control plane `_runs` | thread handles; a thread cannot outlive its process, so the scopes match |
+| `stream._listeners`, `_backlog` | a view by design (invariant 62), never read back as a record |
+| `net/politeness` state | courtesy state about outside hosts; a restart resets a delay, not a fact |
+| `ToolRegistry`, sandbox libraries | rebuilt identically from code in every process |
+| `PrefixGuard` | per session by design; Phase 9 resets it at a boundary and nowhere else |
+| TUI `RunState` | a view |
+
+**The limiting case is not in the table, because it held nothing in memory.**
+Approvals were stored durably, finalised, anchored - and nothing derived any
+rule from them at all. No process ever read `status='approved'`, so approving
+an action never made it happen (C43). The fact was stored; the rule was never
+written.
+
+**Count, 2026-09-13: eleven instances** - four on width (D17, the memory
+blessing, D21, D23), seven on lifetime (the table above). The one worth
+remembering is the arm assignment: the MEASUREMENT APPARATUS ITSELF held durable
+state in process memory. A paired trial's validity rests on which arm got which
+skills, and that fact lived exactly as long as the process running the trial.
+
+Before adding a control, ask what it protects, at what granularity that thing
+lives, and FOR HOW LONG. Store the control at that granularity, under a key
+nothing else writes, somewhere that lives at least as long as what it guards.
+
+**DR3. A control must guard the BYTES, not one route to them.**
+
+The adjacency family's fourth mechanism. Retrieval isolation guarded the query
+path and the file path read the same database. Argument scoping guarded the
+arguments a caller passed and not the ones the tool defaulted to. The sandbox
+guarded writes and not reads. C41's test scanned the main database file while
+the rows sat in its `-wal`. Each control was correct on its route and each had
+a sibling route nobody had listed.
+
+Before calling something protected, enumerate EVERY route to its bytes - query,
+file read, traversal from above, pattern expansion, code execution, a copy - and
+test each one, not the route the control was written for (C50).
 
 **DR2. A default must not shadow the path it is a default for.**
 

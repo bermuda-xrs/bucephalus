@@ -1,0 +1,69 @@
+{
+  "when": "2026-09-13 09:52",
+  "model": "granite4.1:3b",
+  "architecture": "granite",
+  "T": 64,
+  "prefix_sha256": "634c5c2164cf8deb",
+  "sequence": [
+    {
+      "label": "base (cold)",
+      "prompt": 2272,
+      "cached": 1724,
+      "wall_ms": 19726
+    },
+    {
+      "label": "identical",
+      "prompt": 2272,
+      "cached": 2271,
+      "wall_ms": 2396
+    },
+    {
+      "label": "diverge mid-USER",
+      "prompt": 2273,
+      "cached": 2000,
+      "wall_ms": 11220
+    },
+    {
+      "label": "restore",
+      "prompt": 2272,
+      "cached": 2000,
+      "wall_ms": 10986
+    },
+    {
+      "label": "diverge in the tool manual (char 1000)",
+      "prompt": 2274,
+      "cached": 244,
+      "wall_ms": 66012
+    },
+    {
+      "label": "restore",
+      "prompt": 2272,
+      "cached": 2271,
+      "wall_ms": 2551
+    },
+    {
+      "label": "diverge at the memory block (char 2860)",
+      "prompt": 2273,
+      "cached": 698,
+      "wall_ms": 54222
+    },
+    {
+      "label": "restore",
+      "prompt": 2272,
+      "cached": 2271,
+      "wall_ms": 2529
+    }
+  ],
+  "references": {
+    "system_text_starts": 966,
+    "mid_user": 2006,
+    "char_1000": 1209,
+    "memory_block": 1662
+  },
+  "reuse_on_divergence": {
+    "mid_user": 2000,
+    "tool_manual": 244,
+    "memory_block": 698
+  },
+  "signatures_matched": []
+}

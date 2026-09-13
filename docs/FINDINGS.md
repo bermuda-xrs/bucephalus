@@ -924,6 +924,102 @@ verifiers, and plan-pin verification are three different things sharing a
 verb) and `check` (capability gate, exposure, verifiers). Both are worth
 naming precisely before the next mechanism is added under one of them.
 
+
+### 1.23 Two walls answer two questions, and a third question neither asks
+
+The capability gate (M8.2) judges a tool call by the TAINT of its arguments:
+where did these bytes come from? Exposure (Phase 5, B3) judges it by
+AUTHORITY: may this agent call this tool at all? When Phase 5 landed it was
+reasonable to ask whether the second wall was redundant with the first. It is
+not, and A4 produced the case that shows exactly why.
+
+**The taint wall stops the attacker's bytes. It does not stop the attacker's
+intent, laundered through the model's paraphrase.** Taint is computed from
+provenance - an argument is untrusted if it appears verbatim inside something
+the task read from outside. That is what defeats the classic injection: the
+attacker's address is untrusted because it was quoted from their page. But a
+message that says "write a script that lists the home directory and reads the
+key file" does not need to be quoted. The model writes the script itself, in
+its own words, quoting nothing - and model output derived from the goal is USER
+taint, inside `run_code`'s ceiling. The injected INSTRUCTION succeeds while
+every injected BYTE is refused.
+
+Exposure is the wall for that case, because it never looks at the arguments. A
+channel task is denied `run_code` whatever it passes; no paraphrase changes a
+refusal that does not read what was said.
+
+| an attacker controls... | taint (M8.2) | exposure (B3) |
+|---|---|---|
+| bytes the agent will copy into an argument | **stops it** | not consulted |
+| which tool the agent reaches for, via a paraphrase | does not see it | **stops it**, if the tool is denied |
+| the content of an ALLOWED tool call, via a paraphrase | does not see it | does not see it |
+
+The third row is the honest limit. A channel task may still `write_file`, and
+it may write the attacker's intended content in the model's own words. Neither
+wall can see that, because both are rules and the gap is in meaning. What
+stands there is the third wall: a channel task never auto-proceeds (invariant
+65), so a write whose content was shaped by a stranger is looked at by a human.
+Tier-1 memory gets both mechanical walls at once - exposure denies it to a
+channel task, and its USER ceiling refuses anything quoted - because it is the
+one write whose content enters every future prompt.
+
+**Consequence for anyone adding a denial:** justify it by the paraphrase gap,
+not by the taint table. A denial that restates a taint ceiling adds nothing; a
+denial of a tool whose DANGER does not depend on quoted bytes - code execution,
+delegation, a second egress path - is the case exposure exists for.
+
+
+### 1.24 M13's two-touch model was inert in both halves - a scope correction
+
+M13 is the interaction this architecture is organised around: **approve a
+plan, receive a result, nothing in between.** A human touches the task twice -
+once to approve what it will do, once when it asks permission for something the
+plan did not settle - and code holds it to both. What ran, for the life of the
+project until 2026-09-13, was **approve a plan, then get a result regardless.**
+
+**Touch two - the approval - was fully inert.** When a task parked for a human,
+the decision was recorded, finalised, re-verified, anchored and logged, and
+nothing ever read it. The resumed task started from its goal, re-issued the
+call, and parked again under a new approval (SPEC-DELTA C43, fixed in
+`f11be4d`). Approving an action never made it happen; denying it never told the
+task. Every test of the path asserted that a decision was RECORDED. None
+asserted that it had an EFFECT.
+
+**Touch one - the plan pin - was half inert.** Invariant 17 verifies the
+approved plan's hash before every step, against the database AND against the
+anchor. The anchor half never fired: `checkpoint()` wrote chain heads under the
+same key the pin used, so the pin read a chain head and skipped itself (D21,
+found 2026-09-07). The database half did work - an edited `approved_hash` was
+caught - so an approved plan was protected against accidental change and not
+against someone editing the database, which is the case the anchor exists for.
+
+**Stated with the same honesty as 1.21.** M13's two human touch points were
+specified, built, tested for recording, and did not constrain execution. The
+deputy (M13.3 auto-review) and `approve_scoped_writes` allow within the same
+turn and were never affected; they are the paths that actually decided what
+ran.
+
+**Whether any published number depended on it - VERIFIED against the record,
+not inferred.** In the 283-task measurement database:
+
+| | count | detail |
+|---|---|---|
+| human decisions (`human.approved` / `human.denied`) | **0** | no human ever decided anything |
+| approvals | 3 | all still `pending`; all `run_code`; all 2026-08-24 01:41-01:42 |
+| tasks that ever paused | 3 | exactly those three |
+| of those, in any evidence file | **0** | searched every file in `docs/evidence/` |
+| plans drafted / approved | 1 / 1 | its task appears in no evidence file |
+| deputy decisions | 14 | 3 approve, 11 deny - in-turn, unaffected |
+
+No published number came from a run in which an approval or a plan pin
+mattered: benchmark runs never waited on a human, and the three that parked
+one night in August were abandoned undecided and never reported.
+
+**What holds now:** a decided approval is released on resume through the
+ordinary receipt path, at most once, with exposure and the gate's hard denials
+re-checked first (invariant 71); the plan pin reads its own namespaced key
+(invariant 17, verified by injection in `181159f`).
+
 ---
 
 ## 8. Open research questions

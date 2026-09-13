@@ -674,6 +674,11 @@ and the request shape are verified together.
 **What would make it urgent:** any surface work aimed at a cloud tier, or the
 G1 measurement, which needs a paid backend anyway.
 
+**CLOSED 2026-09-13.** The adapter now streams through `messages.stream()`,
+forwarding text deltas to `on_chunk`, on ONE path - which also removes a defect
+found on the way (C46: the SDK refuses a large non-streaming request outright).
+Tested against a fake client only; there is no key. Verification is D26's now.
+
 ## D26 — the Telegram transport has never made a live call
 
 **Found:** 2026-09-08, by instruction. Phase 8 carries a STOP before a real
@@ -717,3 +722,103 @@ receipt protocol already described in `kernel/db.py`. Building a queue in
 front of a lock that serialises anyway would look like concurrency and deliver
 none.
 
+**D26 now holds TWO unexercised live paths, 2026-09-13**, by instruction: the
+Telegram transport, and the Anthropic adapter's streaming path (D25, closed as
+a gap, open as a claim). They close together whenever a token and a key appear.
+The Anthropic half needs one trivial `--profile mixed` task: confirm tokens
+reach a surface while the turn is running, that `cache_read_input_tokens` is
+non-zero on the second call, and that a refusal is reported rather than
+rerouted.
+
+## D28 — a resumed task does not see its own history
+
+**Found:** 2026-09-13, while tracing why the taint tracker's lifetime gap was
+latent rather than live.
+
+`run_task` seeds a resumed run with the objective, the plan, and (since C43)
+the released decisions. Every observation from before the park is gone from
+the model's context - it is in the artifacts and on the chain, and the model
+can reach it with `expand_artifact` or `search_history`, but it is not in the
+tail. A task resumed after approval effectively starts over with one fact.
+
+**Why deferred:** restoring the tail is a harness change for every resumed task,
+and deciding what to restore - all of it, the last session's seed, a
+projection - is a design question that Phase 9's sessions make answerable but
+do not answer.
+
+## D29 — an EMPTY artifact_scope allows every path
+
+**Found:** 2026-09-13, by the storage-layer sweep.
+
+`within_scope` returns allowed when `artifact_scope` is empty. `TaskContract`
+defaults to an empty scope. So a task that declares nothing may read any file
+the process can - `~/.ssh` included - with only the protected-path list in the
+way. That is the fail-open shape Phase 8 refused for the channel allowlist,
+where empty means NOBODY.
+
+**Why not fixed here:** it is the default for every contract, and changing what
+"no scope" means changes behaviour for every task that relied on it. That is
+the user's decision. C45 closed the part of it that touched this project's own
+state.
+
+## D30 — Phase 9's summarizer: a design STOP (CLOSED: 9.2 withdrawn, C49)
+
+**Found:** 2026-09-13. See SPEC-DELTA C47.
+
+The tail holds only observations, so there is no conversation history for 9.2
+to summarize that is not tool output, which 9.1 forbids summarizing. Three ways
+forward, each a decision rather than an implementation detail:
+
+1. **Summarize tool output anyway.** Contradicts 9.1 and the 17/17 evidence.
+   Not recommended.
+2. **Put the model's own turns into the tail first**, then summarize those.
+   Every multi-step task would then see its own previous outputs, which it has
+   never done: a harness change for every measured task, so a HARNESS_VERSION
+   bump and its own STOP - and arguably a bigger change than the summarizer.
+3. **Treat a session as a conversation SPANNING tasks** - a Telegram chat, a
+   TUI session - where conversation history is the prior (goal, answer)
+   exchanges. That is real conversation, trajectories stay untouched, and
+   benchmark tasks, being single exchanges, never compress at all.
+
+Recommendation: 3. It is the only reading under which 9.1 and 9.2 are both
+satisfiable without a harness change, and it is where unbounded growth
+actually happens: a task ends at 24 steps, a chat does not.
+
+## D31 — the Anthropic path has no stall detection
+
+**Found:** 2026-09-13, writing D25.
+
+`StallWatch` protects the OpenAI-protocol adapters. The Anthropic adapter never
+had it, streaming or not. Wiring it is small, but it would be the second
+unverified behaviour added to a path that has made no live call; it belongs in
+the same session as D26's verification.
+
+**D30 CLOSED 2026-09-13.** Decided by instruction: 9.2 is withdrawn, not
+deferred. The child session is seeded by reference. See SPEC-DELTA C49.
+
+## D32 — the sandbox is a door, not a wall
+
+**Found:** 2026-09-13, Item 2's sweep (C50).
+
+The sandbox's audit hook now refuses reads, sqlite connections, listings and
+process starts against protected state. It lives in the process it polices, so
+code written to defeat it - `ctypes`, a native extension - can. It stops a model
+that REACHES for a protected file; it does not stop one that is TRYING.
+
+**What closes it:** Phase 6 (A6, a container per run), parked because Docker is
+not installed. Until then, isolation holds by construction for every tool route
+and by a guard for code execution, and the run record should say so.
+
+## D33 - tier 1 sits before ~966 tokens of tool schemas on this template
+
+**Found:** 2026-09-13, by 9.6 (SPEC-DELTA C48).
+
+The prefix renders tier 1 inside the system text. The local template appends the
+tool schemas after the system text, so any tier-1 change invalidates the whole
+schema block: the boundary took 77 s with a memory change against 36 s without.
+Anthropic renders tools BEFORE system, where the same change would cost only the
+system block, so the layout that is cheap depends on the provider.
+
+**Why not changed:** moving tier 1 out of the system text changes prefix
+STRUCTURE, which this project measured moving pass rates (the harness tax). That
+is a HARNESS_VERSION change and needs its own STOP.

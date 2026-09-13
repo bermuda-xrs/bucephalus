@@ -147,12 +147,19 @@ def run_code_action(
         }
 
     handler = make_tool_handler(ctx, task, step) if live_tools else None
+    # Item 2: the gate cannot see inside code, so the child refuses reads,
+    # sqlite connections, listings and process starts against the task's
+    # protected state itself. Not a boundary against an adversary with code
+    # execution - that is Phase 6's container - but no longer an open door.
+    from ..security.capabilities import task_state_paths
+
     result = run_sandboxed(
         code,
         allowed_paths=scope,
         timeout_s=timeout_s,
         preamble=CALL_TOOL_PREAMBLE,
         tool_handler=handler,
+        protected_paths=[str(p) for p in task_state_paths(ctx, task)],
     )
     result["ok"] = result["returncode"] == 0
     return result

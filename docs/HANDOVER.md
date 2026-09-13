@@ -224,11 +224,11 @@ split, profile or executor.
 | Branch | `measurement-2026-09-01` (off `main` at `148cd99`; no remote) |
 | Harness version | **2** — v3 was evaluated and **rejected**, see section 7 |
 | Toolset version | **5** — sympy, `search_history`, memory, web/file tools, then `parallel` |
-| Tests | **610 passing** |
+| Tests | **687 passing** |
 | Working tree | clean |
 | Running | nothing |
-| Last completed step | **Iteration two, Phase 8 (Telegram).** Stopped before a live token. See CHANGELOG |
-| Next step | Phase 9 (lineage compression), then 11 (cron), 12 (portable skills). Phase 6 (Docker) is PARKED — not installed. Phase 8 needs a bot token to finish — D26 |
+| Last completed step | **Iteration two, Phase 9 (sessions)**, 9.2 withdrawn, and the file-path sweep (C50). See CHANGELOG |
+| Next step | Phase 11 (cron), then 12 once D19 closes. Phase 6 (Docker) PARKED - it is also what closes D32. D26 holds two unexercised live paths: a bot token and an API key close both |
 
 ### Iteration two, so far
 

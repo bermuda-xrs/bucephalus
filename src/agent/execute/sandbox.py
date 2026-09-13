@@ -150,6 +150,12 @@ import sys as _sys, os as _os
 _ROOTS = [_os.path.realpath(p) for p in {roots!r}]
 _WORKDIR = _os.path.realpath({workdir!r})
 _BUSY = [False]
+_PROTECTED = [_os.path.realpath(p) for p in {protected!r}]
+_DENY_SPAWN = {deny_spawn!r}
+# A new process is a process this hook is not in: starting one bypasses every
+# rule here in a single call. Refused for agent code; harness runs keep it.
+_SPAWN = ("subprocess.Popen", "os.system", "os.exec", "os.posix_spawn",
+          "os.spawn", "os.startfile")
 
 
 def _under(path, root):
@@ -170,6 +176,26 @@ def _allowed(path):
     return any(_under(real, r) for r in _ROOTS)
 
 
+def _is_protected(path):
+    try:
+        real = _os.path.realpath(_os.path.abspath(_os.fspath(path)))
+    except Exception:
+        return False
+    return any(_under(real, p) for p in _PROTECTED)
+
+
+def _check_protected(path):
+    if not _PROTECTED or path is None or isinstance(path, int):
+        return
+    _BUSY[0] = True
+    try:
+        hit = _is_protected(path)
+    finally:
+        _BUSY[0] = False
+    if hit:
+        raise PermissionError("sandbox: protected path: %s" % (path,))
+
+
 _FS_EVENTS = (
     "os.remove", "os.rmdir", "os.mkdir", "os.rename", "os.link",
     "os.symlink", "os.truncate", "shutil.copyfile", "shutil.move",
@@ -180,8 +206,17 @@ _FS_EVENTS = (
 def _audit(event, args):
     if _BUSY[0]:
         return
+    if _DENY_SPAWN and event in _SPAWN:
+        raise PermissionError("sandbox: starting a process is denied (%s): it "
+                              "would run outside this hook" % (event,))
+    if event in ("os.listdir", "os.scandir", "sqlite3.connect"):
+        _check_protected(args[0] if args else ".")
+        return
     if event == "open":
         path, mode, flags = (list(args) + [None, None, None])[:3]
+        # READS too. The hook guarded writes only, so code could open any file
+        # on the machine by absolute path, whatever the task's scope.
+        _check_protected(path)
         writing = False
         if isinstance(mode, str) and any(c in mode for c in "wxa+"):
             writing = True
@@ -237,6 +272,7 @@ def run_sandboxed(
     timeout_s: int = 30,
     preamble: str = "",
     tool_handler: ToolHandler | None = None,
+    protected_paths=(),
 ) -> dict:
     """Run python in an isolated working directory.
 
@@ -267,6 +303,8 @@ def run_sandboxed(
             roots=[str(Path(p[0] if isinstance(p, (tuple, list)) else p).resolve())
                    for p in allowed_paths],
             workdir=str(Path(workdir).resolve()),
+            protected=[str(p) for p in protected_paths],
+            deny_spawn=bool(protected_paths),
         )
         script = Path(workdir) / "_run.py"
         script.write_text(guard + "\n" + preamble + "\n" + code, encoding="utf-8")
