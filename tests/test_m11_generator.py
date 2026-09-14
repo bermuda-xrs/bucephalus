@@ -11,6 +11,10 @@ import pytest
 from agent.assure.mesh import GamingSuspicion
 from agent.skills.generate import Source, TaskPattern, generate_skill, promotion_rate
 
+# FINDINGS 1.21: generate_skill refuses while M7.4 rules 2 and 3 are unwired.
+# These tests are about the generator's own rules, so they opt out, visibly.
+pytestmark = pytest.mark.usefixtures("generator_unguarded")
+
 DRAFT = (
     "# csv tidying\n"
     "when cleaning a delimited export\n\n"

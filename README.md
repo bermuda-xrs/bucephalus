@@ -288,6 +288,16 @@ rates to shrink a prompt you are about to send to the cloud is a net loss.
 - talk to a paid API — the `anthropic` adapter is written and unit-tested but
   has never made a live call
 
+**Half of M7.4 has never run, and skill generation is locked until it does.**
+The anti-gaming rules exist to police generated skills. Two of four are
+enforced: different authors for a skill and its tests, and trusted-tier
+actions never auto-reviewed. Two are not. The visible/held-out gap
+(`record_holdout_gap`) and isomorphic verification (`verify_isomorphic`) have
+no production caller, so no verification here has ever been cross-checked
+by a second verifier, and every promotion records `gaming_check: NOT
+MEASURED`. `generate_skill` therefore refuses to run: the first generated
+skill must not precede the rules that police it (FINDINGS 1.21).
+
 ## Grounding, fetching, and why not a server-side tool
 
 `web_fetch` uses **our own fetcher** (`src/agent/net/fetch.py`), not

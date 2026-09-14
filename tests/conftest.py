@@ -173,3 +173,19 @@ def routing_only(monkeypatch):
     import agent.router.cascade as cascade
 
     monkeypatch.setattr(cascade, "_ESCALATION_WIRED", True, raising=False)
+
+
+@pytest.fixture
+def generator_unguarded(monkeypatch):
+    """Opt a test out of the generation gate (FINDINGS 1.21).
+
+    `generate_skill` refuses while M7.4 rules 2 and 3 have no production
+    caller. These tests are about the GENERATOR's own rules - grounding, the
+    module limit, different authors - not about whether it may run for real,
+    so they say so explicitly rather than the gate being softened for
+    everyone. When rules 2 and 3 are wired, flip the flag and delete this
+    fixture and every use of it; the tests should then pass unaided.
+    """
+    import agent.skills.generate as gen
+
+    monkeypatch.setattr(gen, "M74_RULES_2_3_WIRED", True)

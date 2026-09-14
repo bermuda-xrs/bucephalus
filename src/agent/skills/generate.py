@@ -68,8 +68,26 @@ class Source:
     retrieved: str = ""
 
 
+# FINDINGS 1.21 / DEFERRED D22. M7.4 rules 2 (the visible/held-out gap) and 3
+# (isomorphic verification) have no production caller, and they exist to police
+# exactly what this function produces. The first real generation must not
+# precede them, so it cannot. Flip this only in the change that wires both into
+# the gate - and delete the `generator_unguarded` test fixture with it.
+M74_RULES_2_3_WIRED = False
+
+
+class GenerationGated(RuntimeError):
+    """generate_skill refused: M7.4 rules 2 and 3 are not enforced yet."""
+
+
 def generate_skill(ctx, pattern: TaskPattern, sources: list[Source] | None = None) -> str:
     """Draft locally, have a DIFFERENT model write the checks, store as candidate."""
+    if not M74_RULES_2_3_WIRED:
+        raise GenerationGated(
+            "generate_skill is gated: M7.4 rules 2 (visible/held-out gap) and 3 "
+            "(isomorphic verification) have no production caller - FINDINGS "
+            "1.21, D22. A generated skill is what they police, and promoting "
+            "one on a half-inert gate is the result the gate exists to prevent.")
     # 1. Ground in real sources — do NOT rely on model priors
     sources = sources or ctx.research_retrieve(pattern.description, k=5)
     for s in sources:

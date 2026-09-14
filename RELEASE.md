@@ -347,6 +347,14 @@ measurement at all (FINDINGS 1.13). Two of the gate's own guards are
 additionally inert: `record_holdout_gap` (so M7.4's anti-gaming veto cannot
 fire) and `measure_retrieval_precision`.
 
+**Scope statement, 2026-09-14.** M7.4 is one rule of four enforced where it
+matters: rules 2 (the visible/held-out gap) and 3 (isomorphic verification)
+have no production caller, so no verification in this project has been
+cross-checked by a second verifier, and no promotion has carried a measured
+gap. They were not wired: each is a design decision, not a line (FINDINGS
+1.21, D22). The gate they form holds in code - `generate_skill` refuses
+(`GenerationGated`) until they run.
+
 ---
 
 ## G5 — Least-privilege security with provenance. Implemented and measured.
@@ -412,6 +420,19 @@ in `skills_store/`. Two skills exist.
 `import_external_skill` is in `KNOWN_INERT` ("External skills go through the
 same gate; none imported yet"), and no skill has ever moved between machines,
 suites, or models. The format is a claim, not a demonstrated property.
+
+---
+
+## Code that has never run for real - 2026-09-14
+
+FINDINGS 1.25 has the inventory. In brief: the measurement record exercised
+the loop, the gate's allow path, receipts, the deputy, verification and the
+measurement apparatus, and nothing else. **Sixteen paths** have run only
+against a mock or a fake - among them both credential-gated adapters, every
+network tool, memory, sessions, compaction, delegation, cron, and the release
+of a human decision. **Nine components cannot run under any current
+configuration.** No production task has ever been resumed, and the
+capability gate has never refused a production call.
 
 ---
 

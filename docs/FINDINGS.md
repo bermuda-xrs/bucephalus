@@ -894,6 +894,13 @@ that a unit test proves a function works and says nothing about whether the
 system calls it. `test_wired_invariants.py` exists for this and did not cover
 these three.
 
+**2026-09-14: the gate holds in code.** `generate_skill` raises
+`GenerationGated` until the change that wires rules 2 and 3 flips
+`M74_RULES_2_3_WIRED`. Rules 2 and 3 were not wired here: rule 3 needs a
+choice of which verifier pairs are isomorphic for a task, and rule 2 a
+visible/held-out partition that only the never-run generator produces - design,
+not a line (D22). The scope statement is in README and RELEASE.
+
 ---
 
 ### 1.22 A word that covers two mechanisms makes the working one an alibi
@@ -1019,6 +1026,99 @@ one night in August were abandoned undecided and never reported.
 ordinary receipt path, at most once, with exposure and the gate's hard denials
 re-checked first (invariant 71); the plan pin reads its own namespaced key
 (invariant 17, verified by injection in `181159f`).
+
+### 1.25 Code that has never run for real - an inventory (A2-1, A2-2)
+
+A unit test proves a function works and says nothing about whether the system
+has ever called it for real (1.21). This is the inventory, taken 2026-09-14
+against the measurement record - `agent.local.db`: 283 tasks, 1,214 model
+calls, 2026-08-17 to 2026-09-06 - and the evidence files. The eight
+`runs/demo-*` databases are scripted-model runs, real harness and no real
+model, and count as tests here.
+
+**What the record contains, in full.** Event types: `task.*`, `model.*`,
+`tool.intent` / `tool.receipt`, `artifact.written`, `verify.*`, `review.*`
+(15 requested, 14 decided), `plan.drafted` / `plan.approved` (1 each),
+`skill.loaded` (45), `task.model_stalled` (12), `task.crashed` (3). Tools:
+`run_code` 495, `read_file` 113, `list_dir` 5, `write_file` 1. Call purposes:
+`step` 1,182, `plan` 1. Nothing else - no integrity, approval, channel,
+schedule, session, memory, delegation, web or compaction event of any kind.
+
+#### Paths exercised only against a mock or a fake (A2-1)
+
+| path | exercised today by | to exercise for real | fails silently if wrong |
+|---|---|---|---|
+| Telegram `HttpTransport`, `serve_forever` | `FakeTransport` | a bot token (D26); Part 4's skip-gated test | update-id offsets against real ids; a 409 when a second poller exists; the 4,096-character limit; callback answers; HTML escaping |
+| the Anthropic adapter - all of it; streaming is its only path | a fake client | an API key (D26); Part 4's skip-gated test | cache-token accounting; `stop_reason` mapping; tools-before-system rendering (D33's other half); error and retry mapping; stall detection (D31) |
+| the OpenAI-compatible adapter against anything but Ollama | Ollama's `/v1` on 11435 (`phase1-openai-parity.json`) | vLLM, llama.cpp's server, a hosted endpoint | usage fields absent or named differently; stream chunk shapes |
+| `web_fetch` / `web_search` over a network | a stub fetcher and searcher; never called in the record | a task that fetches | redirects and final-URL provenance; the byte cap; charsets; a scraper that parses to nothing, which is why `tool.search_failed` exists |
+| tier-1 memory: write, consolidate, flush, blessing | tests; 0 memory events in the record | a run with isolation off | the per-user blessing (DR1); consolidation; the flush refusal |
+| sessions and boundaries (Phase 9) | tests; 9.6 against real Ollama with scripted decisions, prefill only | a real task that crosses compaction | the seed reference; the snapshot on the session row |
+| compaction and the quarantined summarizer | tests; 0 `compress_tool_output` calls in the record | an observation over the threshold, with a local tier | the quarantine prompt; projection |
+| delegation | tests; 0 delegation events | a task the five gates admit | the child's narrowed policy |
+| the parallel batch | tests; measurement pins width 1 | `max_parallel_tools` above 1 | gate-before-run under threads |
+| cron: `supervise`, notifications, the measurement signal | tests | `alpha supervise` against a real model | local-time fields, DST, the grace window |
+| releasing a decided approval; the plan pin's anchor half; `integrity.resume` | tests | Part 3 runs each for real | - |
+| the skill gate's verdict, `promote`, `decay_pass` | tests; the one real trial run aborted at 10/30 | a completed calibration (D35) | McNemar on real pairs |
+| the control plane: server, SSE, console | Starlette's `TestClient` | a browser against a live run | SSE reconnection and backlog; CSRF from a real browser |
+| the TUI | tests | a terminal session | - |
+| `alpha monitor` | tests; `monitor_flags` has 0 rows | running it over the record | - |
+| `alpha snapshot` (the backup API) | tests | copying evidence out of a live WAL database | - |
+
+#### Guarantees, by whether they have ever run (A2-2)
+
+**Exercised in production, with evidence:**
+
+| guarantee | evidence in the record |
+|---|---|
+| prefix byte-stability (invariant 1) | a `prefix_fp` on 1,214 of 1,214 `model.called` |
+| write-before-act, receipts (7) | 614 `tool.intent`, 613 `tool.receipt`; the one without a receipt is a `run_code` whose process died inside the call - its task, `t_9a772f7c`, is still `running` in the record |
+| every model call in `calls` (12) | **holds only for calls that returned.** 1,183 rows (1,182 step, 1 plan) against 1,214 `model.called`; the 32 that never returned - 17 cut off by a killed process, 12 stalled, 3 crashed - have no row, so their wall time is absent from `calls` (D36) |
+| the capability gate | consulted on all 614 tool calls; **its refusal path never fired** - no denial in the record |
+| the deputy: a different backend, never widening (14, 15) | 15 `review.requested`, 14 `review.decided` |
+| the planner cannot write (13) | 1 `plan.drafted` |
+| verification | 427 `verify.attempted`: 73 passed, 354 failed |
+| a machine event is never scored (30) | 12 `task.model_stalled`, excluded in `S2c-two-stalls-excluded.jsonl` |
+| the measurement invariants (26-29, 33-34, 52, 58) | the ledgers in `docs/evidence/`, including a pass killed at task 5 and resumed from its ledger (RELEASE, G6) |
+| the arm's skill set | 45 `skill.loaded` |
+| `check_contamination` | 10 real pairs, 2026-08-27 - certified through the empty-set defect Part 1 fixed |
+
+**Exists, never run in production.** `integrity.resume` (9, 53): no task in
+the record was ever resumed - none re-entered `running`, and the 15 that
+crashed or stalled never ran again. The plan pin's anchor half (17): fixed
+2026-09-13, and the one production plan ran under the inert version. The
+trusted tier parks (16): no trusted-tier call. Approval release (71): 0 human
+decisions, 3 approvals pending since 2026-08-24. Injection blocking (3):
+nothing untrusted ever entered a production task, and `artifact.written` in
+the record predates the per-write taint field, so taint rebuild (72) has
+nothing to rebuild there either. Refinement, compaction, fill-ratio
+delegation and quarantine (2, 8, 11, 20). The semantic cache's taint check
+(18): one row written, 2026-08-19, and no read recorded. Memory and web
+(41-48). Exposure refusals and delegated children (49-51). The parallel
+batch (56-57). The stream, the TUI, the banner (59-62). The channel (63-74).
+Protected state and every file-route fence (75-77, 83). Sessions (80-82).
+Cron (84-88). Part 1's controls (89-96) and Part 2's (97-100). The gate's
+verdict, promotion and decay (10). The monitor (6). The integrity alert
+channel (40).
+
+**Exists, and cannot run under any current configuration:**
+
+| component | why |
+|---|---|
+| M7.4 rule 2 - `record_holdout_gap` - and with it the gate's gaming veto | no caller, and a `verify_program` suite has no visible/held-out partition |
+| M7.4 rule 3 - `verify_isomorphic` | no caller (D22) |
+| `measure_retrieval_precision` | no caller |
+| local-tier routing, `local_with_escalation` | `Router.choose` raises unless `_ESCALATION_WIRED`; one tier is configured |
+| `tokens.calibrate` | no caller; no `.token_calibration.json` exists |
+| `max_taint_in` | carried on every contract, consulted nowhere |
+| `generate_skill`, and invariants 4 and 5, which only it reaches | no entry point - and since Part 2, refused in code until M7.4 rules 2 and 3 run |
+| POSIX rlimits | only Windows has ever run this |
+| the live Telegram path; the Anthropic adapter | no token, no key (D26) |
+
+**One thing the record cannot say, and now will.** What the recorded programs
+did: each of the 495 keeps an 80-character repr in its chained intent. From
+Part 2 on, `run_code` records its full source, the source's hash on the chain,
+and every path the program touched (A2-4). The 495 are not recoverable.
 
 ---
 

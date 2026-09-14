@@ -124,7 +124,7 @@ If it does not say that, stop and fix it before anything else.
 | `src/agent/execute/sandbox.py` | Subprocess + audit hook: writes to scope; agent code's reads to scope plus the interpreter. Advisory - D32 |
 | `src/agent/execute/codeact.py` | Runs model-written code; compile-checks it first |
 | `src/agent/skills/gate.py` | **The statistical gate.** Paired trials, McNemar, promotion |
-| `src/agent/skills/generate.py` | The skill generator (M11). **Has never been run** |
+| `src/agent/skills/generate.py` | The skill generator (M11). **Has never been run, and refuses to until M7.4 rules 2 and 3 do** |
 | `src/agent/assure/verifiers.py` | Graders. `verify_program` is the one the suite uses |
 | `src/agent/assure/mesh.py` | Ratchet, anti-gaming signal, held-out registry |
 | `src/agent/kernel/` | Event log, hash chain, receipts (exactly-once side effects) |
@@ -224,11 +224,11 @@ split, profile or executor.
 | Branch | `measurement-2026-09-01` (off `main` at `148cd99`; no remote) |
 | Harness version | **2** — v3 was evaluated and **rejected**, see section 7 |
 | Toolset version | **5** — sympy, `search_history`, memory, web/file tools, then `parallel` |
-| Tests | **733 passing** |
+| Tests | **752 passing** |
 | Working tree | clean |
 | Running | nothing |
-| Last completed step | **Consolidation, Part 1** - D29 and its six siblings, D33 threshold, D34 signal. See CHANGELOG |
-| Next step | Consolidation Parts 2-4: code that has never run for real, real-run verification, skip-gated live tests. The phase program is stopped; Phase 12 needs D19. D35 (the calibration skill's drafting set) is the user's decision. Phase 6 (Docker) PARKED - it also closes D32. D26 holds two unexercised live paths |
+| Last completed step | **Consolidation, Part 2** - the never-run inventory (FINDINGS 1.25), the generation gate in code, `run_code`'s record, the SQLite routes (C55). See CHANGELOG |
+| Next step | Consolidation Parts 3-4: real-run verification, skip-gated live tests. The phase program is stopped; Phase 12 needs D19. D35 (the calibration skill's drafting set) is the user's decision. Phase 6 (Docker) PARKED - it also closes D32. D26 holds two unexercised live paths |
 
 ### Iteration two, so far
 

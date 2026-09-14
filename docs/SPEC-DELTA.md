@@ -1175,3 +1175,53 @@ The lock also moved. It lived beside each run's `--out`, so two measurements
 writing to different directories never excluded each other - DR1's width axis
 in the one control whose whole job is exclusion. It is now one per project
 root. C52 stays as written: this supersedes its conclusion, not its reasoning.
+
+### C55. The sandbox guarded one spelling of the route into a database
+
+**Reality, found 2026-09-14 building A2-4.** From agent code, with the task's
+scope linked and its state protected:
+
+| route | before |
+|---|---|
+| `sqlite3.connect(<protected path>)` | refused |
+| `sqlite3.connect('file:<path>?mode=ro', uri=True)` | **opened** - 70 tables |
+| the same with a percent-encoded name | **opened** |
+| `file:///<path>`, `file://localhost/<path>` | refused - by accident: the mangled path fell outside the read fence |
+| `ATTACH` the protected file, literal or by URI | **opened** |
+| `VACUUM INTO` a path outside scope | **wrote it** |
+| `connect()` a new file in the interpreter's directories, which the read fence allows | **created it** - a write the write-confinement never saw |
+| `enable_load_extension(True)` | allowed - native code, outside the hook |
+
+The hook checked `sqlite3.connect`'s argument as a path; SQLite reads it as a
+URI, and opens files itself in C, where no Python audit event fires. ATTACH
+and VACUUM INTO open files from inside SQL with no event at all.
+
+**Correct version.** The database string is read as SQLite reads it - URI,
+authority, `/C:/`, percent-encoding - and every file SQLite opens for agent
+code must pass the protected check AND lie inside the task's writable scope.
+An authorizer on every connection refuses ATTACH - which VACUUM INTO also
+reports - of anything else. Native extensions are refused like process starts.
+
+**Two designs were wrong on first contact, and the tests said so.** The audit
+event for a new connection carries a raw `sqlite3*` handle, not the
+`Connection`, so installing the authorizer there refused every connection,
+`:memory:` included; it is installed by a wrapped `sqlite3.connect` instead.
+And SQLite asks about an ATTACH before a bound parameter or an expression has
+named the file - the target arrives as `None`, which the first authorizer
+allowed. Refused now (DR4). Still advisory (D32): a `Connection` built another
+way, or `set_authorizer(None)`, gets past it.
+
+### C56. A2-4: `run_code` records its source, its hash, and what it touched
+
+**Reality:** the chained intent kept an 80-character repr of each program and
+the output artifact's origin 200 characters, so whether any recorded program
+read outside its scope - Part 1's question - could be answered only for a
+prefix.
+
+**Correct version:** all three of the options given. The source is stored
+content-addressed, so its hash is its address; the SHA-256 rides the chained
+`tool.intent`; what the program touched rides the chained `tool.receipt`. A
+hash alone answers "is this the program that ran" and never "what did it do".
+The touch log lives outside the work directory, and `touched` is popped
+before the observation is rendered, so the model's view is byte-identical and
+`HARNESS_VERSION` does not move.

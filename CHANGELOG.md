@@ -10,6 +10,62 @@
 Dates are commit dates. `0.1.0` is not released yet — see "Unreleased" for
 what still stands between here and a first iteration.
 
+## Consolidation, Part 2 - code that has never run for real - 2026-09-14
+
+**Invalidates no published number.** `HARNESS_VERSION` 2, `TOOLSET_VERSION` 5:
+the model's view of a `run_code` result is byte-identical - tested - and the
+new fences narrow what agent code may open, C50's precedent.
+
+### A2-1, A2-2 - the inventory (FINDINGS 1.25)
+
+Sixteen paths exercised only against a mock or a fake; every named guarantee
+sorted by whether it has run - in production with evidence, never, or never
+able to under any current configuration (nine). Three findings from the record
+itself: invariant 12 holds only for calls that return (32 have no `calls`
+row, D36); the capability gate's refusal path never fired in production; and
+no production task was ever resumed, so `integrity.resume` has never run for
+real.
+
+### A2-3 - the scope statement, and the gate in code
+
+Not wired: rule 3 needs a choice of which verifier pairs are isomorphic per
+task, and rule 2 a visible/held-out partition that only the never-run
+generator produces - design, not a line (D22). The scope statement is in
+README and RELEASE in 1.21's words. And the gate holds in code:
+`generate_skill` raises `GenerationGated` until the change that wires both
+flips `M74_RULES_2_3_WIRED`. The generator's own tests opt out with a visible
+fixture, as `routing_only` does for the router.
+
+### A2-4 - what `run_code` records (C56)
+
+All three: the source, content-addressed; its SHA-256 on the chained intent;
+what the program touched - every open, listing, database and filesystem change
+outside the interpreter's own paths, refusals included - on the chained
+receipt. The touch log is written outside the work directory and `touched` is
+popped before rendering, so the model sees what it saw before. A harness run
+keeps no log and says so with null. The record's 495 programs keep only an
+80-character repr and are not recoverable.
+
+### Found building A2-4 - the SQLite routes into protected state (C55)
+
+`file:<path>?mode=ro` opened the project database from agent code - 70 tables -
+where the plain path was refused. So did a percent-encoded name, ATTACH, and a
+database created in the interpreter's readable directories; VACUUM INTO wrote
+outside scope; native extensions loaded. The fence now reads the string as
+SQLite does, requires every file SQLite opens to be in the task's writable
+scope, authorizes ATTACH (refusing an unknown target), and refuses extensions.
+Advisory (D32).
+
+### Tests
+
+**752 passing.** 19 new, in `tests/test_run_code_record.py`,
+`tests/test_sqlite_routes.py` and `tests/test_gated_generation.py`. 16 injected
+defects, every listed test red for each. Every new test ran against the unfixed
+code first: six of the A2-4 and gate tests red for the missing record or gate,
+and the SQLite tests red for the hole itself - seven routes opened the
+database, two were refused only by accident. Two designs were wrong on first
+contact and the tests caught both (C55).
+
 ## Consolidation, Part 1 - empty means nothing, and the measurement signal - 2026-09-13
 
 **Invalidates no published number - verified.** 2 of the record's 283 tasks

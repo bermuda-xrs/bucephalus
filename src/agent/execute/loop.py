@@ -798,12 +798,11 @@ def _perform(ctx, task, tool, tool_name: str, args: dict, step: int) -> LedgerEn
     """
     # Write-before-act, then execute at most once across all replays.
     key = idempotency_key(task.id, step, tool_name, args)
-    ctx.log.append(
-        task.id,
-        "tool.intent",
-        {"tool": tool_name, "step": step, "key": key,
-         "preview": render_preview(tool, args)},
-    )
+    intent = {"tool": tool_name, "step": step, "key": key,
+              "preview": render_preview(tool, args)}
+    if tool_name == "run_code":
+        intent.update(_code_record(ctx, task, str(args.get("code", ""))))
+    ctx.log.append(task.id, "tool.intent", intent)
 
     t0 = time.time()
     try:
@@ -829,12 +828,14 @@ def _perform(ctx, task, tool, tool_name: str, args: dict, step: int) -> LedgerEn
     except Exception as e:  # noqa: BLE001 - a failing tool is an observation
         result = {"ok": False, "error": f"{type(e).__name__}: {e}"}
 
-    ctx.log.append(
-        task.id,
-        "tool.receipt",
-        {"tool": tool_name, "key": key, "ok": bool(result.get("ok", True)),
-         "wall_ms": int((time.time() - t0) * 1000)},
-    )
+    # A2-4: what the program touched goes on the RECEIPT and never into the
+    # observation - the model's view of a run stays byte-identical.
+    touched = result.pop("touched", None) if isinstance(result, dict) else None
+    receipt = {"tool": tool_name, "key": key, "ok": bool(result.get("ok", True)),
+               "wall_ms": int((time.time() - t0) * 1000)}
+    if tool_name == "run_code":
+        receipt.update(_touched_record(touched))
+    ctx.log.append(task.id, "tool.receipt", receipt)
 
     text = _render_result(result)
     taint = tool.output_taint
@@ -862,6 +863,36 @@ def _perform(ctx, task, tool, tool_name: str, args: dict, step: int) -> LedgerEn
     rendered, via = condense_observation(ctx, task, text, taint, aid)
     label = f"{tool_name} via {via}" if via else tool_name
     return LedgerEntry.observation(rendered, artifact_id=aid, taint=taint, label=label)
+
+
+def _code_record(ctx, task, code: str) -> dict:
+    """A2-4 - what run_code RAN, recoverable from the record byte for byte.
+
+    The intent's preview keeps an 80-character repr of `code` and the output
+    artifact's origin 200 characters, so the record could not say what a
+    program did - the question Part 1 had to leave half-answered. The source
+    is stored content-addressed, and its hash rides the chained intent: a row
+    edited later no longer matches the chain. No `artifact.written`: source is
+    not an observation, and taint is rebuilt from observations only.
+    """
+    from ..kernel.events import sha256_hex
+
+    taint = ctx.taint_tracker(task.id).args_taint({"code": code})
+    aid = write_artifact(ctx.conn, task.id, "code", code, taint,
+                         {"tool": "run_code", "role": "source"})
+    return {"code_sha256": sha256_hex(code), "code_artifact": aid,
+            "code_chars": len(code)}
+
+
+def _touched_record(touched: dict | None) -> dict:
+    """The receipt's view of what a program touched. None when nothing
+    captured it - a malformed action, or a run with no touch log - because
+    unmeasured is null, never an empty list (invariant 36)."""
+    if touched is None:
+        return {"code_touched": None}
+    return {"code_touched": touched["entries"],
+            "code_touched_dropped": touched["dropped"],
+            "code_denied": touched["denied"]}
 
 
 def condense_observation(ctx, task, text: str, taint: Taint, aid: str) -> tuple[str, str | None]:

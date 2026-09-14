@@ -157,10 +157,23 @@ _READ_FENCE = {read_fence!r}
 # interpreter needs: the work directory, the linked scope, and the
 # interpreter's own paths, captured before any user code runs. Anything else -
 # a home directory, another project - is not declared, so it is not permitted.
-_READ_ROOTS = [_WORKDIR] + _ROOTS + sorted({{_os.path.realpath(p) for p in (
+_INTERP_ROOTS = sorted({{_os.path.realpath(p) for p in (
     [x for x in _sys.path if x] + [_sys.prefix, _sys.base_prefix,
      _sys.exec_prefix, getattr(_sys, "base_exec_prefix", _sys.prefix),
      _os.environ.get("SYSTEMROOT", "")]) if p}})
+_READ_ROOTS = [_WORKDIR] + _ROOTS + _INTERP_ROOTS
+# A2-4. What this program touched, for the record: every open, listing,
+# database and filesystem change outside the interpreter's own paths, refusals
+# included. Written a line at a time to a file OUTSIDE the work directory,
+# opened before the hook exists, so a listing of the work directory is
+# unchanged and os._exit loses at most a line. Telemetry, not a control: code
+# that wants to can write to it too (D32).
+_TOUCH = [None]
+if {touch_path!r}:
+    try:
+        _TOUCH[0] = open({touch_path!r}, "a", encoding="utf-8", buffering=1)
+    except Exception:
+        _TOUCH[0] = None
 # A new process is a process this hook is not in: starting one bypasses every
 # rule here in a single call. Refused for agent code; harness runs keep it.
 _SPAWN = ("subprocess.Popen", "os.system", "os.exec", "os.posix_spawn",
@@ -225,6 +238,114 @@ def _check_read(path):
         raise PermissionError("sandbox: read outside scope: %s" % (path,))
 
 
+def _touch(op, path, denied=False, raw=False):
+    f = _TOUCH[0]
+    if f is None or path is None or isinstance(path, int):
+        return
+    _BUSY[0] = True
+    try:
+        if raw:
+            real = _os.fsdecode(path) if isinstance(path, bytes) else str(path)
+        else:
+            try:
+                real = _os.path.realpath(_os.path.abspath(_os.fspath(path)))
+                if isinstance(real, bytes):
+                    real = _os.fsdecode(real)
+            except Exception:
+                real = repr(path)
+        if denied or not any(_under(real, r) for r in _INTERP_ROOTS):
+            f.write(("D " if denied else "  ") + op + " " + real + "\\n")
+    except Exception:
+        pass
+    finally:
+        _BUSY[0] = False
+
+
+def _unpct(s):
+    out = bytearray()
+    i = 0
+    while i < len(s):
+        h = s[i + 1:i + 3]
+        if s[i] == "%" and len(h) == 2:
+            try:
+                out.append(int(h, 16))
+                i += 3
+                continue
+            except ValueError:
+                pass
+        out.extend(s[i].encode("utf-8"))
+        i += 1
+    return out.decode("utf-8", "replace")
+
+
+def _sqlite_targets(db):
+    """Every file this database string can make SQLite open.
+
+    SQLite opens files itself, in C, where no Python audit event sees them, so
+    the string must be read the way SQLite reads it: as a URI when it starts
+    with file:, and as a plain name as well. `file:C:/x/agent.db?mode=ro` was
+    checked only as a plain name - a path under the work directory - and
+    opened the project database.
+    """
+    s = _os.fsdecode(db) if isinstance(db, bytes) else str(db)
+    if s in ("", ":memory:"):
+        return []
+    if s[:5].lower() != "file:":
+        return [s]
+    body, _, query = s[5:].partition("?")
+    body = body.partition("#")[0]
+    if "mode=memory" in query.lower() or body in ("", ":memory:"):
+        return []
+    if body.startswith("//"):
+        body = "/" + body[2:].partition("/")[2]     # file://host/p -> /p
+    body = _unpct(body)
+    if len(body) >= 3 and body[0] == "/" and body[2] == ":":
+        body = body[1:]                                # /C:/x -> C:/x
+    return [body, s]
+
+
+def _check_sqlite(db):
+    """A database is fenced by what SQLite will OPEN, for read or write. Agent
+    code has no business with one outside its scope, and a database SQLite
+    creates is a write the write-confinement below never sees."""
+    if not _DENY_SPAWN:
+        return
+    for t in _sqlite_targets(db):
+        _check_protected(t)
+        _BUSY[0] = True
+        try:
+            ok = _allowed(t)
+        finally:
+            _BUSY[0] = False
+        if not ok:
+            raise PermissionError("sandbox: database outside scope: %s" % (t,))
+
+
+# SQLite's authorizer code for ATTACH - which VACUUM INTO also reports for its
+# target file - and its answers. Numbers rather than sqlite3.SQLITE_*, so the
+# guard does not import sqlite3 into every run.
+_SQLITE_ATTACH, _SQLITE_DENY, _SQLITE_OK = 24, 1, 0
+
+
+def _sqlite_auth(action, a1, a2, dbname, trigger):
+    if action != _SQLITE_ATTACH:
+        return _SQLITE_OK
+    if a1 is None:
+        # A bound parameter or an expression is not a filename yet when SQLite
+        # asks about an ATTACH: it is resolved after this answer. An unknown
+        # target is not a safe one (DR4). VACUUM INTO is asked at run time,
+        # with the name.
+        _touch("attach", "<target unknown when authorized>", True, raw=True)
+        return _SQLITE_DENY
+    try:
+        _check_sqlite(a1)
+    except PermissionError:
+        _touch("attach", a1, True, raw=True)
+        return _SQLITE_DENY
+    _touch("attach", a1, raw=True)
+    return _SQLITE_OK
+
+
 _FS_EVENTS = (
     "os.remove", "os.rmdir", "os.mkdir", "os.rename", "os.link",
     "os.symlink", "os.truncate", "shutil.copyfile", "shutil.move",
@@ -236,18 +357,36 @@ def _audit(event, args):
     if _BUSY[0]:
         return
     if _DENY_SPAWN and event in _SPAWN:
+        _touch("spawn", event, True, raw=True)
         raise PermissionError("sandbox: starting a process is denied (%s): it "
                               "would run outside this hook" % (event,))
-    if event in ("os.listdir", "os.scandir", "sqlite3.connect"):
-        _check_protected(args[0] if args else ".")
-        _check_read(args[0] if args else ".")
+    if _DENY_SPAWN and event in ("sqlite3.enable_load_extension",
+                                 "sqlite3.load_extension"):
+        # Native code is a process-sized hole in this hook, same as a spawn.
+        _touch("load_extension", event, True, raw=True)
+        raise PermissionError("sandbox: loading a native extension is denied "
+                              "(%s): it would run outside this hook" % (event,))
+    if event == "sqlite3.connect":
+        p = args[0] if args else ""
+        try:
+            _check_sqlite(p)
+        except PermissionError:
+            _touch("sqlite", p, True, raw=True)
+            raise
+        _touch("sqlite", p, raw=True)
+        return
+    if event in ("os.listdir", "os.scandir"):
+        p = args[0] if args else "."
+        try:
+            _check_protected(p)
+            _check_read(p)
+        except PermissionError:
+            _touch("list", p, True)
+            raise
+        _touch("list", p)
         return
     if event == "open":
         path, mode, flags = (list(args) + [None, None, None])[:3]
-        # READS too. The hook guarded writes only, so code could open any file
-        # on the machine by absolute path, whatever the task's scope.
-        _check_protected(path)
-        _check_read(path)
         writing = False
         if isinstance(mode, str) and any(c in mode for c in "wxa+"):
             writing = True
@@ -256,16 +395,27 @@ def _audit(event, args):
             | getattr(_os, "O_APPEND", 8) | getattr(_os, "O_CREAT", 64)
         ):
             writing = True
-        if not writing or path is None:
-            return
-        _BUSY[0] = True
+        op = "write" if writing else "read"
         try:
-            ok = _allowed(path)
-        finally:
-            _BUSY[0] = False
-        if not ok:
-            raise PermissionError("sandbox: write denied outside scope: %s" % (path,))
+            # READS too. The hook guarded writes only, so code could open any
+            # file on the machine by absolute path, whatever the task's scope.
+            _check_protected(path)
+            _check_read(path)
+            if writing and path is not None:
+                _BUSY[0] = True
+                try:
+                    ok = _allowed(path)
+                finally:
+                    _BUSY[0] = False
+                if not ok:
+                    raise PermissionError(
+                        "sandbox: write denied outside scope: %s" % (path,))
+        except PermissionError:
+            _touch(op, path, True)      # a refused open is on the record too
+            raise
+        _touch(op, path)
     elif event in _FS_EVENTS:
+        op = event.split(".", 1)[1]
         for a in args:
             if not isinstance(a, (str, bytes, _os.PathLike)):
                 continue
@@ -275,13 +425,83 @@ def _audit(event, args):
             finally:
                 _BUSY[0] = False
             if not ok:
+                _touch(op, a, True)
                 raise PermissionError(
                     "sandbox: filesystem change denied outside scope: %s" % (a,)
                 )
+            _touch(op, a)
+
+
+# ATTACH and VACUUM INTO open files from inside SQL, with no audit event at
+# all; SQLite's authorizer is the one place that sees them. The audit event for
+# a new connection carries a raw sqlite3* handle, not the Connection, so the
+# authorizer is installed by the function that makes connections - wrapped
+# here, before any agent code runs. A connection it cannot be installed on is
+# refused. Code that builds a Connection some other way, or replaces the
+# authorizer, gets past it: advisory, like the rest of this hook (D32).
+if _DENY_SPAWN:
+    import sqlite3 as _sq
+    _SQ_CONNECT = _sq.connect
+
+    def _fenced_connect(*a, **k):
+        c = _SQ_CONNECT(*a, **k)
+        try:
+            c.set_authorizer(_sqlite_auth)
+        except Exception:
+            c.close()
+            raise PermissionError("sandbox: could not fence this database "
+                                  "connection")
+        return c
+
+    _sq.connect = _sq.dbapi2.connect = _fenced_connect
 
 
 _sys.addaudithook(_audit)
 '''
+
+
+# A2-4: how many touched-path entries a receipt keeps; the rest are counted.
+MAX_TOUCHED = 200
+
+
+def _read_touched(log_path: str, workdir: str, links: list[dict]) -> dict | None:
+    """The child's touch log, as the receipt records it.
+
+    None when there is no log: unmeasured is null, never an empty list
+    (invariant 36). Paths inside a COPIED scope entry are mapped back to the
+    file they stand for, and other work-directory paths are shown under
+    `<sandbox>`, so a receipt names what a task would recognise.
+    """
+    try:
+        lines = Path(log_path).read_text(encoding="utf-8",
+                                         errors="replace").splitlines()
+    except OSError:
+        return None
+    wd = os.path.realpath(workdir)
+    copies = [(os.path.realpath(e["dest"]), os.path.realpath(e["src"]))
+              for e in links if e.get("mode") == "copy"]
+    seen: set = set()
+    entries: list[dict] = []
+    for line in lines:
+        if len(line) < 4:
+            continue
+        denied = line.startswith("D ")
+        op, _, path = line[2:].partition(" ")
+        for dest, src in copies:
+            if path == dest or path.startswith(dest + os.sep):
+                path = src + path[len(dest):]
+                break
+        else:
+            if path == wd or path.startswith(wd + os.sep):
+                path = "<sandbox>" + path[len(wd):].replace(os.sep, "/")
+        key = (op, path, denied)
+        if key in seen:
+            continue
+        seen.add(key)
+        entries.append({"op": op, "path": path, **({"denied": True} if denied else {})})
+    return {"entries": entries[:MAX_TOUCHED],
+            "dropped": max(0, len(entries) - MAX_TOUCHED),
+            "denied": sum(1 for e in entries if e.get("denied"))}
 
 
 def _build_env(workdir: str) -> dict:
@@ -330,6 +550,11 @@ def run_sandboxed(
             if entry:
                 links.append(entry)
 
+        # A2-4: agent code keeps a touch log, outside the work directory.
+        touch_path = None
+        if protected_paths:
+            fd, touch_path = tempfile.mkstemp(prefix="alpha_touch_", suffix=".log")
+            os.close(fd)
         guard = _GUARD_TEMPLATE.format(
             roots=[str(Path(p[0] if isinstance(p, (tuple, list)) else p).resolve())
                    for p in allowed_paths],
@@ -337,6 +562,7 @@ def run_sandboxed(
             protected=[str(p) for p in protected_paths],
             deny_spawn=bool(protected_paths),
             read_fence=bool(protected_paths),
+            touch_path=touch_path,
         )
         script = Path(workdir) / "_run.py"
         script.write_text(guard + "\n" + preamble + "\n" + code, encoding="utf-8")
@@ -351,6 +577,13 @@ def run_sandboxed(
 
         result["changed_files"] = _copy_back(links)
         result["notes"] = notes
+        result["touched"] = (_read_touched(touch_path, workdir, links)
+                             if touch_path else None)
+        if touch_path:
+            try:
+                os.unlink(touch_path)
+            except OSError:
+                pass
         return result
 
 

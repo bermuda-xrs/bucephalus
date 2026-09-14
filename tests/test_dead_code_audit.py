@@ -73,7 +73,8 @@ KNOWN_INERT = {
     # --- not yet reached in the build order -------------------------------
     "generate_skill":
         "M11. No generated skill has been produced yet - by design, the gate "
-        "was built first.",
+        "was built first, and it refuses to run until M7.4 rules 2 and 3 do "
+        "(FINDINGS 1.21).",
     "import_external_skill":
         "External skills go through the same gate; none imported yet.",
 

@@ -814,6 +814,11 @@ that REACHES for a protected file; it does not stop one that is TRYING.
 not installed. Until then, isolation holds by construction for every tool route
 and by a guard for code execution, and the run record should say so.
 
+**SQLite, 2026-09-14 (C55).** The fence reads a database string as SQLite
+reads it and authorizes ATTACH; the authorizer is installed by a wrapped
+`sqlite3.connect`. A `Connection` built another way, or
+`set_authorizer(None)`, gets past it - the same door.
+
 ## D33 - tier 1 sits before ~966 tokens of tool schemas on this template
 
 **Found:** 2026-09-13, by 9.6 (SPEC-DELTA C48).
@@ -877,3 +882,18 @@ detector; (c) something else. **Recommendation: (b)** - it states the
 contamination instead of hiding it, and enforces the one consequence that
 matters. Until decided, `bench/run.py paired` refuses this skill, `--resume` of
 the 10-pair run of 2026-08-27 included.
+
+## D36 - a model call that never returns has no `calls` row
+
+**Found:** 2026-09-14, by A2-2.
+
+Invariant 12 says every model call is recorded in `calls`. The record has
+1,214 `model.called` and 1,183 rows: the 32 calls that never returned - 17 cut
+off by a killed process, 12 stalled, 3 crashed - have none, because the row is
+written from the response's usage. Their wall time is in the task's budget
+events and missing from `calls`, so any per-call timing drawn from `calls`
+silently drops exactly the slowest calls.
+
+**Fix shape, not built:** write the row at call time with null usage, and
+complete it on return. Changes what `calls` means for every existing
+analysis, so it waits for a decision.

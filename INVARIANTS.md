@@ -26,7 +26,8 @@ that would catch a violation, so "I checked it" means something.
        — `test_promotion_requires_a_human`, `test_generator_cannot_promote`
 11. ☐ Working context stays under the fill ratio
        — `test_ceiling_triggers_delegation_not_squeeze`
-12. ☐ Every model call is recorded in `calls`
+12. ☐ Every model call is recorded in `calls` - *for calls that return;
+       one that never returns has no row (FINDINGS 1.25, D36)*
        — `test_no_call_bypasses_telemetry`
 13. ☐ The planner cannot write; plan phase is read-only
        — `test_planner_cannot_write`
@@ -606,6 +607,30 @@ reads as stale by PID.
 `test_the_supervisor_will_not_fire_during_a_measurement`,
 `test_a_fired_task_waits_for_the_measurement_to_end`.
 
+## Added 2026-09-14 (consolidation - code that has never run for real)
+
+**97. What `run_code` ran is recoverable from the record, byte for byte.** The
+full source is stored content-addressed and its SHA-256 rides the chained
+`tool.intent`. *Caught by:* `test_the_full_source_is_recoverable_from_the_record`.
+
+**98. What agent code touched is on the chained receipt, and the model's view
+is unchanged.** Every open, listing, database and filesystem change outside
+the interpreter's own paths, refusals included. Unmeasured is null.
+*Caught by:* `test_what_the_code_touched_is_on_the_receipt`,
+`test_a_refused_read_is_recorded_as_refused`, `test_imports_do_not_flood_the_record`,
+`test_the_observation_the_model_sees_is_unchanged`,
+`test_touched_is_null_when_nothing_captured_it`.
+
+**99. A database is fenced by what SQLite will open.** For agent code: a URI is
+read as SQLite reads it, every file SQLite opens must be inside the task's
+scope, ATTACH is authorized - and refused when its target is not yet known -
+VACUUM INTO likewise, and native extensions do not load. Advisory, like the
+rest of the hook (D32).
+*Caught by:* `tests/test_sqlite_routes.py`.
+
+**100. `generate_skill` refuses until M7.4 rules 2 and 3 run.**
+*Caught by:* `test_generation_is_refused_until_m74_rules_2_and_3_run`.
+
 ---
 
 ## Design rules
@@ -740,6 +765,13 @@ Before calling something protected, enumerate EVERY route to its bytes - query,
 file read, traversal from above, pattern expansion, code execution, a copy - and
 test each one, not the route the control was written for (C50).
 
+**Instance, 2026-09-14 (C55).** The sandbox refused `sqlite3.connect` of a
+protected path and opened the same database for `file:<path>?mode=ro`: it
+checked the URI as a path under the work directory, and SQLite opens files
+itself, in C, where no Python audit event sees them. ATTACH and VACUUM INTO
+open files from inside SQL with no event at all. One spelling of the route,
+guarded; five others, not.
+
 **DR4. Empty means nothing.**
 
 The adjacency family's fifth mechanism, and the only one where nothing is
@@ -786,6 +818,11 @@ Before adding a control, write down what it does when its list is empty and
 when its input is missing. If the answer is "permits", the control is a
 suggestion. Empty and absent are inputs like any other; they resolve to nothing
 permitted, and the refusal says what to declare.
+
+**Instance, 2026-09-14.** SQLite asks its authorizer about an ATTACH before a
+bound parameter or an expression has named the file, so the target arrives as
+`None` - and the first fence read `None` as nothing to check. An unknown
+target is refused.
 
 **DR2. A default must not shadow the path it is a default for.**
 

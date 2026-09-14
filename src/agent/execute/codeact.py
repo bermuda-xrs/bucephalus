@@ -13,6 +13,7 @@ tools directly would be a hole straight through M8.
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 
 from ..kernel.receipts import execute_once, idempotency_key
@@ -162,4 +163,14 @@ def run_code_action(
         protected_paths=[str(p) for p in task_state_paths(ctx, task)],
     )
     result["ok"] = result["returncode"] == 0
+    # A2-4: name what the program touched the way the task names it - relative
+    # to the project - so a receipt reads `work/E01/params.json`, not a path
+    # under this machine's user directory.
+    touched = result.get("touched")
+    if touched:
+        root = os.path.realpath(str(ctx.config.root))
+        for e in touched["entries"]:
+            p = e["path"]
+            if p == root or p.startswith(root + os.sep):
+                e["path"] = os.path.relpath(p, root).replace(os.sep, "/")
     return result
