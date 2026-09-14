@@ -227,8 +227,8 @@ split, profile or executor.
 | Tests | **757 passing** |
 | Working tree | clean |
 | Running | nothing |
-| Last completed step | **Consolidation, Part 3** - approvals, the plan pin's anchor half and `integrity.resume` verified in real runs (`docs/evidence/part3-real-runs*.json`); two defects found by them (C58); the sandbox stated as a door. See CHANGELOG |
-| Next step | Consolidation Part 4: skip-gated live tests. The phase program is stopped; Phase 12 needs D19. D35 (the calibration skill's drafting set) is the user's decision. Phase 6 (Docker) PARKED - it also closes D32. D26 holds two unexercised live paths |
+| Last completed step | **Consolidation, Parts 3 and 4** - Part 4: skip-gated live tests for both credential paths, checked against local fakes; - approvals, the plan pin's anchor half and `integrity.resume` verified in real runs (`docs/evidence/part3-real-runs*.json`); two defects found by them (C58); the sandbox stated as a door. See CHANGELOG |
+| Next step | Consolidation complete. The user decides the bot token and the API key (D26), D35 (the calibration's drafting set), and D36 (`calls` rows for calls that never return). The phase program is stopped; Phase 12 needs D19. D35 (the calibration skill's drafting set) is the user's decision. Phase 6 (Docker) PARKED - it also closes D32. D26 holds two unexercised live paths |
 
 ### Iteration two, so far
 

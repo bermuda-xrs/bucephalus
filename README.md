@@ -423,6 +423,25 @@ Phase 6, parked because Docker is not installed here; installing it is your
 decision. Until then, nothing this project produced should be read as having
 run untrusted code safely.
 
+## Two paths no live request has ever tested
+
+**The Telegram transport and the Anthropic adapter are both unverified against
+the live service.** Neither has made one real request. Each has a test that
+makes one the moment its credential exists, and skips until then:
+
+| path | test | runs when | what it does |
+|---|---|---|---|
+| Telegram HTTP transport | `tests/test_live_credentials.py::test_telegram_transport_live` | `ALPHA_TELEGRAM_TOKEN` is set | `getMe`, a `getUpdates` at offset 0 and timeout 0 (read-only; confirms nothing), and one unknown method that must be refused |
+| Anthropic adapter, streaming | `tests/test_live_credentials.py::test_anthropic_streaming_live` - once per Anthropic backend in `config.yaml` | `ANTHROPIC_API_KEY` is set | one tiny streamed call with that backend's exact request shape; text must reach the surface in chunks, and usage, stop reason and model must come back |
+
+**A key in the environment makes the full suite spend** - two small paid calls,
+a few hundred tokens each. A skipped test proves nothing about its body, so
+the same bodies run on every suite against local fake servers speaking each
+protocol (`test_the_telegram_body_against_a_fake_api`,
+`test_the_anthropic_body_against_a_fake_api`); that is how these were checked
+to catch a broken transport rather than pass it. Whether to supply the token
+or the key is yours (DEFERRED D26).
+
 ## Reading the numbers it produces
 
 Every report carries its provenance and the caveats in the same object as the

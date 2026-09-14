@@ -10,6 +10,37 @@
 Dates are commit dates. `0.1.0` is not released yet — see "Unreleased" for
 what still stands between here and a first iteration.
 
+## Consolidation, Part 4 - the credential-gated paths - 2026-09-14
+
+**Invalidates no published number.** No source change: tests and documentation.
+
+### A4-1 - live tests that skip without the credential
+
+`tests/test_live_credentials.py`. With `ALPHA_TELEGRAM_TOKEN` set, the live
+Telegram test calls `getMe`, a non-confirming `getUpdates`, and an unknown
+method that must be refused. With `ANTHROPIC_API_KEY` set, one tiny streamed
+call per Anthropic backend in `config.yaml`, with that backend's exact request
+shape - chunks to the surface, usage, stop reason, model. Without them, both
+skip.
+
+**Checked not to be vacuous, three ways.** Without credentials: 3 skipped.
+With credentials present and each endpoint pointed at a local fake speaking the
+protocol, the LIVE tests themselves ran: 3 passed, and the fakes answered 3
+Telegram and 2 Anthropic requests - no request left the machine. And the same
+bodies run on every suite against those fakes, where 8 injected transport
+defects - the URL losing `/bot`, a dropped result, a refusal read as success, a
+poll that confirms updates, chunks not forwarded, usage unmapped, the answer
+dropped, the stop reason lost - each turned every listed test red.
+
+### A4-2 - stated in README
+
+Both paths are unverified against the live service; the README names the
+tests, what each costs, and that the decision is the user's (D26).
+
+### Tests
+
+**760 passing, 3 skipped.** 6 new: 3 live (skipped), 3 against fakes.
+
 ## Consolidation, Part 3 - the fixes, verified in real runs - 2026-09-14
 
 **Invalidates no published number.** `HARNESS_VERSION` 2, `TOOLSET_VERSION` 5:

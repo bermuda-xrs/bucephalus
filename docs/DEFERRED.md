@@ -897,3 +897,12 @@ silently drops exactly the slowest calls.
 **Fix shape, not built:** write the row at call time with null usage, and
 complete it on return. Changes what `calls` means for every existing
 analysis, so it waits for a decision.
+
+## D26 addendum, 2026-09-14 - the tests are waiting
+
+Both live paths now have a test that runs the moment the credential exists:
+`tests/test_live_credentials.py::test_telegram_transport_live`
+(`ALPHA_TELEGRAM_TOKEN`) and `::test_anthropic_streaming_live`
+(`ANTHROPIC_API_KEY`, one small paid call per Anthropic backend). Both skip
+without it. The same bodies run every suite against local fakes. The STOP is
+unchanged: supplying either credential is the user's decision.
