@@ -183,11 +183,21 @@ def cmd_run(ctx, args, console) -> int:
     return 0 if result.status == "done" else 2
 
 
+def _fmt(value, spec: str) -> str:
+    """Invariant 36 on a display: unmeasured is null, and null prints as n/a."""
+    return "n/a" if value is None else format(value, spec)
+
+
 def _print_budget(ctx, console, task_id, theme) -> None:
     m = ctx.telemetry.metrics(task_id)
+    # FOUND BY THE PART 3 REAL RUN: `cache_hit_ratio` is None wherever the
+    # backend does not report cache accounting - every local run - and
+    # `:.0%` of None raised AFTER the result was printed, so `alpha run` exited
+    # 1 on a task that had finished. The test backends all report a cache, so
+    # no test ever reached this line with a null.
     console.print(
         f"[{theme['muted']}]paid {m.paid_tokens:,} tok · free {m.free_tokens:,} tok · "
-        f"${m.cost_usd:.4f} · cache hit {m.cache_hit_ratio:.0%} · "
+        f"${_fmt(m.cost_usd, '.4f')} · cache hit {_fmt(m.cache_hit_ratio, '.0%')} · "
         f"{m.wall_ms/1000:.1f}s[/]"
     )
     alarm = ctx.telemetry.cache_alarm(task_id)

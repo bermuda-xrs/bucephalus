@@ -1225,3 +1225,38 @@ hash alone answers "is this the program that ran" and never "what did it do".
 The touch log lives outside the work directory, and `touched` is popped
 before the observation is rendered, so the model's view is byte-identical and
 `HARNESS_VERSION` does not move.
+
+### C57. A check that passes in silence cannot be placed in production
+
+**Reality:** `integrity.resume()` and `verify_plan_pin()` succeeded without a
+word. A real run's event log could show that neither FAILED and never that
+either RAN, which is why FINDINGS 1.25 could not place them in production at
+all.
+
+**Correct version:** each records what it verified - `integrity.verified`
+(head, anchor state) and `plan.pin_verified` (plan hash, `matched` or
+`absent`). Neither reaches a prompt or the deputy's transcript, so
+`HARNESS_VERSION` does not move.
+
+**A correction to the brief.** It said Phase 11's acceptance already showed
+approval-then-resume working end to end. It showed it in `test_schedule`,
+against scripted models; there was no real run. Part 3's run A is the first
+real approve-then-resume in this project.
+
+### C58. The real run found the pin checked one step late, and a crash on null
+
+**Reality, from run A's event log:** in the resumed process the decided
+`write_file` executed - intent, receipt, `approval.consumed` - and only then
+came the first `plan.pin_verified`. The pin was checked at the top of each
+step, and the release comes before the first. A plan edited while the task sat
+parked would still have had its approved action carried out, one step before
+the halt. Separately, the resumed `alpha run` exited 1 on a finished task:
+`_print_budget` formatted `cache_hit_ratio` with `:.0%`, and every local
+backend leaves it `None` (invariant 36). Every `alpha run` that finished under
+`config.local.yaml` would have crashed there; the test backends all report a
+cache, so no test reached the line with a null.
+
+**Correct version:** the pin is verified before anything a run does and before
+every step (invariant 103); an unmeasured value prints as `n/a`. Run B, on the
+fixed code, shows the pin verified before the release and every command
+exiting 0.

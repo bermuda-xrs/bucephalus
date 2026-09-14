@@ -133,6 +133,11 @@ EVENT_TYPES = frozenset(
         # 11.2. A task that parked with nobody watching, and the notification
         # raised for it.
         "notification.raised",
+        # A3-1. Two checks that pass SILENTLY left nothing to point at: a real
+        # run's log could show that they did not fail, never that they ran.
+        # Each now records what it verified.
+        "integrity.verified",
+        "plan.pin_verified",
     }
 )
 

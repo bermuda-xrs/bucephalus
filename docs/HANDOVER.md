@@ -224,11 +224,11 @@ split, profile or executor.
 | Branch | `measurement-2026-09-01` (off `main` at `148cd99`; no remote) |
 | Harness version | **2** — v3 was evaluated and **rejected**, see section 7 |
 | Toolset version | **5** — sympy, `search_history`, memory, web/file tools, then `parallel` |
-| Tests | **752 passing** |
+| Tests | **757 passing** |
 | Working tree | clean |
 | Running | nothing |
-| Last completed step | **Consolidation, Part 2** - the never-run inventory (FINDINGS 1.25), the generation gate in code, `run_code`'s record, the SQLite routes (C55). See CHANGELOG |
-| Next step | Consolidation Parts 3-4: real-run verification, skip-gated live tests. The phase program is stopped; Phase 12 needs D19. D35 (the calibration skill's drafting set) is the user's decision. Phase 6 (Docker) PARKED - it also closes D32. D26 holds two unexercised live paths |
+| Last completed step | **Consolidation, Part 3** - approvals, the plan pin's anchor half and `integrity.resume` verified in real runs (`docs/evidence/part3-real-runs*.json`); two defects found by them (C58); the sandbox stated as a door. See CHANGELOG |
+| Next step | Consolidation Part 4: skip-gated live tests. The phase program is stopped; Phase 12 needs D19. D35 (the calibration skill's drafting set) is the user's decision. Phase 6 (Docker) PARKED - it also closes D32. D26 holds two unexercised live paths |
 
 ### Iteration two, so far
 

@@ -37,7 +37,8 @@ that would catch a violation, so "I checked it" means something.
        — `test_auto_review_cannot_widen_scope`
 16. ☐ TRUSTED-tier actions always park for a human, never auto-reviewed
        — `test_trusted_tier_always_parks`
-17. ☐ An approved plan hash is pinned and verified before every step
+17. ☐ An approved plan hash is pinned and verified before every step - and
+       before a decided action is released on resume (Part 3)
        — `test_plan_hash_pinned_after_approval`
 
 ## Concurrency — the control plane serves on a threadpool
@@ -630,6 +631,23 @@ rest of the hook (D32).
 
 **100. `generate_skill` refuses until M7.4 rules 2 and 3 run.**
 *Caught by:* `test_generation_is_refused_until_m74_rules_2_and_3_run`.
+
+## Added 2026-09-14 (consolidation - real runs)
+
+**101. A resume check that passes says what it verified.** `integrity.verified`
+carries the chain head and the anchor state compared - `none`, `matched` or
+`behind` - on the chain it checked.
+*Caught by:* `test_a_resumed_run_records_the_anchor_it_was_checked_against`.
+
+**102. A plan-pin check that passes says what it compared.** `plan.pin_verified`
+carries the plan hash and `matched`, or `absent` when the anchor half had
+nothing to compare against.
+*Caught by:* `test_every_step_records_the_pinned_plan_it_verified`,
+`test_a_pin_with_nothing_anchored_says_so`.
+
+**103. Nothing a resumed run does precedes the pin check - a released decision
+included.** *Caught by:*
+`test_a_plan_changed_while_parked_halts_before_the_decided_action_runs`.
 
 ---
 

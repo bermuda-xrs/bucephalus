@@ -375,6 +375,14 @@ sympy present, where an out-of-scope write was still refused.
 **Caveat kept from the source:** the sandbox is honest about being a guard
 against mistakes, not against an adversary with code execution.
 
+**The sandbox is a door, not a wall - 2026-09-14.** It now refuses, for agent
+code, out-of-scope writes and reads, every file and database route into the
+project's own state that has been tested, process starts and native
+extensions. It stops a model that reaches. It does not stop code written to
+defeat it - the hook runs inside the process it polices (D32). Only Phase 6,
+a container per run, makes it a wall, and Phase 6 is parked: Docker is not
+installed on this machine.
+
 ---
 
 ## G6 — Durable, resumable, interruptible execution. Implemented and measured.

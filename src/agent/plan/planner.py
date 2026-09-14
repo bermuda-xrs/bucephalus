@@ -273,4 +273,10 @@ def verify_plan_pin(ctx, task) -> Plan:
         raise IntegrityError(
             f"approved plan hash does not match the anchor "
             f"(anchor={anchored[:12]}, recomputed={recomputed[:12]})")
+    # A3-1: this passes in silence too, so say what it compared. "absent"
+    # means the anchor half had nothing to compare against - the half that was
+    # inert until D21 - and a record saying so is the only way to tell.
+    ctx.log.append(task.id, "plan.pin_verified",
+                   {"plan": recomputed[:16],
+                    "anchor": "matched" if anchored else "absent"})
     return plan

@@ -1120,6 +1120,34 @@ did: each of the 495 keeps an 80-character repr in its chained intent. From
 Part 2 on, `run_code` records its full source, the source's hash on the chain,
 and every path the program touched (A2-4). The 495 are not recoverable.
 
+**Part 3, 2026-09-14: three rows moved - run for real, with evidence.**
+The release of a decided approval, the plan pin's anchor half, and
+`integrity.resume` each ran in a real process, and the event log now says
+so, because each records what it verified (invariants 101-103).
+
+Two real runs, granite4.1:3b on the dedicated Ollama, through the real CLI,
+every step its own process, on their own database - never `agent.local.db`:
+plan, approve (the pin goes to the anchor), run (parks on a `write_file`),
+`approvals --decide` in a separate process, run again in a new one.
+
+| | run A - `part3-real-runs.json` | run B - `part3-real-runs-2.json` |
+|---|---|---|
+| task | `t_fc9a3b2505ec` | `t_0f12b3909a36` |
+| outcome | done, `work/hello.txt` = 'hello', chain verifies: True | done, `work/hello.txt` = 'hello', chain verifies: True |
+| `integrity.verified`, first run / resume | anchor `none` / **`matched`** | anchor `none` / **`matched`** |
+| `plan.pin_verified` | 2, every one `matched` against the anchor: True | 4, every one `matched`: True |
+| decided approval released on resume | a_bdf9e58e2abd - executed | a_7c6bd60da2e3 - executed |
+| pin verified before the release, in the resumed process | **no** | **yes** |
+| every command exited 0 | False - the resumed `alpha run` exited 1 | True |
+| wall clock, all commands | 137 s | 114 s |
+
+Run A found two defects no test had: the resumed process released the
+decided write BEFORE it verified the pin (invariant 17 now covers a release),
+and `alpha run` crashed printing the cache ratio every local backend leaves
+unmeasured - after the result, on a finished task. Run B is the same task
+shape on the fixed code. This does not change the measurement record's
+count: no task in `agent.local.db` was ever resumed.
+
 ---
 
 ## 8. Open research questions

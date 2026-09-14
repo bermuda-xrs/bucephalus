@@ -197,6 +197,16 @@ def parse_action(text: str) -> ParsedAction:
     )
 
 
+def _verified_state(ctx, task_id: str) -> dict:
+    """What `resume` just verified: the chain head, and the anchor it was
+    compared against - "none" for a task never checkpointed, "matched", or
+    "behind" (anchored hash still in the chain; see `resume`)."""
+    head = ctx.log.head(task_id)
+    anchored = ctx.anchor.latest_chain(task_id)
+    state = "none" if not anchored else ("matched" if anchored == head else "behind")
+    return {"head": head[:16] if head else None, "anchor": state}
+
+
 def run_task(ctx, task_id: str) -> TaskResult:
     task = load_task(ctx.conn, task_id)
 
@@ -229,6 +239,11 @@ def run_task(ctx, task_id: str) -> TaskResult:
         # would reintroduce the denial of service D17 removed.
         set_status(ctx.conn, ctx.log, task, TaskStatus.FAILED, "integrity_halt")
         raise
+    # A3-1: `resume` passes in silence, so a real run's log could show that it
+    # did not FAIL and never that it RAN - FINDINGS 1.25 could not place it in
+    # production for exactly that reason. Recorded after the check, on the
+    # chain it checked.
+    ctx.log.append(task.id, "integrity.verified", _verified_state(ctx, task.id))
 
     set_status(ctx.conn, ctx.log, task, TaskStatus.RUNNING)
     checkpoint(ctx.log, ctx.anchor, task.id)
@@ -254,6 +269,17 @@ def run_task(ctx, task_id: str) -> TaskResult:
     charged_s = 0.0          # wall clock already charged to the budget
 
     try:
+        # Invariant 17 covers a RELEASED action too - it is the rest of the
+        # step that parked. FOUND BY THE PART 3 REAL RUN: the decided write
+        # executed before this process had verified the pin, because the pin
+        # was checked only at the top of each step and the release comes
+        # before the first. A plan edited while the task sat parked would still
+        # have had its approved action carried out. Verified here, before
+        # anything this run does, and again before every step below.
+        if plan is not None:
+            from ..plan.planner import verify_plan_pin
+
+            plan = verify_plan_pin(ctx, task)
         # Human decisions made while this task was parked, acted on BEFORE the
         # model gets a turn. See `_release_decided`.
         entries.extend(_release_decided(ctx, task))

@@ -409,6 +409,20 @@ On Windows there are no `rlimit` caps, so memory and CPU limits are not
 enforced — only the wall-clock timeout. `run_sandboxed` reports that in
 `notes` rather than pretending otherwise.
 
+**It is a door, not a wall, and only Phase 6 makes it a wall.** For agent
+code the hook refuses writes outside the task's scope; reads outside that
+scope and the interpreter's own files; the project's own state by every file
+route tested (SPEC-DELTA C50) and every database route (C55); starting a
+process; and loading a native extension. That stops a model that REACHES for
+something it should not. It does not stop code written to get past it: the
+hook lives in the process it polices, so `ctypes`, a native library loaded
+some other way, a `sqlite3.Connection` built without `connect()`, or
+`set_authorizer(None)` goes straight through (DEFERRED D32). The wall is a
+container per run - no network, a read-only root, a non-root user - which is
+Phase 6, parked because Docker is not installed here; installing it is your
+decision. Until then, nothing this project produced should be read as having
+run untrusted code safely.
+
 ## Reading the numbers it produces
 
 Every report carries its provenance and the caveats in the same object as the

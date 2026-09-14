@@ -1,0 +1,471 @@
+{
+  "what": "Consolidation Part 3 (A3-1): real runs of the plan pin's anchor half, integrity.resume, and the release of a decided approval",
+  "when": "2026-09-14",
+  "server": "Ollama, 127.0.0.1:11435 (ollama-serve.ps1), CPU inference",
+  "executor": "granite4.1:3b",
+  "config": {
+    "file": "config.yaml in the run directory (backends as config.local.yaml)",
+    "state": "its own database, anchor and work tree under ALPHA_DATA_DIR; agent.local.db untouched",
+    "plan_required": true,
+    "auto_review": false,
+    "approve_scoped_writes": false
+  },
+  "each_command_is_a_separate_process": true,
+  "commands": [
+    {
+      "argv": [
+        "alpha",
+        "new",
+        "Create the file work/hello.txt containing exactly the word hello. Use the write_file tool with path work/hello.txt and content hello, then finish with the answer: written.",
+        "--scope",
+        "work"
+      ],
+      "returncode": 0,
+      "seconds": 2.2,
+      "started": "2026-09-14T10:27:19",
+      "output_tail": "▄▀▀▀▄  ▄▀▀▀▄  ▄▀▀▀▄  ▄▀▀▀▄\n       █  α  █ ─ test ─ ▏ 1 ▕ ─ ▏▕\n        ▀▄▄▄▀  ▀▄▄▄▀  ▀▄▄▄▀  ▀▄▄▄▀\n     ─────────────────────────────────\n      plan once · walk away · get told\n     ─────────────────────────────────\n   local + cloud · verified skills · receipts\n\ntask t_0f12b3909a364bb6 created\nnext: alpha plan t_0f12b3909a364bb6"
+    },
+    {
+      "argv": [
+        "alpha",
+        "plan",
+        "t_0f12b3909a364bb6"
+      ],
+      "returncode": 0,
+      "seconds": 39.3,
+      "started": "2026-09-14T10:27:21",
+      "output_tail": "l: $0.0000, 0s, 1 steps                                                                                                                                                                         │\n│ will PARK for you at: 1                                                                                                                                                                             │\n└─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘\napprove: alpha approve t_0f12b3909a364bb6 28f7ef052a79fd6e8a3297fb9c2228eb78453e1c7638e4037df475e0b3a040ba"
+    },
+    {
+      "argv": [
+        "alpha",
+        "approve",
+        "t_0f12b3909a364bb6",
+        "28f7ef052a79fd6e8a3297fb9c2228eb78453e1c7638e4037df475e0b3a040ba"
+      ],
+      "returncode": 0,
+      "seconds": 3.2,
+      "started": "2026-09-14T10:28:01",
+      "output_tail": "plan 28f7ef052a79 approved and pinned"
+    },
+    {
+      "argv": [
+        "alpha",
+        "run",
+        "t_0f12b3909a364bb6"
+      ],
+      "returncode": 0,
+      "seconds": 54.8,
+      "started": "2026-09-14T10:28:04",
+      "output_tail": "                                                                                                   │\n│ approval id: a_7c6bd60da2e3                                                                                                                                                                         │\n│ decide with: alpha approvals --decide a_7c6bd60da2e3 --yes                                                                                                                                          │\n└─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘"
+    },
+    {
+      "argv": [
+        "alpha",
+        "approvals",
+        "--decide",
+        "a_7c6bd60da2e3",
+        "--yes"
+      ],
+      "returncode": 0,
+      "seconds": 3.0,
+      "started": "2026-09-14T10:28:59",
+      "output_tail": "a_7c6bd60da2e3 → approved"
+    },
+    {
+      "argv": [
+        "alpha",
+        "run",
+        "t_0f12b3909a364bb6"
+      ],
+      "returncode": 0,
+      "seconds": 11.4,
+      "started": "2026-09-14T10:29:02",
+      "output_tail": "                                     │\n│   \"status\": \"written\"                                                                                                                                                                               │\n│ }                                                                                                                                                                                                   │\n└─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘\npaid 0 tok · free 3,721 tok · $0.0000 · cache hit n/a · 97.7s"
+    }
+  ],
+  "task_id": "t_0f12b3909a364bb6",
+  "plan": {
+    "id": "28f7ef052a79fd6e8a3297fb9c2228eb78453e1c7638e4037df475e0b3a040ba",
+    "rows": [
+      [
+        "28f7ef052a79fd6e8a3297fb9c2228eb78453e1c7638e4037df475e0b3a040ba",
+        "approved",
+        "28f7ef052a79fd6e8a3297fb9c2228eb78453e1c7638e4037df475e0b3a040ba"
+      ]
+    ],
+    "anchor_plan_key": "28f7ef052a79fd6e8a3297fb9c2228eb78453e1c7638e4037df475e0b3a040ba"
+  },
+  "approvals": [
+    [
+      "a_7c6bd60da2e3",
+      "write_file",
+      "approved",
+      1789349344.568787
+    ]
+  ],
+  "anchor_chain_head": "567863d80caf324eb2c7ce897fb0c93a65bf804044bf321a0411ba5d62570bb2",
+  "chain_verifies": true,
+  "chain_bad_seq": null,
+  "task_status": "done",
+  "work/hello.txt": "hello",
+  "per_run": [
+    {
+      "integrity.verified": {
+        "anchor": "none",
+        "head": "bfcdaf06811f44d7"
+      },
+      "plan.pin_verified": [
+        {
+          "anchor": "matched",
+          "plan": "28f7ef052a79fd6e"
+        },
+        {
+          "anchor": "matched",
+          "plan": "28f7ef052a79fd6e"
+        }
+      ],
+      "model_steps": 1,
+      "released": [],
+      "tool_calls": [],
+      "ended_with": [
+        {
+          "reason": "approval required for write_file",
+          "status": "paused"
+        }
+      ]
+    },
+    {
+      "integrity.verified": {
+        "anchor": "matched",
+        "head": "04df598e08e184ea"
+      },
+      "plan.pin_verified": [
+        {
+          "anchor": "matched",
+          "plan": "28f7ef052a79fd6e"
+        },
+        {
+          "anchor": "matched",
+          "plan": "28f7ef052a79fd6e"
+        }
+      ],
+      "model_steps": 1,
+      "released": [
+        {
+          "approval_id": "a_7c6bd60da2e3",
+          "decision": "approved",
+          "outcome": "executed",
+          "tool": "write_file"
+        }
+      ],
+      "tool_calls": [
+        [
+          "tool.intent",
+          "write_file",
+          null
+        ],
+        [
+          "tool.receipt",
+          "write_file",
+          true
+        ]
+      ],
+      "ended_with": [
+        {
+          "reason": "done",
+          "status": "done"
+        }
+      ]
+    }
+  ],
+  "events": [
+    {
+      "seq": 0,
+      "type": "task.created",
+      "payload": {
+        "contract": {
+          "artifact_scope": [
+            "work"
+          ],
+          "goal": "Create the file work/hello.txt containing exactly the word hello. Use the write_file tool with path work/hello.txt and content hello, then finish with the answer: written.",
+          "grader_dir": null,
+          "max_taint_in": "untrusted",
+          "output_schema": {},
+          "success_criterion": "always_pass"
+        },
+        "origin": "local",
+        "parent_id": null
+      }
+    },
+    {
+      "seq": 1,
+      "type": "task.budget_spent",
+      "payload": {
+        "seconds": 0.0,
+        "total_usd": 0.0,
+        "usd": 0.0
+      }
+    },
+    {
+      "seq": 2,
+      "type": "plan.drafted",
+      "payload": {
+        "est_cost": 0.0,
+        "est_seconds": 0.0,
+        "n_steps": 1,
+        "plan_id": "28f7ef052a79fd6e8a3297fb9c2228eb78453e1c7638e4037df475e0b3a040ba"
+      }
+    },
+    {
+      "seq": 3,
+      "type": "plan.approved",
+      "payload": {
+        "edits": [],
+        "hash": "28f7ef052a79fd6e8a3297fb9c2228eb78453e1c7638e4037df475e0b3a040ba",
+        "plan_id": "28f7ef052a79fd6e8a3297fb9c2228eb78453e1c7638e4037df475e0b3a040ba"
+      }
+    },
+    {
+      "seq": 4,
+      "type": "integrity.verified",
+      "payload": {
+        "anchor": "none",
+        "head": "bfcdaf06811f44d7"
+      }
+    },
+    {
+      "seq": 5,
+      "type": "task.status_changed",
+      "payload": {
+        "reason": "",
+        "status": "running"
+      }
+    },
+    {
+      "seq": 6,
+      "type": "skills.frozen",
+      "payload": {
+        "skills": [],
+        "source": "retrieved"
+      }
+    },
+    {
+      "seq": 7,
+      "type": "session.opened",
+      "payload": {
+        "memory_sha256": "897a1483a7111f436bde4a68dbdd5a59c0a308d69d57cbc2e2f277b566f21ec3",
+        "parent_id": null,
+        "reason": "start",
+        "seed_artifact": null,
+        "session_id": "s_f7fc1e010ef74285"
+      }
+    },
+    {
+      "seq": 8,
+      "type": "plan.pin_verified",
+      "payload": {
+        "anchor": "matched",
+        "plan": "28f7ef052a79fd6e"
+      }
+    },
+    {
+      "seq": 9,
+      "type": "plan.pin_verified",
+      "payload": {
+        "anchor": "matched",
+        "plan": "28f7ef052a79fd6e"
+      }
+    },
+    {
+      "seq": 10,
+      "type": "model.called",
+      "payload": {
+        "backend": "cloud",
+        "prefix_fp": "58e23a3bbf4cc393ae0c469223bc80c042816d7290f41f1fa6c383fbfb600d66",
+        "purpose": "step",
+        "step": 0
+      }
+    },
+    {
+      "seq": 11,
+      "type": "task.budget_spent",
+      "payload": {
+        "seconds": 0.0,
+        "total_usd": 0.0,
+        "usd": 0.0
+      }
+    },
+    {
+      "seq": 12,
+      "type": "model.returned",
+      "payload": {
+        "backend": "cloud",
+        "output_tokens": 24
+      }
+    },
+    {
+      "seq": 13,
+      "type": "task.budget_spent",
+      "payload": {
+        "seconds": 52.154,
+        "total_usd": 0.0,
+        "usd": 0.0
+      }
+    },
+    {
+      "seq": 14,
+      "type": "task.status_changed",
+      "payload": {
+        "reason": "approval required for write_file",
+        "status": "paused"
+      }
+    },
+    {
+      "seq": 15,
+      "type": "human.approved",
+      "payload": {
+        "approval_id": "a_7c6bd60da2e3",
+        "tool": "write_file"
+      }
+    },
+    {
+      "seq": 16,
+      "type": "integrity.verified",
+      "payload": {
+        "anchor": "matched",
+        "head": "04df598e08e184ea"
+      }
+    },
+    {
+      "seq": 17,
+      "type": "task.status_changed",
+      "payload": {
+        "reason": "",
+        "status": "running"
+      }
+    },
+    {
+      "seq": 18,
+      "type": "plan.pin_verified",
+      "payload": {
+        "anchor": "matched",
+        "plan": "28f7ef052a79fd6e"
+      }
+    },
+    {
+      "seq": 19,
+      "type": "tool.intent",
+      "payload": {
+        "key": "49eaa99324c0d6eafd1372c1d91f0450eecb735e26aaec50dd487d1d02416927",
+        "preview": "write_file(content='hello', path='work/hello.txt')",
+        "step": 0,
+        "tool": "write_file"
+      }
+    },
+    {
+      "seq": 20,
+      "type": "tool.receipt",
+      "payload": {
+        "key": "49eaa99324c0d6eafd1372c1d91f0450eecb735e26aaec50dd487d1d02416927",
+        "ok": true,
+        "tool": "write_file",
+        "wall_ms": 0
+      }
+    },
+    {
+      "seq": 21,
+      "type": "artifact.written",
+      "payload": {
+        "id": "b8f895d97aaf03ee226ef36814b883c0",
+        "kind": "tool_output",
+        "taint": "trusted"
+      }
+    },
+    {
+      "seq": 22,
+      "type": "approval.consumed",
+      "payload": {
+        "approval_id": "a_7c6bd60da2e3",
+        "decision": "approved",
+        "outcome": "executed",
+        "tool": "write_file"
+      }
+    },
+    {
+      "seq": 23,
+      "type": "task.budget_spent",
+      "payload": {
+        "seconds": 0.033,
+        "total_usd": 0.0,
+        "usd": 0.0
+      }
+    },
+    {
+      "seq": 24,
+      "type": "plan.pin_verified",
+      "payload": {
+        "anchor": "matched",
+        "plan": "28f7ef052a79fd6e"
+      }
+    },
+    {
+      "seq": 25,
+      "type": "model.called",
+      "payload": {
+        "backend": "cloud",
+        "prefix_fp": "58e23a3bbf4cc393ae0c469223bc80c042816d7290f41f1fa6c383fbfb600d66",
+        "purpose": "step",
+        "step": 0
+      }
+    },
+    {
+      "seq": 26,
+      "type": "task.budget_spent",
+      "payload": {
+        "seconds": 0.0,
+        "total_usd": 0.0,
+        "usd": 0.0
+      }
+    },
+    {
+      "seq": 27,
+      "type": "model.returned",
+      "payload": {
+        "backend": "cloud",
+        "output_tokens": 12
+      }
+    },
+    {
+      "seq": 28,
+      "type": "verify.attempted",
+      "payload": {
+        "verifier": "always_pass"
+      }
+    },
+    {
+      "seq": 29,
+      "type": "verify.passed",
+      "payload": {
+        "score": 1.0,
+        "verifier": "always_pass"
+      }
+    },
+    {
+      "seq": 30,
+      "type": "task.status_changed",
+      "payload": {
+        "reason": "done",
+        "status": "done"
+      }
+    },
+    {
+      "seq": 31,
+      "type": "session.closed",
+      "payload": {
+        "reason": "done",
+        "session_id": "s_f7fc1e010ef74285"
+      }
+    }
+  ]
+}

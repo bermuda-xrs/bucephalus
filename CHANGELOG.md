@@ -10,6 +10,58 @@
 Dates are commit dates. `0.1.0` is not released yet — see "Unreleased" for
 what still stands between here and a first iteration.
 
+## Consolidation, Part 3 - the fixes, verified in real runs - 2026-09-14
+
+**Invalidates no published number.** `HARNESS_VERSION` 2, `TOOLSET_VERSION` 5:
+two new event types that no prompt and no transcript reads, one check moved
+earlier, one display fixed.
+
+### A3-1 - three paths, run for real (FINDINGS 1.25, C57)
+
+A check that passes in silence leaves nothing to point at, so each now says
+what it verified: `integrity.verified` (the head and the anchor state it was
+compared against) and `plan.pin_verified` (the plan hash, and whether the
+anchor half compared anything). Then two real runs:
+
+Two real runs, granite4.1:3b on the dedicated Ollama, through the real CLI,
+every step its own process, on their own database - never `agent.local.db`:
+plan, approve (the pin goes to the anchor), run (parks on a `write_file`),
+`approvals --decide` in a separate process, run again in a new one.
+
+| | run A - `part3-real-runs.json` | run B - `part3-real-runs-2.json` |
+|---|---|---|
+| task | `t_fc9a3b2505ec` | `t_0f12b3909a36` |
+| outcome | done, `work/hello.txt` = 'hello', chain verifies: True | done, `work/hello.txt` = 'hello', chain verifies: True |
+| `integrity.verified`, first run / resume | anchor `none` / **`matched`** | anchor `none` / **`matched`** |
+| `plan.pin_verified` | 2, every one `matched` against the anchor: True | 4, every one `matched`: True |
+| decided approval released on resume | a_bdf9e58e2abd - executed | a_7c6bd60da2e3 - executed |
+| pin verified before the release, in the resumed process | **no** | **yes** |
+| every command exited 0 | False - the resumed `alpha run` exited 1 | True |
+| wall clock, all commands | 137 s | 114 s |
+
+### What run A found (C58)
+
+* **The pin was verified one step late.** The resumed process released the
+  decided write before its first pin check. Now verified before anything a run
+  does (invariant 103) - and run B's log shows it.
+* **`alpha run` crashed on every finished local task**, formatting the cache
+  ratio that local backends leave null. Now `n/a`.
+
+### A3-2 - the sandbox, stated plainly
+
+README and RELEASE: a door, not a wall; it stops a model that reaches, not
+code written to defeat it; only Phase 6 makes it a wall, and Phase 6 is parked.
+
+### Tests
+
+**757 passing.** 5 new, in `tests/test_verification_evidence.py`.
+6 injected defects, every listed test red for each. Each new test ran
+against the unfixed code first: the evidence tests red for the missing events,
+the tamper test red because the decided write ran under a changed plan, the
+budget test red with the real run's own `TypeError`.
+
+Ollama on 11435 ran for the real runs only and is stopped.
+
 ## Consolidation, Part 2 - code that has never run for real - 2026-09-14
 
 **Invalidates no published number.** `HARNESS_VERSION` 2, `TOOLSET_VERSION` 5:
