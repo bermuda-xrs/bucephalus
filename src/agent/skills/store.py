@@ -110,6 +110,37 @@ class SkillStore:
         ).fetchone()
         return int(row[0]) + 1
 
+    def declare_drafted_from(self, skill_id: str, keys: list[str]) -> dict:
+        """Record a skill's drafting set, ONCE (D29's sweep).
+
+        An undeclared drafting set certifies no paired trial, so a skill stored
+        without one - every `alpha skills --add` before this - needs a way to
+        get one. It never overwrites: a drafting set rewritten after results
+        exist is contamination laundered by declaration. The first declaration
+        stands, and the number of trials already recorded when it was made is
+        written beside it, so a late declaration is visible as one.
+        """
+        row = self.conn.execute(
+            "SELECT provenance_json FROM skills WHERE id=?", (skill_id,)).fetchone()
+        if row is None:
+            raise KeyError(f"no such skill: {skill_id}")
+        prov = json.loads(row[0])
+        if prov.get("drafted_from") is not None:
+            raise ValueError(
+                f"skill {skill_id[:12]} already declares drafted_from="
+                f"{prov['drafted_from']!r}; a declaration is never overwritten")
+        trials = self.conn.execute(
+            "SELECT COUNT(*) FROM skill_trials WHERE skill_id=?", (skill_id,)).fetchone()[0]
+        prov.update(drafted_from=list(keys), drafted_from_declared_at=time.time(),
+                    trials_before_declaration=trials)
+        self.conn.execute("UPDATE skills SET provenance_json=? WHERE id=?",
+                          (canonical(prov), skill_id))
+        self.conn.commit()
+        disk = self.root / skill_id / "provenance.json"
+        if disk.parent.exists():
+            disk.write_text(json.dumps(prov, indent=2), encoding="utf-8")
+        return prov
+
     # -- reading -----------------------------------------------------------
 
     def load(self, skill_id: str, verify: bool = True) -> dict:

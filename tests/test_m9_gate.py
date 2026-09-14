@@ -82,8 +82,10 @@ def test_gate_rejects_useless_skill(ctx, workspace):
     """Synthetic skill of pure filler text. 30 paired trials. Assert rejection."""
     ctx.config.limits.max_steps = 1
     _install_responder(ctx, "useless")
+    # drafted_from=[]: a declaration, not a default. Since D29's sweep an
+    # undeclared drafting set certifies no trial (test_empty_means_nothing).
     sid = ctx.skills.store("filler", USELESS_SKILL, {"applies_when": "anything"},
-                           {"drafted_by": "test"})
+                           {"drafted_by": "test", "drafted_from": []})
     for i, spec in enumerate(_specs()):
         run_paired_trial(ctx, sid, spec, seed=i)
 
@@ -100,7 +102,7 @@ def test_gate_accepts_known_good_skill(ctx, workspace):
     _install_responder(ctx, "good")
     sid = ctx.skills.store("checked-value", GOOD_SKILL,
                            {"applies_when": "produce the checked value"},
-                           {"drafted_by": "human"})
+                           {"drafted_by": "human", "drafted_from": []})
     for i, spec in enumerate(_specs()):
         run_paired_trial(ctx, sid, spec, seed=i)
 
@@ -116,7 +118,7 @@ def test_promotion_requires_a_human(ctx, workspace):
     _install_responder(ctx, "good")
     sid = ctx.skills.store("checked-value", GOOD_SKILL,
                            {"applies_when": "produce the checked value"},
-                           {"drafted_by": "human"})
+                           {"drafted_by": "human", "drafted_from": []})
     for i, spec in enumerate(_specs()):
         run_paired_trial(ctx, sid, spec, seed=i)
     decision = evaluate_skill(ctx, sid)
@@ -132,7 +134,8 @@ def test_promotion_requires_a_human(ctx, workspace):
 def test_insufficient_trials_is_not_a_pass(ctx, workspace):
     ctx.config.limits.max_steps = 1
     _install_responder(ctx, "good")
-    sid = ctx.skills.store("thin", GOOD_SKILL, {"applies_when": "x"}, {})
+    sid = ctx.skills.store("thin", GOOD_SKILL, {"applies_when": "x"},
+                           {"drafted_from": []})
     for i, spec in enumerate(_specs(5)):
         run_paired_trial(ctx, sid, spec, seed=i)
     d = evaluate_skill(ctx, sid)

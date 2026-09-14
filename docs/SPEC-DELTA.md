@@ -1118,3 +1118,60 @@ that instant, which then aborts with `RunLockBusy`.
 
 **Correct version:** not built. A probe that can abort the thing it protects is
 worse than no probe. DEFERRED D34.
+
+### C53. D29 closed: an empty scope permits nothing - and six siblings
+
+**Reality:** `within_scope` returned "allowed" for an empty `artifact_scope`
+before looking at a single path, and `TaskContract` defaults to empty, so a task
+that declared nothing could read and write anything outside the protected list.
+It was held open as the user's decision (D29), because the default belongs to
+every contract. The sweep for the same shape - a control that exists, is
+consulted, and permits everything because its list is empty or its input
+missing - found six more: the sandbox's reads (a denylist over allow-all),
+`scope_widens` with an empty parent, `human_only_tiers` carrying the
+trusted-tier rule, `check_contamination` on a missing drafting set, the control
+plane's Host check on an absent header, and the path checks keyed on argument
+NAMES (a parameter not named like a path is never checked - latent, since every
+path parameter today is `path`).
+
+**Correct version:** empty means nothing, everywhere the sweep listed it. Named
+as design rule DR4, with the full table. The measurement record is unaffected:
+2 of its 283 tasks declared no scope - both the "hello.txt" smoke goal, one
+never run - and neither appears in any evidence file. Every measured task
+declared a scope under `work/`.
+
+**The check had run for real.** The 2026-08-27 calibration - 10 pairs of
+`aero_units_discipline`, aborted at 10 of 30 - went through it, and it
+certified every pair because the skill declares no drafting set. The run is
+retained as `docs/evidence/calibration-PRE-FIX-aborted.json`, labelled
+do-not-report because two output-contract defects were live, and no published
+number comes from it: the calibration is pending (FINDINGS 3.2), and the
+evidence README's calibration comparison is built from separately measured
+arms, not `skill_trials`.
+
+**Consequence:** neither skill in the database (`verbatim`,
+`aero_units_discipline`) records a drafting set, so the gate refuses their
+paired trials until one is declared - `alpha skills --declare-drafted-from`,
+once, never overwritten, with the count of trials that already existed written
+beside it. For the calibration skill the truthful declaration is the whole
+suite, which refuses every trial: a decision, D35. A certification must not
+rest on a field nobody wrote.
+
+### C54. C52 superseded: the lock is observed through a record its holder publishes
+
+**Reality (C52):** an OS advisory lock can be probed only by taking it, and a
+probe can abort the measurement it protects, so C52 concluded "not built".
+
+**Correct version:** do not probe the lock; read a record beside it. The holder
+writes `<lock>.holder.json` (PID, label, start) on acquire and removes it on
+release. `lock_status` reads it without acquiring anything and treats a dead PID
+as stale - the shape the process reaper already uses (`proc._alive`). The
+supervisor consults it every wake: a due occurrence is logged missed, naming the
+holder, and nothing already fired runs until the measurement ends. A PID reused
+by an unrelated live process reads as held - the supervisor waits when it need
+not, which is the safe direction.
+
+The lock also moved. It lived beside each run's `--out`, so two measurements
+writing to different directories never excluded each other - DR1's width axis
+in the one control whose whole job is exclusion. It is now one per project
+root. C52 stays as written: this supersedes its conclusion, not its reasoning.

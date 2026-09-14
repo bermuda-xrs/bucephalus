@@ -194,7 +194,11 @@ def test_scope_containment_is_by_path_not_by_string_prefix():
     assert scope_widens(["work"], ["work/sub"]) == []
     assert scope_widens(["work"], ["work_other"]) == ["work_other"]
     assert scope_widens(["work"], ["anchor"]) == ["anchor"]
-    assert scope_widens([], ["anything"]) == [], "no parent scope means no limit"
+    # Inverted by D29's sweep. This line pinned the fail-open reading - "no
+    # parent scope means no limit" - which let a parent that declared nothing
+    # hand a child any scope. A parent with no scope permits no path, so every
+    # entry a child asks for widens.
+    assert scope_widens([], ["anything"]) == ["anything"], "empty means nothing"
 
 
 def test_a_real_delegated_child_gets_the_narrowed_policy(tmp_path):

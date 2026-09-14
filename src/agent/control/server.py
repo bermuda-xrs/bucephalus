@@ -124,7 +124,11 @@ def create_app(ctx: AgentContext) -> FastAPI:
             seconds=body.budget_seconds or ctx.config.limits.default_task_budget_seconds,
         )
         task = create_task(ctx.conn, ctx.log, contract, budget)
-        return {"task_id": task.id, "status": task.status.value}
+        out = {"task_id": task.id, "status": task.status.value}
+        if not contract.artifact_scope:
+            out["warning"] = ("no artifact_scope: this task may read or write no "
+                              "file (an empty scope permits nothing)")
+        return out
 
     @app.get("/tasks/{task_id}")
     def get_task(task_id: str) -> dict:

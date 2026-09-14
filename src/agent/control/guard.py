@@ -90,7 +90,10 @@ class AccessGuard(BaseHTTPMiddleware):
 
         # --- DNS rebinding: the Host header carries the attacker's name -----
         host = request.headers.get("host", "")
-        if not self.allow_remote and host and not is_loopback_host(host):
+        # A request with NO Host header skipped this check entirely (D29's
+        # sweep): `host and ...` read an absent name as a safe one. Absent is
+        # not loopback.
+        if not self.allow_remote and not is_loopback_host(host):
             return JSONResponse(
                 {"detail": f"Host {host!r} is not a loopback name. Set "
                            f"{ALLOW_REMOTE_ENV}=1 to serve other hosts."},

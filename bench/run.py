@@ -201,7 +201,10 @@ def cmd_paired(args) -> int:
         _out = Path(args.out or "runs/x")
         if not _out.is_absolute():
             _out = Path(args.config).resolve().parent / _out
-        lock = RunLock(_out.parent / ".measurement.lock", "calibration").acquire()
+        from agent.runlock import measurement_lock_path
+
+        lock = RunLock(measurement_lock_path(Path(args.config).resolve().parent),
+                       "calibration").acquire()
     except RunLockBusy as e:
         print(f"REFUSING TO START.\n{e}")
         return 2

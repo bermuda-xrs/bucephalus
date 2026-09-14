@@ -121,7 +121,7 @@ If it does not say that, stop and fix it before anything else.
 |---|---|
 | `src/agent/` | The system. 64 modules |
 | `src/agent/execute/loop.py` | **The spine.** `run_task()` — plan, act, verify, finish. Read this first |
-| `src/agent/execute/sandbox.py` | Subprocess + audit hook that confines writes to scope |
+| `src/agent/execute/sandbox.py` | Subprocess + audit hook: writes to scope; agent code's reads to scope plus the interpreter. Advisory - D32 |
 | `src/agent/execute/codeact.py` | Runs model-written code; compile-checks it first |
 | `src/agent/skills/gate.py` | **The statistical gate.** Paired trials, McNemar, promotion |
 | `src/agent/skills/generate.py` | The skill generator (M11). **Has never been run** |
@@ -224,11 +224,11 @@ split, profile or executor.
 | Branch | `measurement-2026-09-01` (off `main` at `148cd99`; no remote) |
 | Harness version | **2** — v3 was evaluated and **rejected**, see section 7 |
 | Toolset version | **5** — sympy, `search_history`, memory, web/file tools, then `parallel` |
-| Tests | **707 passing** |
+| Tests | **733 passing** |
 | Working tree | clean |
 | Running | nothing |
-| Last completed step | **Iteration two, Phase 11 (cron).** See CHANGELOG |
-| Next step | Phase 12 (portable skills) needs D19 closed first. Phase 6 (Docker) PARKED - it also closes D32. D26 holds two unexercised live paths: a bot token and an API key close both |
+| Last completed step | **Consolidation, Part 1** - D29 and its six siblings, D33 threshold, D34 signal. See CHANGELOG |
+| Next step | Consolidation Parts 2-4: code that has never run for real, real-run verification, skip-gated live tests. The phase program is stopped; Phase 12 needs D19. D35 (the calibration skill's drafting set) is the user's decision. Phase 6 (Docker) PARKED - it also closes D32. D26 holds two unexercised live paths |
 
 ### Iteration two, so far
 

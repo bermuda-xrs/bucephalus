@@ -746,7 +746,7 @@ and deciding what to restore - all of it, the last session's seed, a
 projection - is a design question that Phase 9's sessions make answerable but
 do not answer.
 
-## D29 — an EMPTY artifact_scope allows every path
+## D29 — an EMPTY artifact_scope allows every path (CLOSED 2026-09-13: empty means nothing, C53)
 
 **Found:** 2026-09-13, by the storage-layer sweep.
 
@@ -760,6 +760,11 @@ where empty means NOBODY.
 "no scope" means changes behaviour for every task that relied on it. That is
 the user's decision. C45 closed the part of it that touched this project's own
 state.
+
+**Closed 2026-09-13, by that decision.** Empty means nothing: `within_scope`
+refuses every path-shaped argument when no scope is declared and says what to
+declare; `alpha new` and `POST /tasks` warn at creation. The sibling sweep is
+design rule DR4.
 
 ## D30 — Phase 9's summarizer: a design STOP (CLOSED: 9.2 withdrawn, C49)
 
@@ -823,7 +828,19 @@ system block, so the layout that is cheap depends on the provider.
 STRUCTURE, which this project measured moving pass rates (the harness tax). That
 is a HARNESS_VERSION change and needs its own STOP.
 
-## D34 - the supervisor and a measurement can share the machine
+**Decision, 2026-09-13: not moved.** A memory change becomes visible only at a
+session boundary, so the rebuild is paid rarely. Moving tier 1 needs a
+`HARNESS_VERSION` bump, and a bump makes every published number incomparable
+with every later one. A rare cost does not buy a certain one.
+
+**Revisit when memory-change frequency rises past one threshold: a boundary
+rebuild more than once per task on average.** Count `session.opened` rows whose
+`memory_sha256` differs from their parent session's, and divide by tasks. The
+measurement record predates sessions (283 tasks, 0 `session.opened` rows), so
+the rate is unobservable there; the first run that crosses a boundary
+produces the first number.
+
+## D34 - the supervisor and a measurement can share the machine (CLOSED 2026-09-13: the holder is published, C54)
 
 **Found:** 2026-09-13, building 11.
 
@@ -834,3 +851,29 @@ supervisor does not consult the lock, because the lock cannot be probed without
 being taken (C52). Until a non-intrusive signal exists - a measurement writing
 a marker the supervisor reads, say - do not leave `alpha supervise` running
 through a measurement, and the run record cannot yet prove it was not.
+
+**Closed 2026-09-13 (C54).** The signal was fixed, not the behaviour: the
+holder publishes itself beside the lock and anyone can read it without taking
+anything; a dead holder is recognised by PID. The supervisor then refuses to
+fire or run while a live holder exists, and logs why. One lock per project,
+whatever `--out` says.
+
+## D35 - the calibration's positive control cannot declare a truthful drafting set
+
+**Found:** 2026-09-13, by D29's sweep (C53).
+
+`aero_units_discipline` was hand-written by an author who saw the whole
+`aero_calc` suite, so its truthful drafting set is every task in the suite -
+and under the fail-closed contamination check that refuses every trial. The
+calibration, a POSITIVE CONTROL on the detector that is contaminated by design
+and caveated as such, cannot run on a true record; declaring `none` would let it
+run on a false one.
+
+**Why not decided here:** it is the measurement plan's call. Options: (a)
+declare the whole suite, and write the positive control's skill blind to the
+suite; (b) an explicit `positive_control` declaration that permits trials but
+makes the skill unpromotable, so its verdict can only ever calibrate the
+detector; (c) something else. **Recommendation: (b)** - it states the
+contamination instead of hiding it, and enforces the one consequence that
+matters. Until decided, `bench/run.py paired` refuses this skill, `--resume` of
+the 10-pair run of 2026-08-27 included.

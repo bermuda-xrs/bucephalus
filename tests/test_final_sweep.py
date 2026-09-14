@@ -65,7 +65,7 @@ def test_correct_work_without_a_final_still_passes(ctx, workspace, tmp_path, mon
         ctx.backends[name]._responder = lambda p, t: code  # noqa: SLF001
 
     sid = ctx.skills.store("probe", "# p\n", {"applies_when": "x"},
-                           {"drafted_by": "test"})
+                           {"drafted_by": "test", "drafted_from": []})
     run_paired_trial(ctx, sid, spec, seed=0)
 
     _, control, skill = fetch_paired_outcomes(ctx.conn, sid)[0]

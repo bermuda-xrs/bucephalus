@@ -93,6 +93,10 @@ def cmd_new(ctx, args, console) -> int:
     )
     task = create_task(ctx.conn, ctx.log, contract, budget)
     console.print(f"task [bold]{task.id}[/bold] created")
+    if not contract.artifact_scope:
+        console.print("[yellow]no --scope: this task may read or write no file "
+                      "(an empty scope permits nothing). Pass --scope work to "
+                      "declare one.[/]")
     console.print(f"next: alpha plan {task.id}")
     return 0
 
@@ -433,8 +437,30 @@ def cmd_pareto(ctx, args, console) -> int:
     return 0
 
 
+def _parse_drafted_from(raw: str) -> list[str]:
+    """`none` declares the empty set; anything else is comma-separated task keys."""
+    raw = raw.strip()
+    if raw.lower() == "none":
+        return []
+    return [k.strip() for k in raw.split(",") if k.strip()]
+
+
 def cmd_skills(ctx, args, console) -> int:
     from .skills.generate import promotion_rate
+
+    if args.declare_drafted_from:
+        sid, raw = args.declare_drafted_from
+        try:
+            prov = ctx.skills.declare_drafted_from(sid, _parse_drafted_from(raw))
+        except (KeyError, ValueError) as e:
+            console.print(f"[red]{e}[/red]")
+            return 1
+        console.print(f"skill [bold]{sid[:12]}[/bold] declares drafted_from="
+                      f"{prov['drafted_from']!r}")
+        if prov["trials_before_declaration"]:
+            console.print(f"[yellow]declared after {prov['trials_before_declaration']} "
+                          "trials were recorded; that count is written beside it[/]")
+        return 0
 
     if args.add:
         # M9 needs a hand-written skill before it can calibrate. Everything
@@ -445,14 +471,21 @@ def cmd_skills(ctx, args, console) -> int:
             console.print(f"[red]no such file: {path}[/red]")
             return 1
         body = path.read_text(encoding="utf-8")
+        provenance = {"drafted_by": "human", "source_file": str(path)}
+        if args.drafted_from is not None:
+            provenance["drafted_from"] = _parse_drafted_from(args.drafted_from)
         sid = ctx.skills.store(
             name=args.name or path.stem,
             body=body,
             contract={"applies_when": args.when or "(not stated)"},
-            provenance={"drafted_by": "human", "source_file": str(path)},
+            provenance=provenance,
             status="candidate",
         )
         console.print(f"stored [bold]{sid[:12]}[/bold] as a candidate")
+        if args.drafted_from is None:
+            console.print("[yellow]no --drafted-from: the gate refuses every paired "
+                          "trial of this skill until its drafting set is declared "
+                          f"(alpha skills --declare-drafted-from {sid} KEYS|none)[/]")
         console.print(
             f"next: run paired trials, then\n"
             f"  python bench/run.py paired {sid} --suite bench/tasks"
@@ -775,6 +808,13 @@ def build_parser() -> argparse.ArgumentParser:
     sk.add_argument("--add", metavar="SKILL.md", help="store a hand-written skill as a candidate")
     sk.add_argument("--name", help="skill name (defaults to the filename)")
     sk.add_argument("--when", help="one line: when this skill applies")
+    sk.add_argument("--drafted-from", metavar="KEYS",
+                    help="with --add: suite task keys the skill was drafted from, "
+                         "comma-separated, or 'none'. Undeclared, the gate refuses "
+                         "every paired trial of it")
+    sk.add_argument("--declare-drafted-from", nargs=2, metavar=("SKILL_ID", "KEYS"),
+                    help="declare an existing skill's drafting set - once; a "
+                         "declaration is never overwritten")
     sk.add_argument("--gate", help="skill id to evaluate")
     sk.add_argument("--decay", action="store_true")
     sk.add_argument("--yes", action="store_true", help="human approval for promotion")

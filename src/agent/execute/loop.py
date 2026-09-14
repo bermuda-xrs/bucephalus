@@ -938,7 +938,11 @@ def _adjudicate(ctx, task, tool, args, decision: GateDecision, step: int, plan,
 
     tracker = ctx.taint_tracker(task.id)
     arg_taint = tracker.args_taint(args)
-    human_only = tier_of(ctx, tool.name) in ctx.config.autonomy.human_only_tiers
+    # The TRUSTED tier is human-only IN CODE, not by config (D29's sweep). An
+    # empty `human_only_tiers` routed a trusted-tier call to the deputy, and
+    # "trusted always parks" then rested on git_push's taint ceiling alone.
+    tier = tier_of(ctx, tool.name)
+    human_only = tier == "trusted" or tier in ctx.config.autonomy.human_only_tiers
 
     # A4.2 — a channel task never reaches the deputy. The deputy is a model,
     # and the premise of a channel is that its input was written by someone

@@ -152,7 +152,7 @@ def auto_review(ctx, req: ReviewRequest) -> ReviewDecision:
     # Never auto-review TRUSTED tier. Those park for a human, always.
     if (
         req.arg_taint == Taint.TRUSTED
-        or tier_of(ctx, req.tool) in ctx.config.autonomy.human_only_tiers
+        or tier_of(ctx, req.tool) in {"trusted", *ctx.config.autonomy.human_only_tiers}
     ):
         d = ReviewDecision(
             verdict="escalate",

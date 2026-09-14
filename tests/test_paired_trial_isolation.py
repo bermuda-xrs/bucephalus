@@ -69,7 +69,7 @@ def _skill(ctx) -> str:
         "isolation-probe",
         "# probe\n\n## procedure\nDo the arithmetic.\n",
         {"applies_when": "anything"},
-        {"drafted_by": "test"},
+        {"drafted_by": "test", "drafted_from": []},   # declared: see D29's sweep
     )
 
 

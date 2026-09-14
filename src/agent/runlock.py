@@ -23,8 +23,10 @@ shutdown would strand every subsequent run.
 
 from __future__ import annotations
 
+import json
 import os
 import sys
+import time
 from pathlib import Path
 
 if sys.platform == "win32":  # pragma: no cover - platform split
@@ -35,6 +37,54 @@ else:  # pragma: no cover
 
 class RunLockBusy(RuntimeError):
     """Another measurement process holds the lock."""
+
+
+# D34. The holder, published BESIDE the lock and readable without taking it.
+#
+# The OS lock is the truth and it cannot be observed without acquiring it, so
+# every would-be reader - the scheduler, a status command - had to become a
+# writer, and a reader that takes the lock for an instant can abort the very
+# measurement it wanted to stay out of the way of. The holder writes this on
+# acquire and removes it on release; a holder that dies without releasing
+# leaves it behind, and `lock_status` recognises that by the dead PID - the
+# same shape the process reaper already uses (proc._alive).
+STATUS_SUFFIX = ".holder.json"
+
+
+def status_path(lock_path) -> Path:
+    p = Path(lock_path)
+    return p.with_name(p.name + STATUS_SUFFIX)
+
+
+def measurement_lock_path(root) -> Path:
+    """ONE measurement lock per project, whatever a run's --out says.
+
+    It lived beside each run's OUTPUT file, so two measurements writing to
+    different directories never excluded each other - a lock keyed on where
+    results go, guarding what they share: this project's database and its CPU.
+    DR1's width axis, in the one control whose whole job is exclusion.
+    """
+    return Path(root) / ".measurement.lock"
+
+
+def lock_status(lock_path) -> dict:
+    """Who holds the lock, READ WITHOUT ACQUIRING ANYTHING.
+
+    {"held": False} when free; {"held": True, pid, label, started_at} when a
+    live process holds it; {"held": False, "stale": True, ...} when the
+    recorded holder is dead. A PID reused by an unrelated live process reads
+    as held - the fail-closed direction for anything deciding whether to wait.
+    """
+    try:
+        info = json.loads(status_path(lock_path).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {"held": False}
+    from .proc import _alive
+
+    pid = int(info.get("pid") or 0)
+    if pid and _alive(pid):
+        return {"held": True, **info}
+    return {"held": False, "stale": True, **info}
 
 
 # Held locks, kept alive deliberately. `RunLock(p).acquire()` without binding
@@ -97,11 +147,22 @@ class RunLock:
         self._fh.write(f"{os.getpid():<20}")
         self._fh.flush()
         _HELD.add(self)
+        sp = status_path(self.path)
+        tmp = sp.with_name(sp.name + ".tmp")
+        tmp.write_text(json.dumps({"pid": os.getpid(), "label": self.label,
+                                   "started_at": time.time()}), encoding="utf-8")
+        os.replace(tmp, sp)
         return self
 
     def release(self) -> None:
         if self._fh is None:
             return
+        try:
+            sp = status_path(self.path)
+            if json.loads(sp.read_text(encoding="utf-8")).get("pid") == os.getpid():
+                sp.unlink()
+        except (OSError, ValueError):
+            pass
         try:
             self._unlock()
         except OSError:

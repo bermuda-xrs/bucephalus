@@ -253,10 +253,21 @@ def _count(cron: Cron, a: float, b: float) -> int:
 
 # -- one wake -------------------------------------------------------------
 
+def _measuring(ctx) -> dict | None:
+    """The measurement lock's holder, if a live one exists (D34)."""
+    from .runlock import lock_status, measurement_lock_path
+
+    st = lock_status(measurement_lock_path(ctx.config.root))
+    return st if st.get("held") else None
+
+
 def tick(ctx, now: float | None = None) -> list[dict]:
     """Derive what is due for every schedule, claim it, act on it."""
     now = time.time() if now is None else now
     out: list[dict] = []
+    # D34: nothing fires while a measurement runs. A scheduled task competing
+    # for the CPU corrupts the one cost axis the measurement exists to record.
+    busy = _measuring(ctx)
     for s in active(ctx.conn):
         cron = Cron.parse(s["spec"])
         first = cron.next_after(_last(ctx.conn, s))
@@ -265,6 +276,9 @@ def tick(ctx, now: float | None = None) -> list[dict]:
         latest = cron.last_at_or_before(now, first)
         fire_at = latest if now - latest <= GRACE_S else None
         reason = "passed while nothing was watching"
+        if fire_at is not None and busy:
+            fire_at, reason = None, (f"a measurement is running ({busy.get('label')}, "
+                                     f"PID {busy.get('pid')})")
         if fire_at is not None and _unfinished(ctx.conn, s["id"]):
             fire_at, reason = None, "previous run unfinished"
         until = (latest if fire_at is None
@@ -319,6 +333,8 @@ def run_due(ctx) -> list[dict]:
     """Run what `runnable` derives. A run that parks raises a notification."""
     from .execute.loop import run_task
 
+    if _measuring(ctx):
+        return []        # D34: nothing runs while a measurement does
     out = []
     for tid in runnable(ctx.conn):
         try:

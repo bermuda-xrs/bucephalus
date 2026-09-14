@@ -627,11 +627,17 @@ def test_the_channel_binds_nothing(bot):
 
 
 def test_allow_remote_is_untouched_by_this_phase():
-    """8.4 — the gate on non-loopback binding stays exactly where it was."""
+    """8.4 — the gate on non-loopback binding stays exactly where it was.
+
+    Tightened once since, deliberately: D29's sweep removed the `host and`
+    clause that let a request with no Host header skip the check. Pinned to
+    the tightened line so neither Phase 8 nor anything later loosens it back.
+    """
     guard = (ROOT / "src" / "agent" / "control" / "guard.py").read_text(
         encoding="utf-8")
     assert 'ALLOW_REMOTE_ENV = "ALPHA_ALLOW_REMOTE"' in guard
-    assert "not self.allow_remote and host and not is_loopback_host(host)" in guard
+    assert "if not self.allow_remote and not is_loopback_host(host):" in guard
+    assert "allow_remote and host and" not in guard
 
 
 # =========================================================================

@@ -40,7 +40,10 @@ def scope_widens(parent_scope: list[str], child_scope: list[str]) -> list[str]:
     from pathlib import Path
 
     if not parent_scope:
-        return []
+        # EMPTY MEANS NOTHING (D29's sweep). This returned "nothing widens",
+        # so a parent that declared no scope could hand a child any scope at
+        # all. A parent permitted no path; every entry a child asks for widens.
+        return list(child_scope)
     roots = [Path(os.path.abspath(x)) for x in parent_scope]
     out = []
     for entry in child_scope:

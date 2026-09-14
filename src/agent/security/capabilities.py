@@ -122,8 +122,20 @@ def task_state_paths(ctx, task) -> tuple[Path, ...]:
 
 
 def within_scope(args: dict, artifact_scope: list[str], root: str = ".") -> tuple[bool, str]:
-    """Every path-shaped argument must resolve inside artifact_scope."""
+    """Every path-shaped argument must resolve inside artifact_scope.
+
+    EMPTY MEANS NOTHING (D29, 2026-09-13). An empty scope returned "allowed"
+    before looking at a single path, so a task that declared nothing could read
+    and write anything outside the protected list - the fail-open shape Phase 8
+    refused for the channel allowlist. Nothing declared resolves to nothing
+    permitted.
+    """
     if not artifact_scope:
+        for key, value in args.items():
+            if _looks_like_path(key, value):
+                return False, (f"{key}={value!r}: this task declared no "
+                               "artifact_scope, so no path is permitted - "
+                               "declare one (alpha new --scope work)")
         return True, ""
     roots = [Path(os.path.abspath(os.path.join(root, s))) for s in artifact_scope]
     for key, value in args.items():

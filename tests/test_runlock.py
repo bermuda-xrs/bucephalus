@@ -150,7 +150,8 @@ def test_both_harnesses_share_one_lock_file():
     run = (ROOT / "bench" / "run.py").read_text(encoding="utf-8")
     for src, name in ((noise, "noise.py"), (run, "run.py")):
         assert "RunLock(" in src, f"{name} does not take the measurement lock"
-        assert ".measurement.lock" in src, f"{name} uses a different lock file"
+        # D34: the ONE project lock, not a file beside the run's output.
+        assert "RunLock(measurement_lock_path(" in src, f"{name} uses a different lock file"
 
 
 def test_an_unbound_lock_is_not_silently_released(tmp_path):

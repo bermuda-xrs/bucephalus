@@ -198,6 +198,12 @@ Nothing added by `--add` is ever live: it lands as a `candidate`, and only the
 gate promotes, only after the paired trials clear all four conditions, and
 only with a human saying yes.
 
+**Step 2 is refused today, on purpose.** An undeclared drafting set
+certifies no paired trial (D29's sweep), and this skill's truthful
+declaration - its author saw the whole suite - refuses every trial. How a
+positive control declares its contamination is an open decision (DEFERRED
+D35). A skill written blind to the suite: `--add ... --drafted-from none`.
+
 **Both long runs are resumable.** They append each completed run to a
 `.partial.jsonl` ledger (noise floor) or to `skill_trials` (calibration), so a
 kill costs at most one task. `--resume` picks up where it stopped and refuses

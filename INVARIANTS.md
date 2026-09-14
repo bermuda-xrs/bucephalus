@@ -559,6 +559,53 @@ record carries its origin.**
 *Caught by:* `test_the_scheduled_origin_derives_a_tool_floor`,
 `test_scheduled_runs_are_separable_in_telemetry`.
 
+## Added 2026-09-13 (consolidation - empty means nothing, and the measurement signal)
+
+**89. An empty scope permits no path.** A task that declared no
+`artifact_scope` may pass no path-shaped argument to any tool (D29).
+*Caught by:* `test_a_task_that_declared_no_scope_may_touch_no_path` (six routes).
+
+**90. Code reads only what the task declared, plus the interpreter.** In
+agent-code mode the sandbox refuses opens and listings outside the work
+directory, the linked scope, and the interpreter's own paths, captured before
+any user code runs. Advisory, like everything in that hook (D32).
+*Caught by:* `test_code_cannot_read_what_the_task_did_not_declare`,
+`test_code_still_reads_its_scope_and_imports`.
+
+**91. The trusted tier is human-only in code, at both layers.** Neither
+`_adjudicate` nor the deputy's own check depends on `human_only_tiers` for it.
+*Caught by:* `test_the_trusted_tier_is_human_only_whatever_the_config`,
+`test_the_reviewer_itself_escalates_the_trusted_tier`.
+
+**92. An unknown drafting set certifies no trial.** No skill row, or a row with
+no `drafted_from`, refuses the trial; `[]` is a declaration and is honoured.
+A drafting set is declared once and never overwritten, and the trials already
+recorded when it was declared are counted beside it.
+*Caught by:* `test_an_unknown_drafting_set_certifies_no_trial`,
+`test_an_unknown_skill_certifies_no_trial`, `test_a_declared_drafting_set_is_honoured`,
+`test_a_drafting_set_is_declared_once_and_never_rewritten`,
+`test_a_declaration_after_trials_says_so`.
+
+**93. A parent that declared no scope can give a child none.**
+*Caught by:* `test_a_parent_that_declared_no_scope_can_give_a_child_none`.
+
+**94. A loopback-only control plane refuses a request with no Host header.**
+*Caught by:* `test_a_request_with_no_host_header_is_refused`.
+
+**95. Every tool parameter is classified path or not-path before it ships.**
+The path checks are keyed on argument names, so an unclassified name would be
+unchecked. *Caught by:* `test_every_tool_argument_is_classified`.
+
+**96. The measurement lock publishes its holder, and nothing scheduled fires or
+runs while a live holder exists.** One lock per project, whatever a run's
+`--out` says; the holder is readable without acquiring anything; a dead holder
+reads as stale by PID.
+*Caught by:* `test_the_holder_is_readable_without_taking_the_lock`,
+`test_a_dead_holder_reads_as_stale_not_held`,
+`test_measurements_share_one_lock_whatever_their_output`,
+`test_the_supervisor_will_not_fire_during_a_measurement`,
+`test_a_fired_task_waits_for_the_measurement_to_end`.
+
 ---
 
 ## Design rules
@@ -692,6 +739,53 @@ a sibling route nobody had listed.
 Before calling something protected, enumerate EVERY route to its bytes - query,
 file read, traversal from above, pattern expansion, code execution, a copy - and
 test each one, not the route the control was written for (C50).
+
+**DR4. Empty means nothing.**
+
+The adjacency family's fifth mechanism, and the only one where nothing is
+adjacent: the control exists, is consulted, is aimed at the right thing - and
+because its list is empty or its input missing, it permits everything. It reads
+like a configuration question and is a DEFAULT question: what does the control
+do when nobody filled it in? The failure is silent in the permissive direction,
+and nobody fills in a list that already works.
+
+Phase 8 settled it for one control (`allowed_senders`: empty means NOBODY).
+D29 found the same shape in `artifact_scope`, and the sweep found six more.
+
+**The sweep, 2026-09-13.** Every allowlist, denylist, scope list, and policy
+set, reported even where correct:
+
+| control | kind | empty / absent meant | safe? | now |
+|---|---|---|---|---|
+| `artifact_scope` (`within_scope`) | scope list | every path | **no** - D29 | no path; `alpha new` and `POST /tasks` warn at creation |
+| sandbox reads | denylist over allow-all | every file not on the protected list | **no** | fenced to workdir, linked scope, and the interpreter's own paths |
+| `scope_widens(parent=[])` | scope list | nothing widens, so a parent with no scope could hand a child any | **no** | every child entry widens |
+| `human_only_tiers` | policy set | `[]` sent a trusted-tier call to the deputy | **no** | trusted tier human-only in code, at both layers |
+| `check_contamination` | derived set | no row, or no `drafted_from`: every trial certified clean | **no** | refused; `[]` is a declaration and is honoured |
+| control-plane Host check | input | an absent header skipped the rebinding check | **no** | refused unless `ALPHA_ALLOW_REMOTE` |
+| path-argument checks | key list | a parameter not NAMED like a path is never checked | **no** - latent: every path parameter today is `path` | every parameter of every tool must be classified |
+| `allowed_senders` | allowlist | nobody | yes | Phase 8 |
+| `ALLOWED_SCHEMES` (web_fetch) | allowlist | constant; an unlisted scheme is refused | yes | |
+| web_fetch private / loopback / link-local | denylist | refused unless `allow_private` (default off) | yes | |
+| `EVENT_TYPES` | allowlist | an unlisted type is refused at append | yes | |
+| `local_allowlist`, `laptop_allowlist` | allowlist | nothing routes local | yes | |
+| `load_policy` fallback | policy | "NO POLICY FOUND. Deny every action" | yes | |
+| `approve_scoped_writes` | policy | needs a non-empty scope; unattended origins excluded | yes | |
+| `reset_workspace` | scope list | clears nothing | yes | |
+| sandbox writes | allowlist | workdir only | yes | |
+| search `allowed_tasks` | allowlist | no results | yes | |
+| `visible_tasks(None)` | allowlist | the empty set | yes | |
+| `CLIENT_EVENTS`, `OPEN_PATHS` | allowlist | nothing | yes | |
+| verifier grader lookup | scope | `artifact_scope or ["."]`, harness side; a missing grader fails the task | yes | |
+| `ToolPolicy` for a local task | denylist | nothing denied | yes, by design: attended; the channel and schedule floors are constants | |
+| `isolate_retrieval` | policy | unrestricted retrieval | yes, by design outside measurement; `bench/measurement.py` pins it | |
+| `PROTECTED_*`, `PROJECT_STATE` | denylist | constants; a config's own state always included | yes as a denylist - which is why reads needed the fence above | |
+| `max_taint_in` | ceiling | never enforced - inert rather than empty | -> Part 2 | |
+
+Before adding a control, write down what it does when its list is empty and
+when its input is missing. If the answer is "permits", the control is a
+suggestion. Empty and absent are inputs like any other; they resolve to nothing
+permitted, and the refusal says what to declare.
 
 **DR2. A default must not shadow the path it is a default for.**
 

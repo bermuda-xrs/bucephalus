@@ -58,9 +58,21 @@ def check_contamination(ctx, skill_id: str, task_key: str) -> None:
     row = ctx.conn.execute(
         "SELECT provenance_json FROM skills WHERE id=?", (skill_id,)
     ).fetchone()
+    # EMPTY MEANS NOTHING (D29's sweep). A missing row and a missing drafting
+    # set both returned "clean", so an unknown drafting set certified every
+    # trial - and neither skill in the measurement record declares one.
+    # Unknown is not "drafted from nothing": nothing can be certified.
     if not row:
-        return
-    drafted_from = set(json.loads(row[0]).get("drafted_from", []))
+        raise ContaminationError(
+            f"no such skill {skill_id[:12]}: its drafting set is unknown")
+    prov = json.loads(row[0])
+    if prov.get("drafted_from") is None:
+        raise ContaminationError(
+            f"skill {skill_id[:12]} records no drafting set, so no trial can be "
+            "certified uncontaminated. Declare it, once: alpha skills "
+            f"--declare-drafted-from {skill_id} KEYS|none - 'none' is a human "
+            "asserting it was drafted from none of the suite's tasks.")
+    drafted_from = set(prov["drafted_from"])
     if task_key in drafted_from:
         raise ContaminationError(
             f"task {task_key!r} was used to draft skill {skill_id[:12]}; "

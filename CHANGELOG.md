@@ -10,6 +10,80 @@
 Dates are commit dates. `0.1.0` is not released yet — see "Unreleased" for
 what still stands between here and a first iteration.
 
+## Consolidation, Part 1 - empty means nothing, and the measurement signal - 2026-09-13
+
+**Invalidates no published number - verified.** 2 of the record's 283 tasks
+declared no scope: both the "hello.txt" smoke goal, neither in any evidence
+file. Every measured task declared a scope under `work/`. No recorded
+`run_code` shows a read outside it, though the record keeps only a prefix of
+each program (A2-4). `check_contamination` did run for real - on the
+2026-08-27 calibration, 10 pairs of `aero_units_discipline`, aborted at 10 of
+30 and kept only as do-not-report evidence (`calibration-PRE-FIX-aborted.json`;
+FINDINGS 3.2 is pending) - and certified every pair
+because the skill declares no drafting set. For that skill the check could not
+have meant anything: its author saw the whole suite, the calibration's stated
+caveat. It now refuses, which raises a decision (D35).
+
+`HARNESS_VERSION` 2 and `TOOLSET_VERSION` 5 unchanged. No tool's schema or
+description changed. What `run_code` may READ narrowed to what the task
+declared, the precedent C50 set when its reads of protected state were refused
+without a bump. If that precedent is wrong, both changes bump together.
+
+### D29 - fixed: empty means nothing (C53)
+
+An empty `artifact_scope` now permits no path. The refusal names the fix
+(`--scope work`), and `alpha new` / `POST /tasks` warn at creation.
+
+### The sibling sweep - DR4
+
+Every allowlist, denylist, scope list, and policy set, with what empty means:
+the full table is design rule DR4 in INVARIANTS. Six more failed open and are
+fixed:
+
+* **Sandbox reads.** The hook refused protected paths and allowed every other
+  file on the machine - D29 for code. Agent code now reads the work directory,
+  the linked scope, and the interpreter's own paths only. Still advisory (D32).
+* **`scope_widens`, empty parent.** Returned "nothing widens".
+* **`human_only_tiers`.** An empty list sent a trusted-tier call to the deputy,
+  and "trusted always parks" rested on one tool's taint ceiling. Now in code,
+  at both layers.
+* **`check_contamination`.** A missing row or a missing `drafted_from`
+  certified every trial. Neither real skill declares one, so their trials are
+  refused until someone does: `alpha skills --declare-drafted-from <id>
+  KEYS|none` (once - never overwritten, and it records how many trials already
+  existed), or `--drafted-from` with `--add`, which now warns without it.
+* **The Host check.** An absent header skipped DNS-rebinding protection.
+* **Path checks keyed on argument names.** Latent: a parameter not named like a
+  path would never be checked. A test now fails on any unclassified parameter
+  of any tool.
+
+### D33 - not moved; threshold recorded
+
+A boundary rebuild more than once per task on average. The record predates
+sessions, so there is no rate to read yet. DEFERRED D33.
+
+### D34 - the signal, not the behaviour (C54)
+
+The lock's holder publishes `<lock>.holder.json` on acquire and clears it on
+release, readable without acquiring anything; a dead holder is stale by PID.
+The supervisor logs a due occurrence as missed while a measurement runs and
+runs nothing already fired until it ends. One lock per project root - it lived
+beside each run's `--out`, so two measurements writing to different
+directories never excluded each other.
+
+### Tests
+
+**733 passing.** 26 new, in `tests/test_empty_means_nothing.py` and
+`tests/test_measurement_signal.py`. 18 injected defects, every listed test red
+for each. Six existing test files changed, none weakened: `test_tool_exposure` asserted the fail-open reading ("no parent scope means no limit") and now asserts the opposite; `test_channel` pinned the old guard line and now pins the tightened one; `test_runlock` now requires the one project lock; and the skill fixtures in `test_m9_gate`, `test_paired_trial_isolation` and `test_final_sweep` declare `drafted_from: []`, which the gate now requires.
+
+One new test was vacuous on its first draft. The trusted-tier test named its
+argument `target`, which is a path key, so the scope check refused the call
+before the tier was ever asked. It was red before the fix and red after it,
+and the reason was neither. Red against the defect is necessary, not
+sufficient: a test must also be green against the fix, red for the reason it
+names. The test now asserts nothing else refused the call.
+
 ## Phase 11 (A3) - cron - 2026-09-13
 
 **Invalidates no published number.** `HARNESS_VERSION` 2, `TOOLSET_VERSION` 5:

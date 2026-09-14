@@ -152,6 +152,15 @@ _WORKDIR = _os.path.realpath({workdir!r})
 _BUSY = [False]
 _PROTECTED = [_os.path.realpath(p) for p in {protected!r}]
 _DENY_SPAWN = {deny_spawn!r}
+_READ_FENCE = {read_fence!r}
+# D29 for code. Reads are fenced to what the task DECLARED plus what the
+# interpreter needs: the work directory, the linked scope, and the
+# interpreter's own paths, captured before any user code runs. Anything else -
+# a home directory, another project - is not declared, so it is not permitted.
+_READ_ROOTS = [_WORKDIR] + _ROOTS + sorted({{_os.path.realpath(p) for p in (
+    [x for x in _sys.path if x] + [_sys.prefix, _sys.base_prefix,
+     _sys.exec_prefix, getattr(_sys, "base_exec_prefix", _sys.prefix),
+     _os.environ.get("SYSTEMROOT", "")]) if p}})
 # A new process is a process this hook is not in: starting one bypasses every
 # rule here in a single call. Refused for agent code; harness runs keep it.
 _SPAWN = ("subprocess.Popen", "os.system", "os.exec", "os.posix_spawn",
@@ -196,6 +205,26 @@ def _check_protected(path):
         raise PermissionError("sandbox: protected path: %s" % (path,))
 
 
+def _check_read(path):
+    if not _READ_FENCE or path is None or isinstance(path, int):
+        return
+    if str(path).lower() in (_os.devnull.lower(), "nul", "/dev/null"):
+        return
+    _BUSY[0] = True
+    try:
+        try:
+            real = _os.path.realpath(_os.path.abspath(_os.fspath(path)))
+            if isinstance(real, bytes):
+                real = _os.fsdecode(real)
+        except Exception:
+            real = None
+        ok = real is not None and any(_under(real, r) for r in _READ_ROOTS)
+    finally:
+        _BUSY[0] = False
+    if not ok:
+        raise PermissionError("sandbox: read outside scope: %s" % (path,))
+
+
 _FS_EVENTS = (
     "os.remove", "os.rmdir", "os.mkdir", "os.rename", "os.link",
     "os.symlink", "os.truncate", "shutil.copyfile", "shutil.move",
@@ -211,12 +240,14 @@ def _audit(event, args):
                               "would run outside this hook" % (event,))
     if event in ("os.listdir", "os.scandir", "sqlite3.connect"):
         _check_protected(args[0] if args else ".")
+        _check_read(args[0] if args else ".")
         return
     if event == "open":
         path, mode, flags = (list(args) + [None, None, None])[:3]
         # READS too. The hook guarded writes only, so code could open any file
         # on the machine by absolute path, whatever the task's scope.
         _check_protected(path)
+        _check_read(path)
         writing = False
         if isinstance(mode, str) and any(c in mode for c in "wxa+"):
             writing = True
@@ -305,6 +336,7 @@ def run_sandboxed(
             workdir=str(Path(workdir).resolve()),
             protected=[str(p) for p in protected_paths],
             deny_spawn=bool(protected_paths),
+            read_fence=bool(protected_paths),
         )
         script = Path(workdir) / "_run.py"
         script.write_text(guard + "\n" + preamble + "\n" + code, encoding="utf-8")
