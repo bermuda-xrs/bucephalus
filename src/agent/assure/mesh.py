@@ -11,6 +11,7 @@ optimizing for what is measured.
 
 from __future__ import annotations
 
+import inspect
 import random
 from dataclasses import dataclass, field
 from typing import Callable
@@ -91,8 +92,12 @@ class VerificationMesh:
             )
         else:
             try:
-                r = verifier.check(artifact, task.contract,
-                                   root=self.ctx.config.root)
+                # A verifier that calls a model needs the task, so the call
+                # is on the task's record (D36). Only it is handed one.
+                kw = {"root": self.ctx.config.root}
+                if "task" in inspect.signature(verifier.check).parameters:
+                    kw["task"] = task
+                r = verifier.check(artifact, task.contract, **kw)
             except Exception as e:  # noqa: BLE001 - a broken verifier is a failed check
                 r = VerifyResult(
                     passed=False, score=0.0,

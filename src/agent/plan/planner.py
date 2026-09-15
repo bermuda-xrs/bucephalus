@@ -76,10 +76,10 @@ def draft_plan(ctx, task, backend_name: str = "cloud") -> Plan:
             f"<budget>${task.budget.usd:.2f} / {task.budget.seconds}s</budget>\n\n"
             f"<survey>\n{context}\n</survey>"
         )
-        resp = backend.complete(
-            PLANNER_PREFIX, tail, None, max_tokens=4096, temperature=0.0
+        resp = ctx.call_model(
+            task, backend, "plan", prefix=PLANNER_PREFIX, tail=tail, tools=None,
+            max_tokens=4096, temperature=0.0,
         )
-        ctx.record(task, resp, purpose="plan")
         plan = parse_plan(resp.text, fallback_objective=task.contract.goal)
     finally:
         ctx.phase = "execute"

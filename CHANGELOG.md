@@ -10,6 +10,152 @@
 Dates are commit dates. `0.1.0` is not released yet — see "Unreleased" for
 what still stands between here and a first iteration.
 
+## Consolidation - four decisions - 2026-09-15
+
+**Moves no headline number.** One definition changes: `calls` now holds every
+model call made for a task from the moment it starts. Every published figure
+computed from `calls` is listed below, with what it becomes.
+
+### D36 - a model call is on the record before it returns (invariant 12)
+
+Invariant 12 was false in two ways.
+
+- **Calls that never returned.** The row was written from a returned response,
+  so the 32 calls in the measurement record that never returned have none: 12
+  stalled, 3 crashed, 17 cut off by a killed process.
+- **Call sites that wrote nothing.** Five call sites never wrote a row at all:
+  the deputy, the quarantined summarizer, the monitor, the self-consistency
+  verifier and the generator. Only the deputy ran in production: 15 reviews,
+  23.5-167.7 s each, none in `calls`.
+
+Every task-bound call now goes through `AgentContext.call_model`:
+- it writes the row **before** the call, with null usage;
+- it completes the row on return;
+- on an exception it records the elapsed time and an `outcome`: `stalled`,
+  `error` or `interrupted`.
+
+A row with no outcome is a call that never ended. A structural test fails on a
+`.complete(` anywhere else in `src/agent`. The two throughput probes, which
+have no task, are the named exceptions (invariants 104-106).
+
+**Migration.** SQLite cannot drop NOT NULL, so `calls` is rebuilt in one
+transaction, and every existing row is kept unchanged and marked `returned`.
+It was checked first on a backup-API snapshot of `agent.local.db`:
+- 1,183 rows identical before and after;
+- all 31 tables' row counts unchanged;
+- integrity ok;
+- a second open changes nothing.
+
+**What `calls` means now.**
+- `n_calls` counts calls begun.
+- `wall_ms` includes the time of calls that ended without a response.
+- `n_unreturned` is new.
+- Tokens, cost and the cache ratio cover returned calls only. An unreturned
+  call's usage is unknown, not zero.
+- The router's length and throughput estimates read returned calls only. A
+  stall is a machine fault, the rule the reference measurement already
+  excludes it by.
+
+**The historical record is not backfilled.** The 32 calls stay absent from
+`agent.local.db`'s `calls`, because a row built from events after the fact
+would be evidence written later. The figures below add them in analysis only.
+15 of the 32 have durations reconstructable from their events: 9,363.1,
+2,319.7, 1,342.4, 1,078.6, 1,070.3, 858.2, 319.9 and 196.8 s, plus 7 at 0.0 s.
+The 17 killed calls have no end time, so any total that includes them is a
+lower bound.
+
+| published figure | computed over | moves once the 32 are present? |
+|---|---|---|
+| reference measurement, per task: median 252.0 s, p90 941.2 s; the Pareto medians | ledger wall-clock (`noise.py`'s `wall_s`), not `calls` | **No.** The ledger already includes every stall, or excludes it as a machine fault by its stated rule. **No correction to the reference measurement.** |
+| per-call step wall, n = 1,182 returned | `calls` | Median 53.3 → 53.4 s and p90 112.4 → 114.4 s: **not material**. Mean 78.0 → 90.8 s and total 25.60 → 30.20 h (a lower bound): **material, never published**. |
+| SPEC-DELTA C8's "~44 s median" | `calls` | Not materially. |
+| RELEASE G1's "1,179 real model calls" | `calls` at the time | It counts *recorded* calls; the record held more. Relabelled. |
+| `free_tokens`, `paid_tokens`, `cost_usd`, `cache_hit_ratio` in `pareto-3b.json` (t_224695e752de, t_b6ff0653d740), `pareto-8b.json` (t_852eaa685642), `bench-local.json` (t_343db8000f02) | `calls` | They omit the deputy's tokens on those tasks. Never quoted in FINDINGS. |
+
+**The four stalls the decision cited were never absent from every statistic.**
+They sit in ledger-based figures, flagged or excluded by rule, and are absent
+only from `calls`:
+- 2,465.9 s is a ledger `wall_s` (`v3probe-ladder-E01-3b-R4R5-sbs.json` row 8,
+  and `phase1-analysis.json`, where it is flagged `sample_4_is_contaminated`);
+- 1,499.8 s is `evidence.step_6_call` in `d2-8b-ABORTED-memory-pressure.json`;
+- 2,539 s and 17 m 57 s are `machine_event`s in `phase1-openai-parity.json`.
+
+**Injection.** Each of 10 defects turns its tests red:
+1. the row written at return (the pre-D36 shape);
+2. the abort not recorded;
+3. the deputy calling its backend directly;
+4. the monitor doing the same;
+5. the migration skipped;
+6. old rows left unmarked;
+7. metrics not None-safe;
+8. open rows not counted;
+9. the median reading open rows;
+10. throughput reading a stall's time.
+
+The step, the stall, the deputy and the migration are covered behaviourally.
+The monitor, quarantine, verifier and generator are covered structurally only.
+
+One existing test anchored on the old call text,
+`test_the_pin_is_checked_before_every_step_not_only_the_first`. It is
+re-anchored, and its injection (the pin check removed) still turns it red.
+
+### D35 - option (a): the positive control, drafted from the drafting split
+
+`examples/skills/si_first_orbital_arithmetic.md` (`a4aa91a3e464`) was written
+from the 15 drafting tasks only (E01-E05, M11-M16, H23-H26) and declares them.
+It runs on the 15 eval tasks and is refused on every drafting task: the rules
+every skill follows, no exemption. Its provenance also states what cannot be
+ruled out: the drafting model worked on this project in earlier sessions whose
+context is not retained.
+
+`aero_units_discipline` now declares the whole suite, truthfully, after 20
+recorded trials. It is refused on every task, kept as a record, and not made
+runnable.
+
+**The report's caveat was an assumption.** It said, for every skill, that "the
+author saw the entire suite", and the secondary said the eval subset was
+"contamination-clean". Both are now read from the skill's provenance (invariant
+107):
+- who drafted it;
+- how many scored tasks are in its declared drafting set, named and marked
+  CONTAMINATED when any are;
+- its declared exposure.
+
+A missing record or an undeclared set says so. Each of 5 injected defects turns
+its tests red. An archived test's fake context gained a connection for the new
+provenance read.
+
+**Measured consequence.** At n = 15 the gate needs 10 discordant pairs, 9 of
+them favouring the skill. So this control fires only on an effect that changes
+about two-thirds of outcomes (FINDINGS 3.2). Not run: it takes hours, and it is
+ready as README step 2.
+
+### max_taint_in - DELETE, not built: a HARNESS_VERSION STOP
+
+No check could give it a meaning. Every observation tool's output is UNTRUSTED,
+so a ceiling below the default forbids reading, and the default permits
+everything. The field is also rendered into every prompt prefix, so removing it
+bumps HARNESS_VERSION (SPEC-DELTA C60, DEFERRED D38).
+
+### POSIX rlimits - stated
+
+README and RELEASE now say it plainly: on Windows the sandbox is advisory path
+confinement plus a wall-clock timeout, and no memory, CPU, process-count or
+file-size limit is enforced. Job Objects are recommended at about a day's
+effort (DEFERRED D37).
+
+### Tests
+
+**768 passing, 3 skipped.** 9 new; 3 existing tests changed:
+- the pin test, re-anchored;
+- the calibration test, which now asserts the derived caveat;
+- the archived bench fixture, which gained a connection.
+
+Seen while testing and not fixed, because it is outside the four decisions:
+`cmd_paired` does not release the measurement lock on an exception. In one
+process, one failure made the next nine calibration tests fail with "lock
+busy".
+
 ## Consolidation, Part 4 - the credential-gated paths - 2026-09-14
 
 **Invalidates no published number.** No source change: tests and documentation.

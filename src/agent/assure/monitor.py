@@ -77,7 +77,11 @@ def run_monitor(ctx, task_id: str, backend_name: str = "review") -> int:
     """Runs out of band. Reads the trace read-only, writes only monitor_flags."""
     trace = load_trace_readonly(ctx.conn, task_id)
     backend = ctx.backends.get(backend_name) or ctx.backends["cloud"]
-    resp = backend.complete(MONITOR_PREFIX, render(trace), None, 1024, 0.0)
+    # On the record under the task it watched, and charged to nobody: it runs
+    # out of band, after the task. `calls` is telemetry, never agent context.
+    resp = ctx.call_model(task_id, backend, "monitor", prefix=MONITOR_PREFIX,
+                          tail=render(trace), tools=None, max_tokens=1024,
+                          temperature=0.0)
 
     findings = parse_findings(resp.text)
     for f in findings:

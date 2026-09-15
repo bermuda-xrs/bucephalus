@@ -26,9 +26,10 @@ that would catch a violation, so "I checked it" means something.
        — `test_promotion_requires_a_human`, `test_generator_cannot_promote`
 11. ☐ Working context stays under the fill ratio
        — `test_ceiling_triggers_delegation_not_squeeze`
-12. ☐ Every model call is recorded in `calls` - *for calls that return;
-       one that never returns has no row (FINDINGS 1.25, D36)*
-       — `test_no_call_bypasses_telemetry`
+12. ☐ Every model call made for a task is recorded in `calls` from the moment
+       it starts - one that never returns keeps an open row (D36, 104-106)
+       — `test_no_call_bypasses_telemetry`, `test_no_model_call_bypasses_the_record`,
+         `test_a_stalled_call_keeps_its_row_and_its_time`
 13. ☐ The planner cannot write; plan phase is read-only
        — `test_planner_cannot_write`
 14. ☐ The auto-review backend differs from the executing backend
@@ -648,6 +649,37 @@ nothing to compare against.
 **103. Nothing a resumed run does precedes the pin check - a released decision
 included.** *Caught by:*
 `test_a_plan_changed_while_parked_halts_before_the_decided_action_runs`.
+
+## Added 2026-09-15 (consolidation - the decisions)
+
+**104. Every model call made for a task goes through `AgentContext.call_model`.**
+A `.complete(` anywhere else in `src/agent` fails the suite. The two throughput
+probes, which have no task, are the named exceptions. Five call sites - the
+deputy, the quarantined summarizer, the monitor, the self-consistency verifier,
+the generator - never wrote a row before this.
+*Caught by:* `test_no_model_call_bypasses_the_record`, `test_the_deputy_is_on_the_record`.
+
+**105. A call's row exists before the call returns.** It is written with null
+usage and completed on return. An abort records its elapsed time and why:
+`stalled`, `error` or `interrupted`. A row with no outcome is a call that never
+ended, and `metrics` counts it as `n_unreturned`. A pre-D36 `calls` table is
+rebuilt in one transaction with every row kept and marked `returned`.
+*Caught by:* `test_a_call_is_on_the_record_before_it_returns`,
+`test_a_stalled_call_keeps_its_row_and_its_time`,
+`test_a_call_that_never_returns_stays_open_and_is_counted`,
+`test_the_calls_table_migrates_without_losing_a_row`.
+
+**106. The router estimates from returned calls only.** An unreturned call's
+usage is unknown, not zero, and a stall is a machine fault - the rule the
+reference measurement already excludes it by. It stays on the record and out
+of the estimate. *Caught by:* `test_router_inputs_ignore_calls_that_never_returned`.
+
+**107. A contamination caveat is read from the skill's provenance, never
+assumed.** It names who drafted the skill, how many scored tasks are in its
+declared drafting set (CONTAMINATED if any), and its declared exposure. A
+missing record or an undeclared set says so and treats every task as
+contaminated. *Caught by:* `test_the_caveat_is_derived_from_what_the_skill_declares`,
+`test_the_whole_calibration_path_reports_two_numbers`.
 
 ---
 

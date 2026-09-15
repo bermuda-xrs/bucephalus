@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import sqlite3
 import sys
 from math import sqrt
 from pathlib import Path
@@ -198,6 +199,10 @@ class _FakeCtx:
             "auto_review": True, "approve_scoped_writes": False})()
         self.backends = {"cloud": type("B", (), {
             "cfg": type("BC", (), {"model": "mock"})()})()}
+        # cmd_paired reads the pairs it scored and the skill's provenance for
+        # its caveat (D35). No skills table: the caveat says NO PROVENANCE.
+        self.conn = sqlite3.connect(":memory:")
+        self.conn.execute("CREATE TABLE skill_trials(skill_id TEXT, task_key TEXT, arm TEXT)")
         self.closed = False
 
     def close(self):

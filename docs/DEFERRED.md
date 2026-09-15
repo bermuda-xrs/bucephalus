@@ -863,7 +863,7 @@ anything; a dead holder is recognised by PID. The supervisor then refuses to
 fire or run while a live holder exists, and logs why. One lock per project,
 whatever `--out` says.
 
-## D35 - the calibration's positive control cannot declare a truthful drafting set
+## D35 - the calibration's positive control cannot declare a truthful drafting set (CLOSED 2026-09-15: option (a))
 
 **Found:** 2026-09-13, by D29's sweep (C53).
 
@@ -883,7 +883,18 @@ contamination instead of hiding it, and enforces the one consequence that
 matters. Until decided, `bench/run.py paired` refuses this skill, `--resume` of
 the 10-pair run of 2026-08-27 included.
 
-## D36 - a model call that never returns has no `calls` row
+**Closed 2026-09-15: option (a), not the recommendation.** There is no
+`positive_control` category. The control is a new skill,
+`si_first_orbital_arithmetic` (`a4aa91a3e464`). It was written from the
+drafting split only, declares that split, and is refused on every drafting
+task: the rules every skill follows. Its provenance also records what cannot
+be ruled out: the drafting model worked on this project in earlier sessions,
+and that context is not retained. `aero_units_discipline` declares the whole
+suite, truthfully, and is refused on every task. It is kept as a record, not
+made runnable. The report's caveat, which assumed "the author saw the entire
+suite" for every skill, is now read from each skill's provenance (invariant 107).
+
+## D36 - a model call that never returns has no `calls` row (CLOSED 2026-09-15: the row is written at call time, C59)
 
 **Found:** 2026-09-14, by A2-2.
 
@@ -898,6 +909,13 @@ silently drops exactly the slowest calls.
 complete it on return. Changes what `calls` means for every existing
 analysis, so it waits for a decision.
 
+**Closed 2026-09-15, by that decision, in that shape.** Every task-bound call
+goes through `AgentContext.call_model` (invariants 104-106). Building it found
+a second gap. Five call sites never wrote a row at all, and one of them, the
+deputy, ran 15 times in the record. The migration was checked on a snapshot of
+`agent.local.db` first: 1,183 rows identical. No published headline figure
+moves: CHANGELOG 2026-09-15 has the table.
+
 ## D26 addendum, 2026-09-14 - the tests are waiting
 
 Both live paths now have a test that runs the moment the credential exists:
@@ -906,3 +924,55 @@ Both live paths now have a test that runs the moment the credential exists:
 (`ANTHROPIC_API_KEY`, one small paid call per Anthropic backend). Both skip
 without it. The same bodies run every suite against local fakes. The STOP is
 unchanged: supplying either credential is the user's decision.
+
+## D37 - resource limits are POSIX-only; on Windows the sandbox enforces none
+
+**Found:** 2026-09-14, by A2-2 (FINDINGS 1.25). **Stated 2026-09-15** in
+README and RELEASE.
+
+`sandbox.py` sets `RLIMIT_AS`, `RLIMIT_CPU`, `RLIMIT_NPROC` and `RLIMIT_FSIZE`
+when `os.name == "posix"`. Every run in this project's history was on Windows,
+where none of them applies. There, the sandbox is advisory path confinement
+plus a wall-clock timeout.
+
+**Recommendation: a Job Object, before any unattended use.** It would set:
+- memory, with `JOB_OBJECT_LIMIT_PROCESS_MEMORY`;
+- CPU time, with `JOB_OBJECT_LIMIT_PROCESS_TIME`;
+- active processes, with `JOB_OBJECT_LIMIT_ACTIVE_PROCESS`;
+- `KILL_ON_JOB_CLOSE`, which also takes the tree down when the parent dies (a
+  sibling of D10).
+
+It needs only `ctypes`, no new dependency.
+
+**Effort: about a day.** The code is about a hundred lines; the rest is the
+assignment race. `Popen` does not hand back a suspended child's thread, and the
+venv `python.exe` is a trampoline that spawns the real interpreter (C13). So
+the job must be in place before the trampoline's child exists. Each limit can
+be tested for real on this machine. File size has no per-process Windows
+equivalent and needs Phase 6.
+
+A limit that is hit becomes a kill, which `run_code` can observe, so this
+likely bumps TOOLSET_VERSION. It does not bump HARNESS_VERSION.
+
+**Why not built now:** no new features (2026-09-15). Measurement runs are
+attended and bounded by the wall clock. Cron and the channel are neither.
+
+## D38 - `max_taint_in`: decided DELETE, blocked on a HARNESS_VERSION STOP
+
+**Found:** 2026-09-14, by A2-2. **Decided 2026-09-15: delete** (SPEC-DELTA C60).
+
+The field cannot be wired to mean anything. Every observation tool is
+UNTRUSTED, so a ceiling below the default forbids reading, and the default
+permits everything. But the whole contract is rendered into every prefix, so
+removing the field changes every task's prefix bytes. Options:
+
+1. **Delete it and bump HARNESS_VERSION 2 → 3.** Every published number becomes
+   incomparable with every later one, for a field that changes no behaviour -
+   unless the bump is batched with one that has to happen anyway (D33's tier-1
+   move, D28's tail).
+2. **Remove it from the contract and code, but keep its bytes in the prefix**
+   as a labelled legacy constant until the next bump. The prompt would still
+   show the model a ceiling nothing enforces.
+
+Recommendation: (1), batched with the next bump. Until then it is inert, and
+documented as inert.

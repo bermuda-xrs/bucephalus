@@ -227,7 +227,7 @@ class SelfConsistencyVerifier:
         self.k = k
 
     def check(self, artifact: str, contract: TaskContract,
-              root: str | None = None) -> VerifyResult:
+              root: str | None = None, task=None) -> VerifyResult:
         from ..router.cascade import (
             DEFAULT_AGREEMENT, max_cluster_fraction, normalize)
 
@@ -237,7 +237,10 @@ class SelfConsistencyVerifier:
             f"Question: {contract.goal}"
         )
         samples = [
-            backend.complete("You answer concisely.", prompt, None, 512, 0.7).text
+            self.ctx.call_model(
+                task if task is not None else "unattributed", backend, "verify",
+                prefix="You answer concisely.", tail=prompt, tools=None,
+                max_tokens=512, temperature=0.7).text
             for _ in range(self.k)
         ]
         agreement = max_cluster_fraction([normalize(s) for s in samples])

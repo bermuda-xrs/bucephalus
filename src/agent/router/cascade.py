@@ -166,13 +166,16 @@ def local_with_escalation(
     """Sample the local tier k times; escalate on disagreement. Returns (resp, escalated)."""
     tier = ctx.active_local_tier()
     if tier is None:
-        resp = ctx.backends["cloud"].complete(prefix, tail, None, 1024, 0.0, schema)
+        resp = ctx.call_model(task, "cloud", purpose, prefix=prefix, tail=tail,
+                              tools=None, max_tokens=1024, temperature=0.0,
+                              schema=schema)
         return resp, True
 
     local = ctx.backends[tier]
-    samples = [local.complete(prefix, tail, None, 1024, 0.7, schema) for _ in range(k)]
-    for s in samples:
-        ctx.record(task, s, purpose=purpose)
+    samples = [ctx.call_model(task, local, purpose, prefix=prefix, tail=tail,
+                              tools=None, max_tokens=1024, temperature=0.7,
+                              schema=schema)
+               for _ in range(k)]
 
     agreement = max_cluster_fraction([normalize(s.text) for s in samples])
     if agreement >= agreement_threshold:  # 2 of 3 agree
@@ -184,6 +187,7 @@ def local_with_escalation(
         {"backend": "cloud", "escalated": True, "agreement": round(agreement, 3),
          "purpose": purpose},
     )
-    resp = ctx.backends["cloud"].complete(prefix, tail, None, 1024, 0.0, schema)
-    ctx.record(task, resp, purpose=purpose, escalated=True)
+    resp = ctx.call_model(task, "cloud", purpose, escalated=True, prefix=prefix,
+                          tail=tail, tools=None, max_tokens=1024, temperature=0.0,
+                          schema=schema)
     return resp, True

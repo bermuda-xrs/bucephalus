@@ -76,7 +76,7 @@ class TaintTracker:
 
 
 def quarantined_summarize(
-    ctx, content: str, question: str, backend_name: str | None = None
+    ctx, content: str, question: str, backend_name: str | None = None, task=None
 ) -> str:
     """Summarize untrusted content with a TOOL-LESS backend (M8.1 rule 4).
 
@@ -87,7 +87,8 @@ def quarantined_summarize(
     """
     name = backend_name or ctx.active_local_tier() or "cloud"
     backend = ctx.backends.get(name) or ctx.backends["cloud"]
-    resp = backend.complete(
+    resp = ctx.call_model(
+        task if task is not None else "unattributed", backend, "quarantine",
         prefix=QUARANTINE_PREFIX,
         tail=f"<question>{question}</question>\n<data>\n{content}\n</data>",
         tools=None,

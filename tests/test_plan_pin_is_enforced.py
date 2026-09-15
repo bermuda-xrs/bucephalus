@@ -173,7 +173,8 @@ def test_the_pin_is_checked_before_every_step_not_only_the_first(tmp_path):
     src = (ROOT / "src" / "agent" / "execute" / "loop.py").read_text(
         encoding="utf-8")
     i = src.index("for step in range(ctx.config.limits.max_steps)")
-    j = src.index("resp = backend.complete(", i)
+    # The step's model call, through the recording door since D36.
+    j = src.index("resp = ctx.call_model(", i)
     assert "verify_plan_pin(ctx, task)" in src[i:j], (
         "the pin check must be inside the step loop, before the model call")
 

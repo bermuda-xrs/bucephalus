@@ -180,11 +180,14 @@ relative to how much the same tasks move on their own.
 python bench\noise.py --config config.local.yaml --profile local --runs 1 --out runs\noise-floor.json
 python bench\noise.py --config config.local.yaml --profile local --runs 3 --resume --out runs\noise-floor.json
 
-# 2. the calibration skill - a POSITIVE CONTROL on the instrument
-.\alpha.ps1 --config config.local.yaml skills --add examples\skills\aero_units_discipline.md ^
-    --name aero_units_discipline --when "aerospace calculation with units"
+# 2. the calibration skill - a POSITIVE CONTROL on the instrument (D35).
+#    Drafted from the drafting split only, declared so, scored on eval only.
+#    In agent.local.db it is already stored and declared: a4aa91a3e464.
+.\alpha.ps1 --config config.local.yaml skills --add examples\skills\si_first_orbital_arithmetic.md ^
+    --name si_first_orbital_arithmetic --when "aerospace calculation from params.json and constants.json" ^
+    --drafted-from E01,E02,E03,E04,E05,M11,M12,M13,M14,M15,M16,H23,H24,H25,H26
 python bench\run.py --config config.local.yaml --profile local paired <skill_id> ^
-    --suite aero_calc --out runs\calibration.json
+    --suite aero_calc --split eval --out runs\calibration.json
 
 # 3. the verdict, and promotion, which requires a human
 .\alpha.ps1 --config config.local.yaml skills --gate <skill_id>
@@ -198,11 +201,14 @@ Nothing added by `--add` is ever live: it lands as a `candidate`, and only the
 gate promotes, only after the paired trials clear all four conditions, and
 only with a human saying yes.
 
-**Step 2 is refused today, on purpose.** An undeclared drafting set
-certifies no paired trial (D29's sweep), and this skill's truthful
-declaration - its author saw the whole suite - refuses every trial. How a
-positive control declares its contamination is an open decision (DEFERRED
-D35). A skill written blind to the suite: `--add ... --drafted-from none`.
+**Step 2 runs on the eval split, by the rule every skill follows.** The
+control was drafted from the 15 drafting tasks, and the contamination check
+refuses each of them; `--split eval` keeps the run to the 15 it may be scored
+on. An undeclared drafting set certifies no trial at all (D29's sweep).
+`aero_units_discipline`, the earlier control, declares the whole suite
+truthfully - its author saw every task - so it is refused on all 30. That is
+the check working. It stays as the record of the 10-pair run of 2026-08-27 and
+is not runnable. A skill written blind to the suite: `--add ... --drafted-from none`.
 
 **Both long runs are resumable.** They append each completed run to a
 `.partial.jsonl` ledger (noise floor) or to `skill_trials` (calibration), so a
@@ -216,12 +222,14 @@ not a statistical guard. `min_lift_pp` is **inert** below n=160 at these
 settings and is not protection. See the annotated `gate:` block in
 `config.local.yaml`.
 
-**Contamination.** The eval split never enters a drafting prompt. A
-*generated* skill is evaluated with `--split eval`, always. The hand-written
-calibration skill runs on all 30 because it is a positive control on the
-detector rather than a claim about generalization — and its author saw the
-whole suite, so no split is clean with respect to the author anyway. That
-caveat is printed next to its number, not in a footnote.
+**Contamination.** The eval split never enters a drafting prompt, and every
+skill - the hand-written control included - is scored with `--split eval` on
+tasks it was not drafted from. The report's caveat is read from the skill's
+own provenance: who drafted it, whether any scored task is in its declared
+drafting set, and what it declares about exposure. It is printed next to the
+number, not in a footnote. At n=15 the gate needs 9 of 10 discordant pairs
+to favour the skill, so the control can fire only on a large effect, and a
+null says only that the effect was not large.
 
 `demo.py` runs the whole flow with a scripted model — no API key, no network.
 
@@ -405,9 +413,21 @@ stdout/stdin and is gated exactly like a direct action, with side effects
 receipted. An action that would need human approval is refused there rather
 than parked — a sandboxed process cannot be suspended mid-run.
 
-On Windows there are no `rlimit` caps, so memory and CPU limits are not
-enforced — only the wall-clock timeout. `run_sandboxed` reports that in
-`notes` rather than pretending otherwise.
+**Resource limits are POSIX-only. On Windows none is enforced.** On POSIX the
+child process gets `RLIMIT_AS` (memory), `RLIMIT_CPU`, `RLIMIT_NPROC` and
+`RLIMIT_FSIZE`. On Windows it gets none of them, and every run in this
+project's history was on Windows. **There, the sandbox is advisory path
+confinement plus a wall-clock timeout, and nothing else.**
+
+Code that allocates without bound, spins every core or writes a disk-filling
+file inside its scope is stopped only by the timeout. It is not stopped at all
+if it finishes first. Starting a process is refused only by the audit hook,
+which is advisory (D32). `run_sandboxed` reports the missing limits in `notes`
+rather than pretending otherwise.
+
+A Windows Job Object would enforce memory, CPU time and process count
+(DEFERRED D37). File size has no per-process equivalent short of a container
+(Phase 6).
 
 **It is a door, not a wall, and only Phase 6 makes it a wall.** For agent
 code the hook refuses writes outside the task's scope; reads outside that

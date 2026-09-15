@@ -5,6 +5,7 @@ Rule that outranks convenience: nothing UPDATEs or DELETEs from `events`.
 
 from __future__ import annotations
 
+import re
 import sqlite3
 import threading
 from pathlib import Path
@@ -149,15 +150,21 @@ CREATE TABLE IF NOT EXISTS calls (
     task_id         TEXT NOT NULL,
     backend         TEXT NOT NULL,
     purpose         TEXT NOT NULL,
-    input_tokens    INTEGER NOT NULL,
-    output_tokens   INTEGER NOT NULL,
-    cache_read_tokens  INTEGER NOT NULL DEFAULT 0,
-    cache_write_tokens INTEGER NOT NULL DEFAULT 0,
-    cost_usd        REAL NOT NULL,
-    wall_ms         INTEGER NOT NULL,
+    -- D36: written when the call STARTS, so usage is NULL until it returns.
+    -- A row whose usage never arrives is the record of a call that never
+    -- returned - the stalled, the crashed, the killed - which the old
+    -- write-on-return shape left out of the table entirely.
+    input_tokens    INTEGER,
+    output_tokens   INTEGER,
+    cache_read_tokens  INTEGER,
+    cache_write_tokens INTEGER,
+    cost_usd        REAL,
+    wall_ms         INTEGER,            -- set on return, or on an abort
     escalated       INTEGER NOT NULL DEFAULT 0,
     thinking        TEXT NOT NULL DEFAULT 'unknown',
-    created_at      REAL NOT NULL
+    created_at      REAL NOT NULL,      -- the START (pre-D36 rows: the return)
+    outcome         TEXT                -- NULL in flight or never ended;
+                                        -- returned | stalled | error | interrupted
 );
 CREATE INDEX IF NOT EXISTS idx_calls_task ON calls(task_id);
 
@@ -512,9 +519,41 @@ def _add_missing_columns(conn: sqlite3.Connection) -> list[str]:
     return added
 
 
+def _calls_allow_unreturned(conn: sqlite3.Connection) -> bool:
+    """D36: rebuild a pre-D36 `calls` so a row can exist before its call returns.
+
+    SQLite cannot drop NOT NULL in place, so the table is renamed, recreated
+    from SCHEMA_SQL's definition, refilled with every row unchanged - each
+    marked `returned`, which is what every pre-D36 row is by construction -
+    and the old one dropped, in one transaction. Idempotent: a table whose
+    usage columns already accept NULL is left alone.
+    """
+    info = {r[1]: r[3] for r in conn.execute("PRAGMA table_info(calls)")}
+    if not info or info.get("input_tokens") == 0:
+        return False
+    ddl = re.search(r"CREATE TABLE IF NOT EXISTS calls \(.*?\n\);", SCHEMA_SQL, re.S).group(0)
+    cols = ("id, task_id, backend, purpose, input_tokens, output_tokens, "
+            "cache_read_tokens, cache_write_tokens, cost_usd, wall_ms, "
+            "escalated, thinking, created_at")
+    conn.execute("BEGIN IMMEDIATE")
+    try:
+        conn.execute("ALTER TABLE calls RENAME TO calls_pre_d36")
+        conn.execute(ddl)
+        conn.execute(f"INSERT INTO calls({cols}, outcome) "
+                     f"SELECT {cols}, 'returned' FROM calls_pre_d36")
+        conn.execute("DROP TABLE calls_pre_d36")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_calls_task ON calls(task_id)")
+        conn.execute("COMMIT")
+    except Exception:
+        conn.execute("ROLLBACK")
+        raise
+    return True
+
+
 def init_schema(conn: sqlite3.Connection) -> None:
     conn.executescript(SCHEMA_SQL)
     _add_missing_columns(conn)
+    _calls_allow_unreturned(conn)
     conn.commit()
 
 

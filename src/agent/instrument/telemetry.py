@@ -37,8 +37,8 @@ def record_call(
     conn.execute(
         """INSERT INTO calls(task_id, backend, purpose, input_tokens, output_tokens,
                              cache_read_tokens, cache_write_tokens, cost_usd,
-                             wall_ms, escalated, thinking, created_at)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
+                             wall_ms, escalated, thinking, created_at, outcome)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,'returned')""",
         (
             task_id,
             backend,
@@ -54,6 +54,38 @@ def record_call(
             time.time(),
         ),
     )
+    conn.commit()
+
+
+def begin_call(conn: sqlite3.Connection, task_id: str, backend: str, purpose: str,
+               escalated: bool = False, thinking: str = "unknown") -> int:
+    """D36 - the row, written BEFORE the call. Usage is NULL until it returns."""
+    cur = conn.execute(
+        """INSERT INTO calls(task_id, backend, purpose, escalated, thinking, created_at)
+           VALUES (?,?,?,?,?,?)""",
+        (task_id, backend, purpose, int(escalated), thinking, time.time()),
+    )
+    conn.commit()
+    return cur.lastrowid
+
+
+def complete_call(conn: sqlite3.Connection, call_id: int, usage: TokenUsage,
+                  cost: float, wall_ms: int) -> None:
+    conn.execute(
+        """UPDATE calls SET input_tokens=?, output_tokens=?, cache_read_tokens=?,
+                            cache_write_tokens=?, cost_usd=?, wall_ms=?,
+                            outcome='returned'
+           WHERE id=?""",
+        (usage.input_tokens, usage.output_tokens, usage.cache_read_tokens,
+         usage.cache_write_tokens, cost, wall_ms, call_id),
+    )
+    conn.commit()
+
+
+def abort_call(conn: sqlite3.Connection, call_id: int, wall_ms: int, outcome: str) -> None:
+    """A call that ended without a response: its time is known, its usage is not."""
+    conn.execute("UPDATE calls SET wall_ms=?, outcome=? WHERE id=?",
+                 (wall_ms, outcome, call_id))
     conn.commit()
 
 
@@ -74,6 +106,11 @@ class TaskMetrics:
     delegation_count: int = 0
     n_refinements: int = 0
     n_calls: int = 0
+    # D36: calls begun that never delivered a response - stalled, crashed,
+    # interrupted, or still open because the process died. Their tokens and
+    # cost are unknown, which is not zero; their time is in wall_ms when an
+    # abort recorded it.
+    n_unreturned: int = 0
 
     def as_dict(self) -> dict:
         return {
@@ -89,6 +126,7 @@ class TaskMetrics:
             "delegation_count": self.delegation_count,
             "n_refinements": self.n_refinements,
             "n_calls": self.n_calls,
+            "n_unreturned": self.n_unreturned,
         }
 
 
@@ -122,21 +160,23 @@ class Telemetry:
         escalated = 0
         measurable = False
         for backend, ti, to, cr, cw, cost, wall, esc in rows:
-            total = ti + to + cr + cw
+            if ti is None:                   # D36: never returned
+                m.n_unreturned += 1
+            total = (ti or 0) + (to or 0) + (cr or 0) + (cw or 0)
             if backend in self.cloud_backends:
                 m.paid_tokens += total
             else:
                 m.free_tokens += total
-            m.cost_usd += cost
-            m.wall_ms += wall
+            m.cost_usd += cost or 0.0
+            m.wall_ms += wall or 0
             escalated += esc
             # Only calls on a backend that REPORTS caching enter the ratio.
             # Mixing in calls from one that reports nothing would drag the
             # ratio toward zero and read as a prefix mutation - an alarm
             # firing on the absence of a measurement.
-            if backend in self.cache_reporting:
+            if backend in self.cache_reporting and ti is not None:
                 measurable = True
-                cache_read += cr
+                cache_read += cr or 0
                 raw_input += ti
         m.n_calls = len(rows)
         denom = cache_read + raw_input
@@ -195,7 +235,8 @@ class Telemetry:
             r[0]
             for r in self.conn.execute(
                 """SELECT output_tokens FROM calls
-                   WHERE backend=? AND purpose=? ORDER BY output_tokens""",
+                   WHERE backend=? AND purpose=? AND output_tokens IS NOT NULL
+                   ORDER BY output_tokens""",
                 (backend, purpose),
             ).fetchall()
         ]
@@ -216,7 +257,7 @@ class Telemetry:
         ):
             row = self.conn.execute(
                 f"SELECT COALESCE(SUM(output_tokens),0), COALESCE(SUM(wall_ms),0) "  # noqa: S608
-                f"FROM calls WHERE backend=? {where}",
+                f"FROM calls WHERE backend=? AND output_tokens IS NOT NULL {where}",
                 args,
             ).fetchone()
             tokens, wall_ms = row[0] or 0, row[1] or 0

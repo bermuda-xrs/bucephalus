@@ -99,7 +99,8 @@ def generate_skill(ctx, pattern: TaskPattern, sources: list[Source] | None = Non
     assert_different_authors(drafter_name, test_author_name)  # M7.4 rule 1
 
     # 2. Draft. Local tier. HARD LIMIT: 3 modules.
-    draft = ctx.backends[drafter_name].complete(
+    draft = ctx.call_model(
+        f"skillgen:{pattern.name}", drafter_name, "skill_draft",
         prefix=SKILL_DRAFT_PREFIX,
         tail=render_grounding(pattern, sources),
         tools=None,
@@ -114,7 +115,8 @@ def generate_skill(ctx, pattern: TaskPattern, sources: list[Source] | None = Non
         )
 
     # 3. Tests by a DIFFERENT model (anti-gaming invariant)
-    tests_text = ctx.backends[test_author_name].complete(
+    tests_text = ctx.call_model(
+        f"skillgen:{pattern.name}", test_author_name, "skill_tests",
         prefix=TEST_AUTHOR_PREFIX,
         tail=draft,
         tools=None,

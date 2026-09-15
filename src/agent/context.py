@@ -140,6 +140,44 @@ class AgentContext:
         spend(self.conn, self.log, task, usd=cost)
         return cost
 
+    def call_model(self, task, backend, purpose: str, escalated: bool = False,
+                   **kwargs) -> ModelResponse:
+        """EVERY model call made for a task goes through here (invariant 12).
+
+        D36. `calls` was written from a RETURNED response, so a call that
+        stalled, crashed or was killed left no row - the slowest calls were
+        exactly the ones missing from every figure drawn from `calls` - and
+        five call sites (the deputy, the quarantined summarizer, the monitor,
+        the self-consistency verifier, the generator) never wrote one at all.
+        The row is now written BEFORE the call with null usage and completed
+        on return; an abort records its time and why. A row that never
+        completes is the record of a call that never returned.
+
+        `task` is the Task - its budget is charged - or, for a call made on a
+        task's behalf outside its run (the monitor), its id alone.
+        """
+        from .instrument.telemetry import abort_call, begin_call, complete_call
+        from .models.stall import ModelStall
+
+        b = self.backends[backend] if isinstance(backend, str) else backend
+        task_id = task if isinstance(task, str) else task.id
+        cid = begin_call(self.conn, task_id, b.name, purpose, escalated=escalated,
+                         thinking=b.cfg.thinking)
+        t0 = time.time()
+        try:
+            resp = b.complete(**kwargs)
+        except BaseException as e:
+            outcome = ("stalled" if isinstance(e, ModelStall) else
+                       "interrupted" if isinstance(e, (KeyboardInterrupt, SystemExit))
+                       else "error")
+            abort_call(self.conn, cid, int((time.time() - t0) * 1000), outcome)
+            raise
+        cost = compute_cost(resp.usage, b.cost_vector)
+        complete_call(self.conn, cid, resp.usage, cost, resp.wall_ms)
+        if not isinstance(task, str):
+            spend(self.conn, self.log, task, usd=cost)
+        return resp
+
     # -- taint -------------------------------------------------------------
 
     def freeze_memory(self, task_id: str) -> dict:

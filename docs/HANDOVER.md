@@ -224,11 +224,11 @@ split, profile or executor.
 | Branch | `measurement-2026-09-01` (off `main` at `148cd99`; no remote) |
 | Harness version | **2** — v3 was evaluated and **rejected**, see section 7 |
 | Toolset version | **5** — sympy, `search_history`, memory, web/file tools, then `parallel` |
-| Tests | **760 passing, 3 skipped** - the skips are the live-credential tests, until a credential exists (D26) |
+| Tests | **768 passing, 3 skipped** - the skips are the live-credential tests, until a credential exists (D26) |
 | Working tree | clean |
 | Running | nothing |
-| Last completed step | **Consolidation, Parts 1-4.** Part 3: approvals, the plan pin's anchor half and `integrity.resume` verified in real runs (`docs/evidence/part3-real-runs*.json`), two defects found by them (C58), the sandbox stated as a door. Part 4: skip-gated live tests for both credential paths, checked against local fakes. See CHANGELOG |
-| Next step | Consolidation complete; the phase program is stopped (Phase 12 needs D19). The user's decisions: the bot token and the API key (D26 - each unlocks its skip-gated test), D35 (the calibration skill's drafting set), D36 (`calls` rows for calls that never return), and Phase 6 (Docker), which also closes D32 |
+| Last completed step | **Consolidation - four decisions, 2026-09-15.** D36 fixed: every model call made for a task is on the record before it returns (invariants 104-106, C59). D35 option (a): a control drafted from the drafting split and scored on eval only, with the report's caveat read from provenance (107). `max_taint_in` decided DELETE, waiting on a HARNESS_VERSION STOP (D38). Resource limits stated POSIX-only (D37). See CHANGELOG |
+| Next step | The triage of the nine unreachable guarantees, then D28's scoping: reports, no code. The user's decisions: `max_taint_in`'s harness bump (D38), the bot token and the API key (D26), Phase 6 (Docker, closes D32) and the Job Object (D37) |
 
 ### Iteration two, so far
 

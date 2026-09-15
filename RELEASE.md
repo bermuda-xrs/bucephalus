@@ -227,7 +227,10 @@ actually stand, so a reader does not have to reconstruct it.
 ## G1 — ≥10× reduction in paid tokens. The headline claim, and it is unverified.
 
 **The decisive number.** Across the whole project history the telemetry table
-holds **1,179 real model calls** with:
+holds **1,179 recorded real model calls** with the figures below. *Recorded*:
+until 2026-09-15 a call that never returned, and every deputy review, wrote
+no row. The record holds more calls than `calls` does (CHANGELOG 2026-09-15,
+C59). They are:
 
 ```
 SUM(cost_usd)          = 0.0
@@ -382,6 +385,13 @@ extensions. It stops a model that reaches. It does not stop code written to
 defeat it - the hook runs inside the process it polices (D32). Only Phase 6,
 a container per run, makes it a wall, and Phase 6 is parked: Docker is not
 installed on this machine.
+
+**Resource limits are POSIX-only - 2026-09-15.** On Windows the sandbox is
+advisory path confinement plus a wall-clock timeout. The OS enforces no memory,
+CPU, process-count or file-size limit there, and Windows is the only platform
+this project has run on. The POSIX path sets all four with `rlimit` and has
+never run. Windows equivalents for memory, CPU time and process count, via a
+Job Object, are DEFERRED D37. File size needs the container.
 
 ---
 

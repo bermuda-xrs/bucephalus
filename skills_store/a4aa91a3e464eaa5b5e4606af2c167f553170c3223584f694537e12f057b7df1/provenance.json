@@ -1,0 +1,23 @@
+{
+  "drafted_by": "claude-opus-5 (Claude Code), consolidation session, 2026-09-14",
+  "source_file": "examples/skills/si_first_orbital_arithmetic.md",
+  "drafted_from": [
+    "E01",
+    "E02",
+    "E03",
+    "E04",
+    "E05",
+    "M11",
+    "M12",
+    "M13",
+    "M14",
+    "M15",
+    "M16",
+    "H23",
+    "H24",
+    "H25",
+    "H26"
+  ],
+  "exposure": "This session read the drafting split only - the goals, fixtures and grader headers of the 15 drafting tasks - and neither any eval task nor aero_units_discipline. The drafting model has worked on this project in earlier sessions whose context is not retained, so earlier exposure to the eval split cannot be ruled out.",
+  "note": "Written as the calibration's positive control under D35 option (a): drafted from the drafting split, declared as such, evaluated on eval only - the rules every skill follows, with no exemption."
+}

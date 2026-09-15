@@ -59,6 +59,7 @@ class _Ctx:
         self.conn.execute(
             "CREATE TABLE semantic_cache(key TEXT PRIMARY KEY, value_json TEXT,"
             " taint TEXT, source_hash TEXT, created_at REAL, hits INT)")
+        self.conn.execute("CREATE TABLE skills(id TEXT PRIMARY KEY, provenance_json TEXT)")
         gate = type("G", (), {"min_paired_trials": min_paired,
                               "min_discordant_pairs": min_discordant,
                               "min_lift_pp": 5.0, "max_p_value": 0.05})()
@@ -85,6 +86,11 @@ def _seed(ctx, skill_id, outcomes):
             ctx.conn.execute(
                 "INSERT INTO skill_trials VALUES (?,?,?,?,?,?,?,?,?)",
                 (skill_id, key, arm, val, float(val), 0, 100, 1000, _t.time()))
+    ctx.conn.commit()
+
+
+def _declare(ctx, skill_id, prov):
+    ctx.conn.execute("INSERT INTO skills VALUES (?,?)", (skill_id, json.dumps(prov)))
     ctx.conn.commit()
 
 
@@ -127,13 +133,14 @@ def test_the_whole_calibration_path_reports_two_numbers(tmp_path, monkeypatch, c
         else:
             outcomes[s["key"]] = (1, 1)      # concordant pass
 
+    _declare(ctx, "sk1", {"drafted_by": "a test author",
+                          "drafted_from": [s["key"] for s in suite[:15]]})
     _wire(mod, monkeypatch, ctx, suite,
           lambda c, sid, spec, seed=None: _seed(c, sid, {spec.key: outcomes[spec.key]}))
     assert mod.cmd_paired(_args("sk1")) == 0
 
     out = capsys.readouterr().out
     assert "PRIMARY" in out and "SECONDARY" in out
-    assert "POSITIVE CONTROL" in out, "the contamination caveat must be printed"
     assert "UNDERPOWERED" in out
 
     report = json.loads((tmp_path / "calibration.json").read_text(encoding="utf-8"))
@@ -142,7 +149,44 @@ def test_the_whole_calibration_path_reports_two_numbers(tmp_path, monkeypatch, c
     assert report["primary"]["verdict"] == "promote"
     assert report["secondary"]["n"] == 15, "eval subset comes from the same trials"
     assert report["profile"] == "local"
-    assert "author" in report["primary"]["caveat"]
+    # The caveat travels with the number, printed in the same block.
+    cav = report["primary"]["caveat"]
+    assert cav in out, "the contamination caveat must be printed"
+    assert "a test author" in cav and "15 of the 30 scored tasks" in cav, cav
+    assert "none of the 15 scored tasks" in report["secondary"]["caveat"]
+
+
+def test_the_caveat_is_derived_from_what_the_skill_declares(tmp_path, monkeypatch):
+    """D35. The caveat said, for EVERY skill, that its author saw the entire
+    suite. True of aero_units_discipline; false of the control drafted from
+    the drafting split, and of every generated skill. It is read from the
+    skill's own provenance, and an absent record is said to be absent."""
+    mod = _load_bench_run()
+    suite = _suite(15, 15)
+    everything = [s["key"] for s in suite]
+    cases = {
+        "whole": ({"drafted_by": "the old author", "drafted_from": everything},
+                  ["15 of the 15 scored tasks", "CONTAMINATED"]),
+        "drafting": ({"drafted_by": "the control's author",
+                      "drafted_from": everything[:15],
+                      "exposure": "read the drafting split only"},
+                     ["none of the 15 scored tasks", "read the drafting split only"]),
+        "undeclared": ({"drafted_by": "someone"}, ["NO declared drafting set"]),
+        "missing": (None, ["NO PROVENANCE"]),
+    }
+    for sid, (prov, expected) in cases.items():
+        ctx = _Ctx(tmp_path / sid, min_paired=1, min_discordant=1)
+        (tmp_path / sid).mkdir()
+        if prov is not None:
+            _declare(ctx, sid, prov)
+        _wire(mod, monkeypatch, ctx, suite,
+              lambda c, s, spec, seed=None: _seed(c, s, {spec.key: (0, 1)}))
+        assert mod.cmd_paired(_args(sid, split="eval")) == 0
+        cav = json.loads((tmp_path / sid / "calibration.json").read_text(
+            encoding="utf-8"))["primary"]["caveat"]
+        for phrase in expected:
+            assert phrase in cav, f"{sid}: {cav}"
+        assert "entire suite" not in cav, f"{sid}: the old assumption is back: {cav}"
 
 
 def test_an_underpowered_secondary_still_reports_direction(tmp_path, monkeypatch):

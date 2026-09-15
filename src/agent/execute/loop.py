@@ -367,16 +367,16 @@ def run_task(ctx, task_id: str) -> TaskResult:
             # most of the turn and looks hung.
             stream.publish(task.id, "waiting", {"step": step,
                                                 "backend": backend.name})
-            resp = backend.complete(
-                prefix,
-                tail,
-                ctx.tools.schemas(),
+            resp = ctx.call_model(
+                task, backend, "step",
+                prefix=prefix,
+                tail=tail,
+                tools=ctx.tools.schemas(),
                 max_tokens=backend.default_max_tokens(),
                 temperature=0.0,
                 schema=step_schema,
                 on_chunk=stream.token_sink(task.id),
             )
-            ctx.record(task, resp, purpose="step")
             stream.publish(task.id, "step", {
                 "step": step, "backend": backend.name,
                 "output_tokens": resp.usage.output_tokens,
@@ -603,11 +603,11 @@ def _flush_memory(ctx, task, builder, prefix: str, entries, step: int, plan):
     ctx.log.append(task.id, "model.called",
                    {"backend": backend.name, "purpose": "memory_flush",
                     "step": step, "prefix_fp": builder.fingerprint()})
-    resp = backend.complete(prefix, tail, ctx.tools.schemas(),
-                            max_tokens=backend.default_max_tokens(),
-                            temperature=0.0, schema=schema,
-                            on_chunk=stream.token_sink(task.id))
-    ctx.record(task, resp, purpose="memory_flush")
+    resp = ctx.call_model(task, backend, "memory_flush",
+                          prefix=prefix, tail=tail, tools=ctx.tools.schemas(),
+                          max_tokens=backend.default_max_tokens(),
+                          temperature=0.0, schema=schema,
+                          on_chunk=stream.token_sink(task.id))
     ctx.log.append(task.id, "model.returned",
                    {"backend": backend.name, "purpose": "memory_flush",
                     "output_tokens": resp.usage.output_tokens})
@@ -956,14 +956,14 @@ def condense_observation(ctx, task, text: str, taint: Taint, aid: str) -> tuple[
     cache_hit = {"v": False}
 
     def _summarize() -> dict:
-        resp = backend.complete(
-            prefix,
-            f"<question>{question}</question>\n<data>\n{text[:60000]}\n</data>",
-            None,  # tools=None is the quarantine property. Never pass tools here.
+        resp = ctx.call_model(
+            task, backend, "compress_tool_output",
+            prefix=prefix,
+            tail=f"<question>{question}</question>\n<data>\n{text[:60000]}\n</data>",
+            tools=None,  # tools=None is the quarantine property. Never pass tools here.
             max_tokens=512,
             temperature=0.0,
         )
-        ctx.record(task, resp, purpose="compress_tool_output")
         return {"text": resp.text}
 
     try:
@@ -1033,7 +1033,7 @@ def _adjudicate(ctx, task, tool, args, decision: GateDecision, step: int, plan,
             plan_step=plan.steps[0] if plan and plan.steps else None,
             artifact_scope=list(task.contract.artifact_scope),
         )
-        d = auto_review(ctx, req)
+        d = auto_review(ctx, req, task=task)
         if d.verdict == "approve":
             return GateDecision.allow_(d.rationale)
         if d.verdict == "deny":

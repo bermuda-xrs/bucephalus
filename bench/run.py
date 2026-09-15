@@ -21,6 +21,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import sqlite3
 import sys
 import time
 from pathlib import Path
@@ -50,6 +51,42 @@ CAVEATS = [
     "Published agent costs have been misestimated by up to 100%. These numbers "
     "are cost-controlled but single-run unless n is stated.",
 ]
+
+
+def _contamination_caveat(ctx, skill_id: str, scored: set[str]) -> str:
+    """What the skill's own provenance says about the tasks it was scored on.
+
+    Derived, never assumed. This was one sentence for every skill - "written
+    by an author who saw the entire suite" - true of aero_units_discipline,
+    false of the control written from the drafting split alone (D35) and of
+    every generated skill. A caveat that reads the same whatever the skill is
+    not a caveat about the skill. Missing provenance is stated, not guessed.
+    """
+    try:
+        row = ctx.conn.execute(
+            "SELECT provenance_json FROM skills WHERE id=?", (skill_id,)).fetchone()
+    except sqlite3.Error:
+        row = None
+    if row is None:
+        return (f"NO PROVENANCE for skill {skill_id[:12]}: nothing is known about "
+                f"what its author saw, so all {len(scored)} scored tasks are "
+                "treated as contaminated.")
+    prov = json.loads(row[0] or "{}")
+    who = prov.get("drafted_by") or "an undeclared author"
+    declared = prov.get("drafted_from")
+    if declared is None:
+        parts = [f"Drafted by {who} with NO declared drafting set, so all "
+                 f"{len(scored)} scored tasks are treated as contaminated."]
+    else:
+        hit = sorted(set(declared) & scored)
+        parts = [f"Drafted by {who} from {len(declared)} declared task(s); " + (
+            f"{len(hit)} of the {len(scored)} scored tasks are among them - "
+            f"CONTAMINATED: {', '.join(hit[:8])}{' ...' if len(hit) > 8 else ''}."
+            if hit else f"none of the {len(scored)} scored tasks is among them.")]
+    for field in ("exposure", "note"):
+        if prov.get(field):
+            parts.append(f"{field.capitalize()}, as declared: {prov[field]}")
+    return " ".join(parts)
 
 
 def load_suite(spec: str | Path, ctx=None) -> list[dict]:
@@ -315,6 +352,8 @@ def cmd_paired(args) -> int:
                  if (sp.get("output_schema") or {}).get("x-split") == "eval"}
     secondary = (evaluate_skill(ctx, args.skill_id, task_keys=eval_keys)
                  if eval_keys else None)
+    # The pairs the analysis reads - complete pairs, earlier runs included.
+    scored = _completed_trials(ctx, args.skill_id)
 
     report = {
         "skill_id": args.skill_id,
@@ -327,13 +366,7 @@ def cmd_paired(args) -> int:
             "scope": f"all {len(specs)} tasks that ran",
             "verdict": primary.verdict, "reason": primary.reason,
             **primary.detail,
-            "caveat": (
-                "The calibration skill was written by an author who saw the "
-                "entire suite, so no split is clean with respect to the "
-                "author. This is a POSITIVE CONTROL on the instrument - does "
-                "the detector fire when a real effect exists - not a claim "
-                "that the skill generalizes."
-            ),
+            "caveat": _contamination_caveat(ctx, args.skill_id, scored),
         },
         "caveats": CAVEATS,
     }
@@ -343,9 +376,9 @@ def cmd_paired(args) -> int:
             "verdict": secondary.verdict, "reason": secondary.reason,
             **secondary.detail,
             "caveat": (
-                "Contamination-clean with respect to the drafting split, but "
-                "UNDERPOWERED at this n. Report alongside the primary, never "
-                "instead of it."
+                _contamination_caveat(ctx, args.skill_id, scored & eval_keys)
+                + " UNDERPOWERED at this n. Report alongside the primary, "
+                "never instead of it."
             ),
         }
 

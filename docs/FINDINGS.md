@@ -544,10 +544,22 @@ than silent.
 ## 3. Pending
 
 * **3.1 Noise floor, both arms** — *pending Phase 4.*
-* **3.2 Calibration** — *pending Phase 5.* Reported with the contamination
-  caveat in the same paragraph: the skill's author saw the whole suite, so no
-  split is clean with respect to the author. It is a **positive control on the
-  detector**, not a claim of generalization.
+* **3.2 Calibration** — *pending Phase 5; ready to run.* D35 option (a),
+  2026-09-15. The control is `si_first_orbital_arithmetic`, drafted from the
+  15 drafting tasks and scored on the 15 eval tasks only (`--split eval`). Its
+  caveat is printed from its provenance, in the same paragraph as the number:
+  drafted from 15 tasks, none of them scored. The drafting model's earlier
+  sessions on this project mean prior exposure to the eval split cannot be
+  ruled out. It is still a **positive control on the detector**, not a claim of
+  generalization.
+
+  **It can fire only on a large effect.** At n=15 the gate needs at least 10
+  discordant pairs, 9 of 10 favouring the skill (`config.local.yaml`), so the
+  skill must change about two-thirds of outcomes. A null result there says the
+  effect was not huge. It does not say the detector is blind.
+
+  `aero_units_discipline` declares the whole suite, truthfully, and is refused
+  on all 30 tasks. It is kept as the record of the 10-pair run of 2026-08-27.
 * **3.3 Module ablation** — *pending Phase 5.3.* The highest-value single
   measurement here. If lift collapses without module 3 (the magnitude check),
   the skill works by supplying the external observation the bare agent lacks —
@@ -1073,7 +1085,7 @@ schedule, session, memory, delegation, web or compaction event of any kind.
 |---|---|
 | prefix byte-stability (invariant 1) | a `prefix_fp` on 1,214 of 1,214 `model.called` |
 | write-before-act, receipts (7) | 614 `tool.intent`, 613 `tool.receipt`; the one without a receipt is a `run_code` whose process died inside the call - its task, `t_9a772f7c`, is still `running` in the record |
-| every model call in `calls` (12) | **holds only for calls that returned.** 1,183 rows (1,182 step, 1 plan) against 1,214 `model.called`; the 32 that never returned - 17 cut off by a killed process, 12 stalled, 3 crashed - have no row, so their wall time is absent from `calls` (D36) |
+| every model call in `calls` (12) | **held only for calls that returned, at call sites that remembered.** 1,183 rows (1,182 step, 1 plan) against 1,214 `model.called`. The 32 that never returned - 17 cut off by a killed process, 12 stalled, 3 crashed - have no row, and neither do the deputy's 15 reviews. **Fixed 2026-09-15 for every call from then on** (D36, C59): the row is written before the call. The record is not backfilled |
 | the capability gate | consulted on all 614 tool calls; **its refusal path never fired** - no denial in the record |
 | the deputy: a different backend, never widening (14, 15) | 15 `review.requested`, 14 `review.decided` |
 | the planner cannot write (13) | 1 `plan.drafted` |
@@ -1110,9 +1122,9 @@ channel (40).
 | `measure_retrieval_precision` | no caller |
 | local-tier routing, `local_with_escalation` | `Router.choose` raises unless `_ESCALATION_WIRED`; one tier is configured |
 | `tokens.calibrate` | no caller; no `.token_calibration.json` exists |
-| `max_taint_in` | carried on every contract, consulted nowhere |
+| `max_taint_in` | carried on every contract, consulted nowhere. **Decided 2026-09-15: DELETE.** No check could give it a meaning (C60). Removing it changes the prefix, so it waits on a HARNESS_VERSION STOP (D38) |
 | `generate_skill`, and invariants 4 and 5, which only it reaches | no entry point - and since Part 2, refused in code until M7.4 rules 2 and 3 run |
-| POSIX rlimits | only Windows has ever run this |
+| POSIX rlimits | only Windows has ever run this. **Stated 2026-09-15** in README and RELEASE: on Windows the sandbox is advisory path confinement plus a timeout. Job Objects for memory, CPU time and process count are D37 |
 | the live Telegram path; the Anthropic adapter | no token, no key (D26) |
 
 **One thing the record cannot say, and now will.** What the recorded programs

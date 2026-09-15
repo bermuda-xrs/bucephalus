@@ -1260,3 +1260,37 @@ cache, so no test reached the line with a null.
 every step (invariant 103); an unmeasured value prints as `n/a`. Run B, on the
 fixed code, shows the pin verified before the release and every command
 exiting 0.
+
+### C59. Invariant 12 held for calls that returned, at call sites that remembered
+
+**Reality:** `calls` was written from a returned response's usage. The
+measurement record has 1,214 `model.called` against 1,183 rows. The 32 calls
+that never returned have no row: 12 stalled, 3 crashed, 17 cut off by a killed
+process. Separately, five call sites called their backend directly and wrote
+nothing: the deputy, the quarantined summarizer, the monitor, the
+self-consistency verifier and the generator. The deputy ran 15 times in
+production, 23.5-167.7 s each, and none of them is in `calls`. The existing test
+counted rows against a spy on the executing backend only, so it could not see
+either gap.
+
+**Correct version:** one door, `AgentContext.call_model`. The row is written
+before the call, completed on return, and closed with an outcome on an abort.
+A structural test refuses a `.complete(` anywhere else (invariants 104-106).
+The historical record is not backfilled: a row built from events after the
+fact would be evidence written later. CHANGELOG 2026-09-15 lists every
+published figure computed from `calls` and whether it moves.
+
+### C60. `max_taint_in` has no meaning a check could enforce
+
+**Reality:** `TaskContract.max_taint_in` defaults to UNTRUSTED. It is carried
+on every contract and consulted nowhere. Read as a ceiling on what a task may
+take in, it cannot be wired usefully. Every observation tool's `output_taint`
+is UNTRUSTED (`execute/tools.py`), so a ceiling below UNTRUSTED forbids reading
+anything, and a ceiling at UNTRUSTED - the default - permits everything. The
+ceiling that does work is per tool, on arguments, in the capability gate. The
+field is also rendered into every prompt prefix: the `<task_contract>` block
+is the canonical dump of the whole contract.
+
+**Correct version:** delete it. Deleting it changes the prefix bytes of every
+task, which is a HARNESS_VERSION bump and needs its own STOP. Decided, not
+built (DEFERRED D38).

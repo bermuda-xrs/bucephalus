@@ -140,7 +140,7 @@ def tier_of(ctx, tool_name: str) -> str:
 READ_ONLY_TOOL_NAMES = ("read_file", "list_dir", "expand_artifact")
 
 
-def auto_review(ctx, req: ReviewRequest) -> ReviewDecision:
+def auto_review(ctx, req: ReviewRequest, task=None) -> ReviewDecision:
     reviewer_name = ctx.config.autonomy.auto_review_backend
     executing = ctx.executing_backend or ""
     if reviewer_name == executing:
@@ -173,7 +173,10 @@ def auto_review(ctx, req: ReviewRequest) -> ReviewDecision:
     # is a reviewer that approves nothing, and granite4.1:8b already failed to
     # emit one unaided across 8 tasks.
     constrain = backend.cfg.needs_action_envelope
-    resp = backend.complete(
+    # D36: the deputy's call was never recorded - 15 reviews in the measurement
+    # record, not one row in `calls`.
+    resp = ctx.call_model(
+        task if task is not None else req.task_id, backend, "review",
         prefix=REVIEW_PREFIX + "\n\n<policy>\n" + load_policy(ctx) + "\n</policy>",
         tail=render_review_request(req) + (REVIEW_SCHEMA_HINT if constrain else ""),
         tools=tools,
