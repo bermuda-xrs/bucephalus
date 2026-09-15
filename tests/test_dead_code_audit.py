@@ -10,15 +10,13 @@ This test freezes the known set. A NEW unreferenced function fails it. The
 existing ones are listed with why they are tolerated, so the list is a record
 rather than a suppression.
 
-The two that actually matter are called out in `KNOWN_INERT`:
+The one that actually matters is called out in `KNOWN_INERT`:
 
-  * `record_holdout_gap` is never called, so `_holdout_gap` always returns
-    None and the gate's anti-gaming veto (M7.4 rule 4) CANNOT FIRE in a real
-    run. That veto is the one guarding against a skill fitted to the checks
-    it can see — precisely the failure expected from generated skills, which
-    is the next phase of the project.
   * `local_with_escalation` is never called, so escalation-by-disagreement
     (M6.3) does not happen; the router escalates on allowlist rules alone.
+
+`record_holdout_gap` was the other, until it was retired with the generator
+it policed (M11, 2026-09-15, FINDINGS 1.27).
 """
 
 from __future__ import annotations
@@ -33,30 +31,14 @@ SRC = ROOT / "src" / "agent"
 # name -> why it is unreferenced and whether that is acceptable
 KNOWN_INERT = {
     # --- inert guarantees. These are the expensive ones. -------------------
-    "record_holdout_gap":
-        "M7.4 rule 4 is INERT: nothing records the visible/held-out gap, so "
-        "the gate's anti-gaming veto can never fire. Must be wired before "
-        "any generated skill is evaluated.",
     "local_with_escalation":
         "M6.3 escalation-by-disagreement never runs; the router escalates on "
         "allowlist rules only.",
-    "measure_retrieval_precision":
-        "M9.4 measures retrieval separately from quality. Never invoked, so "
-        "'the right skill existed and was not retrieved' is unmeasured.",
     "freeze_skills":
         "A second implementation. `AgentContext.freeze_skills` is the one the "
         "loop calls; this module-level version in ledger/prefix.py has no "
         "caller. It looked wired only because the audit credited the METHOD "
         "call `ctx.freeze_skills(task)` to it.",
-    "calibrate":
-        "CORRECTIONS 1.2 replaced tiktoken with a local estimator for in-loop "
-        "budgeting PLUS the provider's count_tokens for calibration. The "
-        "calibration half has no caller, so _CHARS_PER_TOKEN is never "
-        "measured against a real tokenizer and EVERY token figure in this "
-        "project is an uncalibrated estimate. It also cannot run under "
-        "--profile local: count_tokens_exact needs a provider client and "
-        "there is no API key. Surfaced 2026-09-03 when the audit stopped "
-        "counting comment mentions as call sites.",
 
     # --- superseded by an inline implementation ---------------------------
     "refine_with_ratchet":
@@ -71,10 +53,6 @@ KNOWN_INERT = {
         "execute/loop decides code-vs-action inline.",
 
     # --- not yet reached in the build order -------------------------------
-    "generate_skill":
-        "M11. No generated skill has been produced yet - by design, the gate "
-        "was built first, and it refuses to run until M7.4 rules 2 and 3 do "
-        "(FINDINGS 1.21).",
     "import_external_skill":
         "External skills go through the same gate; none imported yet.",
 
@@ -206,6 +184,6 @@ def test_the_known_list_does_not_rot():
 
 def test_the_inert_guarantees_are_named_as_such():
     """The point of the list is that the expensive ones stay visible."""
-    for name in ("record_holdout_gap", "local_with_escalation"):
+    for name in ("local_with_escalation",):
         assert name in KNOWN_INERT
         assert "INERT" in KNOWN_INERT[name] or "never" in KNOWN_INERT[name]

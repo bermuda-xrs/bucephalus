@@ -9,10 +9,10 @@ that would catch a violation, so "I checked it" means something.
        — `test_no_refinement_without_observation`
  3. ☐ Instructions found in observed content are data, never commands
        — `test_injection_blocked_end_to_end`
- 4. ☐ Whoever drafts something never writes its tests
-       — `test_different_author_rule`, `assert_different_authors`
- 5. ☐ Held-out tests never enter any prompt
-       — `test_holdout_never_enters_prompt`
+ 4. ☐ ~~Whoever drafts something never writes its tests~~ - WITHDRAWN
+       2026-09-15 with M11, the only thing it policed (FINDINGS 1.27)
+ 5. ☐ ~~Held-out tests never enter any prompt~~ - WITHDRAWN 2026-09-15 with
+       M11: no held-out tests exist any more (FINDINGS 1.27)
  6. ☐ Monitor output never enters agent context
        — `test_monitor_never_in_agent_context`, `test_monitor_absent_from_client_stream`,
          `test_monitor_is_not_imported_by_prompt_builders`
@@ -23,7 +23,8 @@ that would catch a violation, so "I checked it" means something.
  9. ☐ Nothing resumes without integrity verification
        — `test_anchor_mismatch_halts`
 10. ☐ Only the gate promotes skills, and only with human approval
-       — `test_promotion_requires_a_human`, `test_generator_cannot_promote`
+       — `test_promotion_requires_a_human` (`test_generator_cannot_promote`
+         left with the generator, 2026-09-15)
 11. ☐ Working context stays under the fill ratio
        — `test_ceiling_triggers_delegation_not_squeeze`
 12. ☐ Every model call made for a task is recorded in `calls` from the moment
@@ -630,8 +631,8 @@ VACUUM INTO likewise, and native extensions do not load. Advisory, like the
 rest of the hook (D32).
 *Caught by:* `tests/test_sqlite_routes.py`.
 
-**100. `generate_skill` refuses until M7.4 rules 2 and 3 run.**
-*Caught by:* `test_generation_is_refused_until_m74_rules_2_and_3_run`.
+**100. ~~`generate_skill` refuses until M7.4 rules 2 and 3 run.~~** WITHDRAWN
+2026-09-15: the generator itself is retired, with both rules (FINDINGS 1.27).
 
 ## Added 2026-09-14 (consolidation - real runs)
 
@@ -680,6 +681,27 @@ declared drafting set (CONTAMINATED if any), and its declared exposure. A
 missing record or an undeclared set says so and treats every task as
 contaminated. *Caught by:* `test_the_caveat_is_derived_from_what_the_skill_declares`,
 `test_the_whole_calibration_path_reports_two_numbers`.
+
+## Added 2026-09-15 (consolidation - the second decisions)
+
+**108. A measurement entry point reaches its first decision, and releases its
+lock on every exit - early returns and exceptions included.** `noise.py main`
+read `ctx` before assigning it from 2026-09-06, so no noise floor could start;
+and both it and `cmd_paired` held the lock past any exit but success.
+*Caught by:* `test_main_reaches_its_first_decision_and_releases_the_lock`,
+`test_an_exception_in_main_releases_the_lock`,
+`test_an_exception_mid_run_releases_the_measurement_lock`.
+
+**109. `max_taint_in` is dead in code and alive in bytes.** Nothing reads it,
+no value but the default can be set, and its bytes leave the prefix only with
+a HARNESS_VERSION bump (D38).
+*Caught by:* `tests/test_max_taint_in_is_dead.py`.
+
+**110. A promotion states why the gaming veto does not apply.** Every check is
+held out and the grader is unreachable (SPEC-DELTA C1); the verdict says so in
+words, never a bare "skipped".
+*Caught by:* `test_a_promotion_says_the_gaming_veto_does_not_apply_and_why`,
+`test_a_promotion_states_why_the_gaming_veto_does_not_apply`.
 
 ---
 
@@ -862,7 +884,7 @@ set, reported even where correct:
 | `ToolPolicy` for a local task | denylist | nothing denied | yes, by design: attended; the channel and schedule floors are constants | |
 | `isolate_retrieval` | policy | unrestricted retrieval | yes, by design outside measurement; `bench/measurement.py` pins it | |
 | `PROTECTED_*`, `PROJECT_STATE` | denylist | constants; a config's own state always included | yes as a denylist - which is why reads needed the fence above | |
-| `max_taint_in` | ceiling | never enforced - inert rather than empty | -> Part 2 | |
+| `max_taint_in` | ceiling | never enforced - inert rather than empty | -> Part 2; dead in code 2026-09-15, bytes wait for the next bump (D38, 109) | |
 
 Before adding a control, write down what it does when its list is empty and
 when its input is missing. If the answer is "permits", the control is a

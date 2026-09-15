@@ -10,6 +10,110 @@
 Dates are commit dates. `0.1.0` is not released yet — see "Unreleased" for
 what still stands between here and a first iteration.
 
+## Consolidation - the second decisions, steps 1-3 - 2026-09-15
+
+**Moves no published number.** Two functions are deleted, a false claim
+about token counts is corrected wherever it appeared, one field is dead in
+code, a milestone is retired, and the measurement entry points are fixed:
+one could not start at all.
+
+### 1. The two DELETEs, and the lock leak
+
+- **`measure_retrieval_precision` (M9.4) is withdrawn.** `retrieve` returns
+  promoted skills only, and none has ever been promoted, so it measured 0.0
+  by construction (SPEC-DELTA C61).
+- **`tokens.calibrate`, `count_tokens_exact` and the calibration-file loader
+  are deleted.** The claim they propped up was false. "Every token figure in
+  this project is an uncalibrated estimate" was wrong: recorded usage has
+  always been the model server's own count. Only the in-loop estimator is
+  uncalibrated (D6), and calibrating it to Claude's tokenizer would have made
+  it worse for the local models that run here (C62). Corrected in:
+  - the dead-code audit;
+  - the caveats in `bench/run.py` and `bench/report.py`;
+  - README;
+  - RELEASE, three places;
+  - DEFERRED D6 and D16;
+  - FINDINGS.
+
+  The three evidence files written earlier carry the old caveat string. They
+  are records and are not edited. The protected path `.token_calibration.json`
+  stays, because a protection is never loosened.
+- **The lock leak is fixed, and so is its sibling.** `cmd_paired` released the
+  measurement lock only on success. `noise.py main` did the same on two of its
+  four exits. Both now release it in a `finally`.
+- **The test for the sibling found that the noise floor could not start.**
+  Since 2026-09-06, `noise.py main` has read `ctx.config` forty-five lines
+  before `ctx` was assigned. Every noise-floor run since died with
+  `UnboundLocalError` before its first task. That is step 1 of the README's
+  measurement flow, broken for nine days and never noticed, because no test ran
+  `main`. `tests/test_noise_main.py` now runs it to its first decision, with the
+  orphan reaper and memory probes stubbed (C64, invariant 108).
+
+### 2. `max_taint_in` - dead in code, alive in bytes
+
+Its one reader, delegation copying the field to a child, is removed.
+`TaskContract` now refuses any value but the default. The bytes stay in the
+prefix until the next change that bumps HARNESS_VERSION anyway. DEFERRED D38
+records which bump it is waiting for, and the deadline: if none comes within
+two more sessions, it gets a bump of its own. It was **not** replaced with a
+labelled constant (invariant 109).
+
+### 3. M11 retired unanswered - the finding is FINDINGS 1.27
+
+**Deleted:**
+- `skills/generate.py`. `promotion_rate` moves into `skills/gate.py`.
+- M7.4 rules 1-3 in `assure/mesh.py`, with `HoldoutRegistry`,
+  `partition_tests` and `suspicion_signal`.
+- The gate's veto branch, with `_holdout_gap` and `record_holdout_gap`.
+- The skill store's visible/held-out test storage.
+- `AgentContext.research_retrieve`, the grounding step.
+- `net.fetch.default_fetcher`, whose last caller was `research_retrieve`; the
+  dead-code audit flagged it.
+- The generator's tests, and the fixture that un-gated them.
+
+**Withdrawn:** invariants 4, 5 and 100. Invariant 10 loses
+`test_generator_cannot_promote`.
+
+**What promotions now record.** Every promotion's `gaming_check` reads "not
+applicable - every check is held out, the grader is unreachable (SPEC-DELTA
+C1)" (invariant 110). **Removing the veto removed no protection:** it read a
+gap that nothing ever recorded, so it could not fire.
+
+**Other records:**
+- D19 is dormant and D22's rule-3 half is closed.
+- FINDINGS 1.27 says what would reopen M11: a live suite, D19 closed, and the
+  two rules wired. It also says where the code is: `ce624c7`.
+- **FINDINGS 1.26 records the deputy finding as its own entry:** 15 reviews
+  with zero `calls` rows, and invariant 12 false twice, in different ways.
+- SPEC-DELTA C59 is corrected. It said the old test's spy watched only the
+  executing backend. The spy summed every backend; the gap was a scenario that
+  never reached a review.
+
+### Tests
+
+**756 passing, 3 skipped**, run on exactly this tree, with the next steps'
+files set aside. New:
+- `test_noise_main.py` (2);
+- `test_max_taint_in_is_dead.py` (3);
+- the calibration lock test (1);
+- the `gaming_check` test (1, replacing 2);
+- `promotion_rate` (moved).
+
+Removed:
+- `test_m11_generator.py` and `test_gated_generation.py`;
+- five tests of M7.4 rules 1-3 in `test_m7_assure.py`;
+- `test_retrieval_measured_separately`;
+- `test_generator_cannot_promote`;
+- two grounding tests;
+- `test_default_fetcher_returns_errors_as_text`.
+
+**Injections:**
+- steps 1-2: 6 of 6 red;
+- step 3: 3 of 3 red;
+- the two refusal tests, retargeted from `fetch_url` to
+  `fetch_with_provenance`: 2 of 2 red. These tests guarded a wrapper that no
+  production path called. They now guard the function `web_fetch` runs.
+
 ## Consolidation - four decisions - 2026-09-15
 
 **Moves no headline number.** One definition changes: `calls` now holds every

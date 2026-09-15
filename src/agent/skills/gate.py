@@ -49,6 +49,12 @@ class ContaminationError(RuntimeError):
     """A trial task was one the skill was drafted from. That is a fake positive."""
 
 
+# What every promotion records in place of M7.4 rule 4, the gaming veto,
+# retired with M11 on 2026-09-15 (FINDINGS 1.27).
+GAMING_CHECK = ("not applicable - every check is held out, the grader is "
+                "unreachable (SPEC-DELTA C1)")
+
+
 def check_contamination(ctx, skill_id: str, task_key: str) -> None:
     """Never reuse a task the skill was drafted from.
 
@@ -235,74 +241,48 @@ def evaluate_skill(
             )
 
     if lift_pp >= cfg.min_lift_pp and p < cfg.max_p_value:
-        # M7.4 rule 4 — a skill that shines on the checks it could see and
-        # not on the ones it could not is the signature of fitting the
-        # checker rather than doing the task. Refuse rather than warn: this
-        # is the failure mode the whole gate exists to catch.
-        gap = _holdout_gap(ctx, skill_id)
-        if gap is not None:
-            suspicion = ctx.mesh.suspicion_signal(*gap)
-            if suspicion:
-                return GateDecision.reject(
-                    f"suspected gaming — {suspicion}",
-                    visible_pass=gap[0], holdout_pass=gap[1],
-                    gaming_check="ran", **stats,
-                )
-            return GateDecision.promote(gaming_check="ran", **stats)
-
-        # M7.4 rule 4 DID NOT RUN, and a promotion must say so rather than
-        # look like it passed a check that never happened.
-        #
-        # The holdout-gap recorder below has no callers. The only code that
-        # partitions visible/held-out checks is the M11 generator
-        # (holdout_frac=0.30), which has never run. A `verify_program` suite
-        # has one grader per task and no partition at all, so there is no gap
-        # to compute and the veto is inoperative for it.
-        #
-        # That matters most for exactly the suites it cannot check: the
-        # grader holds the answer, and until it moved outside artifact_scope
-        # a skill reading it would have scored 100% with nothing watching.
-        return GateDecision.promote(
-            gaming_check="NOT MEASURED — no visible/held-out partition "
-                         "exists for this suite, so M7.4 rule 4 was skipped",
-            **stats)
+        # M7.4 rule 4, the gaming veto, is RETIRED with M11 (FINDINGS 1.27).
+        # Removing it removed NO protection: it read a visible/held-out gap
+        # that nothing ever recorded, so it could not fire. And here the gap
+        # is undefined, not unmeasured - every check is held out, because the
+        # grader lives outside artifact_scope where the agent cannot read it
+        # (SPEC-DELTA C1, test_grader_isolation). Only a generated skill,
+        # writing visible checks of its own, ever had a visible half to fit.
+        return GateDecision.promote(gaming_check=GAMING_CHECK, **stats)
 
     return GateDecision.reject(
         f"lift={lift_pp:.1f}pp p={p:.3f} n={n}", **stats
     )
 
 
-def _holdout_gap(ctx, skill_id: str) -> tuple[float, float] | None:
-    """(visible_pass_rate, holdout_pass_rate), or None if not measured.
+def promotion_rate(conn) -> dict:
+    """Track this. 10-30% is the system working; >60% means check contamination.
 
-    Recorded by whatever runs the checks; absent it, the gate simply has no
-    gaming signal to act on and says so rather than inventing one.
+    Moved here from the retired generator (M11): the gate is what promotes, so
+    the gate is what reports how often.
     """
-    row = ctx.conn.execute(
-        "SELECT value_json FROM semantic_cache WHERE key=?",
-        (f"holdout_gap:{skill_id}",),
+    row = conn.execute(
+        """SELECT
+             SUM(CASE WHEN status='promoted' THEN 1 ELSE 0 END),
+             SUM(CASE WHEN status IN ('promoted','rejected','demoted') THEN 1 ELSE 0 END),
+             COUNT(*)
+           FROM skills"""
     ).fetchone()
-    if not row:
-        return None
-    try:
-        d = json.loads(row[0])
-        return float(d["visible"]), float(d["holdout"])
-    except (KeyError, ValueError, TypeError):
-        return None
-
-
-def record_holdout_gap(ctx, skill_id: str, visible: float, holdout: float) -> None:
-    """Store the visible/held-out pass rates so the gate can see the gap."""
-    import time as _t
-
-    ctx.conn.execute(
-        "INSERT OR REPLACE INTO semantic_cache(key,value_json,taint,source_hash,"
-        "created_at,hits) VALUES (?,?,?,?,?,0)",
-        (f"holdout_gap:{skill_id}",
-         json.dumps({"visible": visible, "holdout": holdout}),
-         "trusted", skill_id, _t.time()),
-    )
-    ctx.conn.commit()
+    promoted, decided, total = (row[0] or 0), (row[1] or 0), (row[2] or 0)
+    rate = (promoted / decided) if decided else 0.0
+    if not decided:
+        verdict = "no decisions yet"
+    elif rate > 0.60:
+        verdict = "gate too loose — check for contamination first"
+    elif rate == 0.0 and decided >= 20:
+        verdict = (
+            "debug in this order: task suite not sensitive enough, skills too "
+            "generic, grounding retrieval returning junk"
+        )
+    else:
+        verdict = "expected range"
+    return {"promoted": promoted, "decided": decided, "total": total,
+            "rate": round(rate, 3), "verdict": verdict}
 
 
 def promote(ctx, skill_id: str, decision: GateDecision, human_approved: bool) -> None:
@@ -322,26 +302,11 @@ def promote(ctx, skill_id: str, decision: GateDecision, human_approved: bool) ->
     ctx.record_promotion(skill_id, decision.detail | {"name": meta["name"]})
 
 
-# -- M9.4 retrieval, measured separately -----------------------------------
-
-
-def measure_retrieval_precision(ctx, eval_set: list[tuple[str, set[str]]]) -> float:
-    """eval_set: [(task_goal, correct_skill_ids)].
-
-    Failures often happen because the right skill existed and was not
-    retrieved. Measure selection separately from quality, or you will blame
-    good skills for a bad index.
-    """
-    from .retrieve import retrieve
-
-    if not eval_set:
-        return 0.0
-    hits = 0
-    for goal, correct in eval_set:
-        chosen = {s["id"] for s in retrieve(ctx, goal)}
-        if chosen & correct:
-            hits += 1
-    return hits / len(eval_set)
+# -- M9.4 retrieval precision: WITHDRAWN 2026-09-15 -------------------------
+# `retrieve` returns promoted skills only, and none has ever been promoted, so
+# a precision measured today is 0.0 by construction. Below MAX_SKILLS_IN_PREFIX
+# promoted skills it would measure the threshold alone. Rebuild it when the
+# promoted library outgrows the prefix (SPEC-DELTA C61).
 
 
 # -- M9.5 decay and pruning -------------------------------------------------

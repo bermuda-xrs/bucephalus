@@ -59,8 +59,6 @@ class SkillStore:
         body: str,
         contract: dict,
         provenance: dict,
-        visible_tests: list[str] | None = None,
-        holdout_tests: list[str] | None = None,
         status: str = "candidate",
         version: int | None = None,
     ) -> str:
@@ -73,8 +71,9 @@ class SkillStore:
         version = version if version is not None else self._next_version(name)
 
         d = self.root / skill_id
-        (d / "tests" / "visible").mkdir(parents=True, exist_ok=True)
-        (d / "tests" / "holdout").mkdir(parents=True, exist_ok=True)
+        # No `tests/visible` or `tests/holdout` any more: their only writer was
+        # the skill generator, retired with M11 on 2026-09-15 (FINDINGS 1.27).
+        d.mkdir(parents=True, exist_ok=True)
         (d / "SKILL.md").write_text(body, encoding="utf-8")
         (d / "contract.json").write_text(json.dumps(contract, indent=2), encoding="utf-8")
         (d / "provenance.json").write_text(json.dumps(provenance, indent=2), encoding="utf-8")
@@ -86,12 +85,6 @@ class SkillStore:
             ),
             encoding="utf-8",
         )
-        for i, t in enumerate(visible_tests or []):
-            (d / "tests" / "visible" / f"check_{i}.txt").write_text(t, encoding="utf-8")
-        for i, t in enumerate(holdout_tests or []):
-            # On disk but NEVER read into a prompt. See mesh.HoldoutRegistry.
-            (d / "tests" / "holdout" / f"check_{i}.txt").write_text(t, encoding="utf-8")
-
         self.conn.execute(
             """INSERT OR REPLACE INTO skills(id, name, version, body, contract_json,
                                              provenance_json, status, created_at)
@@ -183,19 +176,6 @@ class SkillStore:
             "SELECT id FROM skills WHERE status=? ORDER BY name, version", (status,)
         ).fetchall()
         return [self.load(r[0], verify=False) for r in rows]
-
-    def holdout_tests(self, skill_id: str) -> list[str]:
-        """Read from disk only by the gate. Never by anything that builds a prompt."""
-        d = self.root / skill_id / "tests" / "holdout"
-        if not d.exists():
-            return []
-        return [p.read_text(encoding="utf-8") for p in sorted(d.glob("*.txt"))]
-
-    def visible_tests(self, skill_id: str) -> list[str]:
-        d = self.root / skill_id / "tests" / "visible"
-        if not d.exists():
-            return []
-        return [p.read_text(encoding="utf-8") for p in sorted(d.glob("*.txt"))]
 
     # -- lifecycle ---------------------------------------------------------
 

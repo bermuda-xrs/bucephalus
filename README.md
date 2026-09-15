@@ -296,15 +296,14 @@ rates to shrink a prompt you are about to send to the cloud is a net loss.
 - talk to a paid API — the `anthropic` adapter is written and unit-tested but
   has never made a live call
 
-**Half of M7.4 has never run, and skill generation is locked until it does.**
-The anti-gaming rules exist to police generated skills. Two of four are
-enforced: different authors for a skill and its tests, and trusted-tier
-actions never auto-reviewed. Two are not. The visible/held-out gap
-(`record_holdout_gap`) and isomorphic verification (`verify_isomorphic`) have
-no production caller, so no verification here has ever been cross-checked
-by a second verifier, and every promotion records `gaming_check: NOT
-MEASURED`. `generate_skill` therefore refuses to run: the first generated
-skill must not precede the rules that police it (FINDINGS 1.21).
+**Skill generation (M11) is retired, and its research question with it.**
+Do self-generated skills help? This project never answered that: the
+generator never ran. It was retired on 2026-09-15, along with the M7.4 rules
+that policed it. The published baseline is -1.3 pp, the suite that would
+have evaluated it is archived, and D19 is unclosed. FINDINGS 1.27 says what
+would reopen it, and where the code is in git. Skills here are hand-written
+and pass the same gate. Every promotion states why the gaming veto does not
+apply: every check is held out, and the grader is unreachable.
 
 ## Grounding, fetching, and why not a server-side tool
 
@@ -321,11 +320,11 @@ addresses refused (a fetched page names the next URL — without that check
 "summarize this page" is one hop from the router's admin console), a hard byte
 cap enforced while streaming, text content types only, HTML reduced to text.
 
-Skill grounding (M11) reads from a `grounding/` folder in the project, or from
-any URL in the pattern description, fetched the same way. There is deliberately
-no search engine: the spec's finding is that self-generated skills drift
-negative when drafted from model priors, and substituting "whatever a search
-API returned" swaps one ungrounded source for another.
+Skill grounding was M11's, and it left with the generator (FINDINGS 1.27).
+There was deliberately no search engine behind it: the spec's finding is that
+self-generated skills drift negative when drafted from model priors, and
+substituting "whatever a search API returned" swaps one ungrounded source for
+another.
 
 ## Verifiers that check the answer
 
@@ -355,9 +354,9 @@ src/agent/
   models/      M4  anthropic + ollama + mock backends
   execute/     M4/M5 the loop, tools, sandbox, code-as-action + tool bridge
   router/      M6  allowlist routing, escalation by self-consistency
-  assure/      M7/M8.3 verifiers, ratchet, anti-gaming, out-of-band monitor
+  assure/      M7/M8.3 verifiers, ratchet, out-of-band monitor
   security/    M8  taint propagation, capability gate
-  skills/      M9/M11 store, retrieval, THE GATE, generator
+  skills/      M9 store, retrieval, THE GATE (M11's generator is retired)
   delegate/    M10 five-gate contract test
   plan/        M13 plan artifact, planner, auto-review, deviation
   control/     M12 FastAPI control plane + client event schema
@@ -394,10 +393,14 @@ missing policy file refuses everything.
 
 The spec listed `tiktoken`. It is not used: that is OpenAI's tokenizer and it
 undercounts Claude tokens by 15–20% on prose and more on code, so every cost
-number derived from it would be quietly wrong. `src/agent/tokens.py` uses a
-fast local estimate for in-loop budgeting and the provider's own
-`count_tokens` endpoint for calibration and for anything published. Run
-`calibrate()` on your own corpus before quoting a token figure.
+number derived from it would be quietly wrong. `src/agent/tokens.py` is a
+fast local estimate, used only for in-loop budgeting. Recorded usage - every
+token figure in `calls` and in a report - is the model server's own count
+(Ollama's `prompt_eval_count` / `eval_count`, the OpenAI protocol's
+`prompt_tokens` / `completion_tokens`, Anthropic's `usage`). The estimate's
+error against the executing model is unmeasured (DEFERRED D6); a
+`calibrate()` against Anthropic's counter existed and was deleted, because it
+would have tuned the estimate to the wrong tokenizer for local models.
 
 ## The sandbox, honestly
 

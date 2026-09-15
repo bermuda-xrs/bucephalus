@@ -456,7 +456,7 @@ def _parse_drafted_from(raw: str) -> list[str]:
 
 
 def cmd_skills(ctx, args, console) -> int:
-    from .skills.generate import promotion_rate
+    from .skills.gate import promotion_rate
 
     if args.declare_drafted_from:
         sid, raw = args.declare_drafted_from

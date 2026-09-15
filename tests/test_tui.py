@@ -292,7 +292,7 @@ def test_the_banner_never_appears_in_any_prompt(tmp_path):
 def test_no_prompt_building_module_imports_the_theme():
     """Structural, so it stays true for prompts this test never sends."""
     for rel in ("ledger/prefix.py", "execute/loop.py", "plan/planner.py",
-                "security/taint.py", "skills/generate.py"):
+                "security/taint.py"):
         text = (ROOT / "src" / "agent" / rel).read_text(encoding="utf-8")
         assert "tui" not in text.replace("intuition", ""), (
             f"{rel} imports something from the surface layer")

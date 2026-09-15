@@ -138,7 +138,6 @@ def run_delegated(ctx, parent_task, subtask_plan: SubtaskPlan) -> DelegationResu
         output_schema=subtask_plan.output_schema or {},
         success_criterion=subtask_plan.success_criterion or "always_pass",
         artifact_scope=subtask_plan.artifact_scope or parent_task.contract.artifact_scope,
-        max_taint_in=parent_task.contract.max_taint_in,
     )
     child = create_task(
         ctx.conn, ctx.log, contract, subtask_plan.budget, parent_id=parent_task.id

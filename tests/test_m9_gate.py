@@ -181,22 +181,6 @@ def test_catastrophic_regression_is_a_veto(ctx, workspace):
     assert vetoed.verdict == "reject" and "catastrophic" in vetoed.reason
 
 
-def test_retrieval_measured_separately(ctx):
-    """M9.4 — selection failures must not be blamed on skill quality."""
-    from agent.skills.gate import measure_retrieval_precision
-
-    sid = ctx.skills.store(
-        "csv-cleaning", "# csv cleaning\n\n## step\nstrip headers\n",
-        {"applies_when": "cleaning a messy csv spreadsheet"}, {},
-    )
-    ctx.skills.set_status(sid, "promoted")
-    p = measure_retrieval_precision(
-        ctx, [("clean this messy csv spreadsheet", {sid}), ("write a poem", set())]
-    )
-    assert 0.0 <= p <= 1.0
-    assert p == 0.5
-
-
 def test_decay_demotes_unused_skills(ctx):
     from agent.skills.gate import decay_pass
 
@@ -207,20 +191,14 @@ def test_decay_demotes_unused_skills(ctx):
     assert ctx.skills.load(sid, verify=False)["status"] == "demoted"
 
 
-def test_generator_cannot_promote(ctx):
-    """M11 must not be able to reach promotion. Static check on the module."""
-    import inspect
+def test_promotion_rate_reports_candidates(ctx):
+    """Moved from the retired generator's tests: the gate reports its own rate."""
+    from agent.skills.gate import promotion_rate
 
-    from agent.skills import generate
-
-    src = inspect.getsource(generate)
-    assert "promote(" not in src, "the generator must never call promote"
-    # The hand-off used to be `ctx.enqueue_for_gate`, a list in process memory
-    # that nothing in production read. A candidate's STATUS is the queue now
-    # (`ctx.gate_queue()` derives it), so the static fact worth pinning is
-    # that the generator stores candidates. tests/test_lifetime.py checks the
-    # queue survives a restart.
-    assert 'status="candidate"' in src, "the generator must hand off to the gate"
+    ctx.skills.store("waiting", GOOD_SKILL, {"applies_when": "x"}, {})
+    r = promotion_rate(ctx.conn)
+    assert r["total"] >= 1 and r["decided"] == 0
+    assert r["verdict"] == "no decisions yet"
 
 
 # ---------------------------------------------------------------------------

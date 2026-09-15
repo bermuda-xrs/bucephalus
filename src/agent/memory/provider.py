@@ -5,8 +5,9 @@ writing down: every external memory provider on offer is a vector database,
 and a vector database would put an embedding model and a similarity threshold
 inside the retrieval path of a system whose entire value is that its
 measurements can be checked. "The right memory was not retrieved" is already
-unmeasured here — `measure_retrieval_precision` has no caller, DEFERRED — and
-adding a second unmeasured retrieval stage on top would compound it.
+unmeasured here - M9.4's retrieval precision was withdrawn because there is no
+promoted library to measure (SPEC-DELTA C61) - and adding a second unmeasured
+retrieval stage on top would compound it.
 
 So this file exists to fix the SHAPE of the thing, so that a later
 implementation cannot quietly change the contract:

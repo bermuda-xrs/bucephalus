@@ -4,14 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from agent.assure.mesh import (
-    GamingSuspicion,
-    VerificationMesh,
-    assert_different_authors,
-    choose_strategy,
-    partition_tests,
-    refine_with_ratchet,
-)
+from agent.assure.mesh import choose_strategy, refine_with_ratchet
 from agent.kernel.types import TaskContract, VerifyResult
 
 
@@ -74,50 +67,6 @@ def test_no_refinement_without_observation(ctx, task):
     task.contract.success_criterion = "silent"
     with pytest.raises(AssertionError, match="invariant #2"):
         refine_with_ratchet(ctx, task, "x", lambda b, o: "y")
-
-
-def test_different_author_rule():
-    assert_different_authors("local", "cloud")
-    with pytest.raises(GamingSuspicion):
-        assert_different_authors("cloud", "cloud")
-
-
-def test_partition_is_seventy_thirty():
-    checks = [f"check {i}" for i in range(10)]
-    visible, holdout = partition_tests(checks, holdout_frac=0.30)
-    assert len(holdout) == 3 and len(visible) == 7
-    assert not set(visible) & set(holdout)
-
-
-def test_holdout_never_enters_prompt(ctx, task, workspace, scripted):
-    """Scan every prompt sent during a run for held-out check content."""
-    from agent.execute.loop import run_task
-
-    secret = "HOLDOUT_CANARY_the_output_must_not_hardcode_the_example"
-    ctx.mesh.holdouts.store("skill_x", [secret])
-
-    scripted("cloud", '<final>{"answer": "ok"}</final>')
-    run_task(ctx, task.id)
-
-    for backend in ctx.backends.values():
-        for prompt in getattr(backend, "prompts", []):
-            assert not ctx.mesh.holdouts.contains_any(prompt), (
-                "held-out check content leaked into a prompt"
-            )
-
-
-def test_suspicion_signal_flags_the_gap(ctx):
-    mesh: VerificationMesh = ctx.mesh
-    assert mesh.suspicion_signal(0.95, 0.40) is not None
-    assert mesh.suspicion_signal(0.80, 0.75) is None
-
-
-def test_isomorphic_disagreement_is_a_finding(ctx, task):
-    ctx.mesh.registry["a"] = ScriptedVerifier([1.0])
-    ctx.mesh.registry["b"] = ScriptedVerifier([0.0])
-    task.contract.success_criterion = "a"
-    _, finding = ctx.mesh.verify_isomorphic(task, "artifact", "b")
-    assert finding and "disagreement" in finding
 
 
 def test_choose_strategy():

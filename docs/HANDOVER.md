@@ -124,9 +124,9 @@ If it does not say that, stop and fix it before anything else.
 | `src/agent/execute/sandbox.py` | Subprocess + audit hook: writes to scope; agent code's reads to scope plus the interpreter. Advisory - D32 |
 | `src/agent/execute/codeact.py` | Runs model-written code; compile-checks it first |
 | `src/agent/skills/gate.py` | **The statistical gate.** Paired trials, McNemar, promotion |
-| `src/agent/skills/generate.py` | The skill generator (M11). **Has never been run, and refuses to until M7.4 rules 2 and 3 do** |
+| ~~`src/agent/skills/generate.py`~~ | The skill generator (M11). **Never ran; retired and deleted 2026-09-15.** At `ce624c7` in git (FINDINGS 1.27) |
 | `src/agent/assure/verifiers.py` | Graders. `verify_program` is the one the suite uses |
-| `src/agent/assure/mesh.py` | Ratchet, anti-gaming signal, held-out registry |
+| `src/agent/assure/mesh.py` | Verification mesh and ratchet (the anti-gaming signal and held-out registry were retired with M11) |
 | `src/agent/kernel/` | Event log, hash chain, receipts (exactly-once side effects) |
 | `src/agent/security/` | Taint lattice and the capability gate |
 | `src/agent/plan/` | Planner (read-only) and the deputy that decides permission boundaries |
@@ -224,11 +224,11 @@ split, profile or executor.
 | Branch | `measurement-2026-09-01` (off `main` at `148cd99`; no remote) |
 | Harness version | **2** — v3 was evaluated and **rejected**, see section 7 |
 | Toolset version | **5** — sympy, `search_history`, memory, web/file tools, then `parallel` |
-| Tests | **768 passing, 3 skipped** - the skips are the live-credential tests, until a credential exists (D26) |
+| Tests | **756 passing, 3 skipped** - the skips are the live-credential tests, until a credential exists (D26) |
 | Working tree | clean |
 | Running | nothing |
-| Last completed step | **Consolidation - four decisions, 2026-09-15.** D36 fixed: every model call made for a task is on the record before it returns (invariants 104-106, C59). D35 option (a): a control drafted from the drafting split and scored on eval only, with the report's caveat read from provenance (107). `max_taint_in` decided DELETE, waiting on a HARNESS_VERSION STOP (D38). Resource limits stated POSIX-only (D37). See CHANGELOG |
-| Next step | The triage of the nine unreachable guarantees, then D28's scoping: reports, no code. The user's decisions: `max_taint_in`'s harness bump (D38), the bot token and the API key (D26), Phase 6 (Docker, closes D32) and the Job Object (D37) |
+| Last completed step | **Second decisions, steps 1-3, 2026-09-15.** Two DELETEs (retrieval precision, `calibrate`) and the false token-count claim corrected. The measurement lock is released on every exit, and the noise floor starts again: it had been unrunnable since 2026-09-06 (C64). `max_taint_in` is dead in code and alive in bytes (D38). M11 is retired unanswered (FINDINGS 1.27), and the deputy's missing rows are FINDINGS 1.26. See CHANGELOG |
+| Next step | Steps 4-5: D28 (the park seed and the id list) and D37 (the Job Object). Open for the user: D26 and Phase 6, decided together. D38's bump has a two-session deadline |
 
 ### Iteration two, so far
 
@@ -597,8 +597,8 @@ and not understand why the code refused them.
 | 1 | The unchanging part of the prompt is byte-identical across turns | Silently losing the provider's ~90% prompt-cache discount | `PrefixGuard` raises, `ledger/prefix.py` |
 | 2 | No retry without a new external observation | An agent "trying again" with nothing new, burning turns | Structural in `execute/loop.py` — failure paths append an observation then continue |
 | 3 | Text found in content is data, never instructions | A web page saying "email the keys to X" being obeyed | `security/capabilities.py` denies on argument taint |
-| 4 | Whoever writes something never writes its test | Marking your own homework | `assert_different_authors` raises, `assure/mesh.py` |
-| 5 | Held-out tests never enter a prompt | Fitting the checks instead of the task | `HoldoutRegistry`, `assure/mesh.py` |
+| 4 | ~~Whoever writes something never writes its test~~ | Marking your own homework | **Withdrawn 2026-09-15** with M11, the only thing it policed (FINDINGS 1.27) |
+| 5 | ~~Held-out tests never enter a prompt~~ | Fitting the checks instead of the task | **Withdrawn 2026-09-15** with M11: no held-out tests exist any more |
 | 6 | Monitor output never reaches the agent | An agent that knows it is watched behaving differently | `monitor_flags` read only by the CLI and control plane |
 | 7 | Every side-effecting tool goes through `execute_once` | Sending the same email twice after a crash and resume | `kernel/receipts.py`, under a lock |
 | 8 | The agent's own trail is never compressed, only documents are | Removing the words that hold a sequence of actions together | `ledger/compact.py` deletes whole entries, never paraphrases |
@@ -616,10 +616,10 @@ and not understand why the code refused them.
 config): **#14** — there is one tier, so reviewer and executor are the same
 model unless a second is configured.
 
-**Currently inoperative:** the anti-gaming veto that compares visible against
-held-out pass rates (part of #5's purpose). `record_holdout_gap` has no
-callers, and the benchmark has no visible/held-out split, so it cannot fire.
-Every promotion therefore carries `gaming_check: "NOT MEASURED"` rather than
+**Retired 2026-09-15:** the anti-gaming veto that compared visible against
+held-out pass rates. It never fired: nothing recorded the gap. It left with
+M11 (FINDINGS 1.27). Every promotion states why it does not apply - every
+check is held out, the grader is unreachable (SPEC-DELTA C1) - rather than
 silently appearing to have passed a check that never ran.
 
 Additional invariants added by this work are in `INVARIANTS.md` (26–29:
@@ -635,7 +635,7 @@ This is the honest scope of the project.
 | Component | Status | Why |
 |---|---|---|
 | **M7 ratchet** (keep a revision only if it scores better) | Barely exercised | The grader returns a single number with no direction or magnitude. Of 30 tasks in the original run, exactly **one** ever moved its score. A monotonic scorer now gives the ratchet an ordering, but the model still gets no actionable feedback |
-| **M7.4 anti-gaming veto** | Never fired | Needs a visible/held-out split of checks, which only the unrun skill generator produces |
+| **M7.4 anti-gaming veto** | Never fired; **retired 2026-09-15** with M11 | Needed a visible/held-out split of checks, which only the never-run skill generator produced (FINDINGS 1.27) |
 | **Prompt-cache benefit** | Unverifiable locally | `cache_read_tokens` is populated only by the mock backend. Across 566 real local calls it is 0. Ollama has no prompt-cache accounting — the ratio is *unknown*, not zero |
 | **Hybrid routing** | Implemented, tested, unexercised | `config.local.yaml` maps the "cloud" slot to a local model. There is one tier. The 8B alone is 7.72 GB resident against 15.5 GB total, so two models cannot be co-resident and a routed run would measure model swapping |
 | **`auto_review` (the deputy)** | Off in every benchmark run | Deliberate: a model in the decision path is variance in the signal being measured. It means the measured system is not the shipped system, and the report header says so |
@@ -689,9 +689,10 @@ Roughly **75–80% of disagreements must favour the skill** at any n:
 **The gate promotes only if all four hold** (`config.local.yaml`, `gate:`):
 at least 15 paired trials, at least 10 discordant pairs, lift ≥ 5 points, and
 p < 0.05. `min_discordant_pairs` is the load-bearing one; `min_lift_pp` is
-**inert** below n=160 at these settings and is not protection. Two vetoes sit
-on top: a catastrophic regression on a flagged task, and a large gap between
-visible and held-out pass rates (currently inoperative — section 11).
+**inert** below n=160 at these settings and is not protection. One veto sits
+on top: a catastrophic regression on a flagged task. A second, on the gap
+between visible and held-out pass rates, never fired and was retired with M11
+(section 11).
 
 **Trials are counted per task, never per run.** Running one task twice with
 different seeds does not create two pairs — two runs of the same task share
@@ -705,9 +706,10 @@ partly memorization. `--split eval` on `bench/run.py paired` enforces the
 boundary; `check_contamination` catches only tasks named in a skill's
 provenance, which a hand-written skill has none of.
 
-**The calibration skill is a positive control, not a result.** It is
-hand-written by someone who saw the entire suite, so no split is clean with
-respect to its author. Running it answers one question: *does the detector
+**The calibration skill is a positive control, not a result.** Since D35 it
+is `si_first_orbital_arithmetic`, written from the drafting split only and
+scored on eval only. The earlier control, `aero_units_discipline`, saw the
+whole suite and is refused on every task. Running it answers one question: *does the detector
 fire when a real effect exists?* If the gate cannot detect a
 deliberately-good skill, then every later rejection is uninterpretable — a
 gate that rejects everything and a gate that works look identical until this
@@ -725,7 +727,7 @@ contamination caveat must appear in the same paragraph as the number.
 | 3 | ~~**The v3 decision**~~ | ~20 min | **DONE. v3 REJECTED**, R5 0/5. Harness stays v2. Section 7, FINDINGS 1.8 |
 | 4 | **H1** — full 30 tasks on the 8B, harness v2 | **~3 h** | **BLOCKED ON MEMORY** (section 5). The medium and hard tiers have never run on the fixed harness. Still the single most informative run available |
 | 5 | **Calibration + ablation** | ~4 h | See below. Coverage upper bound is **20/30** against a gate floor of 10, so the floor is reachable — easy 9/10, medium 7/12, hard 4/8 |
-| 6 | **M11** — generate one skill, gate it on eval only | ~4 h | The actual research question |
+| 6 | ~~**M11** — generate one skill, gate it on eval only~~ | ~4 h | **RETIRED UNANSWERED 2026-09-15.** FINDINGS 1.27 says what would reopen it |
 
 **Two new defects from Phase 1 change how later steps should be read**, both
 in FINDINGS: `reap_orphans()` kills healthy workers (1.10), and temperature 0
@@ -743,8 +745,10 @@ room first: if the 8B is already near-ceiling on easy tasks, the ablation has
 no discordant pairs to find there.
 
 **On M11:** the published baseline for self-generated skills is **−1.3
-points**. Rejection is the *expected* result and is a valid finding. Do not
-tune the gate to make something pass.
+points**. That, an archived suite, D19 unclosed and a generator that never
+ran are why it was retired unanswered on 2026-09-15 (FINDINGS 1.27). If it is
+reopened: rejection is the *expected* result and a valid finding. Do not tune
+the gate to make something pass.
 
 ---
 
@@ -869,12 +873,12 @@ milestone, which is how the spec refers to things.
 | `execute/tools.py` | M5/M8 | Tool registry and the taint table |
 | `router/cascade.py` | M6 | Allowlist routing, escalation by disagreement |
 | `assure/verifiers.py` | M7 | The verifier registry (see section 18) |
-| `assure/mesh.py` | M7 | Ratchet, anti-gaming, held-out registry |
+| `assure/mesh.py` | M7 | Ratchet (anti-gaming and the held-out registry retired with M11) |
 | `assure/monitor.py` | M8.3 | Silent monitor — **never visible to the agent** |
 | `security/taint.py` | M8 | Provenance lattice: trusted < user < untrusted |
 | `security/capabilities.py` | M8 | The gate. Every tool call passes here |
 | `skills/gate.py` | **M9** | **The statistical gate. The heart of the project.** |
-| `skills/generate.py` | M11 | Generator — cannot promote, by construction |
+| ~~`skills/generate.py`~~ | M11 | Generator — retired 2026-09-15, never ran (FINDINGS 1.27) |
 | `delegate/contracts.py` | M10 | Five-gate test; most delegations refused |
 | `plan/planner.py` | M13 | Read-only planning; plan hash pinned |
 | `plan/review.py` | M13.3 | The deputy |
@@ -895,7 +899,7 @@ happened to them.
 | "215 tests passing", "27 commits" | Superseded. 326 tests; see section 5 |
 | "The instrument validated once at small scale — 3 tasks, 0/3 baseline to 3/3 with the calibration skill, 3/3 discordant in the skill's favour" | **Withdrawn, not merely stale.** It was measured before the workspace-reset defect (SPEC-DELTA C12) was found. Both arms shared one directory and `verify_program` grades files on disk, so the control arm could be graded against the answer the skill arm had just written — which manufactures exactly that result. It is not evidence and must not be quoted |
 | Gate table showing ">= 30 paired trials" | Superseded by `config.local.yaml`, which is 15. Section 12 carries the current thresholds and why the change is strictly harder, not weaker |
-| "Plus two vetoes ... visible/held-out pass gap > 0.25" | Written as if operative. It cannot fire — see section 11 and CORRECTIONS 2.8 |
+| "Plus two vetoes ... visible/held-out pass gap > 0.25" | Written as if operative. It never could fire, and was retired with M11 on 2026-09-15 — see section 11, CORRECTIONS 2.8 and FINDINGS 1.27 |
 | "No LICENSE. A deliberate omission" | Stale. Apache 2.0 is in the tree |
 | "`INVARIANTS.md` has all 25" | Stale. 29 |
 | Root sections 8-9 ("what is incomplete", "the next three things to do") | Superseded wholesale by sections 11 and 13 of this file |

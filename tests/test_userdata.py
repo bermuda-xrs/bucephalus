@@ -159,16 +159,3 @@ def test_grounding_is_matched_by_overlap(ctx):
     hits = ctx.userdata.grounding_sources("thermal protection tiles", k=5)
     assert hits and hits[0][0] == "tiles"
     assert all(n != "cooking" for n, _ in hits)
-
-
-def test_generator_grounds_from_ui_notes(ctx):
-    """M11 drafts from what the person entered, not from model priors."""
-    ctx.userdata.put_document("grounding", "csvnotes",
-                              "csv exports carry junk header rows above the real header")
-    sources = ctx.research_retrieve("cleaning csv exports with junk header rows")
-    assert sources and sources[0].url.startswith("grounding://")
-
-
-def test_generation_still_refuses_with_no_grounding_at_all(ctx):
-    with pytest.raises(RuntimeError, match="grounding"):
-        ctx.research_retrieve("a topic nobody wrote anything about zzzq")

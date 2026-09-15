@@ -161,9 +161,10 @@ fire, which is precisely what the pre-test in FINDINGS 1.14 exists to detect
 
 Consequently:
 
-- **M11, the skill generator, has never run.** By design — the calibration
+- **M11, the skill generator, never ran.** By design — the calibration
   positive control never passed, and a gate that has not been shown to detect
-  a real effect makes every later rejection uninterpretable.
+  a real effect makes every later rejection uninterpretable. **Retired
+  unanswered 2026-09-15** (FINDINGS 1.27).
 - **No skill has been through the gate.** Not the calibration skill, not a
   generated one.
 - **The 8B tier was not measured at suite scale.** It does not fit this
@@ -268,11 +269,16 @@ Three things, and the third is the one that is usually forgotten.
    `--profile local` refuses to start with, by design, so this is necessarily
    a different profile.
 
-2. **Token counts must be calibrated.** `tokens.calibrate` has **no caller**
-   (confirmed in `KNOWN_INERT`), so every token figure in this project is an
-   estimate from a local heuristic. A 10× claim built on an uncalibrated
-   estimator is not a measurement. Calibration also *cannot* run locally —
-   `count_tokens_exact` needs the provider client.
+2. **~~Token counts must be calibrated.~~ Corrected 2026-09-15.** This said
+   every token figure in this project is an estimate from a local heuristic.
+   It is not: recorded usage is the model server's own count (Ollama's
+   `prompt_eval_count` / `eval_count`, the OpenAI protocol's `prompt_tokens`
+   / `completion_tokens`, Anthropic's `usage`), so G1's paid-token figures
+   would be the provider's own and no calibration stands in their way. What
+   is uncalibrated is the in-loop estimator the context ceiling budgets
+   against (DEFERRED D6). `tokens.calibrate`, which would have measured it
+   against Anthropic's counter, is deleted: the wrong tokenizer for the local
+   models, and it needed a key.
 
 3. **A control arm must exist, and today it does not.** This is the blocker
    nobody has costed. "10× reduction" is a comparison against the same work
@@ -338,25 +344,25 @@ goal terms:
   implements paired trials, McNemar, and the promotion rule; 
   `bench/coverage.py` bounds discordant pairs; the trap decomposer
   (now `bench/archive/decompose_aero.py`) classifies failures.
-* **The generation half has never run.** `generate_skill` is in `KNOWN_INERT`
-  — "M11. No generated skill has been produced yet - by design, the gate was
-  built first."
-* **Grounding with provenance** is implemented (`render_grounding`) and
-  likewise unexercised.
+* **The generation half never ran, and is retired unanswered (2026-09-15).**
+  `generate_skill`, its grounding (`render_grounding`) and the M7.4 rules
+  that policed it are deleted. FINDINGS 1.27 records why - a -1.3 pp
+  published baseline, an archived suite, D19 unclosed, three components never
+  run - and what would reopen it.
 
 **Reason there is no measurement:** deliberate ordering — the gate was built
 first — and then Phase 2B established that the substrate could not support the
-measurement at all (FINDINGS 1.13). Two of the gate's own guards are
-additionally inert: `record_holdout_gap` (so M7.4's anti-gaming veto cannot
-fire) and `measure_retrieval_precision`.
+measurement at all (FINDINGS 1.13). Two of the gate's own guards were
+additionally inert, and both are gone as of 2026-09-15:
+- `record_holdout_gap` and the anti-gaming veto were retired with M11. A
+  promotion now states why the veto does not apply: every check is held out
+  and the grader is unreachable (C1).
+- `measure_retrieval_precision` was withdrawn: no skill has ever been
+  promoted, so it measured 0.0 by construction.
 
-**Scope statement, 2026-09-14.** M7.4 is one rule of four enforced where it
-matters: rules 2 (the visible/held-out gap) and 3 (isomorphic verification)
-have no production caller, so no verification in this project has been
-cross-checked by a second verifier, and no promotion has carried a measured
-gap. They were not wired: each is a design decision, not a line (FINDINGS
-1.21, D22). The gate they form holds in code - `generate_skill` refuses
-(`GenerationGated`) until they run.
+**Scope statement, 2026-09-15.** M7.4 rules 1-3 policed generated skills and
+were retired with the generator, never having run where it mattered (FINDINGS
+1.21, 1.27). Rule 4, trusted-tier actions never auto-reviewed, stands.
 
 ---
 
@@ -459,11 +465,11 @@ capability gate has never refused a production call.
 | Goal / component | Why |
 |---|---|
 | ~~**G1 prefix-cache benefit**~~ | **MOVED OUT OF THIS LIST, 2026-09-06.** The reason given here — "Ollama has no prompt-cache accounting" — was false. Ollama has it; its *native* protocol does not report it. The OpenAI-compatible endpoint on the same server does, so the ratio is measurable on the local tier under `config.openai.yaml`. The historical statement stands for the runs it describes: `cache_read_tokens` is 0 across all 1,179 real calls, and those runs are recorded with `cache_hit_ratio: null` — **unmeasured, which is not zero** — rather than being back-filled. Still unmeasured *at suite scale*: no pass has yet run through the reporting adapter |
-| **G1 paid-token reduction** | No paid backend has ever been called. Requires an API key, a live Anthropic call, calibration, and ablation switches that do not exist |
+| **G1 paid-token reduction** | No paid backend has ever been called. Requires an API key, a live Anthropic call, and ablation switches that do not exist. *(Calibration was listed here too; removed 2026-09-15 - the provider reports paid tokens itself, C62)* |
 | **G1 routing / escalation** | One configured tier. The 8B alone is 7.64 GB resident against 3.6–6.4 GB free, so two models cannot be co-resident; a "routed" run would measure model swapping |
 | **8B at suite scale** | Does not fit. 7.64 GB resident at the harness's `num_ctx: 16384`. Measured, and recorded as SPEC-DELTA C20 |
-| **Token counts generally** | `calibrate` has no caller and cannot run locally. Every token figure is an estimate — including the one invariant 11's context ceiling budgets against (DEFERRED D6) |
-| **G4 anti-gaming veto** | `record_holdout_gap` has no caller and a `verify_program` suite has no visible/held-out partition. Every promotion carries `gaming_check: NOT MEASURED` |
+| **Token counts generally** | *Corrected 2026-09-15:* this said every token figure is an estimate. Recorded usage is the model server's own count. What is uncalibrated is the in-loop estimator invariant 11's context ceiling budgets against (DEFERRED D6); `calibrate` is deleted (C62) |
+| **G4 anti-gaming veto** | Never fired - nothing recorded the gap it read. Retired with M11, 2026-09-15 (FINDINGS 1.27). Every promotion states why it does not apply: every check is held out, the grader is unreachable (C1) |
 | **Cost axis in dollars** | Every call is $0.0000 under `--profile local`. The Pareto's cost axis is wall-clock seconds, and the dollar column is retained as `n/a` |
 
 ---

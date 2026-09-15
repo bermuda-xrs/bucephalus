@@ -635,7 +635,16 @@ def main() -> int:
     except RunLockBusy as e:
         print(f"REFUSING TO START.\n{e}")
         return 2
+    # Released on EVERY exit. It was released on two of four: the unknown-skill
+    # and unknown-suite returns, and any exception, held it for the rest of
+    # the process - the same leak cmd_paired had.
+    try:
+        return _noise_floor(args)
+    finally:
+        lock.release()
 
+
+def _noise_floor(args) -> int:
     # Preflight. An orphan's memory is charged to whatever runs next: on this
     # box a stray llama-server holding 5.9 GB turned an 88s model call into a
     # 1499.8s one. Wall clock is the cost axis, so reap BEFORE measuring.
@@ -651,6 +660,13 @@ def main() -> int:
     # call sites now read the one function, and
     # tests/test_memory_gate_single_source.py fails if a third copy of the
     # rule appears.
+    # Opened BEFORE its config is read. `exec_cfg` was added (2026-09-06)
+    # reading `ctx` forty-five lines before `ctx` was assigned, so every
+    # noise-floor run since died with UnboundLocalError before its first task.
+    # No test ran `main`; tests/test_noise_main.py does.
+    ctx = open_measurement(args.config, profile=args.profile, isolate=True,
+                           why="paired trials and noise floor: arms and runs "
+                               "must be independent observations")
     exec_cfg = ctx.config.backends["cloud"]
     press = memory_pressure()
     if press:
@@ -695,10 +711,6 @@ def main() -> int:
             print("WARNING: already at or above the suspect commit ratio "
                   "before the first task. Paging rewrites a seconds-based "
                   "measurement - one call has been seen 18x slower.")
-
-    ctx = open_measurement(args.config, profile=args.profile, isolate=True,
-                           why="paired trials and noise floor: arms and runs "
-                               "must be independent observations")
 
     # RETRIEVAL ISOLATION, set here rather than read from a config file.
     #
@@ -782,7 +794,6 @@ def main() -> int:
         missing = wanted - {s["key"] for s in specs}
         if missing:
             print(f"no such task(s): {', '.join(sorted(missing))}")
-            lock.release()
             return 2
     if args.tier:
         specs = [s for s in specs
@@ -791,7 +802,6 @@ def main() -> int:
         specs = specs[: args.limit]
     if not specs:
         print("no tasks matched")
-        lock.release()
         return 2
 
     print(f"noise floor · {len(specs)} tasks x {args.runs} runs = "
@@ -1168,7 +1178,6 @@ def main() -> int:
     if verdict == 0:
         print("\nSuite looks usable. Next: the calibration skill through the gate.")
     ctx.close()
-    lock.release()
     return verdict
 
 

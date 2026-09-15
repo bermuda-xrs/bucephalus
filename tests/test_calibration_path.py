@@ -69,8 +69,6 @@ class _Ctx:
         })()
         self.backends = {"cloud": type("B", (), {
             "cfg": type("BC", (), {"model": "mock-3b"})()})()}
-        self.mesh = type("M", (), {
-            "suspicion_signal": staticmethod(lambda v, h: None)})()
         self.config.autonomy = type("A", (), {"auto_review": True,
                                               "approve_scoped_writes": False})()
         self.closed = False
@@ -295,6 +293,27 @@ def test_the_calibration_takes_the_deputy_out_like_the_noise_floor(tmp_path, mon
         "the deputy was left in the loop; the arms would not be comparable"
     assert ctx.config.autonomy.approve_scoped_writes is True
     assert "auto-review OFF" in capsys.readouterr().out
+
+
+def test_an_exception_mid_run_releases_the_measurement_lock(tmp_path, monkeypatch):
+    """The lock was released on the success path only. One exception held it
+    for the rest of the process, and every later measurement in that process
+    reported "lock busy" - one failing test showed up as ten."""
+    import pytest
+    from agent.runlock import RunLock, measurement_lock_path
+
+    mod = _load_bench_run()
+    ctx = _Ctx(tmp_path, min_paired=1, min_discordant=1)
+
+    def defect(c, sid, spec, seed=None):
+        raise RuntimeError("a defect mid-run")
+
+    _wire(mod, monkeypatch, ctx, _suite(1, 1), defect)
+    with pytest.raises(RuntimeError, match="a defect mid-run"):
+        mod.cmd_paired(_args("sk-exc"))
+    probe = RunLock(measurement_lock_path(Path("config.local.yaml").resolve().parent),
+                    "probe").acquire()
+    probe.release()
 
 
 def test_a_backend_error_skips_the_pair_rather_than_half_recording_it(tmp_path, monkeypatch, capsys):

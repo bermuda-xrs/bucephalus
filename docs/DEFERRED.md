@@ -116,20 +116,28 @@ of it is the tool's limited vocabulary.
 
 **Severity:** corrupting, and larger than a reporting caveat.
 
-`tokens.calibrate` has **no caller** (`KNOWN_INERT`), so `_CHARS_PER_TOKEN` is
-never measured against a real tokenizer. Two consequences, and the second is
-the one that was nearly missed:
+`_CHARS_PER_TOKEN` has never been measured against the tokenizer of a model
+that runs here.
 
-1. **Reporting.** No token number in this project may be described as
-   measured. They are estimates.
-2. **Safety.** `enforce_ceiling` budgets against `usable_context_window`
-   using those estimates. An uncalibrated estimator sits underneath a safety
-   invariant: if the ratio is off, the ceiling fires at the wrong point —
-   early, wasting context, or late, permitting the long-context degradation
-   invariant 11 exists to prevent.
+**Corrected 2026-09-15.** This entry said no token number in this project may
+be described as measured. That was wrong for recorded usage: every real
+backend records the model server's own count - Ollama's `prompt_eval_count` /
+`eval_count`, the OpenAI protocol's `prompt_tokens` / `completion_tokens` - so
+the figures in `calls` are the executing model's own. The claim was read as
+true, and repeated, more than once. What is uncalibrated is the in-loop
+estimator, and that is the half that matters:
 
-It also **cannot** run under `--profile local`: `count_tokens_exact` needs a
-provider client and there is no API key.
+**Safety.** `enforce_ceiling` budgets against `usable_context_window` using
+the estimator. If its ratio is off for the executing model, the ceiling fires
+at the wrong point - early, wasting context, or late, permitting the
+long-context degradation invariant 11 exists to prevent.
+
+`tokens.calibrate` is deleted (2026-09-15). It measured the estimator against
+Anthropic's counter, needed an API key, and would have tuned it to the wrong
+tokenizer for the models that run here. **Correct version:** on one run, put
+`count_tokens(prefix + tail)` beside the server's reported input for calls
+where the server evaluated the whole prompt (no prefix-cache hit), and fit the
+ratio. No key needed.
 
 ---
 
@@ -345,14 +353,14 @@ will not honour, and Ollama truncates without an error.
 
 **Why not detected in code:** the only portable signal is the returned
 `prompt_tokens`, and flagging a mismatch means comparing it against this
-project's own token count — which is an uncalibrated estimator (`calibrate`
-has no caller; see the dead-code audit). A check whose false-alarm rate is
-unknown is worse than a documented constraint, so this is documented.
+project's own token count — which is an uncalibrated estimator (D6). A check
+whose false-alarm rate is unknown is worse than a documented constraint, so
+this is documented.
 
 **Correct version:** either query the server's window through whatever
 non-portable route it offers and assert against the config at startup, or
-calibrate the tokenizer first and then compare `prompt_tokens` to a count that
-can be trusted. The second unblocks several other things and is the better
+measure the estimator against the server's own counts first (D6) and then
+compare `prompt_tokens` to a count that can be trusted. The second unblocks several other things and is the better
 order.
 
 SPEC-DELTA C29.
@@ -434,7 +442,12 @@ machinery for restricting what a run can see.
 **What would make it urgent:** any measurement path gaining a retrieval tool,
 or `search_history` entering the default toolset for a ladder run.
 
-## D19 — skill provenance cannot distinguish "no sources" from "retrieval broke"
+## D19 — skill provenance cannot distinguish "no sources" from "retrieval broke" (DORMANT 2026-09-15: its only consumer, the generator, is retired)
+
+**Dormant, 2026-09-15.** `generate_skill` is retired (FINDINGS 1.27), so
+nothing grounds a skill on retrieval and nothing can be mis-provenanced.
+Closing this is one of the three conditions for reopening M11. It is not an
+active item while M11 is retired, and it becomes one again if M11 returns.
 
 **Found:** 2026-09-07, while making `web_search` report parse failures
 separately from empty results.
@@ -598,6 +611,10 @@ Phase 10 is queued.
 
 **The sweep above is the half of the work already done**, recorded so whoever
 takes it does not repeat it.
+
+**2026-09-15: the rule-3 half is closed by deletion.** `verify_isomorphic` and
+`HoldoutRegistry.contains_any` were retired with M11 (FINDINGS 1.27). The
+other half stays open: the audit still reads no methods.
 
 ## D23 — RESOLVED ON SIGHT: an arm could not read an artifact another arm wrote first
 
@@ -957,9 +974,36 @@ likely bumps TOOLSET_VERSION. It does not bump HARNESS_VERSION.
 **Why not built now:** no new features (2026-09-15). Measurement runs are
 attended and bounded by the wall clock. Cron and the channel are neither.
 
-## D38 - `max_taint_in`: decided DELETE, blocked on a HARNESS_VERSION STOP
+## D38 - `max_taint_in`: DEAD IN CODE, ALIVE IN BYTES - waiting for a HARNESS_VERSION bump
 
 **Found:** 2026-09-14, by A2-2. **Decided 2026-09-15: delete** (SPEC-DELTA C60).
+
+**State, 2026-09-15: removed from the code, not from the bytes.**
+- Its one reader (delegation copied it to a child) is gone.
+- `TaskContract` refuses any value but the default.
+- The declaration stays for one reason: the whole contract is rendered into
+  every prompt prefix, stored in `tasks` and logged on the chain, and
+  removing the field changes those bytes.
+- The model still reads `"max_taint_in": "untrusted"` in every prefix until
+  then - the default, never anything else (invariant 109).
+
+**Waiting for:** the next change that bumps HARNESS_VERSION anyway:
+- D33's tier-1 move; or
+- a D28 design that touches the prefix. The D28 built on 2026-09-15 does not:
+  it restores the tail, which sits after the cache breakpoint.
+
+That change deletes the declaration and its validator. Then
+`test_its_bytes_leave_only_with_a_bump` flips to require the bytes gone.
+
+**Deadline.** If no bump has come by the end of the second session after
+2026-09-15's, bump HARNESS_VERSION for this alone. The reference measurement
+is one number, and it is not worth indefinite distortion.
+
+**Rejected:** keeping a labelled legacy constant in its place. The model would
+still read a ceiling nothing enforces, which is the state this deletion
+exists to end.
+
+*The decision as it was first written:*
 
 The field cannot be wired to mean anything. Every observation tool is
 UNTRUSTED, so a ceiling below the default forbids reading, and the default

@@ -535,9 +535,11 @@ than silent.
   tasks in the original pass, **exactly one ever moved its score**. The
   gradient fixes the ratchet's *ordering*; it does not give the model an
   actionable observation, which is what refinement needs.
-* **M7.4's anti-gaming veto has never fired.** `record_holdout_gap` has no
-  callers and a `verify_program` suite has no visible/held-out partition, so
-  every promotion carries `gaming_check: "NOT MEASURED"`.
+* **M7.4's anti-gaming veto never fired, and is retired with M11 (1.27).**
+  Nothing recorded the gap it read. For a `verify_program` suite every check
+  is held out, so the gap is undefined. Every promotion now says "not
+  applicable - every check is held out, the grader is unreachable (SPEC-DELTA
+  C1)"; it used to say `"NOT MEASURED"`.
 
 ---
 
@@ -564,9 +566,10 @@ than silent.
   measurement here. If lift collapses without module 3 (the magnitude check),
   the skill works by supplying the external observation the bare agent lacks —
   a mechanism, not a score.
-* **3.4 M11 generated skills** — *pending Phase 6.* The published baseline is
-  **−1.3pp** for self-generated skills, so **0 of 3 promoted is the expected
-  result and a valid finding.** It will not be tuned into a pass.
+* **3.4 M11 generated skills** — **RETIRED UNANSWERED, 2026-09-15 (1.27).** The
+  published baseline is **−1.3pp** for self-generated skills. This project had
+  planned 0 of 3 promoted as the expected result and a valid finding. It was
+  never run. 1.27 says what would reopen it.
 
 ---
 
@@ -608,9 +611,11 @@ them in if you want the strongest claims first.
 | 6 | **What was not measured** | 2, 3, DEFERRED | — |
 
 **Not measured, restated plainly:** no skill has ever been through the gate;
-M11 (the generator) has never run; the 8B does not fit this hardware at the
-harness's context length; every token figure is an uncalibrated estimate *and*
-invariant 11's context ceiling budgets against that same estimator; and the
+M11 (the generator) never ran, and was retired unanswered (1.27); the 8B does not fit this hardware at the
+harness's context length; the in-loop token estimator is uncalibrated *and*
+invariant 11's context ceiling budgets against it (recorded usage is the model
+server's own count - corrected 2026-09-15; it said every token figure was an
+estimate); and the
 twelve entries in `docs/DEFERRED.md`.
 
 ---
@@ -839,7 +844,9 @@ step that returned nothing because the parser broke would produce an
 UNGROUNDED SKILL THAT LOOKS GROUNDED — provenance would record sources
 requested and zero retrieved, with nothing marking the difference between
 "nothing exists" and "retrieval malfunctioned". DEFERRED D19; it belongs with
-Phase 12, where skill provenance is the subject.
+Phase 12, where skill provenance is the subject. *2026-09-15: the generator is
+retired (1.27), and closing D19 is one of the three conditions for reopening
+it.*
 
 ---
 
@@ -912,6 +919,11 @@ these three.
 choice of which verifier pairs are isomorphic for a task, and rule 2 a
 visible/held-out partition that only the never-run generator produces - design,
 not a line (D22). The scope statement is in README and RELEASE.
+
+**2026-09-15: retired, not wired.** Rules 1, 2 and 3 policed generated skills
+and nothing else, so they left with the generator (1.27). Rule 4, trusted-tier
+actions never auto-reviewed, stands. What guards a hand-written skill against
+fitting its checks is structural: the grader is unreachable (C1).
 
 ---
 
@@ -1117,13 +1129,13 @@ channel (40).
 
 | component | why |
 |---|---|
-| M7.4 rule 2 - `record_holdout_gap` - and with it the gate's gaming veto | no caller, and a `verify_program` suite has no visible/held-out partition |
-| M7.4 rule 3 - `verify_isomorphic` | no caller (D22) |
-| `measure_retrieval_precision` | no caller |
+| M7.4 rule 2 - `record_holdout_gap` - and with it the gate's gaming veto | no caller, and a `verify_program` suite has no visible/held-out partition. **Deleted 2026-09-15 with M11 (1.27)**; a promotion now states why the veto does not apply |
+| M7.4 rule 3 - `verify_isomorphic` | no caller (D22). **Deleted 2026-09-15 with M11 (1.27)** |
+| `measure_retrieval_precision` | no caller. **Deleted 2026-09-15**: no skill has ever been promoted, so it measured 0.0 by construction (C61) |
 | local-tier routing, `local_with_escalation` | `Router.choose` raises unless `_ESCALATION_WIRED`; one tier is configured |
-| `tokens.calibrate` | no caller; no `.token_calibration.json` exists |
-| `max_taint_in` | carried on every contract, consulted nowhere. **Decided 2026-09-15: DELETE.** No check could give it a meaning (C60). Removing it changes the prefix, so it waits on a HARNESS_VERSION STOP (D38) |
-| `generate_skill`, and invariants 4 and 5, which only it reaches | no entry point - and since Part 2, refused in code until M7.4 rules 2 and 3 run |
+| `tokens.calibrate` | no caller; no `.token_calibration.json` exists. **Deleted 2026-09-15**: it needed an API key and calibrated to the wrong tokenizer. Recorded usage is the server's own count; the in-loop estimator stays uncalibrated (D6) |
+| `max_taint_in` | carried on every contract, consulted nowhere. **Decided 2026-09-15: DELETE.** No check could give it a meaning (C60). **Dead in code the same day**: its one reader is gone and no other value can be set. Its bytes stay in the prefix until the next HARNESS_VERSION bump (D38, invariant 109) |
+| `generate_skill`, and invariants 4 and 5, which only it reaches | no entry point - and since Part 2, refused in code until M7.4 rules 2 and 3 run. **Retired unanswered 2026-09-15, with invariants 4, 5 and 100 (1.27)** |
 | POSIX rlimits | only Windows has ever run this. **Stated 2026-09-15** in README and RELEASE: on Windows the sandbox is advisory path confinement plus a timeout. Job Objects for memory, CPU time and process count are D37 |
 | the live Telegram path; the Anthropic adapter | no token, no key (D26) |
 
@@ -1159,6 +1171,110 @@ and `alpha run` crashed printing the cache ratio every local backend leaves
 unmeasured - after the result, on a finished task. Run B is the same task
 shape on the fixed code. This does not change the measurement record's
 count: no task in `agent.local.db` was ever resumed.
+
+### 1.26 The deputy was off the record - invariant 12 false twice, in two different ways
+
+Invariant 12 says every model call is recorded in `calls`. Fixing D36 found it
+false in two distinct ways, and the second is the finding.
+
+**1. Calls that never returned.** The row was written from the returned
+response, so the 32 calls in the record that never returned have no row: 12
+stalled, 3 crashed, 17 cut off by a killed process. This is the gap D36 was
+opened for. Its timing consequence turned out to be small: per-call median
+53.3 to 53.4 s, and no headline figure moves (CHANGELOG 2026-09-15).
+
+**2. Call sites that never wrote a row at all.** Five places called their
+backend directly: the deputy, the quarantined summarizer, the monitor, the
+self-consistency verifier and the generator. Four never ran in production. The
+deputy did: **15 reviews in the record, 23.5-167.7 s each, and not one row in
+`calls`.**
+
+**Why the second one matters more.** The deputy is a security control. It
+decides whether an action runs (invariants 14-16). A control whose own model
+calls leave no telemetry has a cost, latency and failure rate that no
+calls-derived figure can see. Its 15 decisions were visible as `review.*`
+events. The seconds and tokens it spent to reach them were invisible, and they
+are missing from the token columns of four published evidence rows.
+
+**How it hid.** `test_no_call_bypasses_telemetry` compared `calls` rows with a
+spy that summed every backend's calls. That check was sound, but its scenario
+was `list_dir` then `<final>`, which never reaches a review, a quarantine, a
+monitor or a verifier. A guarantee stated over *every call* was tested over
+*one call site*. The shape is 1.21's: a unit test proves a path works and says
+nothing about which paths exist.
+
+**Fixed 2026-09-15 (D36, SPEC-DELTA C59).** There is now one door,
+`AgentContext.call_model`, which writes the row before the call. A structural
+test fails on any `.complete(` outside it, and the deputy has a behavioural
+test of its own (invariants 104-106). The record is not backfilled.
+
+### 1.27 The original research question is retired unanswered
+
+**The question** - do self-generated skills help? - was the reason this
+project exists (RELEASE, G4). It was never answered, because the generator
+never ran. **On 2026-09-15 it was retired, unanswered.** That is recorded here
+as a finding, not tidied away as a cleanup.
+
+**What was retired.**
+- M11 skill generation: `generate_skill` and its grounding, drafting and
+  test-authoring pipeline.
+- M7.4 rule 2: `record_holdout_gap`, the visible/held-out gap, and with it
+  the gate's gaming veto.
+- M7.4 rule 3: `verify_isomorphic`.
+- Rule 1 (`assert_different_authors`), the held-out registry, and the skill
+  store's visible/held-out test storage. These existed only to serve the
+  generator.
+- Invariants 4, 5 and 100, withdrawn.
+
+**Why retired rather than kept gated.**
+1. **Its own baseline says it does not work.** The published baseline this
+   project adopted for self-generated skills is **-1.3 pp** (3.4, HANDOVER
+   section 13). The literature puts curated skills around +16 and generated
+   ones slightly negative.
+2. **The suite that would evaluate it is archived.** Its failures were
+   unstructured (1.13), so no skill could produce the discordant pairs the
+   gate needs.
+3. **D19 is unclosed.** A generated skill's provenance cannot tell "no
+   sources existed" from "retrieval broke".
+4. **None of its three components ever ran.**
+
+Keeping M11 meant carrying three gated items to justify a milestone whose
+baseline says it does not work.
+
+**Removing the veto removed no protection.** The veto read a gap that nothing
+ever recorded, so it could not fire. For a hand-written skill the gap is
+undefined, not unmeasured. Every check is held out, because the grader is
+unreachable (SPEC-DELTA C1). Every promotion now states that in its
+`gaming_check` (invariant 110).
+
+**What would reopen it. All three are needed:**
+1. **A live suite** whose failures are structured enough for a skill to move,
+   one that passes the 1.14 pre-test. `aero_calc` is archived and does not
+   pass it.
+2. **D19 closed.** Provenance must distinguish "no sources" from "retrieval
+   broke" before a generated skill's grounding means anything.
+3. **Both rules wired, not gated:**
+   - the visible/held-out gap recorded from a generated skill's own checks, and
+     read by the gate;
+   - isomorphic verification with a chosen second verifier per task, its model
+     calls attributed to the task (D36).
+
+**How to pick it up.** The code as it stood is at commit `ce624c7`, the parent
+of the retirement:
+- `git show ce624c7:src/agent/skills/generate.py`
+- `src/agent/assure/mesh.py` (rules 1-4, `HoldoutRegistry`, `partition_tests`)
+- the veto branch in `src/agent/skills/gate.py`
+- `tests/test_m11_generator.py` and `tests/test_gated_generation.py`
+
+`promotion_rate` survives, moved into `skills/gate.py`: the gate is what
+promotes, so the gate reports the rate.
+
+`AgentContext.research_retrieve`, the grounding step, left with the generator
+too. The console's Grounding notes are still stored, and
+`userdata.grounding_sources` still answers a query, but **nothing reads them
+now**. This is a method with no production reader, the class of thing the
+dead-code audit cannot see (D22). It is recorded here so that reopening M11
+finds its input path intact.
 
 ---
 

@@ -42,7 +42,8 @@ from agent.workspace import reset_workspace  # noqa: E402
 from agent.skills.gate import TaskSpec, evaluate_skill, run_paired_trial  # noqa: E402
 
 CAVEATS = [
-    "Token counts are local estimates unless calibrated; see src/agent/tokens.py.",
+    "Token usage is the model server's own count. Only in-loop context "
+    "budgeting uses a local estimate, whose error is unmeasured (DEFERRED D6).",
     "Public coding benchmarks are contamination-inflated by roughly 5-15 points, "
     "and an audit found ~59% of the hardest SWE-bench Verified tasks have tests "
     "that would not catch the intended bug. A reported 90% is realistically 75-80%.",
@@ -245,7 +246,16 @@ def cmd_paired(args) -> int:
     except RunLockBusy as e:
         print(f"REFUSING TO START.\n{e}")
         return 2
+    # Released on EVERY exit. It was released on the success path only, so an
+    # exception after this point held the lock for the rest of the process:
+    # one failing test made the next nine report "lock busy".
+    try:
+        return _paired(args)
+    finally:
+        lock.release()
 
+
+def _paired(args) -> int:
     ctx = open_measurement(args.config, profile=args.profile,
                            isolate=True,
                            why="a measured arm must not read another's work")
@@ -284,7 +294,6 @@ def cmd_paired(args) -> int:
                  if (s.get("output_schema") or {}).get("x-split") == args.split]
         if not suite:
             print(f"no tasks in split {args.split!r}")
-            lock.release()
             return 2
     specs = [
         TaskSpec(
@@ -398,7 +407,6 @@ def cmd_paired(args) -> int:
         print("\ngate passed. Promotion still needs a human: "
               f"alpha skills --gate {args.skill_id} --yes")
     ctx.close()
-    lock.release()
     return 0
 
 

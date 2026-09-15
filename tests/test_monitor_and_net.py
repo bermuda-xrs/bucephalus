@@ -65,22 +65,26 @@ def test_monitor_clean_writes_nothing(ctx, task, scripted):
 # ---------------------------------------------------------------- fetcher
 
 
+# Against `fetch_with_provenance` - the function `web_fetch` calls. These used
+# to test `fetch_url`, a wrapper no production path called.
+
+
 def test_fetcher_refuses_non_http_schemes():
-    from agent.net.fetch import FetchError, fetch_url
+    from agent.net.fetch import FetchError, fetch_with_provenance
 
     for bad in ("file:///etc/passwd", "ftp://example.com/x", "data:text/html,hi"):
         with pytest.raises(FetchError, match="scheme"):
-            fetch_url(bad)
+            fetch_with_provenance(bad)
 
 
 def test_fetcher_refuses_private_addresses():
     """A fetched page names the next URL. Without this it is one hop to the router."""
-    from agent.net.fetch import FetchError, fetch_url
+    from agent.net.fetch import FetchError, fetch_with_provenance
 
     for bad in ("http://127.0.0.1/admin", "http://localhost:8080/",
                 "http://192.168.1.1/", "http://10.0.0.5/"):
         with pytest.raises(FetchError, match="private|loopback|resolve"):
-            fetch_url(bad)
+            fetch_with_provenance(bad)
 
 
 def test_html_is_reduced_to_text():
@@ -92,13 +96,6 @@ def test_html_is_reduced_to_text():
     out = p.text()
     assert "Body text here." in out and "Title" in out
     assert "evil()" not in out, "script contents leaked into the agent's context"
-
-
-def test_default_fetcher_returns_errors_as_text():
-    """A failed fetch is an observation to route around, not a crash."""
-    from agent.net.fetch import default_fetcher
-
-    assert default_fetcher("file:///etc/passwd").startswith("[fetch failed]")
 
 
 def test_web_fetch_output_is_untrusted(ctx, workspace, scripted):

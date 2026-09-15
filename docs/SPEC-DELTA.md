@@ -1270,8 +1270,10 @@ process. Separately, five call sites called their backend directly and wrote
 nothing: the deputy, the quarantined summarizer, the monitor, the
 self-consistency verifier and the generator. The deputy ran 15 times in
 production, 23.5-167.7 s each, and none of them is in `calls`. The existing test
-counted rows against a spy on the executing backend only, so it could not see
-either gap.
+summed a spy over every backend - sound - but its scenario never reached a
+review, a quarantine, a monitor or a verifier, so it tested one call site of
+six. *(Corrected 2026-09-15: this said the spy watched the executing backend
+only. It did not; the scenario was the gap. FINDINGS 1.26.)*
 
 **Correct version:** one door, `AgentContext.call_model`. The row is written
 before the call, completed on return, and closed with an outcome on an abort.
@@ -1294,3 +1296,74 @@ is the canonical dump of the whole contract.
 **Correct version:** delete it. Deleting it changes the prefix bytes of every
 task, which is a HARNESS_VERSION bump and needs its own STOP. Decided, not
 built (DEFERRED D38).
+
+### C61. M9.4 retrieval precision is withdrawn: there is nothing to retrieve
+
+**Reality:** `measure_retrieval_precision` had a unit test and no caller.
+`retrieve` returns PROMOTED skills only, and no skill has ever been promoted:
+the store holds three, all candidates. On any eval set it returned 0.0 by
+construction. Below `MAX_SKILLS_IN_PREFIX` promoted skills, retrieval returns
+everything over the threshold, so "precision" would measure the threshold
+alone.
+
+**Correct version:** deleted 2026-09-15. M9.4 comes back when the promoted
+library outgrows the prefix - the first point at which selection can fail.
+
+### C62. `calibrate` would have calibrated to the wrong tokenizer
+
+**Reality:** CORRECTIONS 1.2 paired the local estimator with the provider's
+`count_tokens` for calibration. The calibration had no caller and needed an
+Anthropic key. Worse, its premise was false where it was quoted: the
+dead-code audit, D6, RELEASE and FINDINGS said every token figure in this
+project was an uncalibrated estimate. Recorded usage has always been the
+model server's own count (Ollama's `prompt_eval_count` / `eval_count`, the
+OpenAI protocol's `prompt_tokens` / `completion_tokens`). The estimator drives
+only in-loop budgeting and the mock. Calibrating it to Claude's tokenizer would
+have made it worse for the local models that run here.
+
+**Correct version:** `calibrate` and `count_tokens_exact` are deleted, and the
+claim is corrected wherever it appeared. The estimator's error against the
+executing model stays unmeasured, and is measurable without a key (D6). The
+evidence files written before this carry the old caveat string
+(`bench-local.json`, `pareto-3b.json`, `pareto-8b.json`); they are records and
+are not edited.
+
+### C63. M11 is retired, and the spec's research question with it
+
+**Reality:** the spec builds toward self-generated skills (M11), policed by
+the M7.4 anti-gaming rules. The generator never ran, and two of those rules
+never had a caller. The published baseline for self-generated skills is
+-1.3 pp. The suite that would have evaluated them is archived, and D19, the
+provenance defect that would have mis-described a generated skill's grounding,
+is unclosed.
+
+**Correct version:** retired 2026-09-15:
+- `generate_skill`;
+- rules 1-3 (`assert_different_authors`, `record_holdout_gap` and the gaming
+  veto, `verify_isomorphic`);
+- the held-out registry and the skill store's test storage;
+- invariants 4, 5 and 100, withdrawn.
+
+Removing the veto removed no protection, because it could not fire.
+Promotions state why it does not apply: every check is held out, and the
+grader is unreachable (C1). FINDINGS 1.27 records the retirement as a finding
+and says what would reopen it.
+
+### C64. The noise floor could not start, and two measurements leaked their lock
+
+**Reality:** since 2026-09-06, `bench/noise.py main` has read
+`ctx.config.backends` forty-five lines before `ctx` was assigned. D18 later
+moved the assignment, but it had never been above the new read. So every
+noise-floor run died with `UnboundLocalError` before its first task. The
+noise floor is step 1 of the README's measurement flow, and no test ran
+`main`.
+
+Separately, both `main` and `cmd_paired` released the measurement lock on
+their success path only. An exception, or noise's unknown-skill and
+unknown-suite returns, held it for the rest of the process: one failing test
+showed up as ten.
+
+**Correct version:** the context is opened before its config is read, and
+each entry point releases the lock in a `finally`. `tests/test_noise_main.py`
+runs `main` to its first decision, with the orphan reaper and memory probes
+stubbed so a test can never kill a worker (invariant 108).

@@ -94,12 +94,9 @@ def _is_public(host: str) -> bool:
     return True
 
 
-def fetch_url(url: str, *, max_bytes: int = MAX_BYTES, timeout_s: float = TIMEOUT_S,
-              allow_private: bool = False, polite: bool = True) -> str:
-    """Fetch one URL and return readable text. Raises FetchError on refusal."""
-    return fetch_with_provenance(
-        url, max_bytes=max_bytes, timeout_s=timeout_s,
-        allow_private=allow_private, polite=polite)["text"]
+# `fetch_url`, a text-only wrapper over the function below, left with its last
+# caller (`default_fetcher`, retired with M11's grounding, 2026-09-15). The
+# `web_fetch` tool calls `fetch_with_provenance`; so do the refusal tests now.
 
 
 def fetch_with_provenance(url: str, *, max_bytes: int = MAX_BYTES,
@@ -186,14 +183,3 @@ def fetch_with_provenance(url: str, *, max_bytes: int = MAX_BYTES,
         },
     }
 
-
-def default_fetcher(url: str) -> str:
-    """The callable assigned to ctx.web_fetcher. Errors come back as text.
-
-    A failed fetch is an observation the agent should see and route around,
-    not an exception that kills the task.
-    """
-    try:
-        return fetch_url(url)
-    except FetchError as e:
-        return f"[fetch failed] {e}"

@@ -148,35 +148,17 @@ def test_deviation_parks_a_materially_changed_task(ctx, workspace):
     assert any(r[0] == "park_for_replan" for r in rows)
 
 
-def test_gate_refuses_a_skill_that_games_the_visible_checks(ctx):
-    """M7.4 rule 4 — a big visible/held-out gap is the signature of gaming."""
+def test_a_promotion_says_the_gaming_veto_does_not_apply_and_why(ctx):
+    """M7.4 rule 4 is RETIRED with M11 (FINDINGS 1.27).
+
+    Removing it removed no protection: nothing recorded the gap it read, so it
+    could not fire. And the gap is undefined here, not unmeasured - every
+    check is held out, the grader unreachable (SPEC-DELTA C1). A promotion
+    says so in words, with the reference, rather than a bare 'skipped'.
+    """
     import time
 
-    from agent.skills.gate import evaluate_skill, record_holdout_gap
-
-    sid = ctx.skills.store("gamer", "# gamer\nwhen x\n\n## step\ndo\n", {}, {})
-    for i in range(30):
-        ctrl, skl = (0, 1) if i < 20 else (0, 0)
-        for arm, val in (("control", ctrl), ("skill", skl)):
-            ctx.conn.execute(
-                "INSERT INTO skill_trials(skill_id,task_key,arm,success,score,"
-                "paid_tokens,free_tokens,wall_ms,created_at) VALUES (?,?,?,?,?,?,?,?,?)",
-                (sid, f"k{i}", arm, val, float(val), 0, 0, 0, time.time()))
-    ctx.conn.commit()
-
-    assert evaluate_skill(ctx, sid).verdict == "promote"
-
-    # Same trials, but it aced what it could see and failed what it could not.
-    record_holdout_gap(ctx, sid, visible=0.95, holdout=0.40)
-    d = evaluate_skill(ctx, sid)
-    assert d.verdict == "reject" and "gaming" in d.reason
-
-
-def test_no_gap_recorded_means_no_gaming_verdict(ctx):
-    """Absent the measurement the gate says nothing rather than inventing it."""
-    import time
-
-    from agent.skills.gate import evaluate_skill
+    from agent.skills.gate import GAMING_CHECK, evaluate_skill
 
     sid = ctx.skills.store("clean", "# clean\nwhen x\n\n## step\ndo\n", {}, {})
     for i in range(30):
@@ -187,4 +169,9 @@ def test_no_gap_recorded_means_no_gaming_verdict(ctx):
                 "paid_tokens,free_tokens,wall_ms,created_at) VALUES (?,?,?,?,?,?,?,?,?)",
                 (sid, f"k{i}", arm, val, float(val), 0, 0, 0, time.time()))
     ctx.conn.commit()
-    assert evaluate_skill(ctx, sid).verdict == "promote"
+    d = evaluate_skill(ctx, sid)
+    assert d.verdict == "promote"
+    assert d.detail.get("gaming_check") == GAMING_CHECK, d.detail
+    for phrase in ("not applicable", "every check is held out",
+                   "grader is unreachable", "C1"):
+        assert phrase in GAMING_CHECK

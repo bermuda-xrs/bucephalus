@@ -162,13 +162,15 @@ def test_the_verifier_no_longer_depends_on_the_process_directory(tmp_path, monke
     assert r.passed, f"CWD still leaks into resolution: {r.observation}"
 
 
-def test_a_promotion_states_whether_the_gaming_veto_ran():
-    """M7.4 rule 4 is inoperative for verify_program suites. Say so.
+def test_a_promotion_states_why_the_gaming_veto_does_not_apply():
+    """M7.4 rule 4 was retired with M11 (FINDINGS 1.27). Say why, in the verdict.
 
-    `record_holdout_gap` has no callers, and the only visible/held-out
-    partition lives in the M11 generator, which has never run. A promotion
-    that silently skipped the check looks identical to one that passed it.
+    A promotion that silently skipped a check looks identical to one that
+    passed it. The reason it does not apply is THIS file's subject: every check
+    is held out, because the grader is unreachable.
     """
+    from agent.skills.gate import GAMING_CHECK
+
     src = (ROOT / "src" / "agent" / "skills" / "gate.py").read_text(encoding="utf-8")
-    assert "gaming_check" in src
-    assert "NOT MEASURED" in src, "an unrun veto must be named in the verdict"
+    assert "gaming_check=GAMING_CHECK" in src
+    assert "grader is unreachable" in GAMING_CHECK and "C1" in GAMING_CHECK
