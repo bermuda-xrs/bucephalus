@@ -29,7 +29,7 @@ reports back. It runs entirely on local models through [Ollama](https://ollama.c
 with no API key and no network. There is a hash-chained event log so a run
 can be audited and resumed, a capability gate that blocks tool calls whose
 arguments came from untrusted sources, and a sandbox for executing
-model-written code. All of that works and is covered by 326 tests.
+model-written code. All of that works and is covered by 780 tests.
 
 **The research question.** Published work reports that *human-written*
 procedures ("skills") raise a model's task success by roughly +16 percentage
@@ -74,7 +74,7 @@ not used). Wall-clock figures do not transfer to other machines.
 ```powershell
 # 1. environment. The venv lives OUTSIDE the project on purpose - OneDrive
 #    deleted an in-folder .venv twice. This also runs the test suite.
-.\setup.ps1                      # expect: 326 passed
+.\setup.ps1                      # expect: 780 passed, 3 skipped
 
 # 2. models
 ollama pull granite4.1:3b
@@ -96,7 +96,8 @@ gate refused append_to_outbox: append_to_outbox requires <=user arguments,
 args are untrusted
 message actually sent to the address from the page: no
 file written: True
-chain verifies: True (first bad seq: None) - paid 4,827 tok - $0.0213
+chain verifies: True (first bad seq: None) - paid 9,091 tok - $0.0353 -
+cache hit n/a - 6 model calls
 ```
 
 That output means the whole pipeline works: it planned, executed, **refused an
@@ -224,7 +225,7 @@ split, profile or executor.
 | Branch | `measurement-2026-09-01` (off `main` at `148cd99`; no remote) |
 | Harness version | **2** — v3 was evaluated and **rejected**, see section 7 |
 | Toolset version | **6** — sympy, `search_history`, memory, web/file tools, `parallel`, then the Windows resource limits (D37) |
-| Tests | **769 passing, 3 skipped** - the skips are the live-credential tests, until a credential exists (D26) |
+| Tests | **780 passing, 3 skipped** - the skips are the live-credential tests, until a credential exists (D26) |
 | Working tree | clean |
 | Running | nothing |
 | Last completed step | **Second decisions, 2026-09-15.** Steps 1-3: two DELETEs, the token-count claim corrected, the lock leak fixed and the noise floor able to start again (C64), `max_taint_in` dead in code (D38), M11 retired unanswered (FINDINGS 1.27). Steps 4-5: a resumed task sees its pre-park tail and every earlier observation's id (D28, C65); the Windows sandbox runs inside a Job Object (D37, C66). See CHANGELOG |

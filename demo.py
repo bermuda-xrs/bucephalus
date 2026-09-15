@@ -177,10 +177,15 @@ def main() -> int:
 
     ok, bad = ctx.log.verify(task.id)
     m = ctx.telemetry.metrics(task.id)
+    # Invariant 36 on a display: unmeasured is null, and null prints as n/a.
+    # A local backend reports no cache accounting, so this is None on every
+    # run of this demo - and `:.0%` on None killed it from 2026-09-06 to
+    # 2026-09-16. C58's defect, in the second place nobody swept.
+    cache = "n/a" if m.cache_hit_ratio is None else f"{m.cache_hit_ratio:.0%}"
     console.print(
         f"\nchain verifies: {ok} (first bad seq: {bad}) · "
         f"paid {m.paid_tokens:,} tok · ${m.cost_usd:.4f} · "
-        f"cache hit {m.cache_hit_ratio:.0%} · {m.n_calls} model calls"
+        f"cache hit {cache} · {m.n_calls} model calls"
     )
     console.print(f"[dim]everything it wrote is under {SANDBOX}[/dim]")
     ctx.close()

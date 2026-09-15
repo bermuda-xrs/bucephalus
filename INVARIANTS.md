@@ -719,6 +719,15 @@ suspended. A job that cannot be applied refuses the run. File size is not
 limited on Windows (Phase 6).
 *Caught by:* `tests/test_sandbox_limits.py`.
 
+## Added 2026-09-16 (the entry-point sweep)
+
+**113. Every documented entry point is invoked by a test, not only imported.**
+`demo.py` is run end to end and its summary asserted; `bench/noise.py main`
+runs to its first decision; the CLI and every `bench/*.py main` start and build
+their parsers. Two are exempt and named in the test: `cache_reuse_probe.py`
+(no parser, needs a live server) and the PowerShell wrappers.
+*Caught by:* `tests/test_entry_points.py`, `tests/test_noise_main.py`.
+
 ---
 
 ## Design rules

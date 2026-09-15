@@ -1,0 +1,151 @@
+# VERIFICATION RUN ONLY, 2026-09-16. config.local.yaml with its own
+# database and anchor, so a smoke run never writes into the measurement
+# record (agent.local.db). Delete after the run; the record of it is in
+# docs/evidence/.
+# ALL-LOCAL profile — runs the whole system with NO API key and no network.
+#
+#   alpha.cmd --config config.local.yaml new "..." --scope work
+#
+# Everything runs on Granite 4.1 through the dedicated Ollama instance. Start
+# it first with ollama-serve.cmd, or every call fails with a connection refusal.
+#
+# BE HONEST ABOUT WHAT THIS IS. On CPU-only hardware the 3B runs at roughly
+# 1.4-2.1 tok/s and the 8B at 0.7 tok/s (measured, `alpha bench-local`). A
+# single turn is 20-40 seconds. This profile exists so the whole pipeline is
+# genuinely runnable and inspectable end to end without a paid key — not
+# because a 3B model is a good agent. Use small tasks and few steps.
+#
+# The invariant that shapes this file: the reviewer MUST be a different
+# backend from the executor (M13.3, invariant 14). So the 3B executes and the
+# 8B reviews — genuinely different models, which is the point of the rule.
+
+db_path: "./runs/verify-2026-09-16/agent.verify.db"
+anchor_path: "./runs/verify-2026-09-16/chain.verify.anchor"
+skills_path: "./skills_store"
+
+backends:
+  # "cloud" is the executor slot. Here it is the fast local model.
+  cloud:
+    kind: ollama
+    model: "granite4.1:3b"
+    endpoint: "http://localhost:11435"
+    input_cost_per_mtok: 0.0
+    output_cost_per_mtok: 0.0
+    cache_read_per_mtok: 0.0
+    cache_write_per_mtok: 0.0
+    context_window: 131072
+    usable_context_window: 16384    # CPU inference: long prompts cost wall clock
+    can_parallel: false
+    thinking: "disabled"            # a 3B that reasons for 2000 tokens is slower
+    accepts_temperature: true
+    max_output_tokens: 512
+    trust_tier: local
+
+  # The deputy. A different model from the executor, per invariant 14.
+  review:
+    kind: ollama
+    model: "granite4.1:8b"
+    endpoint: "http://localhost:11435"
+    input_cost_per_mtok: 0.0
+    output_cost_per_mtok: 0.0
+    cache_read_per_mtok: 0.0
+    cache_write_per_mtok: 0.0
+    context_window: 131072
+    usable_context_window: 8192
+    can_parallel: false
+    thinking: "disabled"
+    accepts_temperature: true
+    max_output_tokens: 128          # it only emits VERDICT + BECAUSE
+    trust_tier: local
+
+  local:
+    kind: ollama
+    model: "granite4.1:3b"
+    endpoint: "http://localhost:11435"
+    context_window: 131072
+    usable_context_window: 16384
+    thinking: "disabled"
+    accepts_temperature: true
+    max_output_tokens: 512
+    trust_tier: local
+
+# No separate offload tier: the executor is already the local model, so
+# compressing its own input on the same model would be pure overhead.
+active_local_tier: null
+
+limits:
+  context_fill_ratio: 0.28
+  default_task_budget_usd: 0.0      # nothing here costs money
+  default_task_budget_seconds: 1800 # ...but it costs a LOT of wall clock
+  max_refinement_iterations: 2
+  # 6 was a step budget masquerading as difficulty: 11 of 30 tasks never
+  # reached a single verification. Reading inputs, writing a program,
+  # recovering from one syntax error and emitting a final does not fit in 6.
+  max_steps: 10
+  delegation_min_isolated_tokens: 1000
+
+local_allowlist: []
+laptop_allowlist: []
+compress_observations_over_tokens: 100000   # effectively off; see above
+
+gate:
+  # Lowered from 30 after the suite settled at 15 eval tasks. This is NOT a
+  # weakening, and the direction is worth being precise about: McNemar reads
+  # only DISCORDANT pairs, so n=15 with 10 discordant is exactly as valid as
+  # n=30 with 10 discordant. min_paired_trials was never a statistical guard —
+  # it was a proxy for "enough discordant pairs will emerge". Holding
+  # min_discordant_pairs at 10 against a pool of 15 instead of 30 means a
+  # skill must now change 67% of outcomes rather than 33%. Strictly harder.
+  min_paired_trials: 15
+
+  # DO NOT LOWER. This is the real guard against a fluke result.
+  # Exact binomial thresholds, i.e. how many discordant pairs must favour
+  # the skill — roughly 75-80% of disagreements, at any n:
+  #   10 discordant -> need  9 (p=0.011);  8 fails (p=0.055)
+  #   13 discordant -> need 10 (p=0.046)
+  #   15 discordant -> need 12 (p=0.018)
+  #   20 discordant -> need 15 (p=0.021)
+  min_discordant_pairs: 10
+
+  max_p_value: 0.05
+
+  # INERT AT THIS SCALE — do not treat it as protection. With
+  # min_discordant_pairs=10 and p<0.05 the minimum passing configuration is
+  # b=9, c=1, so b-c=8 and lift = 800/n, which stays above 5pp for any n
+  # below 160. Retained for larger suites, where it starts to bind.
+  min_lift_pp: 5.0
+
+# Load-bearing constraints, in order:
+#   1. min_discordant_pairs   guards against a fluke
+#   2. max_p_value            the actual test
+#   3. the catastrophic-regression veto (assure/mesh.py, skills/gate.py)
+#   4. min_lift_pp            inert here
+#
+# Trials are counted at TASK level. Never reach a trial count by re-running
+# one task under different seeds: two runs of the same task share its
+# underlying difficulty, so counting them as two pairs inflates n without
+# adding information and makes the p-value anti-conservative.
+
+autonomy:
+  mode: "plan_then_run"
+  plan_required: false              # a 3B planner is not worth the wall clock
+  auto_review: true
+  auto_review_backend: "review"     # granite4.1:8b, different from the executor
+  auto_review_policy: "./policy.md"
+
+  # Treat the CODE gate as sufficient for a side-effecting action already
+  # inside artifact_scope and at or below USER taint: no deputy, no human.
+  # Untrusted arguments never qualify — the taint ceiling refuses those first,
+  # which is the injection case — and trusted-tier actions still park.
+  #
+  # Turn this ON for benchmark runs. The alternative is either parking on
+  # every file write, or putting a nondeterministic LLM inside the thing you
+  # are trying to measure. Leave it OFF for unattended real work.
+  approve_scoped_writes: false
+  deviation_tolerance: 0.25
+  human_only_tiers: ["trusted"]
+
+ui:
+  theme: "./themes/default.toml"
+  banner_art: "./assets/banner.ans"
+  spinner: "braille"

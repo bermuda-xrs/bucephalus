@@ -1276,6 +1276,79 @@ now**. This is a method with no production reader, the class of thing the
 dead-code audit cannot see (D22). It is recorded here so that reopening M11
 finds its input path intact.
 
+### 1.28 An entry point is the least-tested code in a project
+
+**The rule.** A test imports what an entry point CALLS, instead of calling the
+entry point. Coverage accumulates underneath the front door and never touches
+it. The deeper the unit coverage, the more convincing the illusion: 769
+passing tests are evidence about functions, not about the program.
+
+**Measured 2026-09-16: two documented front doors were dead for ten days,
+both broken by ONE commit** - `b0bdcd7`, 2026-09-06, "Corrections: the
+prefix-cache alarm can fire, and the class-name defect is swept" - with the
+full suite green over both.
+
+| front door | documented in | how it died |
+|---|---|---|
+| `bench/noise.py main` | README, step 1 of the measurement flow | `exec_cfg = ctx.config.backends["cloud"]` was added forty-five lines ABOVE the `ctx = open_measurement(...)` that defines it. `UnboundLocalError` before the first task (C64) |
+| `demo.py` | README; HANDOVER section 2, step 4; RELEASE's one end-to-end demonstration | it did all the work, then formatted an unmeasured cache ratio with `:.0%` on its last line. `TypeError`, exit 1 |
+
+`demo.py` was bisected: it worked at `7aed79f` and failed at `b0bdcd7`, which
+introduced the `measurable` guard that makes the ratio None for a local
+backend. **It is C58's defect** - the same `:.0%` on the same None - found in
+the CLI on 2026-09-14 by a real run, fixed there, and never swept for
+siblings. The second site sat in the demo everyone is told to run first.
+
+**Both were found the same way:** by writing a test that calls the entry
+point rather than its parts.
+
+#### The sweep: every entry point, and what invokes it
+
+"Starts" means `--help`, which runs the module's imports and builds its
+parser - where a missing import or a mis-wired subcommand shows. It is not a
+claim that the command works.
+
+| entry point | documented | invoked by a test BEFORE 2026-09-16 | now |
+|---|---|---|---|
+| `demo.py` | README, HANDOVER, RELEASE | **no** - dead 10 days | run in full, output asserted |
+| `bench/noise.py main` | README step 1 | **no** - dead 10 days; a test added 2026-09-15 after the outage | to its first decision, plus starts |
+| `src/agent/cli.py main` (`alpha`) | README, HANDOVER | **no** - two private helpers were imported, the front door never called | starts |
+| `bench/run.py main` | README step 2 | **no** - `cmd_paired` is called directly by 11 tests, `main` by none | starts, plus `cmd_paired` |
+| `bench/report.py main` | README step 4 | **no** - its render functions are tested | starts |
+| `bench/coverage.py main` | HANDOVER | **no** - `load_tasks` is tested | starts |
+| `bench/ladder.py main` | HANDOVER, FINDINGS 1.6-1.8 | **no** - source-text scans only | starts |
+| `bench/nextstep.py main` | HANDOVER | **no** - its internals are tested | starts |
+| `bench/cache_boundary.py main` | FINDINGS 1.18 | **no** | starts |
+| `bench/suites/archive/aero_calc.py main` | README (suite loading) | **no** - the suite's data is tested | starts |
+| `bench/archive/decompose_aero.py main` | FINDINGS 1.14 | **no** - the decomposer is tested | starts |
+| `agent.control.asgi:app` (uvicorn) | README | **yes** - `test_m12_serve` spawns the real server | unchanged |
+| `bench/cache_reuse_probe.py` | FINDINGS 1.18 | **no** | **still none**: no parser, and it needs a live model server |
+| `alpha.ps1`, `setup.ps1`, `ollama-serve.ps1`, `measure.ps1` | README, HANDOVER | **no** | **still none**: no test runs PowerShell |
+
+**Before today, 1 of 13 program entry points had a test that invoked it.**
+Two more now do in full, nine more at least start, and the remaining two are
+named above with the reason.
+
+**The next layer down is the same risk, unclosed.** The CLI's **25
+subcommands** are reachable now only through `--help`. Part 3 ran five of them
+for real, by hand, and that run found two defects no test had (C58). Nothing
+automated enters those rooms.
+
+#### The same failure, one level down, found the same session by another route
+
+`fetch_url` (see 1.27's deletions) was a wrapper that no production path
+called, and **two network-safety tests were guarding it** - non-http schemes
+and private addresses - while `web_fetch` ran `fetch_with_provenance`. The
+tests were retargeted at the function that runs.
+
+The two finds are one failure at different distances from the front door:
+- a test can guard code that nobody calls (`fetch_url`);
+- no test guarded code that everybody calls (`main`).
+
+Both were invisible to the dead-code audit, which reads production call sites:
+`fetch_url` had one until its caller was deleted, and `main` is called by the
+operating system.
+
 ---
 
 ## 8. Open research questions

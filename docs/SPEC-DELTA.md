@@ -1408,3 +1408,23 @@ CPU time, process count), plus kill on close. The launcher is started
 suspended, assigned, and only then resumed, and a second test pins that flag
 directly. A timeout closes the whole job. A job that cannot be applied refuses
 the run. File size waits for Phase 6. TOOLSET_VERSION 6 (invariant 112).
+
+### C67. Two documented front doors were dead, and C58's fix was never swept
+
+**Reality:** one commit on 2026-09-06 (`b0bdcd7`) broke two entry points, and
+the suite stayed green over both for ten days:
+- `bench/noise.py main` read `ctx` before assigning it (C64);
+- `demo.py` formatted an unmeasured cache ratio with `:.0%`, after doing all
+  of its work.
+
+The second is **C58's own defect**. C58 was found by a real run on 2026-09-14
+and fixed in `cli.py::_print_budget`; nobody asked where else an unmeasured
+value is formatted. `demo.py` is the first thing README, HANDOVER and RELEASE
+each tell a reader to run.
+
+**Correct version:** `demo.py` prints `n/a` for an unmeasured ratio, the rule
+`_fmt` already applied in the CLI. Every entry point now has a test that
+INVOKES it, rather than importing what it calls: `tests/test_entry_points.py`
+(invariant 113, FINDINGS 1.28). The two that still have none - a probe with no
+parser that needs a live server, and the PowerShell wrappers - are named
+there.

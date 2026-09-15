@@ -15,6 +15,9 @@ wrong here at least once.
 - [x] `setup.ps1` completes and the suite is green (223 tests)
 - [x] `demo.py` runs end to end with no network, refuses an injected
       instruction, and reports a verifying hash chain
+      *(this box was FALSE from 2026-09-06 to 2026-09-16: the demo did all
+      the work and then died formatting an unmeasured cache ratio. Fixed, and
+      now run by a test - C67, invariant 113, FINDINGS 1.28)*
 - [x] Every benchmark answer independently recomputed — no expected value
       exists only as a table entry (`tests/test_bench_suite.py`)
 - [x] Every verifier rejects a deliberately wrong answer. A suite whose

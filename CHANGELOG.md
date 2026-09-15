@@ -10,6 +10,53 @@
 Dates are commit dates. `0.1.0` is not released yet — see "Unreleased" for
 what still stands between here and a first iteration.
 
+## The entry-point sweep - 2026-09-16
+
+**Moves no published number.** One front door repaired, one rule recorded, and
+every entry point now invoked by a test.
+
+### `demo.py` was dead for ten days, and it is C58's defect
+
+The README's, HANDOVER's and RELEASE's end-to-end proof did all of its work
+and then died on its last line, formatting an unmeasured cache ratio with
+`:.0%`. Bisected: it worked at `7aed79f` and failed at `b0bdcd7` (2026-09-06),
+**the same commit that killed `bench/noise.py main`** - one commit, two
+documented front doors, with the suite green over both.
+
+It is the defect C58 found in the CLI on 2026-09-14 by a real run. That fix
+was never swept for siblings, and the sibling was in the first thing every
+document tells a reader to run. `demo.py` now prints `n/a`, the rule `_fmt`
+already applied in the CLI (C67).
+
+### The rule, and the sweep
+
+**An entry point is the least-tested code in a project**, because a test
+imports what it CALLS rather than calling it. FINDINGS 1.28 carries the rule,
+the two dead doors, and the table: **before today, 1 of 13 program entry points
+had a test that invoked it** - the ASGI app, spawned by `test_m12_serve`.
+
+`tests/test_entry_points.py` now runs `demo.py` in full and asserts its
+summary, and starts the CLI and every `bench/*.py main` (`--help` runs the
+imports and builds the parser). Two remain uninvoked and are named there: the
+cache-reuse probe, which has no parser and needs a live server, and the
+PowerShell wrappers (invariant 113).
+
+**Not closed:** the CLI's 25 subcommands are reachable only through `--help`.
+Part 3 ran five by hand and found two defects no test had.
+
+### Stale claims corrected, found by the sweep
+
+- HANDOVER's setup step said "expect: 326 passed"; the demo's expected output
+  showed figures from a run two versions old.
+- RELEASE's `demo.py` checkbox was ticked while the demo exited 1. The box
+  now carries the dates it was false.
+
+### Tests
+
+**780 passing, 3 skipped.** 11 new, all in `tests/test_entry_points.py`.
+Injections: 3 of 3 red - the demo's format restored, an entry point that
+cannot import, and a CLI that raises before its parser.
+
 ## Consolidation - the second decisions, steps 4-5 - 2026-09-15
 
 **Moves no published number. TOOLSET_VERSION 5 → 6; HARNESS_VERSION
