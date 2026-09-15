@@ -10,6 +10,77 @@
 Dates are commit dates. `0.1.0` is not released yet — see "Unreleased" for
 what still stands between here and a first iteration.
 
+## Consolidation - the second decisions, steps 4-5 - 2026-09-15
+
+**Moves no published number. TOOLSET_VERSION 5 → 6; HARNESS_VERSION
+unchanged.**
+
+### 4. D28 - a resumed task sees what it saw when it parked
+
+The scoping found D28's premise wrong. The model could not reach its history
+by any tool: `search_history` does not index tool output, and
+`expand_artifact` needs ids that only the lost tail carried. Built as option 2
+plus the id list:
+- **At the park,** the tail is written as structured entries, each with its own
+  taint. The chained `task.park_seed` event commits to its hash.
+- **On resume,** it is verified (a tampered seed halts, the S2 path) and
+  restored entry by entry into the tail and the taint tracker. Duplicate notes
+  are dropped by content.
+- **Then the ids.** Up to 100 of every earlier observation's ids follow, each
+  readable with `expand_artifact`.
+- **On the record.** `task.seed_restored` records what was restored.
+
+**The step counter is not restored,** because receipt keys are built from it.
+**Per-entry taint is the design.** A seed flattened into one blob, the session
+boundary's shape, makes the objective's own words untrusted, and the test for
+exactly that goes red. The prefix is untouched: no version bump, and no bump
+for D38 either (invariant 111, C65).
+
+### 5. D37 - the Windows sandbox runs inside a Job Object
+
+`src/agent/execute/winjob.py` enforces the POSIX limits' own numbers:
+- memory, 512 MB per process;
+- CPU time equal to the timeout, user-mode, every process;
+- 32 processes;
+- kill on close.
+
+Each limit was measured on this machine before the code existed, and is
+tested for real now.
+
+**The launcher.** The venv `python.exe` starts the real interpreter as a
+child, so it is started suspended, assigned to the job, then resumed: the
+interpreter is born inside the job. **Fail closed:** a job that cannot be
+applied refuses the run. **File size waits for Phase 6,** and every run's
+`notes` say so.
+
+**Two things found building it (C66):**
+- **A timeout killed only the launcher.** The real interpreter kept running
+  with the pipes open. A timeout now closes the whole job.
+- **The trampoline test could not catch the defect it was written for.**
+  With the suspended start removed, it still passed, because the assignment
+  won the race. A second test pins the flag directly, and it goes red.
+
+**TOOLSET_VERSION 6:** a program past these limits used to finish, and now
+fails. No measurement has run under 6 (invariant 112).
+
+### Tests
+
+**769 passing, 3 skipped.** New:
+- `test_park_seed.py` (5);
+- `test_sandbox_limits.py` (8).
+
+Injections:
+- D28: 6 of 6 red;
+- D37: 8 of 8 red, one only after the second test was added (above).
+
+### Pile
+
+31 at the start of the session → **28 active**:
+- D28 and D37 are closed;
+- D19 is dormant with M11;
+- D38 is open, with its deadline;
+- no new entries.
+
 ## Consolidation - the second decisions, steps 1-3 - 2026-09-15
 
 **Moves no published number.** Two functions are deleted, a false claim

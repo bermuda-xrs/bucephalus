@@ -1367,3 +1367,44 @@ showed up as ten.
 each entry point releases the lock in a `finally`. `tests/test_noise_main.py`
 runs `main` to its first decision, with the orphan reaper and memory probes
 stubbed so a test can never kill a worker (invariant 108).
+
+### C65. D28's premise was wrong, and the restore must not flatten taint
+
+**Reality:** D28 said a resumed task's history was reachable through
+`expand_artifact` or `search_history`. It was not:
+- `search_history` does not index tool output;
+- `expand_artifact` takes an id the model only ever saw in the tail it lost.
+
+So a resumed task started over with one fact and no route to the rest.
+
+Phase 9 had half a fix. A session boundary writes the tail as a seed, but as
+one rendered blob carrying the join of its entries' taints. Restored like that,
+the objective's own words would be untrusted to the argument-taint check, and
+every action quoting them would park.
+
+**Correct version:**
+- At a park, the tail is written as structured entries, each with its own
+  taint. `task.park_seed` commits to its hash.
+- On resume it is verified (a mismatch halts), restored entry by entry into
+  the tail and the taint tracker, and followed by the id of every earlier
+  observation.
+- Step numbering is untouched, because receipt keys are built from it.
+- The prefix is untouched (invariant 111).
+
+### C66. The Windows sandbox had no resource limits, and its timeout killed the wrong process
+
+**Reality:** the POSIX rlimits never applied on Windows, the only platform any
+run here came from. Building the fix found two more things:
+- **The timeout killed the wrong process.** It killed the process `Popen`
+  started, which in a venv is the launcher, while the real interpreter kept
+  running with the pipes open.
+- **The test meant to catch the launcher's child escaping the job could not
+  catch it.** With the suspended start removed, it still passed, because the
+  assignment won the race. The ordering was a race, and the test only
+  observed the race's usual outcome.
+
+**Correct version:** a Job Object with the POSIX limits' own numbers (memory,
+CPU time, process count), plus kill on close. The launcher is started
+suspended, assigned, and only then resumed, and a second test pins that flag
+directly. A timeout closes the whole job. A job that cannot be applied refuses
+the run. File size waits for Phase 6. TOOLSET_VERSION 6 (invariant 112).

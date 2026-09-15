@@ -223,12 +223,12 @@ split, profile or executor.
 |---|---|
 | Branch | `measurement-2026-09-01` (off `main` at `148cd99`; no remote) |
 | Harness version | **2** — v3 was evaluated and **rejected**, see section 7 |
-| Toolset version | **5** — sympy, `search_history`, memory, web/file tools, then `parallel` |
-| Tests | **756 passing, 3 skipped** - the skips are the live-credential tests, until a credential exists (D26) |
+| Toolset version | **6** — sympy, `search_history`, memory, web/file tools, `parallel`, then the Windows resource limits (D37) |
+| Tests | **769 passing, 3 skipped** - the skips are the live-credential tests, until a credential exists (D26) |
 | Working tree | clean |
 | Running | nothing |
-| Last completed step | **Second decisions, steps 1-3, 2026-09-15.** Two DELETEs (retrieval precision, `calibrate`) and the false token-count claim corrected. The measurement lock is released on every exit, and the noise floor starts again: it had been unrunnable since 2026-09-06 (C64). `max_taint_in` is dead in code and alive in bytes (D38). M11 is retired unanswered (FINDINGS 1.27), and the deputy's missing rows are FINDINGS 1.26. See CHANGELOG |
-| Next step | Steps 4-5: D28 (the park seed and the id list) and D37 (the Job Object). Open for the user: D26 and Phase 6, decided together. D38's bump has a two-session deadline |
+| Last completed step | **Second decisions, 2026-09-15.** Steps 1-3: two DELETEs, the token-count claim corrected, the lock leak fixed and the noise floor able to start again (C64), `max_taint_in` dead in code (D38), M11 retired unanswered (FINDINGS 1.27). Steps 4-5: a resumed task sees its pre-park tail and every earlier observation's id (D28, C65); the Windows sandbox runs inside a Job Object (D37, C66). See CHANGELOG |
+| Next step | Open for the user: D26 (the credentials) and Phase 6, decided together. **D38's bump has a deadline:** if neither D33's move nor a prefix-touching change bumps HARNESS_VERSION within two more sessions, bump for it alone |
 
 ### Iteration two, so far
 

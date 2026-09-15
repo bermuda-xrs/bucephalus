@@ -416,21 +416,22 @@ stdout/stdin and is gated exactly like a direct action, with side effects
 receipted. An action that would need human approval is refused there rather
 than parked — a sandboxed process cannot be suspended mid-run.
 
-**Resource limits are POSIX-only. On Windows none is enforced.** On POSIX the
-child process gets `RLIMIT_AS` (memory), `RLIMIT_CPU`, `RLIMIT_NPROC` and
-`RLIMIT_FSIZE`. On Windows it gets none of them, and every run in this
-project's history was on Windows. **There, the sandbox is advisory path
-confinement plus a wall-clock timeout, and nothing else.**
+**Resource limits are enforced by the OS on both platforms, except file size
+on Windows.**
+- **POSIX:** the child gets `RLIMIT_AS` (memory), `RLIMIT_CPU`, `RLIMIT_NPROC`
+  and `RLIMIT_FSIZE`. That path has never run.
+- **Windows** (since 2026-09-15, D37): the child runs inside a Job Object with
+  the same numbers - 512 MB per process, CPU time equal to the timeout, 32
+  processes - and whatever it starts dies when the job closes.
 
-Code that allocates without bound, spins every core or writes a disk-filling
-file inside its scope is stopped only by the timeout. It is not stopped at all
-if it finishes first. Starting a process is refused only by the audit hook,
-which is advisory (D32). `run_sandboxed` reports the missing limits in `notes`
-rather than pretending otherwise.
+On Windows, allocating past the limit fails, spinning past it is killed, and a
+33rd process is refused. The venv launcher is started suspended, so the
+interpreter it starts is born inside the job. If the job cannot be applied,
+the code does not run at all.
 
-A Windows Job Object would enforce memory, CPU time and process count
-(DEFERRED D37). File size has no per-process equivalent short of a container
-(Phase 6).
+**File size is not limited on Windows.** There is no per-process equivalent
+short of a container (Phase 6), and `run_sandboxed` says so in every run's
+`notes`.
 
 **It is a door, not a wall, and only Phase 6 makes it a wall.** For agent
 code the hook refuses writes outside the task's scope; reads outside that

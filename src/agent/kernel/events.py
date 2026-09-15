@@ -133,6 +133,11 @@ EVENT_TYPES = frozenset(
         # 11.2. A task that parked with nobody watching, and the notification
         # raised for it.
         "notification.raised",
+        # D28. The tail as it stood when a task parked - structured, each
+        # entry with its own taint - committed to by hash; and, on resume,
+        # what was restored and how many earlier observations were listed.
+        "task.park_seed",
+        "task.seed_restored",
         # A3-1. Two checks that pass SILENTLY left nothing to point at: a real
         # run's log could show that they did not fail, never that they ran.
         # Each now records what it verified.

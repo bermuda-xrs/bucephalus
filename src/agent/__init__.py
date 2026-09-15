@@ -51,4 +51,10 @@ HARNESS_VERSION = 2
 #      tool in a batch was already callable one at a time - but it changes
 #      what a second of wall clock buys, and wall clock is this project's cost
 #      axis. Measurement runs pin it to width 1 and record the setting.
-TOOLSET_VERSION = 5
+#   6  2026-09-15: run_code's resource limits on Windows (D37). A Job Object
+#      caps memory at 512 MB per process, CPU time at the task's own timeout
+#      (user-mode, every process) and processes at 32 - limits POSIX always
+#      declared and Windows, the only platform any number here came from,
+#      never applied. A program past them used to finish and now fails, so a
+#      run can achieve less. No measurement has run under 6.
+TOOLSET_VERSION = 6

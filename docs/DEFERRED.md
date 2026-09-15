@@ -747,7 +747,7 @@ reach a surface while the turn is running, that `cache_read_input_tokens` is
 non-zero on the second call, and that a refusal is reported rather than
 rerouted.
 
-## D28 — a resumed task does not see its own history
+## D28 — a resumed task does not see its own history (CLOSED 2026-09-15: the park seed and the id list, C65)
 
 **Found:** 2026-09-13, while tracing why the taint tracker's lifetime gap was
 latent rather than live.
@@ -762,6 +762,20 @@ tail. A task resumed after approval effectively starts over with one fact.
 and deciding what to restore - all of it, the last session's seed, a
 projection - is a design question that Phase 9's sessions make answerable but
 do not answer.
+
+**Closed 2026-09-15: option 2 plus the id list, built.** The scoping found this
+entry's premise wrong. The model could NOT reach its history by tool:
+`search_history` excludes tool output, and `expand_artifact` needs ids that
+only the lost tail carried.
+
+Now:
+- at the park, the tail is written as structured entries with per-entry taint,
+  and its hash goes on the chain;
+- on resume it is verified and restored, followed by the id of every earlier
+  observation.
+
+The step counter is not restored. There is no prefix change and no version
+bump (invariant 111, SPEC-DELTA C65).
 
 ## D29 — an EMPTY artifact_scope allows every path (CLOSED 2026-09-13: empty means nothing, C53)
 
@@ -942,7 +956,7 @@ Both live paths now have a test that runs the moment the credential exists:
 without it. The same bodies run every suite against local fakes. The STOP is
 unchanged: supplying either credential is the user's decision.
 
-## D37 - resource limits are POSIX-only; on Windows the sandbox enforces none
+## D37 - resource limits are POSIX-only; on Windows the sandbox enforces none (CLOSED 2026-09-15: a Job Object, C66)
 
 **Found:** 2026-09-14, by A2-2 (FINDINGS 1.25). **Stated 2026-09-15** in
 README and RELEASE.
@@ -973,6 +987,19 @@ likely bumps TOOLSET_VERSION. It does not bump HARNESS_VERSION.
 
 **Why not built now:** no new features (2026-09-15). Measurement runs are
 attended and bounded by the wall clock. Cron and the channel are neither.
+
+**Closed 2026-09-15, built on the user's decision.** `execute/winjob.py`
+enforces:
+- memory, 512 MB per process;
+- CPU time equal to the timeout;
+- 32 processes;
+- kill on close.
+
+The launcher is started suspended, assigned to the job, then resumed. The run
+fails closed if the job cannot be applied. Each limit was measured on this
+machine before the code was written, and tested for real after. File size
+still waits for Phase 6. TOOLSET_VERSION is now 6 (invariant 112, SPEC-DELTA
+C66).
 
 ## D38 - `max_taint_in`: DEAD IN CODE, ALIVE IN BYTES - waiting for a HARNESS_VERSION bump
 

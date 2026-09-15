@@ -1136,7 +1136,7 @@ channel (40).
 | `tokens.calibrate` | no caller; no `.token_calibration.json` exists. **Deleted 2026-09-15**: it needed an API key and calibrated to the wrong tokenizer. Recorded usage is the server's own count; the in-loop estimator stays uncalibrated (D6) |
 | `max_taint_in` | carried on every contract, consulted nowhere. **Decided 2026-09-15: DELETE.** No check could give it a meaning (C60). **Dead in code the same day**: its one reader is gone and no other value can be set. Its bytes stay in the prefix until the next HARNESS_VERSION bump (D38, invariant 109) |
 | `generate_skill`, and invariants 4 and 5, which only it reaches | no entry point - and since Part 2, refused in code until M7.4 rules 2 and 3 run. **Retired unanswered 2026-09-15, with invariants 4, 5 and 100 (1.27)** |
-| POSIX rlimits | only Windows has ever run this. **Stated 2026-09-15** in README and RELEASE: on Windows the sandbox is advisory path confinement plus a timeout. Job Objects for memory, CPU time and process count are D37 |
+| POSIX rlimits | only Windows has ever run this. **Stated 2026-09-15** in README and RELEASE: on Windows the sandbox was advisory path confinement plus a timeout. **Built the same day (D37):** a Job Object enforces memory, CPU time and process count on Windows; file size waits for Phase 6. The POSIX path itself has still never run |
 | the live Telegram path; the Anthropic adapter | no token, no key (D26) |
 
 **One thing the record cannot say, and now will.** What the recorded programs

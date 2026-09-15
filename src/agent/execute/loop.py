@@ -19,12 +19,13 @@ import time
 from dataclasses import dataclass, field
 from typing import Any
 
+from ..kernel.events import sha256_hex
 from ..kernel.integrity import IntegrityError, checkpoint, resume
 from ..kernel.receipts import execute_once, idempotency_key
 from ..models.ollama import ModelStall
 from ..kernel.tasks import load_task, set_status, spend
 from ..kernel.types import GateDecision, Taint, TaskStatus, join_taint
-from ..ledger.artifacts import project, write_artifact
+from ..ledger.artifacts import project, read_artifact, write_artifact
 from ..ledger.compact import compact, enforce_ceiling
 from ..ledger.entries import LedgerEntry, render_tail, sum_tokens
 from ..ledger.prefix import PrefixBuilder, PrefixGuard, SYSTEM_CONTRACT
@@ -280,6 +281,9 @@ def run_task(ctx, task_id: str) -> TaskResult:
             from ..plan.planner import verify_plan_pin
 
             plan = verify_plan_pin(ctx, task)
+        # D28. What this task saw when it parked, then where the rest of its
+        # history is - before the released decisions, which came after it.
+        entries.extend(_restore_park_seed(ctx, task, entries))
         # Human decisions made while this task was parked, acted on BEFORE the
         # model gets a turn. See `_release_decided`.
         entries.extend(_release_decided(ctx, task))
@@ -464,6 +468,7 @@ def run_task(ctx, task_id: str) -> TaskResult:
 
     except TaskPaused as p:
         spend(ctx.conn, ctx.log, task, seconds=time.time() - started)
+        _write_park_seed(ctx, task, entries)
         set_status(ctx.conn, ctx.log, task, TaskStatus.PAUSED, p.reason)
         checkpoint(ctx.log, ctx.anchor, task.id)
         return TaskResult(
@@ -677,6 +682,98 @@ def _session_boundary(ctx, task, entries, window, step, plan, skills, builder,
         tool_manual=ctx.tools.manual(), memory=rot["memory"])
     guard.check(builder, task.id)
     return entries, rot["memory"], guard, builder, builder.build()
+
+
+def _write_park_seed(ctx, task, entries: list[LedgerEntry]) -> None:
+    """D28 - the tail as it stood when the task parked, one record per entry.
+
+    STRUCTURED, each entry with its own taint - not the rendered tail. The
+    session boundary's seed is one rendered blob carrying the join of
+    everything in it, in practice UNTRUSTED. Restored that way, the objective's
+    own words would be untrusted to the argument-taint check, and every action
+    quoting them would park: on a channel task, a human interrupted for no
+    security gain.
+
+    No `artifact.written`, for the boundary seed's reason: that event feeds the
+    taint rebuild, and a seed holds trusted notes beside observations. The
+    chained `task.park_seed` event commits to the payload's hash instead.
+    """
+    payload = json.dumps(
+        [{"kind": e.kind, "content": e.content, "artifact_id": e.artifact_id,
+          "taint": e.taint.value, "pinned": e.pinned, "label": e.label,
+          "exact_strings": list(e.exact_strings)} for e in entries],
+        sort_keys=True)
+    aid = write_artifact(ctx.conn, task.id, "park_seed", payload,
+                         join_taint(*(e.taint for e in entries)),
+                         {"entries": len(entries)})
+    ctx.log.append(task.id, "task.park_seed",
+                   {"artifact": aid, "sha256": sha256_hex(payload),
+                    "entries": len(entries)})
+
+
+# How many earlier observations a resumed task is told about by id. The rest
+# are counted; every id stays reachable through the record either way.
+_MAX_LISTED = 100
+
+
+def _restore_park_seed(ctx, task, fresh: list[LedgerEntry]) -> list[LedgerEntry]:
+    """D28 - a resumed task sees what it saw when it parked.
+
+    It used to receive its objective, its plan and the released decisions, and
+    nothing it had observed - and no tool could reach the rest: `search_history`
+    does not index tool output, and `expand_artifact` needs ids that only the
+    lost tail carried. So: the last park's seed, verified against the hash its
+    chained event committed to, each entry restored with its own taint; then
+    the id of every earlier observation.
+
+    The step counter is NOT restored. Receipt keys are built from it and
+    execute-once works as designed; renumbering would be its own decision.
+    """
+    out: list[LedgerEntry] = []
+    restored = 0
+    row = ctx.conn.execute(
+        "SELECT payload_json FROM events WHERE task_id=? AND type='task.park_seed' "
+        "ORDER BY seq DESC LIMIT 1", (task.id,)).fetchone()
+    seed = json.loads(row[0]) if row else None
+    if seed is not None:
+        art = read_artifact(ctx.conn, seed["artifact"])
+        if art is None or sha256_hex(art["content"]) != seed["sha256"]:
+            raise IntegrityError(
+                f"park seed for {task.id} does not match the hash on its chain; "
+                "refusing to show the model a tail nobody can vouch for")
+        already = {e.content for e in fresh}
+        tracker = ctx.taint_tracker(task.id)
+        for d in json.loads(art["content"]):
+            if d["kind"] == "note" and d["content"] in already:
+                continue            # the objective and the plan, re-seeded current
+            e = LedgerEntry(kind=d["kind"], content=d["content"],
+                            artifact_id=d.get("artifact_id"), taint=Taint(d["taint"]),
+                            pinned=bool(d.get("pinned")), label=d.get("label", ""),
+                            exact_strings=list(d.get("exact_strings") or []))
+            # The gate knows what the model is shown, entry by entry.
+            tracker.observe(e.content, e.taint)
+            out.append(e)
+            restored += 1
+
+    ids = ctx.conn.execute(
+        """SELECT json_extract(e.payload_json, '$.id'),
+                  json_extract(a.origin_json, '$.tool')
+           FROM events e JOIN artifacts a ON a.id = json_extract(e.payload_json, '$.id')
+           WHERE e.task_id = ? AND e.type = 'artifact.written' ORDER BY e.seq""",
+        (task.id,)).fetchall()
+    shown = ids[-_MAX_LISTED:]
+    if shown:
+        more = (f"\n  ({len(ids) - len(shown)} earlier not listed)"
+                if len(ids) > len(shown) else "")
+        out.append(LedgerEntry.note(
+            f"This task was resumed. It made {len(ids)} observation(s) before; "
+            "each can be read back in full with expand_artifact(id):\n"
+            + "\n".join(f"  {aid}  {tool or '?'}" for aid, tool in shown) + more))
+    if seed is not None or shown:
+        ctx.log.append(task.id, "task.seed_restored",
+                       {"artifact": seed["artifact"] if seed else None,
+                        "entries": restored, "ids_listed": len(shown)})
+    return out
 
 
 def _release_decided(ctx, task) -> list[LedgerEntry]:

@@ -31,6 +31,9 @@ IS_POSIX = os.name == "posix"
 
 MEM_LIMIT_BYTES = 512 * 1024 * 1024
 FSIZE_LIMIT_BYTES = 64 * 1024 * 1024
+# Enforced by the OS on both platforms: rlimits on POSIX, a Job Object on
+# Windows (D37). File size is the one limit Windows cannot give per process.
+MAX_PROCESSES = 32
 OUTPUT_CAP = 16000
 TOOLCALL_MARKER = "\x01TOOLCALL"
 
@@ -44,12 +47,55 @@ def _posix_limits(timeout_s: int):  # pragma: no cover - not reachable on Window
         resource.setrlimit(resource.RLIMIT_AS, (MEM_LIMIT_BYTES,) * 2)
         resource.setrlimit(resource.RLIMIT_CPU, (timeout_s, timeout_s))
         try:
-            resource.setrlimit(resource.RLIMIT_NPROC, (32, 32))
+            resource.setrlimit(resource.RLIMIT_NPROC, (MAX_PROCESSES, MAX_PROCESSES))
         except (ValueError, OSError):
             pass
         resource.setrlimit(resource.RLIMIT_FSIZE, (FSIZE_LIMIT_BYTES,) * 2)
 
     return apply
+
+
+def _windows_limits(timeout_s: int):
+    """D37. The POSIX limits' Windows equivalents, the same numbers: memory per
+    process, CPU time equal to the wall-clock budget, the process count."""
+    from .winjob import JobLimits
+
+    return JobLimits(memory_bytes=MEM_LIMIT_BYTES, cpu_seconds=timeout_s,
+                     max_processes=MAX_PROCESSES)
+
+
+def _limits_refused(error: Exception) -> dict:
+    """Fail closed: a child whose limits could not be applied never ran."""
+    return {"stdout": "", "returncode": -1,
+            "stderr": ("sandbox: resource limits could not be applied, so the "
+                       f"code was not run: {error}")}
+
+
+class _JobRef:
+    """A job handle closed exactly once, from whichever thread gets there
+    first - the timeout timer or the caller. Closing it ends every process
+    inside, the interpreter the venv launcher started included."""
+
+    def __init__(self, job) -> None:
+        self._job = job
+        self._lock = threading.Lock()
+
+    def close(self) -> None:
+        with self._lock:
+            job, self._job = self._job, None
+        if job:
+            from .winjob import close_job
+
+            close_job(job)
+
+
+def _cpu_limit_note(returncode, timeout_s: int) -> str:
+    if IS_POSIX:
+        return ""
+    from .winjob import CPU_LIMIT_EXIT
+
+    return (f"\nsandbox: CPU time limit reached ({timeout_s} s)"
+            if returncode == CPU_LIMIT_EXIT else "")
 
 
 # SQLite files that carry CONTENT beside a database. The newest rows of a WAL
@@ -536,8 +582,9 @@ def run_sandboxed(
     notes: list[str] = []
     if not IS_POSIX:
         notes.append(
-            "no rlimits on this platform: memory and CPU caps not enforced, "
-            "only the wall-clock timeout"
+            f"job object: memory {MEM_LIMIT_BYTES // 2**20} MB per process, CPU "
+            f"{timeout_s} s, {MAX_PROCESSES} processes; file size not limited on "
+            "this platform (Phase 6)"
         )
 
     with tempfile.TemporaryDirectory(prefix="alpha_sbx_") as workdir:
@@ -588,13 +635,13 @@ def run_sandboxed(
 
 
 def _run_batch(argv: list[str], workdir: str, env: dict, timeout_s: int) -> dict:
-    kwargs: dict = {}
-    if IS_POSIX:
-        kwargs["preexec_fn"] = _posix_limits(timeout_s)
+    if not IS_POSIX:
+        return _run_batch_in_job(argv, workdir, env, timeout_s)
     try:
         proc = subprocess.run(  # noqa: S603 - the point of this function
             argv, cwd=workdir, env=env, capture_output=True, text=True,
-            encoding="utf-8", errors="replace", timeout=timeout_s, **kwargs,
+            encoding="utf-8", errors="replace", timeout=timeout_s,
+            preexec_fn=_posix_limits(timeout_s),
         )
         return {
             "stdout": (proc.stdout or "")[-OUTPUT_CAP:],
@@ -605,6 +652,40 @@ def _run_batch(argv: list[str], workdir: str, env: dict, timeout_s: int) -> dict
         return {"stdout": "", "stderr": "TIMEOUT", "returncode": -1}
 
 
+def _run_batch_in_job(argv: list[str], workdir: str, env: dict, timeout_s: int) -> dict:
+    """D37 - the same run inside a Job Object, whose limits the kernel enforces.
+
+    On a timeout the whole JOB is closed, not only the process Popen started:
+    that is the venv launcher, and killing it alone left the real interpreter
+    running with the pipes open.
+    """
+    from .winjob import JobError, spawn_in_job
+
+    try:
+        proc, job = spawn_in_job(
+            argv, _windows_limits(timeout_s), cwd=workdir, env=env,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+            encoding="utf-8", errors="replace")
+    except JobError as e:
+        return _limits_refused(e)
+    ref = _JobRef(job)
+    try:
+        try:
+            out, err = proc.communicate(timeout=timeout_s)
+        except subprocess.TimeoutExpired:
+            ref.close()
+            proc.kill()
+            proc.communicate()
+            return {"stdout": "", "stderr": "TIMEOUT", "returncode": -1}
+    finally:
+        ref.close()
+    return {
+        "stdout": (out or "")[-OUTPUT_CAP:],
+        "stderr": ((err or "") + _cpu_limit_note(proc.returncode, timeout_s))[-OUTPUT_CAP:],
+        "returncode": proc.returncode,
+    }
+
+
 def _run_with_bridge(
     argv: list[str], workdir: str, env: dict, timeout_s: int, handler: ToolHandler
 ) -> dict:
@@ -613,15 +694,21 @@ def _run_with_bridge(
     stderr is drained on its own thread so a chatty child cannot deadlock by
     filling the stderr pipe while we are blocked reading stdout.
     """
-    kwargs: dict = {}
+    popen = dict(cwd=workdir, env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                 stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace",
+                 bufsize=1)
+    ref = _JobRef(None)
     if IS_POSIX:
-        kwargs["preexec_fn"] = _posix_limits(timeout_s)
+        proc = subprocess.Popen(argv, preexec_fn=_posix_limits(timeout_s),  # noqa: S603
+                                **popen)
+    else:
+        from .winjob import JobError, spawn_in_job
 
-    proc = subprocess.Popen(  # noqa: S603
-        argv, cwd=workdir, env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace",
-        bufsize=1, **kwargs,
-    )
+        try:
+            proc, job = spawn_in_job(argv, _windows_limits(timeout_s), **popen)
+        except JobError as e:
+            return {**_limits_refused(e), "tool_calls": 0}
+        ref = _JobRef(job)
 
     stderr_parts: list[str] = []
 
@@ -638,6 +725,7 @@ def _run_with_bridge(
 
     def _kill() -> None:
         timed_out["v"] = True
+        ref.close()                     # the whole job, launcher's child included
         try:
             proc.kill()
         except Exception:  # noqa: BLE001
@@ -678,13 +766,15 @@ def _run_with_bridge(
             except Exception:  # noqa: BLE001
                 pass
         drainer.join(timeout=2)
+        ref.close()
 
     if timed_out["v"]:
         return {"stdout": "", "stderr": "TIMEOUT", "returncode": -1,
                 "tool_calls": n_tool_calls}
     return {
         "stdout": "".join(out_lines)[-OUTPUT_CAP:],
-        "stderr": "".join(stderr_parts)[-OUTPUT_CAP:],
+        "stderr": ("".join(stderr_parts)
+                   + _cpu_limit_note(proc.returncode, timeout_s))[-OUTPUT_CAP:],
         "returncode": proc.returncode if proc.returncode is not None else -1,
         "tool_calls": n_tool_calls,
     }

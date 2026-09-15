@@ -703,6 +703,22 @@ words, never a bare "skipped".
 *Caught by:* `test_a_promotion_says_the_gaming_veto_does_not_apply_and_why`,
 `test_a_promotion_states_why_the_gaming_veto_does_not_apply`.
 
+## Added 2026-09-15 (steps 4-5 - resume history, and the Windows limits)
+
+**111. A resumed task is shown what it saw when it parked, and where the rest
+is.** The tail is written at the park as structured entries, each with its own
+taint, and restored entry by entry, followed by the id of every earlier
+observation. It is verified against the hash its chained `task.park_seed`
+committed to, and a mismatch halts. The step counter is not restored.
+*Caught by:* `tests/test_park_seed.py`.
+
+**112. On Windows, sandboxed code runs inside a Job Object.** The kernel
+enforces memory, CPU time and process count. The interpreter the venv
+launcher starts is born inside the job, because the launcher is started
+suspended. A job that cannot be applied refuses the run. File size is not
+limited on Windows (Phase 6).
+*Caught by:* `tests/test_sandbox_limits.py`.
+
 ---
 
 ## Design rules

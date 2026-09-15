@@ -392,12 +392,13 @@ defeat it - the hook runs inside the process it polices (D32). Only Phase 6,
 a container per run, makes it a wall, and Phase 6 is parked: Docker is not
 installed on this machine.
 
-**Resource limits are POSIX-only - 2026-09-15.** On Windows the sandbox is
-advisory path confinement plus a wall-clock timeout. The OS enforces no memory,
-CPU, process-count or file-size limit there, and Windows is the only platform
-this project has run on. The POSIX path sets all four with `rlimit` and has
-never run. Windows equivalents for memory, CPU time and process count, via a
-Job Object, are DEFERRED D37. File size needs the container.
+**Resource limits - 2026-09-15.** The day began with the Windows sandbox as
+advisory path confinement plus a wall-clock timeout: no OS-enforced limit at
+all, on the only platform this project has run on. It ended with a Job Object
+(D37). On Windows the kernel now enforces memory (512 MB per process), CPU
+time (the task's timeout) and process count (32), and each limit was tested
+for real on this machine. File size is still unlimited on Windows and needs
+the container. The POSIX path sets all four with `rlimit` and has never run.
 
 ---
 
