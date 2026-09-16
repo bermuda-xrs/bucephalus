@@ -1229,7 +1229,7 @@ as a finding, not tidied away as a cleanup.
 **Why retired rather than kept gated.**
 1. **Its own baseline says it does not work.** The published baseline this
    project adopted for self-generated skills is **-1.3 pp** (3.4, HANDOVER
-   section 13). The literature puts curated skills around +16 and generated
+   A1). The literature puts curated skills around +16 and generated
    ones slightly negative.
 2. **The suite that would evaluate it is archived.** Its failures were
    unstructured (1.13), so no skill could produce the discordant pairs the

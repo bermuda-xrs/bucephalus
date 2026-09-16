@@ -10,6 +10,53 @@
 Dates are commit dates. `0.1.0` is not released yet — see "Unreleased" for
 what still stands between here and a first iteration.
 
+## The handover, rewritten and tested - 2026-09-17
+
+`docs/HANDOVER.md` replaced: 1,035 lines to 399, and it now has a test.
+
+**Why a rewrite rather than an edit.** This project's documented failure mode
+is stale documentation, and the old handover was a fourth surface for it: it
+reproduced FINDINGS' results, RELEASE's scorecard and 1.25's never-run
+inventory, so every one of those facts had two homes and one of them rotted.
+Three instances are on record - "expect 326 passed" when the suite was 790, a
+ticked demo checkbox over a `demo.py` that exited 1, and README step-1 commands
+missing the now-required `--suite`.
+
+**The structure is the fix.** Volatile facts - commit, versions, counts, what is
+running - live in section D and nowhere else, each with the command that
+regenerates it. Test count and open-defect count are *deliberately not written
+down*: the file gives the command instead, because the best defence against a
+stale number is not writing it. Durable material (method, the six design rules,
+the defect classes, security posture, how the measurement works) is prose that
+does not rot. Everything another document owns is pointed at in one paragraph.
+
+**And it gets a test.** `tests/test_handover_is_current.py`, 15 checks: every
+path named exists, every quickstart and cost-table command is a real entry
+point, the stated commit is an ancestor of HEAD, every FINDINGS / DEFERRED /
+INVARIANTS / RELEASE section pointed at exists, the stated CLI subcommand count
+matches the parser, the stated versions match `agent/__init__.py`, no volatile
+count appears in prose, and the file stays under 400 lines. **Ten injections,
+ten red** - including renaming `bench/nextstep.py` out from under it. Invariant
+114.
+
+**Found while verifying.** `scripts/inject_run.py` does not exist - it was a
+scratch tool, and the draft had cited it as if it shipped. RELEASE's packaging
+checklist still read "No LICENSE. Deliberate" with Apache 2.0 in the tree since
+before iteration one closed: corrected, and recorded as the fourth instance of
+the class. Three inbound pointers to the old `HANDOVER §11` (RELEASE twice,
+`spec/CORRECTIONS.md` once) now point at FINDINGS 1.25, which owns that
+inventory; FINDINGS 1.27's pointer to "HANDOVER section 13" now reads A1.
+
+**Corrections to the brief, both recorded in the handover itself.** E3(c) lists
+D10 among the small fixes; D10 was closed on 2026-09-16 when `measure.ps1 stop`
+was routed through `kill_tree`. And D39's own entry estimates half a day for the
+subcommand sweep; my estimate is a day, because the scratch-database fixture is
+2-3 hours before the first subcommand is touched.
+
+Tests: 805 passing, 3 skipped.
+
+---
+
 ## Iteration two: complete - 2026-09-16
 
 The phase program is finished: phases 1-5 and 7-11 shipped, 6 and 12

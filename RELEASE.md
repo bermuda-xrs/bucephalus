@@ -79,9 +79,10 @@ State it in this shape, or not at all:
       wheel runs the library but still needs a checkout for its
       configuration. Making it fully standalone means shipping those too, or
       an `alpha init` that materialises them into a working directory
-- [ ] **No LICENSE.** Deliberate — that is the author's decision, and an
-      unlicensed repository is "all rights reserved" by default, which may
-      or may not be what is wanted
+- [x] **LICENSE.** Apache 2.0 is in the tree. This entry read "No LICENSE,
+      deliberate" long after the file was added — found 2026-09-17 while
+      rewriting the handover, and the fourth instance of the stale-document
+      class
 - [x] `CHANGELOG.md` reflects what actually changed, including what is still
       undone
 
@@ -89,7 +90,8 @@ State it in this shape, or not at all:
 
 - [ ] `git log --oneline` reads as the project's memory — no commit message
       claims more than was verified
-- [ ] `docs/HANDOVER.md` §11 (what has never been measured) matches reality
+- [ ] `docs/FINDINGS.md` 1.25 (what has never run for real) matches reality, and
+      `docs/HANDOVER.md` passes `tests/test_handover_is_current.py`
 - [ ] `runs/` artifacts worth keeping copied into `docs/evidence/`
 - [x] The version in `pyproject.toml` and `src/agent/__init__.py` agree (both 0.1.0)
 
@@ -346,7 +348,7 @@ Three things, and the third is the one that is usually forgotten.
 
 1. **The Anthropic adapter must make its first live call.** It is written and
    unit-tested and has **never** been exercised against the API
-   (`HANDOVER` §11). That needs an `ANTHROPIC_API_KEY` — which
+   (FINDINGS 1.25). That needs an `ANTHROPIC_API_KEY` — which
    `--profile local` refuses to start with, by design, so this is necessarily
    a different profile.
 

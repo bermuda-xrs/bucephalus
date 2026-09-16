@@ -730,6 +730,20 @@ their parsers. Two are exempt and named in the test: `cache_reuse_probe.py`
 
 ---
 
+## Added 2026-09-17 (the handover rewrite)
+
+**114. The handover names nothing that is not there, and states no number that
+rots.** Every path, quickstart command, subcommand and document section it
+points at is checked against the repository; the commit it was verified at must
+be an ancestor of HEAD; the versions it states must match `agent/__init__.py`.
+Counts that change weekly - tests, open defects - are NOT written down: section
+D gives the command that regenerates each instead, and the test fails if a count
+appears in prose. Stale documentation is a defect class here with four instances
+(FINDINGS 1.28), and a document nothing checks is the fifth waiting.
+*Caught by:* `tests/test_handover_is_current.py`.
+
+---
+
 ## Design rules
 
 Not per-run invariants with a test that fires — rules for the next person
