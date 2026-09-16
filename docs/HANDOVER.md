@@ -42,7 +42,8 @@ explains the method from scratch.
 
 **What has actually been established.** *The research question has not been
 answered. No skill has ever been through the full gate, and no skill has ever
-been generated.* What the work produced instead is a different and, so far,
+been generated - the generator was **retired unanswered** on 2026-09-15, and
+FINDINGS 1.27 says why and what would reopen it.* What the work produced instead is a different and, so far,
 more interesting result: **the agent scaffold degrades a model that can
 otherwise do the task.** The same 3.4B model, asked the same question,
 answers correctly 5 times out of 5 when prompted directly and 0 times out of
@@ -228,8 +229,10 @@ split, profile or executor.
 | Tests | **790 passing, 3 skipped** - the skips are the live-credential tests, until a credential exists (D26) |
 | Working tree | clean |
 | Running | nothing |
-| Last completed step | **Second decisions, 2026-09-15.** Steps 1-3: two DELETEs, the token-count claim corrected, the lock leak fixed and the noise floor able to start again (C64), `max_taint_in` dead in code (D38), M11 retired unanswered (FINDINGS 1.27). Steps 4-5: a resumed task sees its pre-park tail and every earlier observation's id (D28, C65); the Windows sandbox runs inside a Job Object (D37, C66). See CHANGELOG |
-| Next step | Open for the user: D26 (the credentials) and Phase 6, decided together. **D38's bump has a deadline:** if neither D33's move nor a prefix-touching change bumps HARNESS_VERSION within two more sessions, bump for it alone |
+| Phase program | **COMPLETE.** Phases 1-5 and 7-11 shipped. **Phase 6 (Docker) withdrawn** by decision 2026-09-16; **Phase 12 (portable provenance) withdrawn** with M11's subject. FINDINGS 1.29 |
+| Open defects | **9** - see `docs/DEFERRED.md`, which now states each entry's state in its own heading |
+| Last completed step | **The pile, 2026-09-16.** 28 open items became 9: five deleted, two closed whose defects were fixed sessions earlier (DR6), nine fixed. DR5 and DR6 added to the design rules. Phase 6 and Phase 12 withdrawn. Before that, 2026-09-15: Steps 1-3: two DELETEs, the token-count claim corrected, the lock leak fixed and the noise floor able to start again (C64), `max_taint_in` dead in code (D38), M11 retired unanswered (FINDINGS 1.27). Steps 4-5: a resumed task sees its pre-park tail and every earlier observation's id (D28, C65); the Windows sandbox runs inside a Job Object (D37, C66). See CHANGELOG |
+| Next step | **D39 - the CLI's 25 subcommands, reachable only through `--help`.** The layer below the entry-point sweep, and every layer so far has contained something: Part 3 ran five by hand and found two defects no test had. Half a day. Then D26's credentials, which the user has decided to supply (one command each, README) |
 
 ### Iteration two, so far
 
@@ -726,9 +729,11 @@ contamination caveat must appear in the same paragraph as the number.
 | 1 | ~~**G3** — ladder R0/R1 on E03, E04, E05 with the 3B~~ | ~20 min | **DONE 2026-09-03.** The tax reproduces on **1 of 3**. Not general. Mechanism corrected to answer position. FINDINGS 1.6 |
 | 2 | ~~**G4** — ladder R1 on the **8B**, E01~~ | ~15 min | **DONE.** 8B is **5/5** where the 3B is 0/5. Capacity threshold. FINDINGS 1.7 |
 | 3 | ~~**The v3 decision**~~ | ~20 min | **DONE. v3 REJECTED**, R5 0/5. Harness stays v2. Section 7, FINDINGS 1.8 |
-| 4 | **H1** — full 30 tasks on the 8B, harness v2 | **~3 h** | **BLOCKED ON MEMORY** (section 5). The medium and hard tiers have never run on the fixed harness. Still the single most informative run available |
-| 5 | **Calibration + ablation** | ~4 h | See below. Coverage upper bound is **20/30** against a gate floor of 10, so the floor is reachable — easy 9/10, medium 7/12, hard 4/8 |
-| 6 | ~~**M11** — generate one skill, gate it on eval only~~ | ~4 h | **RETIRED UNANSWERED 2026-09-15.** FINDINGS 1.27 says what would reopen it |
+| 4 | **D39 — a test per CLI subcommand** | ~4 h | **FIRST.** 25 subcommands are reachable only through `--help`. Part 3 ran five by hand and found two defects no test had (C58, invariant 17's gap). Every layer of this defect so far has contained something |
+| 5 | **The calibration** | ~4 h | The positive control (`si_first_orbital_arithmetic`, D35) on `--split eval`. At n=15 the gate needs 9 of 10 discordant pairs, so it fires only on a large effect - and a null says the effect was not large, not that the detector is blind (FINDINGS 3.2) |
+| 6 | **D6's number** | ~1 h | The instrument exists: every step call records `est_input_tokens` beside the server's own count. One ordinary run, then read the two columns. No API key needed |
+| 7 | **H1** — full 30 tasks on the 8B, harness v2 | **~3 h** | **BLOCKED ON MEMORY** (section 5). The medium and hard tiers have never run on the fixed harness |
+| 8 | ~~**M11** — generate one skill, gate it on eval only~~ | — | **RETIRED UNANSWERED 2026-09-15.** FINDINGS 1.27 says what would reopen it |
 
 **Two new defects from Phase 1 change how later steps should be read**, both
 in FINDINGS: `reap_orphans()` kills healthy workers (1.10), and temperature 0

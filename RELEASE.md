@@ -123,6 +123,84 @@ number with its flaws disclosed beats an impressive one nobody can check.
 
 ---
 
+# ITERATION TWO: COMPLETE — 2026-09-16
+
+**The phase program is finished.** Phases 1-5 and 7-11 shipped. Phase 6
+(Docker) and Phase 12 (portable provenance) are **withdrawn by decision**, not
+deferred - FINDINGS 1.29 carries the reasoning for both, so neither reads
+later as a missing feature.
+
+Iteration two set out to finish the runtime and keep the instrument honest. It
+did both, and the second cost more than the first: **five of this iteration's
+findings are defects in the measuring apparatus, not in the agent.**
+
+## Against the eight goals
+
+| Goal | Where it stands after iteration two |
+|---|---|
+| **G1** ≥10× reduction in paid tokens | **implemented, unmeasured.** No paid call has ever been made. One blocker was removed this iteration - C62: recorded usage is the server's own count, so nothing needed calibrating - and the remaining one is an API key, which the user has decided to supply (D26) |
+| **G2** Mobile remote control | **partially implemented.** The HTTP control plane, auth and SSE exist; Phase 8 added a Telegram channel with an allowlist, approvals and a park path, driven end to end against a fake transport. No live request has ever been made (D26) |
+| **G3** Multi-agent as context isolation | **implemented, unmeasured.** Delegation, the five gates and a narrowed child policy exist; no production task has delegated |
+| **G4** Research-grounded, verified skill generation | **the gate works; the generation half is RETIRED UNANSWERED** (FINDINGS 1.27). The published baseline is -1.3 pp, the suite that would evaluate it is archived, D19 was never closed, and none of its three components ever ran |
+| **G5** Least-privilege security with provenance | **implemented and measured.** This iteration added the file-route and SQLite fences (C50, C55), per-write taint rebuilt from the record, tool exposure, and D37's Job Object. The gate's refusal path has still never fired in production |
+| **G6** Durable, resumable, interruptible execution | **implemented and measured.** `integrity.resume` was found inert and wired (D20); a resumed task now also sees the tail it had when it parked and the ids of everything it observed (D28). The one user-facing stop path routes through `kill_tree` (D10) |
+| **G7** Self-measuring, eval harness first-class | **implemented and measured - after being repaired twice.** `calls` now records a call from the moment it starts (D36); the noise floor could not start for ten days and does again (C64); the run sheet no longer hides excluded tasks (D7) |
+| **G8** Portable skill format | **implemented; the boundary crossing is demonstrated.** A skill authored elsewhere enters as an untrusted candidate, keeps its bytes, and is gated like anything else. No command imports one, so the import path stays inert by design |
+
+## What iteration two actually produced
+
+- **The runtime finished:** the OpenAI-protocol adapter, FTS5 search, persistent
+  memory, web and file tools, tool exposure, streaming and a terminal surface,
+  parallel tool execution, a Telegram channel, sessions, and cron.
+- **790 tests, 3 skipped** (the skips are the two credential-gated live paths).
+- **An instrument that now tests its own front doors.** 1 of 13 entry points
+  had a test that invoked it; `demo.py` and the noise floor were both dead for
+  ten days, killed by one commit (FINDINGS 1.28).
+- **Two design rules earned the hard way:** DR5 (a defect is never in one
+  place - the sweep is part of the fix) and DR6 (an entry is closed in the
+  change that fixes it).
+- **A pile that shrank:** 31 open items to **9**.
+
+## Known and accepted, versus open
+
+**Known and accepted** - decided, with what would reopen each:
+
+| | |
+|---|---|
+| The sandbox is advisory | path confinement, a Job Object, and a timeout. It stops a model that reaches; it does not stop code written to defeat it. Reopens on genuinely untrusted code, or a second user (D32) |
+| File size is unlimited on Windows | no per-process equivalent; the container was the only route and Phase 6 is withdrawn |
+| M11 is retired unanswered | reopens on a live suite, a closed D19, and both M7.4 rules wired (FINDINGS 1.27) |
+| Phase 12 is withdrawn | its subject retired with M11 |
+| Harness v3 is rejected | measured, iteration one |
+| Phase 9.2's summarizer is withdrawn | there is no conversation history to summarize that is not tool output (C49) |
+
+**Open: 9.** `docs/DEFERRED.md` states each entry's state in its own heading.
+
+| item | one line |
+|---|---|
+| D2 | the pathological model call is detected and recovered, never diagnosed |
+| D6 | the in-loop token estimator is uncalibrated. The instrument now exists; the number needs one run |
+| D16 | per-backend context windows are unreachable over the OpenAI protocol |
+| D24 | two tasks cannot approve identical plans. Fails loudly, unreachable in measurement paths |
+| D26 | the Telegram and Anthropic live paths have never made a request. **The user has decided to supply both credentials** |
+| D27 | the bot serialises tasks with no queue, because the chain is single-writer |
+| D33 | tier 1 sits before the tool schemas; moving it needs a HARNESS bump |
+| D38 | `max_taint_in` is dead in code and alive in prefix bytes, waiting for a bump - with a deadline |
+| D39 | the CLI's 25 subcommands are reachable only through `--help` |
+
+## What a third session picks up first
+
+1. **D39** - a test per CLI subcommand, against a scratch database. Every layer
+   of that defect so far has contained something; Part 3 found two defects in
+   an hour of running five by hand.
+2. **The calibration** - the positive control on `--split eval`, with the
+   caveat that at n=15 the gate fires only on a large effect (FINDINGS 3.2).
+3. **D6's number** - one ordinary run, then read `est_input_tokens` against
+   the server's own count.
+4. **D26**, the moment the credentials exist: one command each, in the README.
+
+---
+
 # ITERATION ONE: COMPLETE — 2026-09-05
 
 Marked complete on the terms this document set out: *a measurement, plus an
@@ -220,7 +298,7 @@ actually stand, so a reader does not have to reconstruct it.
 | G1 ≥10× reduction in **paid** tokens per completed task | **implemented and unmeasured** — and currently unmeasurable, see below |
 | G2 Mobile remote control | **partially implemented** — HTTP API + auth exist; nothing mobile |
 | G3 Multi-agent as context isolation | **implemented and unmeasured** |
-| G4 Research-grounded, verified skill generation | **partially implemented** — the gate works, the generator has never run |
+| G4 Research-grounded, verified skill generation | **the gate works; the generation half is RETIRED UNANSWERED** (2026-09-15, FINDINGS 1.27) |
 | G5 Least-privilege security with provenance | **implemented and measured** |
 | G6 Durable, resumable, interruptible execution | **implemented and measured** |
 | G7 Self-measuring, eval harness first-class | **implemented and measured** |

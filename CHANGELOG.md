@@ -10,6 +10,15 @@
 Dates are commit dates. `0.1.0` is not released yet — see "Unreleased" for
 what still stands between here and a first iteration.
 
+## Iteration two: complete - 2026-09-16
+
+The phase program is finished: phases 1-5 and 7-11 shipped, 6 and 12
+withdrawn by decision. RELEASE carries the close - the eight goals as they now
+stand, what is known and accepted versus open, and what a third session picks
+up first. HANDOVER's state table says the same thing without this changelog.
+
+**Open defects: 9.** Tests: 790 passing, 3 skipped.
+
 ## The pile, and two withdrawals - 2026-09-16
 
 **Moves no published number. 28 open items become 9.**
