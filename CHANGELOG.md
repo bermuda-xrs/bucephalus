@@ -10,6 +10,44 @@
 Dates are commit dates. `0.1.0` is not released yet — see "Unreleased" for
 what still stands between here and a first iteration.
 
+## Verification run after the outage - 2026-09-16
+
+**Not a measurement.** Five tasks from the archived suite, one pass, harness
+v2, `granite4.1:3b`, on **its own database** (`config.verify.yaml`), so the
+measurement record is untouched. It answers one question: does the apparatus
+work end to end after nine days broken and everything since?
+
+**Preflight:** 3.07 GB free, commit ratio 0.926 (suspect at 1.4), no orphans
+to reap, model cold.
+
+**Result:** E05 done 135.6 s · E01 plateau 424.6 s · E02 done 119.9 s · E03
+done 186.7 s · E04 plateau 123.7 s. **3 pass / 2 fail, 0 flaky, no machine
+faults, no exclusions, exit 0.** 970 s of model time, 39,467 in / 3,389 out.
+
+**What it verifies:**
+- **The apparatus starts, records and reports.** `noise.py main` reached its
+  last line for the first time since 2026-09-06.
+- **D36.** 19 `model.called`, 19 `model.returned`, **19 rows** - the log and
+  the table agree exactly, where the old record had 1,214 against 1,183. Rows
+  were caught **in flight** (null usage, no outcome) and completed on return;
+  every row ends `returned` with usage and wall time.
+- **D37.** 9 of 9 sandboxed programs carry `job object: memory 512 MB per
+  process, CPU 30 s, 32 processes; file size not limited on this platform`.
+  All ran, wrote their answers, and recorded what they touched.
+- **D28.** No task parked, so no seed was written and none restored. The
+  correct behaviour for a run with nothing to resume.
+- **The deletions.** Nothing downstream broke: no generator, no
+  `research_retrieve`, no `calibrate`, no `fetch_url`.
+- **Phase 9 sessions** opened and closed for real, one per task.
+
+**One gap found, not built.** The run record carries `free_tokens`,
+`cost_usd` and `cache_hit_ratio` per task, but **not `n_calls` or
+`n_unreturned`**. D36's new field stops at the database: a stalled or killed
+call would sit in `calls` and stay invisible in the run report anyone reads.
+One line in `noise.py`.
+
+**Evidence:** `docs/evidence/verify-2026-09-16-noise.json`, `-ledger.jsonl`.
+
 ## The entry-point sweep - 2026-09-16
 
 **Moves no published number.** One front door repaired, one rule recorded, and

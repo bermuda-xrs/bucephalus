@@ -1,0 +1,180 @@
+{
+  "date": "2026-09-16",
+  "harness_version": 2,
+  "budget_scale": 1.0,
+  "memory_suspect_keys": [],
+  "cache_hit_ratio_median": null,
+  "cache_measured_tasks": 0,
+  "cache_drop_keys": [],
+  "cache_drop_fraction": 0.5,
+  "retrieval_isolation": {
+    "isolate_retrieval": true,
+    "search_history": "scoped to the task tree",
+    "expand_artifact": "scoped to the task tree",
+    "memory_tier1": "unavailable",
+    "note": "a benchmark attempt can read only what it produced itself; cross-arm and cross-run retrieval are impossible by construction"
+  },
+  "session_boundary": "at deletion compaction: memory flush (skipped under isolation), compact() unchanged, session rotated; no summarizer",
+  "channels_enabled": [],
+  "max_parallel_tools": 1,
+  "min_free_gb_any_task": 0.77,
+  "toolset_version": 6,
+  "sandbox_libraries": [
+    "sympy==1.13.3 (network=False, writes_outside_scope=False, subprocesses=False)"
+  ],
+  "order_seed": 397456161,
+  "task_order_randomised": true,
+  "worker_reloads": [],
+  "worker_reload_count": 0,
+  "worker_reload_cost_s": 0,
+  "refresh_commit_ratio_threshold": 1.35,
+  "abort_excluded_max": 3,
+  "machine_fault_note": "health telemetry only - a recovered stall produced a valid measured result and carries no abort authority",
+  "machine_fault_keys": [],
+  "excluded_keys": [],
+  "stall_rule": "a call below 25% of the executor's running median tok/s is aborted as a machine fault; the task re-runs once and is EXCLUDED (never failed) if it stalls again",
+  "wall_outlier_keys": [],
+  "commit_ratio_high_keys": [],
+  "wall_outlier_factor": 3.0,
+  "commit_ratio_suspect_threshold": 1.4,
+  "emergency_free_gb": 0.5,
+  "memory_pressure_at_start": {
+    "available_gb": 1.94,
+    "committed_gb": 18.32,
+    "physical_gb": 15.47,
+    "commit_ratio": 1.185
+  },
+  "free_memory_gb_at_start": 3.070812225341797,
+  "free_memory_gb_before_reap": 3.070636749267578,
+  "orphans_reaped": [],
+  "free_memory_gb_at_end": 1.9431571960449219,
+  "profile": "local",
+  "profile_provenance": {
+    "profile": "local",
+    "cloud_backends": [],
+    "credentials_present": [],
+    "backends": {
+      "cloud": {
+        "kind": "ollama",
+        "model": "granite4.1:3b",
+        "tier": "local"
+      },
+      "local": {
+        "kind": "ollama",
+        "model": "granite4.1:3b",
+        "tier": "local"
+      },
+      "review": {
+        "kind": "ollama",
+        "model": "granite4.1:8b",
+        "tier": "local"
+      }
+    }
+  },
+  "suite": "aero_calc",
+  "split": null,
+  "runs_per_task": 1,
+  "n_tasks": 5,
+  "mean_pass_rate": 0.6,
+  "stable_pass": 3,
+  "stable_fail": 2,
+  "flaky": 0,
+  "wall_s_this_session": 991.3,
+  "wall_s_all_runs": 990.5,
+  "status_counts": {
+    "done": 3,
+    "plateau": 2
+  },
+  "unmeasured": 0,
+  "unmeasured_keys": [],
+  "partially_unmeasured_keys": [],
+  "done": 3,
+  "done_unannounced": 0,
+  "ended_at_step_limit": 0,
+  "ended_budget_exhausted": 0,
+  "tier_pass_rates": {
+    "easy": 0.6
+  },
+  "tasks": [
+    {
+      "key": "E01",
+      "tier": "easy",
+      "split": "drafting",
+      "classification": "stable_fail",
+      "passes": 0,
+      "runs": 1,
+      "mean_wall_s": 424.6,
+      "memory_suspect": false,
+      "wall_outlier": false,
+      "commit_ratio_high": false,
+      "min_free_gb": 0.77,
+      "statuses": [
+        "plateau"
+      ]
+    },
+    {
+      "key": "E02",
+      "tier": "easy",
+      "split": "drafting",
+      "classification": "stable_pass",
+      "passes": 1,
+      "runs": 1,
+      "mean_wall_s": 119.9,
+      "memory_suspect": false,
+      "wall_outlier": false,
+      "commit_ratio_high": false,
+      "min_free_gb": 0.78,
+      "statuses": [
+        "done"
+      ]
+    },
+    {
+      "key": "E03",
+      "tier": "easy",
+      "split": "drafting",
+      "classification": "stable_pass",
+      "passes": 1,
+      "runs": 1,
+      "mean_wall_s": 186.7,
+      "memory_suspect": false,
+      "wall_outlier": false,
+      "commit_ratio_high": false,
+      "min_free_gb": 1.15,
+      "statuses": [
+        "done"
+      ]
+    },
+    {
+      "key": "E04",
+      "tier": "easy",
+      "split": "drafting",
+      "classification": "stable_fail",
+      "passes": 0,
+      "runs": 1,
+      "mean_wall_s": 123.7,
+      "memory_suspect": false,
+      "wall_outlier": false,
+      "commit_ratio_high": false,
+      "min_free_gb": 1.94,
+      "statuses": [
+        "plateau"
+      ]
+    },
+    {
+      "key": "E05",
+      "tier": "easy",
+      "split": "drafting",
+      "classification": "stable_pass",
+      "passes": 1,
+      "runs": 1,
+      "mean_wall_s": 135.6,
+      "memory_suspect": false,
+      "wall_outlier": false,
+      "commit_ratio_high": false,
+      "min_free_gb": 1.1,
+      "statuses": [
+        "done"
+      ]
+    }
+  ]
+}

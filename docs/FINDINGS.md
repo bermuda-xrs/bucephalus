@@ -1077,7 +1077,7 @@ schedule, session, memory, delegation, web or compaction event of any kind.
 | the OpenAI-compatible adapter against anything but Ollama | Ollama's `/v1` on 11435 (`phase1-openai-parity.json`) | vLLM, llama.cpp's server, a hosted endpoint | usage fields absent or named differently; stream chunk shapes |
 | `web_fetch` / `web_search` over a network | a stub fetcher and searcher; never called in the record | a task that fetches | redirects and final-URL provenance; the byte cap; charsets; a scraper that parses to nothing, which is why `tool.search_failed` exists |
 | tier-1 memory: write, consolidate, flush, blessing | tests; 0 memory events in the record | a run with isolation off | the per-user blessing (DR1); consolidation; the flush refusal |
-| sessions and boundaries (Phase 9) | tests; 9.6 against real Ollama with scripted decisions, prefill only | a real task that crosses compaction | the seed reference; the snapshot on the session row |
+| sessions and boundaries (Phase 9) | **opened and closed for real** in the verification run of 2026-09-16 (5 tasks, 5 sessions, 5 `session.opened` / `session.closed`). The BOUNDARY - rotation, flush, seed - is still tests only | a real task that crosses compaction | the seed reference; the snapshot on the session row |
 | compaction and the quarantined summarizer | tests; 0 `compress_tool_output` calls in the record | an observation over the threshold, with a local tier | the quarantine prompt; projection |
 | delegation | tests; 0 delegation events | a task the five gates admit | the child's narrowed policy |
 | the parallel batch | tests; measurement pins width 1 | `max_parallel_tools` above 1 | gate-before-run under threads |
@@ -1136,7 +1136,7 @@ channel (40).
 | `tokens.calibrate` | no caller; no `.token_calibration.json` exists. **Deleted 2026-09-15**: it needed an API key and calibrated to the wrong tokenizer. Recorded usage is the server's own count; the in-loop estimator stays uncalibrated (D6) |
 | `max_taint_in` | carried on every contract, consulted nowhere. **Decided 2026-09-15: DELETE.** No check could give it a meaning (C60). **Dead in code the same day**: its one reader is gone and no other value can be set. Its bytes stay in the prefix until the next HARNESS_VERSION bump (D38, invariant 109) |
 | `generate_skill`, and invariants 4 and 5, which only it reaches | no entry point - and since Part 2, refused in code until M7.4 rules 2 and 3 run. **Retired unanswered 2026-09-15, with invariants 4, 5 and 100 (1.27)** |
-| POSIX rlimits | only Windows has ever run this. **Stated 2026-09-15** in README and RELEASE: on Windows the sandbox was advisory path confinement plus a timeout. **Built the same day (D37):** a Job Object enforces memory, CPU time and process count on Windows; file size waits for Phase 6. The POSIX path itself has still never run |
+| POSIX rlimits | only Windows has ever run this. **The Windows half ran for real 2026-09-16**: 9 of 9 sandboxed programs in the verification run carry the job-object note, and their limits were enforced by the kernel. **Stated 2026-09-15** in README and RELEASE: on Windows the sandbox was advisory path confinement plus a timeout. **Built the same day (D37):** a Job Object enforces memory, CPU time and process count on Windows; file size waits for Phase 6. The POSIX path itself has still never run |
 | the live Telegram path; the Anthropic adapter | no token, no key (D26) |
 
 **One thing the record cannot say, and now will.** What the recorded programs

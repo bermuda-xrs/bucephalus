@@ -1,7 +1,11 @@
-# VERIFICATION RUN ONLY, 2026-09-16. config.local.yaml with its own
-# database and anchor, so a smoke run never writes into the measurement
-# record (agent.local.db). Delete after the run; the record of it is in
-# docs/evidence/.
+# VERIFICATION RUNS, 2026-09-16. config.local.yaml with its own database and
+# anchor, so a smoke run never writes into the measurement record
+# (agent.local.db). Kept so the run is reproducible:
+#
+#   python bench/suites/archive/aero_calc.py --load --config config.verify.yaml
+#   python bench/noise.py --config config.verify.yaml --profile local #       --suite aero_calc --runs 1 --limit 5 --out runs/verify-<date>/noise.json
+#
+# The 2026-09-16 result is in docs/evidence/verify-2026-09-16-*.
 # ALL-LOCAL profile — runs the whole system with NO API key and no network.
 #
 #   alpha.cmd --config config.local.yaml new "..." --scope work
