@@ -224,7 +224,7 @@ actually stand, so a reader does not have to reconstruct it.
 | G5 Least-privilege security with provenance | **implemented and measured** |
 | G6 Durable, resumable, interruptible execution | **implemented and measured** |
 | G7 Self-measuring, eval harness first-class | **implemented and measured** |
-| G8 Portable skill format | **implemented and unmeasured** |
+| G8 Portable skill format | **implemented; the boundary crossing is demonstrated** (2026-09-16) |
 
 ---
 
@@ -391,9 +391,14 @@ against mistakes, not against an adversary with code execution.
 code, out-of-scope writes and reads, every file and database route into the
 project's own state that has been tested, process starts and native
 extensions. It stops a model that reaches. It does not stop code written to
-defeat it - the hook runs inside the process it polices (D32). Only Phase 6,
-a container per run, makes it a wall, and Phase 6 is parked: Docker is not
-installed on this machine.
+defeat it - the hook runs inside the process it polices (D32). A container per
+run was the only thing that would make it a wall, and **Phase 6 is withdrawn -
+2026-09-16, by decision, not deferral** (FINDINGS 1.29). D37's Job Object
+carries most of the isolation benefit; what remains uncovered is file size,
+which on an attended single-user machine is resource exhaustion rather than a
+boundary. **The sandbox is advisory path confinement, a Job Object, and a
+timeout.** D32 is now KNOWN AND ACCEPTED, and names what would reopen it:
+genuinely untrusted code, or a second user.
 
 **Resource limits - 2026-09-15.** The day began with the Windows sandbox as
 advisory path confinement plus a wall-clock timeout: no OS-enforced limit at
@@ -438,7 +443,7 @@ called.
 
 ---
 
-## G8 — Portable skill format. Implemented and unmeasured.
+## G8 — Portable skill format. Implemented; one half demonstrated.
 
 Skills are plain markdown with at most three modules
 (`examples/skills/aero_units_discipline.md`), stored content-addressed by hash

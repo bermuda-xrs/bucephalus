@@ -23,7 +23,31 @@ instrument). Everything below waits.
 
 ---
 
-## D1 — Working set is not a clean per-process leak signal
+## Where this stands, 2026-09-16
+
+**Nine open.** D2, D6, D16, D24, D26, D27, D33, D38, D39.
+
+Everything else on this page is marked in its own heading:
+
+| state | what it means | items |
+|---|---|---|
+| **open** | a real defect, nobody has fixed it | D2, D6, D16, D24, D26, D27, D33, D38, D39 |
+| **closed** | fixed, with the change and its test named | D1, D3, D7, D9, D10, D11, D15, D17, D18, D19, D20, D21, D22, D23, D28, D29, D30, D34, D35, D36, D37 |
+| **deleted** | never a defect, or about an instrument nobody runs | D4, D5, D8, D12, D14 |
+| **known and accepted** | a real limit, decided rather than deferred | D32 (the sandbox is advisory: Phase 6 withdrawn) |
+| **dormant** | its subject is retired; it wakes if that returns | D13 (nothing is frozen), D19 (M11) |
+| **under another item** | one decision unblocks it | D25, D31 (both under D26) |
+
+**Three of the nine are the user's**: D26 (credentials - decided yes, pending),
+D38 (the harness bump, with a deadline), and D32's acceptance above.
+
+**DR6**: an entry is closed in the change that fixes it. D17 and D20 sat here
+for sessions after their defects were fixed, and a triage that read the code
+found them. That is the failure this page exists to prevent, one level up.
+
+---
+
+## D1 — Working set is not a clean per-process leak signal (CLOSED 2026-09-16: private commit recorded beside working set)
 
 **Severity:** corrupting, for any future leak diagnosis.
 
@@ -61,7 +85,7 @@ task in its own right.
 
 ---
 
-## D3 — `httpx` timeout did not bound a blocking call
+## D3 — `httpx` timeout did not bound a blocking call (CLOSED 2026-09-16: the sweep found one unbounded path - robots.txt - now streamed and capped)
 
 **Severity:** corrupting. Fixed incidentally, root cause not confirmed.
 
@@ -76,7 +100,7 @@ in the codebase.
 
 ---
 
-## D4 — de-hardcode brief items 1, 2 and 4
+## D4 — de-hardcode brief items 1, 2 and 4 (DELETED 2026-09-16: generality work on an archived instrument)
 
 **Severity:** generality, not correctness for this iteration.
 
@@ -92,7 +116,7 @@ both lifted.
 
 ---
 
-## D5 — The decomposer's confusion families are hand-written
+## D5 — The decomposer's confusion families are hand-written (DELETED 2026-09-16: disclosure, not a defect; FINDINGS 1.14 carries it)
 
 **Severity:** generality. Disclosed rather than hidden.
 
@@ -135,13 +159,19 @@ long-context degradation invariant 11 exists to prevent.
 `tokens.calibrate` is deleted (2026-09-15). It measured the estimator against
 Anthropic's counter, needed an API key, and would have tuned it to the wrong
 tokenizer for the models that run here. **Correct version:** on one run, put
+**2026-09-16: the instrument now exists, the number does not.** Every step
+call records `est_input_tokens` - what the estimator thought the prompt was -
+beside the server's own count in `calls`. One ordinary run measures the error;
+nobody has run one and read it yet. That is all this entry is still waiting for.
+
+**Correct version:** on one run, put
 `count_tokens(prefix + tail)` beside the server's reported input for calls
 where the server evaluated the whole prompt (no prefix-cache hit), and fit the
 ratio. No key needed.
 
 ---
 
-## D7 — `bench/report.py` has no `machine_fault` / `excluded` column
+## D7 — `bench/report.py` has no `machine_fault` / `excluded` column (CLOSED 2026-09-16: the run sheet renders both)
 
 **Severity:** cosmetic, but it hides a category.
 
@@ -152,7 +182,7 @@ and right now it reads as nothing at all.
 
 ---
 
-## D8 — Two `ollama serve` processes are running
+## D8 — Two `ollama serve` processes are running (DELETED 2026-09-16: environment, not code; it belongs in HANDOVER's traps)
 
 **Severity:** cosmetic on this machine, a trap for the next one.
 
@@ -164,7 +194,7 @@ either. The parentage fix means the reaper no longer kills live workers of
 
 ---
 
-## D9 — `--limit` semantics changed meaning under randomised order
+## D9 — `--limit` semantics changed meaning under randomised order (CLOSED 2026-09-16: the help says when it takes its tasks)
 
 **Severity:** cosmetic, documentation.
 
@@ -176,7 +206,7 @@ which is better, but by accident of the table rather than by design.
 
 ---
 
-## D10 — User-facing stop paths do not route through `kill_tree`
+## D10 — User-facing stop paths do not route through `kill_tree` (CLOSED 2026-09-16: `measure.ps1 stop` goes through kill_tree)
 
 **Severity:** corrupting, and it has now bitten four times.
 
@@ -214,7 +244,7 @@ depends on it.
 
 ---
 
-## D11 — The wall-outlier detector has a warm-up blind spot
+## D11 — The wall-outlier detector has a warm-up blind spot (CLOSED 2026-09-16: an absolute ceiling until a median exists)
 
 **Severity:** cosmetic, bounded to the first three tasks of a run.
 
@@ -234,7 +264,7 @@ and the transport timeout, both of which are independent of run position.
 
 ---
 
-## D12 — `coverage.py` measures declared-trap coverage, not measured-trap incidence
+## D12 — `coverage.py` measures declared-trap coverage, not measured-trap incidence (DELETED 2026-09-16: disclosure about an archived instrument)
 
 **Severity:** corrupting, for any future use as a go/no-go signal.
 
@@ -270,7 +300,7 @@ quoted.
 
 ---
 
-## D13 — The sandbox spawns `sys.executable`, which is fatal under any freeze
+## D13 — The sandbox spawns `sys.executable`, which is fatal under any freeze (DORMANT 2026-09-16: nothing is frozen and nothing plans to be)
 
 **Severity:** blocking, for packaging only. Harmless in every current
 deployment.
@@ -294,7 +324,7 @@ desktop build.
 **Do not attempt a desktop/Tauri build until this is resolved.** The failure
 is not a broken feature, it is a fork bomb.
 
-## D14 — PyInstaller onedir build is 169 MB
+## D14 — PyInstaller onedir build is 169 MB (DELETED 2026-09-16: a measurement note; folded into D13)
 
 **Severity:** cosmetic, and only relevant if D13 is ever fixed.
 
@@ -308,7 +338,7 @@ the sidecar and required only in the sandbox's interpreter.
 
 ---
 
-## D15 — An archived test writes `cal.json` into the repository root
+## D15 — An archived test writes `cal.json` into the repository root (CLOSED 2026-09-16: the fake context resolves under tmp_path)
 
 **Severity:** cosmetic, but it re-dirties a clean tree on every test run.
 
@@ -365,7 +395,7 @@ order.
 
 SPEC-DELTA C29.
 
-## D17 — `alpha verify` reports "head does not match anchor" as critical for tasks that were never re-checkpointed
+## D17 — `alpha verify` reports "head does not match anchor" as critical for tasks that were never re-checkpointed (CLOSED - fixed earlier, recorded 2026-09-16: anchor-behind is `info`. DR6)
 
 **Found:** 2026-09-06, while confirming that Phase 2's search index does not
 disturb the hash chain.
@@ -423,7 +453,7 @@ their anchors in the first place. D10 remains frozen and open. Reclassifying
 the alarm does not checkpoint anything; it stops a bookkeeping gap from
 occupying the channel reserved for tampering.
 
-## D18 — `isolate_retrieval` has no equivalent for the ladder and calibration paths
+## D18 — `isolate_retrieval` has no equivalent for the ladder and calibration paths (CLOSED 2026-09-16: `open_measurement` makes `isolate` mandatory; every path declares it)
 
 **Found:** 2026-09-06, while closing the cross-arm retrieval vector.
 
@@ -472,7 +502,7 @@ not happen before this is closed, because a skill promoted on the strength of
 provenance that could not tell those apart is exactly the failure the gate
 exists to prevent.
 
-## D20 — the resume protocol is inert: resuming a task does not verify its chain
+## D20 — the resume protocol is inert: resuming a task does not verify its chain (CLOSED - fixed in Part 3, recorded 2026-09-16: `resume()` runs on every task. DR6)
 
 **Found:** 2026-09-07, by the dead-code audit, immediately after it was
 tightened to stop crediting method calls as references to module-level
@@ -568,7 +598,7 @@ files keep working without migrating an append-only log.
 one: two kinds of record in a single keyspace, with the same consequence — a
 control that reports on something other than what it is guarding.
 
-## D22 — the dead-code audit never looks at methods, and M7.4 rule 3 is inert
+## D22 — the dead-code audit never looks at methods, and M7.4 rule 3 is inert (CLOSED 2026-09-16: the audit reads methods; 17 named, one wired)
 
 **Found:** 2026-09-07, by re-running the improved audit against what it had
 been blind to rather than only against the case that prompted the fix.
@@ -670,7 +700,7 @@ crash.
 by what it belongs to, not only by what it contains — `(id, task_id)` rather
 than `id` alone.
 
-## D25 — the Anthropic adapter accepts `on_chunk` and ignores it
+## D25 — the Anthropic adapter accepts `on_chunk` and ignores it (UNDER D26: one decision unblocks both)
 
 **Found:** 2026-09-07, while wiring B5 through every adapter.
 
@@ -820,7 +850,7 @@ Recommendation: 3. It is the only reading under which 9.1 and 9.2 are both
 satisfiable without a harness change, and it is where unbounded growth
 actually happens: a task ends at 24 steps, a chat does not.
 
-## D31 — the Anthropic path has no stall detection
+## D31 — the Anthropic path has no stall detection (UNDER D26: one decision unblocks both)
 
 **Found:** 2026-09-13, writing D25.
 
@@ -832,7 +862,7 @@ the same session as D26's verification.
 **D30 CLOSED 2026-09-13.** Decided by instruction: 9.2 is withdrawn, not
 deferred. The child session is seeded by reference. See SPEC-DELTA C49.
 
-## D32 — the sandbox is a door, not a wall
+## D32 — the sandbox is a door, not a wall (KNOWN AND ACCEPTED 2026-09-16: Phase 6 withdrawn - see FINDINGS 1.29)
 
 **Found:** 2026-09-13, Item 2's sweep (C50).
 
@@ -1047,3 +1077,27 @@ removing the field changes every task's prefix bytes. Options:
 
 Recommendation: (1), batched with the next bump. Until then it is inert, and
 documented as inert.
+
+## D39 - the CLI's 25 subcommands are reachable only through `--help`
+
+**Found:** 2026-09-16, by the entry-point sweep (FINDINGS 1.28), and named
+here because **every layer of this defect so far has contained something.**
+
+`tests/test_entry_points.py` starts `agent.cli` and builds its parser. Nothing
+automated then enters any of the 25 rooms behind it: `new`, `plan`, `approve`,
+`run`, `status`, `approvals`, `alerts`, `verify`, `tui`, `memory`, `search`,
+`report`, `pareto`, `skills`, `bench-local`, `steer`, `serve`, `channel`,
+`snapshot`, `lineage`, `schedule`, `supervise`, `notifications`, `monitor`.
+
+**The evidence that this is not hypothetical.** Part 3 ran five of them by
+hand, for one hour, and found two defects no test had: an approval released
+before the plan pin was verified, and `alpha run` crashing on a null cache
+ratio (C58 - whose sibling then killed `demo.py` for ten days).
+
+**The shape of the fix:** one test per subcommand against a scratch database,
+asserting the exit code and one fact about what it changed. About half a day.
+
+**Why it is deferred rather than done:** it was named in the same session that
+found the layer above it, and sweeping it there would have been the third
+unplanned expansion of one task. It is the first thing a third session should
+pick up.

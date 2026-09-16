@@ -246,7 +246,8 @@ def reap_orphans(names: tuple[str, ...] = ORPHAN_NAMES,
     return reaped
 
 
-def worker_rss_gb(names: tuple[str, ...] = ORPHAN_NAMES) -> float | None:
+def worker_rss_gb(names: tuple[str, ...] = ORPHAN_NAMES,
+                  field: str = "WorkingSetSize") -> float | None:
     """Resident memory held by the model worker(s), or None if unreadable.
 
     L2. The leak that aborted Phase 2A was INFERRED from a monotonic commit
@@ -290,7 +291,7 @@ def worker_rss_gb(names: tuple[str, ...] = ORPHAN_NAMES) -> float | None:
                     c = _PMC()
                     c.cb = ctypes.sizeof(_PMC)
                     if psapi.GetProcessMemoryInfo(h, ctypes.byref(c), c.cb):
-                        total += int(c.WorkingSetSize)
+                        total += int(getattr(c, field))
                         found = True
                 finally:
                     k32.CloseHandle(h)
@@ -301,6 +302,8 @@ def worker_rss_gb(names: tuple[str, ...] = ORPHAN_NAMES) -> float | None:
             if not _name_matches(image, names):
                 continue
             try:
+                if field != "WorkingSetSize":
+                    return None          # D1: private commit is Windows-only here
                 with open(f"/proc/{pid}/statm", encoding="utf-8") as fh:
                     total += int(fh.read().split()[1]) * os.sysconf("SC_PAGE_SIZE")
                 found = True
@@ -309,6 +312,17 @@ def worker_rss_gb(names: tuple[str, ...] = ORPHAN_NAMES) -> float | None:
         return round(total / 1024 ** 3, 3) if found else None
     except Exception:  # noqa: BLE001
         return None
+
+
+def worker_private_gb(names: tuple[str, ...] = ORPHAN_NAMES) -> float | None:
+    """D1. Private commit, which Windows does NOT trim under pressure.
+
+    Working set read 2.28 -> 3.251 GB across a successful reload because the
+    worker had been trimmed first, so a leak signal keyed off working set
+    reads the trim rather than the leak. `ollama app.exe` showed 3728 MB
+    working set against 60 MB private seconds apart.
+    """
+    return worker_rss_gb(names, field="PagefileUsage")
 
 
 def memory_pressure() -> dict:

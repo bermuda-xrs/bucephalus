@@ -177,8 +177,8 @@ relative to how much the same tasks move on their own.
 ```powershell
 # 1. how noisy is the suite? Baseline arm, no skill loaded.
 #    Pass 1 first, then read it before spending the rest.
-python bench\noise.py --config config.local.yaml --profile local --runs 1 --out runs\noise-floor.json
-python bench\noise.py --config config.local.yaml --profile local --runs 3 --resume --out runs\noise-floor.json
+python bench\noise.py --config config.local.yaml --profile local --suite aero_calc --runs 1 --out runs\noise-floor.json
+python bench\noise.py --config config.local.yaml --profile local --suite aero_calc --runs 3 --resume --out runs\noise-floor.json
 
 # 2. the calibration skill - a POSITIVE CONTROL on the instrument (D35).
 #    Drafted from the drafting split only, declared so, scored on eval only.
@@ -429,9 +429,11 @@ On Windows, allocating past the limit fails, spinning past it is killed, and a
 interpreter it starts is born inside the job. If the job cannot be applied,
 the code does not run at all.
 
-**File size is not limited on Windows.** There is no per-process equivalent
-short of a container (Phase 6), and `run_sandboxed` says so in every run's
-`notes`.
+**File size is not limited on Windows**, and now stays that way: a container
+was the only per-process route to it and **Phase 6 is withdrawn** (2026-09-16,
+FINDINGS 1.29). `run_sandboxed` says so in every run's `notes`. The sandbox is
+advisory path confinement, a Job Object, and a wall-clock timeout - stated,
+and accepted (D32).
 
 **It is a door, not a wall, and only Phase 6 makes it a wall.** For agent
 code the hook refuses writes outside the task's scope; reads outside that
@@ -463,8 +465,37 @@ a few hundred tokens each. A skipped test proves nothing about its body, so
 the same bodies run on every suite against local fake servers speaking each
 protocol (`test_the_telegram_body_against_a_fake_api`,
 `test_the_anthropic_body_against_a_fake_api`); that is how these were checked
-to catch a broken transport rather than pass it. Whether to supply the token
-or the key is yours (DEFERRED D26).
+to catch a broken transport rather than pass it.
+
+### When you have a credential, this is the whole procedure
+
+One command each. Nothing else needs doing: the tests unskip on the
+environment variable alone.
+
+```powershell
+# Telegram. A bot token from @BotFather; the test only READS.
+$env:ALPHA_TELEGRAM_TOKEN = "123456:ABC..."
+..\..\..\.alpha-test-1-venv\Scripts\python.exe -m pytest tests/test_live_credentials.py -k telegram -v
+
+# Anthropic. One small streamed call per Anthropic backend in config.yaml.
+$env:ANTHROPIC_API_KEY = "sk-ant-..."
+..\..\..\.alpha-test-1-venv\Scripts\python.exe -m pytest tests/test_live_credentials.py -k anthropic -v
+```
+
+**A pass looks like `1 passed` (Telegram) or `2 passed` (Anthropic, one per
+backend) and nothing skipped.** A skip means the variable is not visible to
+that shell, which is the only way to get a false pass here.
+
+**What a failure would mean, per path:**
+- **Telegram:** `getMe` rejected the token, `getUpdates` returned a shape the
+  transport does not parse, or an unknown method was *not* refused - the last
+  is the one that matters, because it is the guard.
+- **Anthropic:** the request shape was rejected, or text, usage, stop reason
+  or model did not come back as the adapter assumes. Either way the adapter's
+  `UNVERIFIED` banner comes off only when this passes.
+
+**Unset the variable afterwards** unless you want every future suite run to
+spend: the two live tests cost a few hundred tokens each time.
 
 ## Reading the numbers it produces
 

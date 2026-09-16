@@ -77,19 +77,60 @@ KNOWN_INERT = {
     "deviation_rate": "reporting helper for M13.4; never surfaced.",
     "delete_step": "plan editing is done through the console API.",
     "edit_step": "plan editing is done through the console API.",
+
+    # --- METHODS, visible since D22 was closed 2026-09-16 -----------------
+    # Invoked by a framework, not by this project. False positives, named
+    # so the list stays a record rather than a filter.
+    "AccessGuard.dispatch": "ASGI middleware; Starlette calls it.",
+    "AlphaTUI.compose": "Textual lifecycle hook.",
+    "AlphaTUI.on_mount": "Textual lifecycle hook.",
+    "AlphaTUI.on_unmount": "Textual lifecycle hook.",
+    "AlphaTUI.on_button_pressed": "Textual event handler, dispatched by name.",
+    "_Text.handle_data": "HTMLParser callback, invoked by the stdlib.",
+    "_Text.handle_starttag": "HTMLParser callback, invoked by the stdlib.",
+    "_Text.handle_endtag": "HTMLParser callback, invoked by the stdlib.",
+
+    # Interface with no implementation, by design (A1 3.5).
+    "ExternalMemoryProvider.recall": "tier 3 is an interface; nothing implements it.",
+    "NoExternalProvider.recall": "the null implementation of that interface.",
+
+    # Genuinely uncalled. Each is small, and each is a decision to leave it.
+    "AgentContext.gate_queue": "candidates are read by status; this derives the same list for a caller that does not exist yet.",
+    "Anchor.all_tasks": "helper; `alpha verify` iterates tasks from the task table.",
+    "BackendBase.set_throughput": "the router reads observed throughput from telemetry instead.",
+    "EventLog.last_of_type": "helper; every caller writes its own query.",
+    "ToolRegistry.read_only": "the planner builds its read-only set from the registry directly.",
+    "RunState.resolve_last_tool": "TUI helper for a view that was never built.",
+    "UserStore.grounding_sources": "M11's grounding input. The generator was retired 2026-09-15 (FINDINGS 1.27); the console still stores the notes and nothing reads them.",
 }
 
 
 def _unreferenced() -> dict[str, Path]:
     defs = {}
+    methods: dict[str, tuple[Path, int]] = {}
     for f in SRC.rglob("*.py"):
-        for node in ast.parse(f.read_text(encoding="utf-8")).body:
+        tree = ast.parse(f.read_text(encoding="utf-8"))
+        for node in tree.body:
             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 if node.name.startswith("_") or node.name == "main":
                     continue
                 if node.decorator_list:          # framework-registered
                     continue
                 defs[node.name] = (f, node.lineno)
+            # D22. The audit read module level only, so 128 public METHODS were
+            # invisible to it - and a one-off sweep found 14 with no production
+            # reference. A method is judged by NAME here: `x.name` anywhere in
+            # production counts, whatever `x` is. That is weaker than the
+            # receiver-aware rule above and deliberately so - the alternative
+            # is every `self.x` call reading as dead. It still catches the case
+            # this exists for: a method nothing ever names.
+            elif isinstance(node, ast.ClassDef):
+                for sub in node.body:
+                    if not isinstance(sub, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                        continue
+                    if sub.name.startswith("_") or sub.decorator_list:
+                        continue
+                    methods.setdefault(f"{node.name}.{sub.name}", (f, sub.lineno))
 
     prod = list(SRC.rglob("*.py")) + list((ROOT / "bench").glob("*.py"))
     prod += [ROOT / "demo.py"]
@@ -107,6 +148,7 @@ def _unreferenced() -> dict[str, Path]:
     # perfectly but behaved slightly unusually - here, code that merely
     # NAMES a function in prose - and the answer was "wired".
     refs: set[str] = set()
+    attr_refs: set[str] = set()
     for f in prod:
         if not f.exists():
             continue
@@ -157,8 +199,14 @@ def _unreferenced() -> dict[str, Path]:
                 # Kept deliberately: a string reference is a real one, and
                 # dropping it would flag registered handlers as dead.
                 refs.add(node.value)
+            if isinstance(node, ast.Attribute):
+                attr_refs.add(node.attr)          # D22: any receiver counts
 
-    return {name: home for name, (home, _l) in defs.items() if name not in refs}
+    out = {name: home for name, (home, _l) in defs.items() if name not in refs}
+    for qual, (home, _l) in methods.items():
+        if qual.split(".", 1)[1] not in (refs | attr_refs):
+            out[qual] = home
+    return out
 
 
 def test_no_newly_unreferenced_machinery():

@@ -1349,6 +1349,48 @@ Both were invisible to the dead-code audit, which reads production call sites:
 `fetch_url` had one until its caller was deleted, and `main` is called by the
 operating system.
 
+### 1.29 Two phases withdrawn: the container, and the portable format
+
+**Phase 6 (Docker) - withdrawn 2026-09-16, by decision.** Not deferred: the
+user declined to install Docker, and the reasoning is recorded here so a
+later session reopens it with evidence rather than reconstructing it.
+
+- **What Phase 6 was for:** a real sandbox boundary, and a path to a desktop
+  application.
+- **What D37 already covers:** on the only platform this project has run on,
+  a Job Object caps memory, CPU time and process count, enforced by the
+  kernel. That is most of the isolation benefit.
+- **What stays uncovered:** file size. On an attended single-user machine that
+  is a resource-exhaustion risk, not a security boundary.
+- **What the desktop app was:** a distribution decision, and there is nobody
+  to distribute to.
+- **What the cost would have been:** Docker becomes a dependency of the
+  sandbox - the one component this project most needs to stay simple and
+  auditable.
+
+**So the sandbox is, and is stated as: advisory path confinement, a Job
+Object, and a wall-clock timeout.** D32 stays on the page as *known and
+accepted* rather than deferred, and it names what would reopen it: running
+genuinely untrusted code, or a second user.
+
+**Phase 12 (portable skill provenance) - withdrawn 2026-09-16.** Its subject
+was a generated skill's grounding provenance, and the generator retired with
+M11 (1.27). Examined piece by piece, nothing else in it had a subject left:
+the format is implemented, the export is the file, and a cross-tool
+demonstration needs a second runtime and a live suite - neither exists.
+
+What was worth an hour, and was done instead: `import_external_skill` is now
+exercised end to end. A skill authored elsewhere enters the store as an
+untrusted candidate, keeps its bytes, and is refused every trial until its
+drafting set is declared. **G8 moves from "the format is a claim" to "a skill
+crossed a boundary and was gated like anything else."** It remains without a
+production caller - no command imports one - so it stays in `KNOWN_INERT`
+with that reason, which is the honest half.
+
+**Both withdrawals are decisions, in the shape 9.2 set:** a phase that is
+withdrawn is not a missing feature. It is a subject that no longer exists,
+recorded so nobody reads the gap as an omission.
+
 ---
 
 ## 8. Open research questions

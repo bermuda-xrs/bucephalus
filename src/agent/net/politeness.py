@@ -43,6 +43,10 @@ MIN_INTERVAL_S = 1.0
 # noticed within a session.
 ROBOTS_TTL_S = 900.0
 
+# D3. The most robots.txt anyone needs, and the bound that makes the
+# fetch finite: a server that dribbles bytes cannot hold the run open.
+ROBOTS_MAX_BYTES = 64 * 1024
+
 _lock = threading.Lock()
 _last_request: dict[str, float] = {}
 _robots: dict[str, tuple[float, object | None]] = {}
@@ -68,12 +72,22 @@ def _robots_for(url: str, timeout_s: float = 5.0):
 
     parser: object | None = None
     try:
-        r = httpx.get(f"{root}/robots.txt", timeout=timeout_s,
-                      headers={"User-Agent": USER_AGENT},
-                      follow_redirects=True)
-        if r.status_code == 200 and r.text.strip():
+        # D3's sweep. A plain `get` reads until the server stops, and httpx's
+        # read timeout measures the gap BETWEEN bytes - the shape that let a
+        # 600 s timeout run for 2539 s. Every other blocking path in this
+        # project streams with a cap; this one did not.
+        body = ""
+        with httpx.stream("GET", f"{root}/robots.txt", timeout=timeout_s,
+                          headers={"User-Agent": USER_AGENT},
+                          follow_redirects=True) as r:
+            if r.status_code == 200:
+                for chunk in r.iter_text():
+                    body += chunk
+                    if len(body) >= ROBOTS_MAX_BYTES:
+                        break
+        if body.strip():
             rp = urllib.robotparser.RobotFileParser()
-            rp.parse(r.text.splitlines())
+            rp.parse(body[:ROBOTS_MAX_BYTES].splitlines())
             parser = rp
         # Any other status - 404, 403, 5xx - means the site published no
         # usable rules. Not a prohibition.

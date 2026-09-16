@@ -236,7 +236,9 @@ def test_paired_enforces_the_declared_profile(monkeypatch, capsys, tmp_path):
     def fake_open(config, *, profile=None, isolate, why=""):
         seen["config"], seen["profile"] = config, profile
         seen["isolate"] = isolate
-        return _FakeCtx(profile or "mixed")
+        # D15: without tmp_path the fake resolves `--out` against Path(".")
+        # and writes cal.json into the repository root on every test run.
+        return _FakeCtx(profile or "mixed", tmp_path)
 
     monkeypatch.setattr(mod, "open_measurement", fake_open)
     monkeypatch.setattr(mod, "load_suite", lambda spec, ctx=None: _fake_specs())

@@ -41,7 +41,8 @@ from agent.models.base import BackendError  # noqa: E402
 from agent.models.ollama import ModelStall, reset_rates  # noqa: E402
 from agent import HARNESS_VERSION, TOOLSET_VERSION  # noqa: E402
 from agent.proc import (  # noqa: E402
-    free_memory_gb, memory_pressure, reap_orphans, worker_rss_gb)
+    free_memory_gb, memory_pressure, reap_orphans, worker_private_gb,
+    worker_rss_gb)
 
 # When a task's wall-clock stops being trustworthy.
 #
@@ -107,6 +108,13 @@ ABORT_EXCLUDED_MAX = 3
 # So: the ratio is still RECORDED, because it is what caught the leak and a
 # future monotonic climb should be visible. It no longer decides the flag.
 WALL_OUTLIER_FACTOR = 3.0
+
+# D11. The factor needs three completed tasks, so tasks 1-3 of a run could
+# never be flagged - M18 took 1777.4 s as task 2 and passed unflagged. Until
+# a median exists, an absolute ceiling stands in. 900 s is above the
+# reference run's p90 (941.2 s was the slowest healthy tier) and far below
+# the three pathological calls (1499.8, 2465, 2539 s).
+WALL_OUTLIER_ABS_S = 900.0
 
 # A prefix mutation shows up as the cache ratio collapsing against the run's
 # own established level. Phase 1 made this observable for the first time: no
@@ -232,8 +240,16 @@ def run_once(ctx, spec: dict, run_ix: int) -> dict:
         # monotonically across a run, the L1 refresh is not working.
         "worker_rss_before_gb": rss_before,
         "worker_rss_after_gb": worker_rss_gb(),
+        # D1: working set is trimmed under pressure, private commit is not.
+        # A leak signal keyed off the first reads the trim.
+        "worker_private_after_gb": worker_private_gb(),
         "free_tokens": m.free_tokens,
         "cost_usd": m.cost_usd,
+        # D36 surfaced, not just recorded. A stalled or killed call keeps an
+        # open row in `calls`; without these two the run report - the thing
+        # anyone actually reads - could not show that it happened.
+        "n_calls": m.n_calls,
+        "n_unreturned": m.n_unreturned,
         # None means UNMEASURED, not zero. Every run before 2026-09-06 has it
         # null because no local backend reported cache accounting at all; a
         # chart that treats those as 0% is inventing a prefix mutation that
@@ -576,7 +592,9 @@ def main() -> int:
     ap.add_argument("--runs", type=int, default=3)
     ap.add_argument("--max-flaky", type=int, default=8)
     ap.add_argument("--split", choices=["drafting", "eval"])
-    ap.add_argument("--limit", type=int, help="first N tasks only (for a smoke check)")
+    ap.add_argument("--limit", type=int,
+                    help="first N tasks in SUITE ORDER, taken before the "
+                         "per-run shuffle (D9). For a smoke check")
     ap.add_argument("--only", action="append", metavar="KEY",
                     help="run exactly these task keys; repeatable. The precise "
                          "form of a sighting shot: a task can only become a "
@@ -888,7 +906,8 @@ def _noise_floor(args) -> int:
                                            out["wall_s"] > WALL_OUTLIER_FACTOR * med)
                 out["wall_vs_median"] = round(out["wall_s"] / med, 2) if med else None
             else:
-                out["wall_outlier"] = False
+                # D11: no median yet - an absolute ceiling, not silence.
+                out["wall_outlier"] = out["wall_s"] > WALL_OUTLIER_ABS_S
                 out["wall_vs_median"] = None
             if out["wall_outlier"]:
                 out["memory_suspect"] = True
@@ -1080,6 +1099,7 @@ def _noise_floor(args) -> int:
         "commit_ratio_high_keys": [r["key"] for r in rows
                                    if r.get("commit_ratio_high")],
         "wall_outlier_factor": WALL_OUTLIER_FACTOR,
+        "wall_outlier_abs_s": WALL_OUTLIER_ABS_S,
         "commit_ratio_suspect_threshold": COMMIT_RATIO_SUSPECT,
         "emergency_free_gb": EMERGENCY_FREE_GB,
         "memory_pressure_at_start": memory_pressure(),

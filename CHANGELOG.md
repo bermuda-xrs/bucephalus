@@ -10,6 +10,92 @@
 Dates are commit dates. `0.1.0` is not released yet — see "Unreleased" for
 what still stands between here and a first iteration.
 
+## The pile, and two withdrawals - 2026-09-16
+
+**Moves no published number. 28 open items become 9.**
+
+### Two design rules, because the second was earned twice this session
+
+- **DR5. A defect is never in one place. The sweep is part of the fix, not a
+  follow-up.** C58's fix never swept, and its sibling killed `demo.py` for ten
+  days. The rule and its six instances are in INVARIANTS.
+- **DR6. An entry is closed in the change that fixes it, not in a later
+  triage.** D17 and D20 sat open for sessions after their defects were fixed.
+  A pile that carries closed items is one people stop reading - the same harm
+  as `alpha verify`'s permanent false criticals.
+
+### Deleted (5) and closed-as-already-fixed (2)
+
+- **D4, D5, D12** - generality work and disclosures about `coverage.py` and
+  the decomposer, instruments for an archived suite. FINDINGS carries their
+  content.
+- **D8** - two `ollama serve` processes: environment, not code.
+- **D14** - a measurement note that only mattered if D13 were fixed.
+- **D17** - anchor-behind has been `info` since the fix; the entry outlived it.
+- **D20** - `resume()` is wired and ran five times in yesterday's verification.
+
+### Fixed (9)
+
+| item | fix |
+|---|---|
+| D15 | the archived test's fake context resolves under `tmp_path`. It had rewritten `cal.json` into the repository root on every suite run, including one at 08:44 today |
+| D9 | `--limit` says it takes the first N in SUITE order, before the shuffle |
+| D7 | the run sheet renders machine faults and EXCLUDED tasks; `noise.py` had emitted both keys all along |
+| D11 | an absolute ceiling (900 s) flags a wall-clock outlier before a median exists. M18 took 1777 s as task 2 and passed unflagged |
+| D1 | private commit recorded beside working set, which Windows trims under pressure |
+| D3 | the sweep found one unbounded blocking path - robots.txt - now streamed with a 64 KB cap |
+| D10 | `measure.ps1 stop` routes through `kill_tree`. `Stop-Process` killed the venv trampoline and left the interpreter running - four occurrences |
+| D18 | closed as already satisfied: `open_measurement` makes `isolate` a required argument, so every measurement path declares its isolation state |
+| D22 | the dead-code audit reads METHODS. 18 findings on the first run: 8 framework callbacks, 2 interface stubs, 7 uncalled helpers named, and one - `worker_private_gb` - that was mine, added for D1 and not yet wired |
+
+**D6 is half closed and stays open.** Every step call now records
+`est_input_tokens` beside the server's own count, so the estimator's error is
+measurable on any ordinary run. Nobody has run one and read it; that is what
+the entry is now waiting for.
+
+### The verification run's gap, built
+
+The run record carries `n_calls` and `n_unreturned`. D36 recorded the fact;
+now the report anyone reads surfaces it.
+
+### Phase 6 - WITHDRAWN, by decision
+
+Docker will not be installed. D37's Job Object carries most of the isolation
+benefit on the only platform this runs on; what remains uncovered is file
+size, which on an attended single-user machine is resource exhaustion rather
+than a boundary; the desktop app was a distribution decision with nobody to
+distribute to; and the cost was Docker becoming a dependency of the one
+component that most needs to stay auditable.
+
+**D32 moves from deferred to KNOWN AND ACCEPTED** and names what would reopen
+it. The sandbox is stated everywhere as: advisory path confinement, a Job
+Object, and a wall-clock timeout (FINDINGS 1.29).
+
+### Phase 12 - WITHDRAWN, and G8's half demonstrated
+
+Its subject retired with M11. `import_external_skill` is now exercised end to
+end: a skill authored elsewhere enters as an untrusted candidate, keeps its
+bytes, and is refused every trial until its drafting set is declared. G8 moves
+from "the format is a claim" to "a skill crossed a boundary and was gated".
+
+### D26, prepared
+
+Both live tests still skip cleanly after this session's deletions. README now
+carries one command per credential, what a pass looks like (`1 passed` /
+`2 passed`, nothing skipped), what each failure would mean, and the reminder
+to unset the variable afterwards.
+
+### D39 - named, not swept
+
+The CLI's 25 subcommands are reachable only through `--help`. Part 3 ran five
+by hand and found two defects no test had, so this layer is expected to
+contain something. It is the first thing a third session should pick up.
+
+### Tests
+
+**790 passing, 3 skipped.** 10 new in `tests/test_deferred_fixes.py`, one per defect.
+Injections: 10 of 10 red.
+
 ## Verification run after the outage - 2026-09-16
 
 **Not a measurement.** Five tasks from the archived suite, one pass, harness

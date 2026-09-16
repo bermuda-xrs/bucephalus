@@ -150,6 +150,15 @@ def render(noise: dict | None, cal: dict | None) -> str:
                 or noise.get("wall_s_this_session")
                 or noise.get("wall_s_total") or 0)
         add(f"| wall clock, all runs | {secs / 3600:.2f} h |")
+        # D7. `noise.py` has emitted both of these since the stall rule
+        # landed and the run sheet rendered neither, so a reader could not
+        # tell "30 tasks measured" from "30 attempted, 2 never scored".
+        faults = noise.get("machine_fault_keys") or []
+        excluded = noise.get("excluded_keys") or []
+        add(f"| machine faults, recovered | "
+            f"{len(faults)}{': ' + ', '.join(faults) if faults else ''} |")
+        add(f"| **EXCLUDED** - stalled twice, never scored | "
+            f"**{len(excluded)}**{': ' + ', '.join(excluded) if excluded else ''} |")
 
         # Memory-suspect tasks. A wall-clock reading taken while the machine
         # was paging is not a measurement of the task, and seconds are the

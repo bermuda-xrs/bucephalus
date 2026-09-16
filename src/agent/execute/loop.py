@@ -360,6 +360,12 @@ def run_task(ctx, task_id: str) -> TaskResult:
                     "purpose": "step",
                     "step": step,
                     "prefix_fp": builder.fingerprint(),
+                    # D6: what the in-loop ESTIMATOR thinks this prompt is,
+                    # beside what the server will report in `calls`. The
+                    # ceiling budgets against the estimator, and its error
+                    # was unmeasurable without a key until C62. Now any run
+                    # measures it.
+                    "est_input_tokens": count_tokens(prefix) + count_tokens(tail),
                 },
             )
 

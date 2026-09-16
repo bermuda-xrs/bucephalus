@@ -92,8 +92,12 @@ switch ($Command) {
             exit 1
         }
         Write-Host "stopping PID $running - completed tasks stay in the ledger" -ForegroundColor Yellow
-        Stop-Process -Id ([int]$running) -Force -ErrorAction SilentlyContinue
-        exit 0
+        # D10. Stop-Process kills THAT process. A venv python.exe is a
+        # trampoline (C13), so it left the real interpreter running and the
+        # ledger still growing while the run was believed stopped - four
+        # occurrences. kill_tree is the one implementation that handles it.
+        & $py -c "import sys; from agent.proc import kill_tree; sys.exit(0 if kill_tree(int(sys.argv[1])) else 1)" $running
+        exit $LASTEXITCODE
     }
 
     "next" {

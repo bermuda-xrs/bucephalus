@@ -934,3 +934,44 @@ A seam is for OVERRIDING. If it is pre-set to the default, it is not a seam;
 it is a hard-coded path with a decoy branch beside it. Leave override seams
 unset and let the consumer own its default.
 
+
+---
+
+**DR5. A defect is never in one place. The sweep is part of the fix, not a
+follow-up.**
+
+Every defect this project has fixed had siblings, and every sweep found them:
+
+| defect | siblings the sweep found |
+|---|---|
+| C58 - an unmeasured value formatted with `:.0%` | the CLI was fixed 2026-09-14 and **nobody swept**. `demo.py` carried the same line and died for ten days (C67, FINDINGS 1.28) |
+| C34 - a pre-set seam made the tool's own path dead | `ctx.web_fetcher`, and the whole class of pre-set overrides (DR2) |
+| C41 - a check blind to the WAL sidecar | every file-copy path that carries a database |
+| C50 / C55 - one route into protected state | six file routes, then every SQLite route |
+| DR1 - a control scoped narrower than what it protects | eleven instances in one sweep |
+| C64 - one commit, two dead entry points | `noise.py main` found first, `demo.py` only because the sweep looked |
+
+**The rule:** when a fix lands, grep for the shape, not the symptom - the
+format spec, the call site, the field name - and fix every instance in the
+same change. A fix that closes one instance and schedules the sweep has not
+been finished; it has been split, and the second half does not happen.
+
+The cheapest sweep is a test that cannot pass while a sibling exists: a
+structural scan for the shape, like `test_no_model_call_bypasses_the_record`
+or `tests/test_entry_points.py`.
+
+---
+
+**DR6. An entry is closed in the change that fixes it, not in a later
+triage.**
+
+D17 and D20 sat open in `DEFERRED.md` for sessions after their defects were
+fixed - anchor-behind had become `info`, `resume()` had been wired and was
+running on every task. Both were found by a triage that read the code rather
+than the entry.
+
+A pile that carries closed items is a pile people stop reading, which is
+exactly the harm DR1's permanent false criticals caused in `alpha verify`: a
+real entry gets scrolled past because the last twenty were noise. The record
+of a defect and the state of the code are the same fact, and they move
+together or the record stops being one.
