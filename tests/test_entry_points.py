@@ -43,6 +43,7 @@ ENTRY_POINTS = [
     "bench/ladder.py",
     "bench/nextstep.py",
     "bench/inventory.py",
+    "bench/g1_ablation_run.py",
     "bench/cache_boundary.py",
     "bench/suites/archive/aero_calc.py",
     "bench/archive/decompose_aero.py",

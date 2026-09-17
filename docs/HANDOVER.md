@@ -284,12 +284,12 @@ same defect wherever it appeared.
 # D — STATE
 
 **Everything volatile is here and nowhere else in this file**, each row with the command that
-regenerates it. Verified 2026-09-17, against commit `290e286`.
+regenerates it. Verified 2026-09-17, against commit `c1fb9d6`.
 
 | Fact | Value | Regenerate with |
 |---|---|---|
 | Branch | `measurement-2026-09-01`, no remote | `git branch --show-current` |
-| Written against | `290e286`; the test asserts this is an ancestor of HEAD | `git log --oneline -1` |
+| Written against | `c1fb9d6`; the test asserts this is an ancestor of HEAD | `git log --oneline -1` |
 | Harness version | **3**, bumped 2026-09-17 on D38's deadline to delete `max_taint_in` from the prefix. A bump makes every published number incomparable with every later one; nothing has yet been produced under 3 | `grep HARNESS_VERSION src/agent/__init__.py` |
 | Toolset version | **6** | `grep TOOLSET_VERSION src/agent/__init__.py` |
 | Test count | *deliberately not stated* | `python -m pytest tests -q`, and read the tail line. The skips are the live-credential tests, until D26's credentials exist |
