@@ -213,13 +213,26 @@ CREATE TABLE IF NOT EXISTS review_decisions (
 CREATE INDEX IF NOT EXISTS idx_reviews_task ON review_decisions(task_id);
 
 -- M13.1: plans. The approved hash is pinned and checked before every step.
+--
+-- D24. Keyed by (id, task_id) and NOT by the content hash alone. `id` is the
+-- hash of the plan BODY, which carries no task id, so two tasks with the same
+-- objective and steps - the ordinary case in a paired trial, where both arms
+-- plan the same task - produce the same hash. Under a bare `id` primary key
+-- the writers' INSERT OR REPLACE made the second task's DRAFT silently delete
+-- the first task's APPROVED row: no error, `load_plan` returning None
+-- afterwards, and the first task halting mid-run on "no approved plan for
+-- this task" - an error naming nothing about the collision.
+--
+-- Same shape as D21 and D23: key the row by what it BELONGS TO, not only by
+-- what it contains.
 CREATE TABLE IF NOT EXISTS plans (
-    id            TEXT PRIMARY KEY,     -- content hash
+    id            TEXT NOT NULL,        -- content hash of the plan body
     task_id       TEXT NOT NULL REFERENCES tasks(id),
     body_json     TEXT NOT NULL,
     status        TEXT NOT NULL,        -- drafted|approved|rejected|superseded
     approved_hash TEXT,
-    created_at    REAL NOT NULL
+    created_at    REAL NOT NULL,
+    PRIMARY KEY (id, task_id)
 );
 CREATE INDEX IF NOT EXISTS idx_plans_task ON plans(task_id);
 
@@ -550,10 +563,51 @@ def _calls_allow_unreturned(conn: sqlite3.Connection) -> bool:
     return True
 
 
+def _plans_keyed_by_task(conn: sqlite3.Connection) -> bool:
+    """D24: rebuild a pre-D24 `plans` so its key is (id, task_id).
+
+    SQLite cannot change a primary key in place, so the same rebuild the D36
+    `calls` migration uses: rename, recreate from SCHEMA_SQL's definition,
+    refill unchanged, drop the old one, in one transaction. Idempotent - a
+    table already keyed by both columns is left alone.
+
+    Existing rows always migrate cleanly. Under the old key a duplicate hash
+    could not be STORED in the first place: the replace had already destroyed
+    the earlier row, so every database reaching this point holds at most one
+    row per hash, and what it lost is not recoverable here.
+    """
+    info = {r[1]: r[5] for r in conn.execute("PRAGMA table_info(plans)")}
+    if not info or info.get("task_id"):
+        return False  # table absent, or its key already includes task_id
+    ddl = re.search(r"CREATE TABLE IF NOT EXISTS plans \(.*?\n\);",
+                    SCHEMA_SQL, re.S).group(0)
+    cols = "id, task_id, body_json, status, approved_hash, created_at"
+    # Since 3.25 a RENAME re-parses every trigger and view in the schema and
+    # aborts the whole migration if any one of them fails to compile - on a
+    # table this rename does not touch. Nothing references `plans`, so the
+    # rewriting has nothing to do here and only supplies that failure mode.
+    conn.execute("PRAGMA legacy_alter_table=ON")
+    conn.execute("BEGIN IMMEDIATE")
+    try:
+        conn.execute("ALTER TABLE plans RENAME TO plans_pre_d24")
+        conn.execute(ddl)
+        conn.execute(f"INSERT INTO plans({cols}) SELECT {cols} FROM plans_pre_d24")
+        conn.execute("DROP TABLE plans_pre_d24")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_plans_task ON plans(task_id)")
+        conn.execute("COMMIT")
+    except Exception:
+        conn.execute("ROLLBACK")
+        raise
+    finally:
+        conn.execute("PRAGMA legacy_alter_table=OFF")
+    return True
+
+
 def init_schema(conn: sqlite3.Connection) -> None:
     conn.executescript(SCHEMA_SQL)
     _add_missing_columns(conn)
     _calls_allow_unreturned(conn)
+    _plans_keyed_by_task(conn)
     conn.commit()
 
 

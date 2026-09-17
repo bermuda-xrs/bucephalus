@@ -677,18 +677,40 @@ never could.
 content-addressed keyspace shared across tasks with an owner column that
 records only the first writer.
 
-## D24 — two tasks cannot approve identical plans
+## D24 — two tasks cannot approve identical plans (CLOSED 2026-09-17: keyed by `(id, task_id)`; and its premise was WRONG)
 
 **Found:** 2026-09-07, by the same sweep. Not fixed.
 
 `plans.id` is the content hash of the plan body, and it is the PRIMARY KEY.
 The body contains no task id, so two tasks with the same objective and steps
-produce the same id and the second `INSERT` raises
-`UNIQUE constraint failed: plans.id`.
+produce the same id.
 
-**It fails LOUDLY**, which is why this is logged rather than fixed — a crash
+~~**It fails LOUDLY**, which is why this is logged rather than fixed — a crash
 at approval time is recoverable and visible, where the artifact version of
-the same collision was silent and corrupting.
+the same collision was silent and corrupting.~~
+
+**CORRECTED 2026-09-17, BY RUNNING IT.** It does not fail loudly. It does not
+fail at all. Both writers - `store_plan` and `approve_plan` - use
+`INSERT OR REPLACE`, which never raises on a key collision, so the second
+task's DRAFT silently replaced the first task's APPROVED row:
+
+```
+identical plan ids: True 6dc8cc1f06f8
+A approved plan: present
+B store_plan: NO EXCEPTION
+rows: [('6dc8cc1f...', 't_B', 'drafted')]      <- task A's row is gone
+A approved plan AFTER B drafted: None
+A verify_plan_pin RAISED: IntegrityError no approved plan for this task
+```
+
+So task A, correctly planned and correctly approved, halts mid-run on an error
+that names nothing about the collision, and its approval is not recoverable
+from the `plans` table. That is **corrupting**, not the gentler thing this
+entry claimed, and it is the SAME failure as D23's artifact version rather
+than its opposite - the sentence that made it safe to defer was the sentence
+that was false. C6: checking an instruction is part of following it, and the
+measurement wins. Carried into `docs/SPEC-DELTA.md` as an instruction-level
+error, not only a code one.
 
 **Not currently reachable in any measurement path:** `config.local.yaml` sets
 `plan_required: false` and no bench entry point drafts plans. It becomes
@@ -696,9 +718,22 @@ reachable the moment a paired trial runs with planning on, where both arms
 would draft the same plan for the same task and the second approval would
 crash.
 
-**The fix when it is needed** is the same shape as D21 and D23: key the row
-by what it belongs to, not only by what it contains — `(id, task_id)` rather
-than `id` alone.
+**The fix, applied 2026-09-17,** is the same shape as D21 and D23: key the row
+by what it BELONGS TO, not only by what it contains — `PRIMARY KEY (id,
+task_id)` rather than `id` alone. `_plans_keyed_by_task` in
+`src/agent/kernel/db.py` rebuilds an existing table the way the D36 `calls`
+migration does, under `PRAGMA legacy_alter_table` so that an unrelated trigger
+failing to re-parse cannot abort a migration which does not touch it.
+`tests/test_deferred_fixes.py` covers both the collision and the migration,
+and both go red against the restored defect.
+
+**The sweep (DR5).** The shape is "a row keyed by content, shared between two
+owners". `artifacts` is the same keyspace and was closed by D23 - authorship
+reads from the event log, and its writer is `INSERT OR IGNORE`, which keeps
+the first row rather than destroying it. `semantic_cache` and `skills` are
+content-keyed and SHARED BY DESIGN, with the taint comparison and the
+name/version pair doing the separating. `plans` was the last one keyed by
+content alone behind a destructive writer.
 
 ## D25 — the Anthropic adapter accepts `on_chunk` and ignores it (UNDER D26: one decision unblocks both)
 

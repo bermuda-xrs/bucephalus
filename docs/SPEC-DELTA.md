@@ -1428,3 +1428,29 @@ INVOKES it, rather than importing what it calls: `tests/test_entry_points.py`
 (invariant 113, FINDINGS 1.28). The two that still have none - a probe with no
 parser that needs a live server, and the PowerShell wrappers - are named
 there.
+
+### C68. D24's own entry was wrong about how D24 fails, and the wrong sentence was the one that deferred it
+
+**The instruction:** DEFERRED D24, written 2026-09-07 - "the second `INSERT`
+raises `UNIQUE constraint failed: plans.id`... **It fails LOUDLY**, which is
+why this is logged rather than fixed."
+
+**Reality, measured 2026-09-17 by writing the collision rather than reading
+the entry:** nothing raises. `store_plan` and `approve_plan` both write with
+`INSERT OR REPLACE`, which has no failure mode on a key collision. The second
+task's DRAFT replaces the first task's APPROVED row in place. The first task
+then loses its approval with no error anywhere, and halts at its next step on
+`IntegrityError: no approved plan for this task` - an error that names the
+consequence and nothing about the cause.
+
+**Correct version:** D24 is **corrupting**, not loud, and it is the same
+failure as D23's artifact collision rather than the safer counterpart the
+entry contrasted it with. Fixed the same day: `PRIMARY KEY (id, task_id)`,
+with `_plans_keyed_by_task` migrating an existing table.
+
+**Class:** oversight - and the instructive kind. The entry's severity, its
+deferral and its position in E3(c)'s "small fixes" all rested on one clause
+about a database behaviour that nobody executed. A triage that reads an entry
+inherits the entry's errors; this one cost a two-minute script to check.
+Fourth instruction-level error in this file, and the third whose defect was
+worse than its own description. C6.

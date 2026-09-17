@@ -161,3 +161,107 @@ def test_g8_an_external_skill_is_imported_as_an_untrusted_candidate(ctx):
         assert "drafting set" in str(e)      # undeclared: no trial may run
     else:
         raise AssertionError("an undeclared drafting set must refuse every trial")
+
+
+def test_d24_two_tasks_can_hold_the_same_plan(ctx):
+    """D24, and a correction to its own entry.
+
+    The entry said the second INSERT raises `UNIQUE constraint failed`, and
+    deferred the fix BECAUSE it fails loudly. It does not. Both writers use
+    INSERT OR REPLACE, so under the old `id`-only primary key the second
+    task's DRAFT silently replaced the first task's APPROVED row: `load_plan`
+    returned None afterwards and the first task halted mid-run on "no approved
+    plan for this task", an error that names nothing about the collision.
+    Measured, not read: see the run in CHANGELOG 2026-09-17.
+
+    Both arms of a paired trial plan the SAME task, so identical bodies are
+    the ordinary case there, not a curiosity.
+    """
+    from agent.kernel.tasks import create_task, load_task
+    from agent.kernel.types import Budget, TaskContract
+    from agent.plan.planner import (approve_plan, load_plan, store_plan,
+                                    verify_plan_pin)
+    from agent.plan.types import Plan, PlanStep
+
+    def body() -> Plan:
+        return Plan(objective="the same objective",
+                    steps=[PlanStep(id="1", intent="do the thing",
+                                    tools=["read_file"],
+                                    artifact_scope=["work"])]).seal()
+
+    def task(goal="identical work"):
+        return create_task(ctx.conn, ctx.log,
+                           TaskContract(goal=goal, artifact_scope=["work"]),
+                           Budget(usd=1.0, seconds=600))
+
+    a, b = task(), task()
+    pa, pb = body(), body()
+    assert pa.id == pb.id, "the premise: the body carries no task id"
+
+    store_plan(ctx, a, pa)
+    approve_plan(ctx, a, pa)
+    store_plan(ctx, b, pb)          # the collision, in the ordinary direction
+
+    kept = load_plan(ctx, a.id, status="approved")
+    assert kept is not None, "the second task's draft deleted the first's approval"
+    assert kept.id == pa.id
+    verify_plan_pin(ctx, load_task(ctx.conn, a.id))   # and the pin still holds
+
+    approve_plan(ctx, b, pb)
+    assert load_plan(ctx, b.id, status="approved").id == pb.id
+    assert load_plan(ctx, a.id, status="approved") is not None, \
+        "approving the second task's copy unpinned the first"
+
+    rows = ctx.conn.execute(
+        "SELECT task_id FROM plans WHERE id=? ORDER BY task_id", (pa.id,)
+    ).fetchall()
+    assert sorted(r[0] for r in rows) == sorted([a.id, b.id]), rows
+
+
+def test_d24_an_existing_database_migrates_to_the_two_column_key(tmp_path):
+    """The rebuild, over a pre-D24 table with rows in it. SQLite cannot change
+    a primary key in place, so this is the same rename-recreate-refill the D36
+    `calls` migration uses, and it has to be idempotent and lossless."""
+    import time
+
+    from agent.kernel.db import init_schema, open_db
+
+    # The WHOLE current schema, then `plans` alone put back the way it was. A
+    # hand-written two-table fixture would migrate under conditions no real
+    # database has - in particular with none of the triggers that a RENAME
+    # re-parses, which is what this rebuild has to survive.
+    path = tmp_path / "old.db"
+    conn = open_db(path)
+    conn.executescript("""
+        DROP TABLE plans;
+        CREATE TABLE plans (
+            id TEXT PRIMARY KEY, task_id TEXT NOT NULL REFERENCES tasks(id),
+            body_json TEXT NOT NULL, status TEXT NOT NULL,
+            approved_hash TEXT, created_at REAL NOT NULL);
+        CREATE INDEX idx_plans_task ON plans(task_id);
+    """)
+    conn.execute(
+        "INSERT INTO tasks(id, contract_json, budget_json, status, created_at,"
+        " updated_at) VALUES ('t_old','{}','{}','done',0,0)")
+    conn.execute("INSERT INTO plans VALUES (?,?,?,?,?,?)",
+                 ("hash_old", "t_old", "{}", "approved", "hash_old", time.time()))
+    conn.commit()
+    assert [r[5] for r in conn.execute("PRAGMA table_info(plans)")
+            if r[1] == "task_id"] == [0], "the fixture is not a pre-D24 table"
+    conn.close()
+
+    conn = open_db(path)
+    key = sorted(r[1] for r in conn.execute("PRAGMA table_info(plans)") if r[5])
+    assert key == ["id", "task_id"], key
+    assert conn.execute("SELECT status, approved_hash FROM plans WHERE id=?",
+                        ("hash_old",)).fetchone() == ("approved", "hash_old"), \
+        "the migration lost a row"
+    assert conn.execute(
+        "SELECT COUNT(*) FROM sqlite_master WHERE name='idx_plans_task'"
+    ).fetchone()[0] == 1, "the rebuild dropped the index with the old table"
+    assert conn.execute(
+        "SELECT COUNT(*) FROM sqlite_master WHERE name='plans_pre_d24'"
+    ).fetchone()[0] == 0, "the old table was left behind"
+    init_schema(conn)                       # idempotent: a second open is a no-op
+    assert conn.execute("SELECT COUNT(*) FROM plans").fetchone()[0] == 1
+    conn.close()
