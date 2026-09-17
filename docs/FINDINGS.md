@@ -1053,6 +1053,20 @@ re-checked first (invariant 71); the plan pin reads its own namespaced key
 
 ### 1.25 Code that has never run for real - an inventory (A2-1, A2-2)
 
+> **Re-runnable since 2026-09-17: `python bench/inventory.py`.** Everything
+> below was taken BY HAND, which is why it is a snapshot with a date rather
+> than a fact anyone re-checks - this project's own failure mode, in the
+> document that catalogues it. The instrument asks the same question of the
+> same records and prints the counts, so re-taking the inventory after real
+> use is a command rather than an hour. It reports FOUR states, not two:
+> `ran`, `never`, `not observable` (a path that leaves no database row at
+> all - `alpha snapshot` writes a file, the TUI paints a terminal), and `ran
+> elsewhere` (Part 3's runs used their own database under `ALPHA_DATA_DIR`
+> and `runs/` is gitignored, so their evidence is in `docs/evidence/` and
+> not in any record the query can read). Collapsing either of the last two
+> into `never` would be a false negative that reads exactly like a true one.
+> **As of 2026-09-17: 9 of 36 observable paths have run for real.**
+
 A unit test proves a function works and says nothing about whether the system
 has ever called it for real (1.21). This is the inventory, taken 2026-09-14
 against the measurement record - `agent.local.db`: 283 tasks, 1,214 model

@@ -42,6 +42,7 @@ ENTRY_POINTS = [
     "bench/coverage.py",
     "bench/ladder.py",
     "bench/nextstep.py",
+    "bench/inventory.py",
     "bench/cache_boundary.py",
     "bench/suites/archive/aero_calc.py",
     "bench/archive/decompose_aero.py",
