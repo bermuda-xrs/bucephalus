@@ -13,6 +13,9 @@ measurements its claims rest on.
 | `pareto-3b.json` / `pareto-8b.json` | Early 4-task model comparison, before the aero_calc suite existed. Superseded; kept because it is where the "8B is dominated on both axes" finding came from. |
 | `bench-local.json` | First harness run that completed end to end. |
 | `noise-floor.json` | Present only once the full noise floor has been run. |
+| `g1-ablation-2026-09-17.json` | **The G1 ablation comparison**, 2026-09-17, HARNESS_VERSION 3. Five arms over the 4-task suite - control plus one per mechanism removed - 37.1 min, every arm 0.75. Carries the analysis: three of the four arms measured NOTHING, because their mechanisms never engaged on this suite. FINDINGS 1.30. |
+| `g1-ablation-control.json` … `g1-ablation-no-code-as-action.json` | The five per-arm run records behind it. |
+| `g1-ablation-2026-09-17.db` | The run database itself, taken with `alpha snapshot` rather than copied - a file copy of a live WAL database drops the newest rows silently (C41). `bench/inventory.py` reads it. |
 
 ## The sighting shot, run twice, two days apart
 

@@ -140,7 +140,7 @@ findings are defects in the measuring apparatus, not in the agent.**
 
 | Goal | Where it stands after iteration two |
 |---|---|
-| **G1** ≥10× reduction in paid tokens | **implemented, unmeasured - but no longer unmeasurABLE.** No paid call has ever been made. Three blockers were named; two are now gone. C62 removed calibration (recorded usage is the server's own count). **2026-09-17 removed the third and largest: the ablation switches now exist** - `mechanisms:` in config turns compaction, the semantic cache, prefix stability and code-as-action off individually, so a control arm can be run at all (`tests/test_g1_ablation.py`). What remains is an API key (D26) and somebody spending the wall clock |
+| **G1** ≥10× reduction in paid tokens | **implemented, unmeasured - but no longer unmeasurABLE.** No paid call has ever been made. Three blockers were named; two are now gone. C62 removed calibration (recorded usage is the server's own count). **2026-09-17 removed the third and largest: the ablation switches now exist** - `mechanisms:` in config turns compaction, the semantic cache, prefix stability and code-as-action off individually, so a control arm can be run at all (`tests/test_g1_ablation.py`). What remains is an API key (D26) and somebody spending the wall clock - and a SUITE that can exercise the mechanisms, which `bench/tasks` cannot: the first comparison ran 2026-09-17 and three of its four arms measured nothing (FINDINGS 1.30) |
 | **G2** Mobile remote control | **partially implemented.** The HTTP control plane, auth and SSE exist; Phase 8 added a Telegram channel with an allowlist, approvals and a park path, driven end to end against a fake transport. No live request has ever been made (D26) |
 | **G3** Multi-agent as context isolation | **implemented, unmeasured.** Delegation, the five gates and a narrowed child policy exist; no production task has delegated |
 | **G4** Research-grounded, verified skill generation | **the gate works; the generation half is RETIRED UNANSWERED** (FINDINGS 1.27). The published baseline is -1.3 pp, the suite that would evaluate it is archived, D19 was never closed, and none of its three components ever ran |
@@ -395,12 +395,23 @@ Three things, and the third is the one that is usually forgotten.
      model arguing with a denial, which is adjacent to the question and not
      it.
 
-   **What is still a design task, and is still uncosted:** whether the
-   benchmark suite can be COMPLETED without code-as-action. The switch makes
-   that an empirical question rather than an unbuildable one, but a
-   code-as-action arm whose tasks all fail measures the suite's dependence on
-   the mechanism, not the mechanism's token cost, and the two must not be
-   reported as one number.
+   **Run 2026-09-17, and the result is mostly about the suite.** Five arms,
+   37 minutes, every one scoring 0.75. Three of the four ablations were
+   **re-runs of the control**: the compaction ceiling sits at 4,587 tokens and
+   the largest call in the run was 2,320; the semantic cache is switched off by
+   `compress_observations_over_tokens: 100000` before `cached_op` is reached;
+   and the prefix-stability arm cannot differ while nothing writes memory
+   mid-task. Only code-as-action produced a contrast - `run_code` receipts 9-10
+   → 0, +4.8% input tokens, +115 s of model wall clock, same pass rate.
+
+   The design question the estimate flagged is **answered for this suite**: the
+   model DID complete the same tasks without `run_code`, so the arm measures
+   the mechanism rather than the suite's dependence on it. At n=4 that is a
+   sighting.
+
+   **What G1 now needs is a suite, not more switches:** tasks whose
+   observations cross a 4,587-token ceiling and repeat enough to hit a cache.
+   FINDINGS 1.30, `docs/evidence/g1-ablation-2026-09-17.json`.
 
 **Estimated scope, stated because prior estimates here ran optimistic:** an
 API key and one live call is an afternoon. Calibration is another. The

@@ -106,6 +106,40 @@ Four suite passes, hours of wall clock and the whole machine, and it needs a
 decision about whether a code-as-action arm that cannot complete the suite is
 reporting the mechanism's token cost or the suite's dependence on it.
 
+### The G1 comparison ran - and three of four arms measured nothing
+
+Five arms over `bench/tasks`, granite4.1:3b, HARNESS_VERSION 3, 37.1 minutes,
+deputy out of the loop. Every arm scored 0.75.
+
+Five identical pass rates is either "these mechanisms do not change
+correctness here" or "the flags did nothing". Checking which - C1's
+correct-but-unusual question - is the result:
+
+  * compaction never fired IN ANY ARM. The ceiling is 0.28 x 16384 = 4587
+    tokens; the largest call in the whole run was 2320. 0 compaction.skipped,
+    0 tombstones, 0 rotations.
+  * the semantic cache was never consulted: compress_observations_over_tokens
+    is 100000 and active_local_tier is null, so the compression path returns
+    before cached_op. 0 compress_tool_output calls, 0 cache rows.
+  * prefix stability could not differ: the arm swaps snapshots for live reads,
+    which only diverge when skills or tier-1 memory change mid-task, and a
+    measured arm is skills-off, isolated, and wrote no memory. 4 distinct
+    prefixes per arm - one per task - and a token delta of exactly 0.
+
+Only code-as-action measured its mechanism: run_code receipts 9-10 -> 0,
++1029 input tokens (+4.8%), +115 s of model wall clock, 96 fewer output
+tokens, same 0.75. Directionally what the mechanism is claimed to buy; at n=4,
+a sighting.
+
+And a number that looks like a result and is not: the no-compaction and
+no-semantic-cache arms both sit at +2320 tokens against the control, the same
+figure to the token with identical call and output counts. That is one extra
+model call - 13 vs 14 - not a mechanism. Two runs of the same code path.
+
+What G1 needs next is a SUITE, not more switches: tasks whose observations
+cross a 4587-token ceiling and repeat enough to hit a cache. FINDINGS 1.30,
+docs/evidence/g1-ablation-2026-09-17.json.
+
 ### HARNESS_VERSION 2 -> 3 - D38 taken on its deadline, D33 re-refused
 
 `max_taint_in` is gone from the task contract and therefore from every prompt

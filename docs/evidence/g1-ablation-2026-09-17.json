@@ -1,0 +1,107 @@
+{
+  "what": "G1 ablation arms: the same 4-task suite once per mechanism removed",
+  "when": "2026-09-17",
+  "harness_version": 3,
+  "toolset_version": 6,
+  "executor": "granite4.1:3b via the dedicated Ollama on 127.0.0.1:11435, CPU",
+  "deputy": "off (auto_review false, approve_scoped_writes true) - these arms differ by one mechanism, and a nondeterministic LLM in the measurement path is noise the comparison cannot absorb",
+  "suite": "bench/tasks, FOUR tasks",
+  "total_minutes": 37.1,
+  "pass_rate_every_arm": 0.75,
+  "arms": {
+    "control": {
+      "tasks": 4,
+      "model_calls": 13,
+      "input_tokens": 21652,
+      "output_tokens": 1319,
+      "model_wall_s": 418.4,
+      "max_call_input_tokens": 2215,
+      "distinct_prefixes": 4,
+      "run_code_receipts": 9,
+      "compaction_skipped": 0,
+      "artifacts_tombstoned": 0,
+      "sessions_rotated": 0,
+      "compress_tool_output_calls": 0
+    },
+    "no-compaction": {
+      "tasks": 4,
+      "model_calls": 14,
+      "input_tokens": 23972,
+      "output_tokens": 1439,
+      "model_wall_s": 385.8,
+      "max_call_input_tokens": 2320,
+      "distinct_prefixes": 4,
+      "run_code_receipts": 10,
+      "compaction_skipped": 0,
+      "artifacts_tombstoned": 0,
+      "sessions_rotated": 0,
+      "compress_tool_output_calls": 0
+    },
+    "no-semantic-cache": {
+      "tasks": 4,
+      "model_calls": 14,
+      "input_tokens": 23972,
+      "output_tokens": 1439,
+      "model_wall_s": 374.8,
+      "max_call_input_tokens": 2320,
+      "distinct_prefixes": 4,
+      "run_code_receipts": 10,
+      "compaction_skipped": 0,
+      "artifacts_tombstoned": 0,
+      "sessions_rotated": 0,
+      "compress_tool_output_calls": 0
+    },
+    "no-prefix-stability": {
+      "tasks": 4,
+      "model_calls": 13,
+      "input_tokens": 21652,
+      "output_tokens": 1319,
+      "model_wall_s": 461.1,
+      "max_call_input_tokens": 2215,
+      "distinct_prefixes": 4,
+      "run_code_receipts": 9,
+      "compaction_skipped": 0,
+      "artifacts_tombstoned": 0,
+      "sessions_rotated": 0,
+      "compress_tool_output_calls": 0
+    },
+    "no-code-as-action": {
+      "tasks": 4,
+      "model_calls": 15,
+      "input_tokens": 22681,
+      "output_tokens": 1223,
+      "model_wall_s": 533.0,
+      "max_call_input_tokens": 2105,
+      "distinct_prefixes": 4,
+      "run_code_receipts": 0,
+      "compaction_skipped": 0,
+      "artifacts_tombstoned": 0,
+      "sessions_rotated": 0,
+      "compress_tool_output_calls": 0
+    }
+  },
+  "headline": "THREE OF THE FOUR ABLATION ARMS MEASURED NOTHING. Their mechanisms never engaged on this suite, so those arms are re-runs of the control rather than comparisons with it. Only code-as-action produced a real contrast.",
+  "why_each_arm_was_inert": {
+    "compaction": "enforce_ceiling fires above context_fill_ratio * usable_context_window = 0.28 * 16384 = 4587 tokens. The largest single call in the whole run was 2320 input tokens (server count) and the in-loop estimator never exceeded 1916. Not once within 2x of the ceiling: 0 compaction.skipped, 0 artifact.tombstoned, 0 sessions rotated, in EVERY arm including the control.",
+    "semantic_cache": "config.local.yaml sets compress_observations_over_tokens to 100000 ('effectively off') and active_local_tier to null, so _compress_observation returns before reaching cached_op. 0 compress_tool_output calls and 0 semantic_cache rows in every arm.",
+    "prefix_stability": "the ablation replaces task-start snapshots with live re-reads, which only diverge if skills or tier-1 memory CHANGE mid-task. A measured arm runs skills-off and isolated, and nothing wrote memory: 0 memory.written. 4 distinct prefixes in every arm - one per task, stable across every step - so the live read returned the same bytes the snapshot would have. Its token delta against the control is exactly 0."
+  },
+  "the_one_arm_that_measured_something": {
+    "arm": "no-code-as-action",
+    "run_code_receipts": "9-10 in every other arm, 0 in this one",
+    "input_tokens_vs_control": "+1029 (+4.8%)",
+    "output_tokens_vs_control": "-96",
+    "model_wall_s_vs_control": "+114.6 (418.4 -> 533.0)",
+    "pass_rate": "0.75, the same as every other arm",
+    "reading": "the model completed the same three tasks without run_code, at more input tokens, more model calls and more wall clock. Directionally what code-as-action is claimed to buy. At n=4 it is a sighting, not a measurement."
+  },
+  "what_this_cannot_support": [
+    "G1's >=10x paid-token reduction. No paid backend was called; every cost here is 0.0 by construction on a local model.",
+    "Any effect size. n=4, one run per arm, no repeats, no variance estimate. The +2320-token 'delta' shared by the no-compaction and no-semantic-cache arms is ONE extra model call of 2320 tokens - the control took 13 calls and those two took 14 - and both arms produced byte-identical totals, which is what two runs of the same code path look like. That number is step-count variation, not a mechanism.",
+    "Anything about compaction, the semantic cache or prefix stability. Their arms did not differ from the control in any observable way."
+  ],
+  "what_it_does_support": [
+    "The switches work end to end: five arms ran to completion under HARNESS_VERSION 3, each with its mechanism setting recorded in profile_provenance, and the code-as-action arm verifiably had no run_code.",
+    "The suite cannot exercise three of the four mechanisms. That is a property of bench/tasks and config.local.yaml, and it is the thing to fix before G1 is attempted again - a bigger suite is not enough on its own, the tasks have to produce observations large enough to cross a 4587-token ceiling and repeated enough to hit a cache."
+  ]
+}

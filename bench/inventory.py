@@ -46,6 +46,11 @@ DEFAULT_RECORDS = [
                                                             # main record
     ROOT / "runs" / "verify-2026-09-16" / "agent.verify.db",  # the 5-task
                                                             # verification run
+    # The G1 ablation arms, 2026-09-17. HARNESS_VERSION 3 where the other two
+    # are 2 - which makes their NUMBERS incomparable and is exactly what a bump
+    # is for, but this file asks which PATHS have been exercised, and a path
+    # that ran is a path that ran whatever the measurement rules were.
+    ROOT / "docs" / "evidence" / "g1-ablation-2026-09-17.db",
 ]
 
 # (row, what would prove it, kind, argument)

@@ -1407,6 +1407,63 @@ recorded so nobody reads the gap as an omission.
 
 ---
 
+
+### 1.30 The G1 ablation arms ran, and three of the four measured nothing
+
+**2026-09-17.** The switches RELEASE called "the blocker nobody has costed"
+were built the same day, and the first comparison ran immediately: the same
+suite five times - a control with the shipped system, then one arm per
+mechanism removed - `granite4.1:3b` on the dedicated Ollama, HARNESS_VERSION
+3, 37.1 minutes, deputy out of the loop.
+
+Every arm scored **0.75**, three of four tasks. Five identical pass rates is
+either "these mechanisms do not change correctness here" or "the flags did
+nothing", and the pass rate alone cannot tell those apart. Asking C1's
+question - what would this score for a run that did the work correctly but
+behaved slightly unusually - is what turned up the result.
+
+**Three of the four arms are re-runs of the control, not comparisons with
+it.** Their mechanisms never engaged, in the ablated arm OR in the control:
+
+| mechanism | why it never ran | evidence, in EVERY arm |
+|---|---|---|
+| compaction | the ceiling is `context_fill_ratio × usable_context_window` = 0.28 × 16,384 = **4,587 tokens**. The largest single call in the whole run was **2,320** input tokens by the server's own count, and the in-loop estimator never exceeded 1,916 | 0 `compaction.skipped`, 0 `artifact.tombstoned`, 0 sessions rotated |
+| semantic cache | `compress_observations_over_tokens: 100000` ("effectively off") and `active_local_tier: null`, so `_compress_observation` returns before it reaches `cached_op` | 0 `compress_tool_output` calls, 0 `semantic_cache` rows |
+| prefix stability | the arm swaps task-start snapshots for live re-reads, which can only diverge if skills or tier-1 memory CHANGE mid-task. A measured arm is skills-off and isolated, and nothing wrote memory | 4 distinct prefixes per arm - one per task, stable across every step. Its token delta against the control is exactly **0** |
+
+**The one arm that measured its mechanism: code-as-action.** `run_code`
+receipts went from 9-10 in every other arm to **0**. It completed the same
+three tasks, at **+1,029 input tokens (+4.8%)**, two more model calls, 96
+fewer output tokens, and **+115 s of model wall clock** (418 → 533). That is
+the direction code-as-action is claimed to buy, and at n=4 with one run per
+arm it is a sighting rather than a measurement.
+
+**A number that looks like a result and is not.** The no-compaction and
+no-semantic-cache arms both sit at +2,320 input tokens against the control -
+the same figure, to the token, along with identical call counts and identical
+output tokens. That is what two runs of the same code path look like. The
+control took 13 model calls and those two took 14; the "delta" is one extra
+call of 2,320 tokens, which is step-count variation between runs of a 3B at
+temperature 0. Quoting it as a compaction effect would be an adjacency defect
+in the instrument built to catch adjacency defects.
+
+**What this cannot support:** G1's ≥10× paid-token reduction - no paid backend
+was called and every cost here is 0.0 by construction. Any effect size at all:
+n=4, one run per arm, no repeats, no variance estimate.
+
+**What it does support, and what to do next.** The switches work end to end,
+each arm's setting recorded in `profile_provenance`. And the more useful half
+is the negative one: **`bench/tasks` cannot exercise three of the four
+mechanisms**, which is a property of the suite and `config.local.yaml` rather
+than of the code. A bigger suite is not enough on its own - the tasks have to
+produce observations large enough to cross a 4,587-token ceiling and repeated
+enough to hit a cache. Until then those three arms will keep returning
+"no difference", which reads like a finding and is not one.
+
+`docs/evidence/g1-ablation-2026-09-17.json`, with the five arm records beside
+it.
+
+
 ## 8. Open research questions
 
 Recorded so they are not re-derived, and kept separate from findings because
