@@ -12,7 +12,22 @@ __version__ = "0.1.0"
 #      (a task that did the work but never announced it now passes);
 #      grader moved outside artifact_scope; max_steps 10; budget charged
 #      wall clock; per-backend action protocol; monotonic scorer.
-HARNESS_VERSION = 2
+#   3  2026-09-17: `max_taint_in` is gone from the task contract, and with it
+#      from every prompt prefix (D38, SPEC-DELTA C60). It changed no
+#      BEHAVIOUR - dead in code since 2026-09-15, and no value but the default
+#      could be set - but the contract renders into the prefix, so removing it
+#      moves bytes the model reads, and this project has measured prefix
+#      STRUCTURE moving pass rates (the harness tax, FINDINGS 1.6-1.8). A bump
+#      for a field that does nothing is the price of not showing the model a
+#      ceiling nothing enforces, which is C3's inert-guarantee class sitting
+#      in the prompt itself.
+#
+#      Taken on D38's OWN DEADLINE, not because a bump was wanted: the entry
+#      said to bump for this alone if none had come by the end of the second
+#      session after 2026-09-15, and none had. Every number published under 2
+#      is incomparable with every number produced from here, and nothing has
+#      yet been produced under 3.
+HARNESS_VERSION = 3
 
 
 # Bump this whenever the set of libraries model-written code may import

@@ -203,9 +203,9 @@ the same session found the mirror image: two network-safety tests guarding a wra
 production path called. Both are invisible to a dead-code audit, which reads production call
 sites — `main` is called by the operating system. FINDINGS 1.28.
 
-> **The named, unswept layer: D39 — the CLI's 25 subcommands**, reachable today only through
-> `--help`. Not hypothetical: five were run by hand for one hour, and that hour found two
-> defects no test had. Every layer of this class so far has contained something. First in E3.
+> **The named layer, swept 2026-09-17: D39 — the CLI's 25 subcommands.** Every earlier layer
+> of this class contained something; **this one contained nothing**, said plainly rather than
+> left as a silence. **Expect the next wherever a test imports what an entry point calls.**
 
 ## C4. Security posture
 
@@ -290,7 +290,7 @@ regenerates it. Verified 2026-09-17, against commit `290e286`.
 |---|---|---|
 | Branch | `measurement-2026-09-01`, no remote | `git branch --show-current` |
 | Written against | `290e286`; the test asserts this is an ancestor of HEAD | `git log --oneline -1` |
-| Harness version | **2**. v3 was evaluated and rejected. A bump makes every published number incomparable with every later one, so it needs an explicit stop | `grep HARNESS_VERSION src/agent/__init__.py` |
+| Harness version | **3**, bumped 2026-09-17 on D38's deadline to delete `max_taint_in` from the prefix. A bump makes every published number incomparable with every later one; nothing has yet been produced under 3 | `grep HARNESS_VERSION src/agent/__init__.py` |
 | Toolset version | **6** | `grep TOOLSET_VERSION src/agent/__init__.py` |
 | Test count | *deliberately not stated* | `python -m pytest tests -q`, and read the tail line. The skips are the live-credential tests, until D26's credentials exist |
 | Open defects | *deliberately not stated* | the state table at the top of `docs/DEFERRED.md`; every entry also carries its state in its own heading |
@@ -332,48 +332,47 @@ Each owns its subject; nothing here is reproduced above.
 | **D2** — the cause of the pathological model call is unknown | Separating llama.cpp KV-cache behaviour, OS paging, thermal throttling and I/O contention. Detection and recovery already exist, so no measurement is at risk; this is diagnosis |
 | **D6** — the in-loop token estimator is uncalibrated | One ordinary run. The instrument exists: every step call records `est_input_tokens` beside the server's own count. Read the two columns and fit the ratio. No API key needed |
 | **D16** — per-backend context windows are unreachable over the OpenAI protocol | D6 first. The only portable signal is the returned `prompt_tokens`, and comparing it against an uncalibrated estimator gives a check with an unknown false-alarm rate |
-| **D24** — two tasks cannot approve identical plans | Key the row by `(id, task_id)`. It fails loudly, and is unreachable until a paired trial runs with planning on |
 | **D26** — the Telegram transport and the Anthropic adapter have never made a live call | A bot token and an API key. Both tests are written and skip cleanly; `README.md` gives the one command per credential and what a pass looks like |
 | **D27** — one task at a time, and the bot has no queue | Not a queue: the single-writer chain lock serialises anyway, so the honest fix is the claim-then-execute receipt protocol |
-| **D33** — tier 1 sits before the tool schemas on this template | A `HARNESS_VERSION` bump, which is a stop. Revisit when a boundary rebuild happens more than once per task on average |
-| **D38** — `max_taint_in` is dead in code and alive in the prefix bytes | The next bump — batch it with D33. **It has a deadline**: if no bump has come by the end of the second session after 2026-09-15, bump for this alone |
-| **D39** — the CLI's 25 subcommands | E3(b) |
+| **D33** — tier 1 sits before the tool schemas on this template | A `HARNESS_VERSION` bump, which is a stop. Its criterion — a boundary rebuild more than once per task — is **measured at zero** as of 2026-09-17 (`bench/inventory.py`): no session has ever rotated. Re-refused, not unexamined |
 
-Three are the user's, not the next engineer's: **D26** (credentials — decided yes, not yet
-supplied), **D38** (the bump), and D32's acceptance in C4.
+**D24, D38 and D39 closed 2026-09-17**; `docs/DEFERRED.md` carries them — D38 took its bump
+alone, on its own deadline, to HARNESS_VERSION 3. One of the rest is the user's: **D26**
+(credentials, decided yes, not supplied). D32's acceptance is in C4.
 
 ## E3. Next steps, in order
 
-**Estimates are mine, from my own reading of the code. Every prior estimate on this project
-ran optimistic, so where I am guessing I say so.**
+**Estimates are mine, from my own reading of the code. Every prior estimate here ran
+optimistic, so where I am guessing I say so.** They stand as written with what has since been
+done marked beside them: a prediction edited afterwards is not one.
 
 **(a) Feature-flag the efficiency mechanisms, then run G1.** First, because it closes the
 headline goal — and *the reason it was never testable is a spec error, not an implementation
-gap*: compaction, the semantic cache, prefix stability and code-as-action are **structural in
-`src/agent/execute/loop.py` with no switches**, so no configuration represents "without
-compaction" and there is nothing to compare against. Only the ceiling is tunable, and that
-moves it rather than removing it. No API key needed — token counts come from the model
-server. *My estimate:* the first three are call sites with a clear "off" meaning, **1–2 days
-including tests**. Code-as-action is not — its "without" arm needs a tool path that can still
-complete the tasks, and I doubt one exists today, so I call that **a design task of 2+ days,
-and I am uncertain about it**. The comparison is four suite passes: **a day of wall clock**.
+gap*: the four mechanisms were **structural in `src/agent/execute/loop.py` with no
+switches**, so no configuration represented "without compaction". No API key needed — token
+counts come from the model server. *My estimate:* the first three are call sites with a clear
+"off" meaning, **1–2 days including tests**; code-as-action is **a design task of 2+ days, and
+I am uncertain**; the comparison is four suite passes, **a day of wall clock**.
+**Switches done 2026-09-17** (`mechanisms:`); **the RUN is not**, and code-as-action is still the design question.
 
 **(b) Subprocess smoke tests on every entry point and all 25 subcommands (D39).** *My
 estimate:* **about a day, not the half-day the entry says.** The scratch-database fixture
 is the work — a task, a plan, an approval, a memory row and a skill — 2–3 hours before the
 first subcommand is touched. Then budget for what it finds: this layer has produced a
-defect every time anyone looked, and under DR5 a defect found is a sweep run.
+defect every time anyone looked, and under DR5 a defect found is a sweep run. **Done
+2026-09-17**, and that last sentence was wrong: it found nothing.
 
 **(c) The small fixes.** D38's bump batched with D33's tier-1 move: **a few hours of code**,
 but the cost is the decision, not the code — the bump makes every published number
 incomparable with every later one. D24 is **1–2 hours**; D27 is a decision rather than work.
-*One correction to the list as given:* **D10 is already closed** — `measure.ps1 stop` was
-routed through `kill_tree` on 2026-09-16, the last open instance of the process class.
+**D24 done 2026-09-17** — not 1–2 hours of typing but ten minutes of running it: the entry's
+"it fails loudly" was false and the defect was corrupting (SPEC-DELTA C68).
 
 **(d) Use the system for real work, then re-run the 1.25 inventory.** Costs nothing and
 closes the most, because almost nothing here has run in production for the simple reason
 that nobody has used it; every row of that inventory that turns green turns green for free.
 *My estimate:* the re-run is **an hour** of SQL. The using is not a task, it is a habit.
+**Done 2026-09-17:** the SQL is `python bench/inventory.py` — 9 of 36 paths have run.
 
 **(e) The frozen-app fix, if a desktop app is ever wanted.** Dormant — nothing is frozen
 today. *My estimate:* **a day, and I am uncertain**, because nobody has pointed a freezer at

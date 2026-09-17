@@ -692,9 +692,8 @@ and both it and `cmd_paired` held the lock past any exit but success.
 `test_an_exception_in_main_releases_the_lock`,
 `test_an_exception_mid_run_releases_the_measurement_lock`.
 
-**109. `max_taint_in` is dead in code and alive in bytes.** Nothing reads it,
-no value but the default can be set, and its bytes leave the prefix only with
-a HARNESS_VERSION bump (D38).
+**109. ~~`max_taint_in` is dead in code and alive in bytes.~~ SUPERSEDED
+2026-09-17 by 118: the bump came and the field is gone from both.**
 *Caught by:* `tests/test_max_taint_in_is_dead.py`.
 
 **110. A promotion states why the gaming veto does not apply.** Every check is
@@ -741,6 +740,49 @@ D gives the command that regenerates each instead, and the test fails if a count
 appears in prose. Stale documentation is a defect class here with four instances
 (FINDINGS 1.28), and a document nothing checks is the fifth waiting.
 *Caught by:* `tests/test_handover_is_current.py`.
+
+---
+
+## Added 2026-09-17 (the CLI sweep, D24, and G1's ablation arms)
+
+**115. Every CLI subcommand is entered by a test, in a subprocess, against a
+scratch installation.** Not `--help`, which builds the parser and stops at the
+door - the command runs, its exit code is asserted, and one fact about what it
+changed is checked. `ALPHA_DATA_DIR` redirects the database, anchor, skills,
+`runs/`, `work/` and the operator's persistent memory into one temporary
+directory, so no test can write into real state. A subcommand added without a
+test fails the sweep rather than waiting for someone's hand-run hour (DR5).
+*Caught by:* `tests/test_cli_subcommands.py`.
+
+**116. A plan row is keyed by what it belongs to, not only by what it
+contains.** `plans` is keyed `(id, task_id)`. The id is the hash of the plan
+BODY, which carries no task id, so two tasks planning the same work produce the
+same id - the ordinary case in a paired trial, where both arms plan the same
+task. Under the old `id`-only key the writers' `INSERT OR REPLACE` made the
+second task's draft silently delete the first task's approval (D24, C68).
+*Caught by:* `tests/test_deferred_fixes.py`.
+
+**117. An ablation flag removes the MECHANISM, never merely its
+enforcement, and the arm travels in the run record.** Turning off compaction
+stops both `compact()` call sites; turning off the semantic cache stops the
+write as well as the read; turning off prefix stability replaces the
+task-start snapshots with live reads rather than only disarming `PrefixGuard`,
+which would change no prompt byte; turning off code-as-action removes
+`run_code` from the registry, the schemas, the tool manual, the sandbox-library
+note and the system contract. `mechanisms` and `ablated` land in
+`profile_provenance`, which every run record carries, so an ablated number
+cannot arrive labelled like a control one - the same argument that makes the
+profile declared and enforced rather than inferred.
+*Caught by:* `tests/test_g1_ablation.py`.
+
+**118. `max_taint_in` exists nowhere - not in the contract, not in the prefix,
+not as a labelled legacy constant.** It was dead in code from 2026-09-15 and
+its bytes left with HARNESS_VERSION 3 on 2026-09-17, taken on D38's own
+deadline rather than because a bump was wanted. A contract stored before the
+bump still LOADS - pydantic ignores the unknown key - because a bump makes old
+numbers incomparable, which is its purpose, and must not make old rows
+unreadable, which would be data loss dressed as versioning.
+*Caught by:* `tests/test_max_taint_in_is_dead.py`.
 
 ---
 

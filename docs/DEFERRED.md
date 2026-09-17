@@ -23,23 +23,26 @@ instrument). Everything below waits.
 
 ---
 
-## Where this stands, 2026-09-16
+## Where this stands, 2026-09-17
 
-**Nine open.** D2, D6, D16, D24, D26, D27, D33, D38, D39.
+**Six open.** D2, D6, D16, D26, D27, D33.
+D24, D38 and D39 were closed 2026-09-17; see their headings.
 
 Everything else on this page is marked in its own heading:
 
 | state | what it means | items |
 |---|---|---|
-| **open** | a real defect, nobody has fixed it | D2, D6, D16, D24, D26, D27, D33, D38, D39 |
-| **closed** | fixed, with the change and its test named | D1, D3, D7, D9, D10, D11, D15, D17, D18, D19, D20, D21, D22, D23, D28, D29, D30, D34, D35, D36, D37 |
+| **open** | a real defect, nobody has fixed it | D2, D6, D16, D26, D27, D33 |
+| **closed** | fixed, with the change and its test named | D1, D3, D7, D9, D10, D11, D15, D17, D18, D19, D20, D21, D22, D23, D24, D28, D29, D30, D34, D35, D36, D37, D38, D39 |
 | **deleted** | never a defect, or about an instrument nobody runs | D4, D5, D8, D12, D14 |
 | **known and accepted** | a real limit, decided rather than deferred | D32 (the sandbox is advisory: Phase 6 withdrawn) |
 | **dormant** | its subject is retired; it wakes if that returns | D13 (nothing is frozen), D19 (M11) |
 | **under another item** | one decision unblocks it | D25, D31 (both under D26) |
 
-**Three of the nine are the user's**: D26 (credentials - decided yes, pending),
-D38 (the harness bump, with a deadline), and D32's acceptance above.
+**One of the six is the user's**: D26 (credentials - decided yes, pending).
+D38's bump was taken on its deadline, 2026-09-17, and D32's acceptance stands
+above. D33 was re-refused the same day on a criterion that finally has a
+number - zero - rather than on nobody having measured it.
 
 **DR6**: an entry is closed in the change that fixes it. D17 and D20 sat here
 for sessions after their defects were fixed, and a triage that read the code
@@ -941,6 +944,28 @@ measurement record predates sessions (283 tasks, 0 `session.opened` rows), so
 the rate is unobservable there; the first run that crosses a boundary
 produces the first number.
 
+**2026-09-17: the criterion has a number for the first time, and it is ZERO.**
+`bench/inventory.py` counts it across every real-model record - the 283-task
+`agent.local.db` and the 5-task verification run of 2026-09-16. Sessions have
+been OPENED five times and **rotated none**; tier-1 memory has been written
+never. So boundary rebuilds per task is 0, against a threshold of 1, and the
+decision not to move stands on its own stated terms rather than on nobody
+having checked.
+
+**Reconsidered and re-refused on the same day, with a reason the entry did not
+have.** The move was proposed as the bump D38 would ride. Two arguments
+against, beyond the unmet criterion:
+- it trades a RARE cost for a CONSTANT one. Tier 1 leaves the cached system
+  block, so it is re-processed on every step, to save ~966 tokens of schema
+  re-processing at a boundary that has not yet happened once;
+- it changes prefix STRUCTURE, which this project measured moving pass rates
+  (the harness tax, FINDINGS 1.6-1.8), and the next thing scheduled to run is
+  a G1 measurement. A structural change immediately upstream of a measurement
+  is the adjacency class waiting to happen.
+
+D38 took its bump alone instead. **This entry stays OPEN**, and its criterion
+is now a thing `bench/inventory.py` re-answers rather than a thing to derive.
+
 ## D34 - the supervisor and a measurement can share the machine (CLOSED 2026-09-13: the holder is published, C54)
 
 **Found:** 2026-09-13, building 11.
@@ -1066,7 +1091,7 @@ machine before the code was written, and tested for real after. File size
 still waits for Phase 6. TOOLSET_VERSION is now 6 (invariant 112, SPEC-DELTA
 C66).
 
-## D38 - `max_taint_in`: DEAD IN CODE, ALIVE IN BYTES - waiting for a HARNESS_VERSION bump
+## D38 - `max_taint_in`: DEAD IN CODE, ALIVE IN BYTES (CLOSED 2026-09-17: the deadline arrived; HARNESS_VERSION 2 -> 3, for this alone)
 
 **Found:** 2026-09-14, by A2-2. **Decided 2026-09-15: delete** (SPEC-DELTA C60).
 
@@ -1090,6 +1115,28 @@ That change deletes the declaration and its validator. Then
 **Deadline.** If no bump has come by the end of the second session after
 2026-09-15's, bump HARNESS_VERSION for this alone. The reference measurement
 is one number, and it is not worth indefinite distortion.
+
+**CLOSED 2026-09-17, on that deadline and not before it.** No bump had come.
+The field and its validator are deleted, HARNESS_VERSION is **3**, and the
+bytes are gone from every prefix built from here.
+
+**Taken ALONE, not batched.** D33's tier-1 move was the bump this entry
+expected to ride, and it did not happen - see D33, whose revisit criterion was
+measured for the first time the same day and came back at ZERO. Batching a
+structural prefix change onto this one would also have put the harness tax
+(FINDINGS 1.6-1.8) immediately upstream of a G1 measurement.
+
+**What the bump costs, stated plainly:** every number published under
+HARNESS_VERSION 2 - the whole 283-task record - is incomparable with every
+number produced from here. Nothing has yet been produced under 3.
+
+**What it does not cost:** the old rows still read. 283 stored contracts carry
+`"max_taint_in": "untrusted"` in their JSON; pydantic ignores unknown fields,
+and `test_a_contract_stored_before_the_bump_still_loads` pins that. A bump
+makes old numbers incomparable, which is its purpose; making old rows
+unreadable would be data loss dressed as versioning.
+
+Invariant 109 is superseded by 118.
 
 **Rejected:** keeping a labelled legacy constant in its place. The model would
 still read a ceiling nothing enforces, which is the state this deletion

@@ -70,28 +70,19 @@ class TaskContract(BaseModel):
     output_schema: dict[str, Any] = Field(default_factory=dict)  # JSON Schema
     success_criterion: str = "always_pass"  # names a registered verifier
     artifact_scope: list[str] = Field(default_factory=list)  # readable paths
-    # DEAD IN CODE, ALIVE IN BYTES (D38). Nothing reads it, and no check could
-    # give it a meaning: every observation tool is UNTRUSTED, so a lower
-    # ceiling forbids reading and this default permits everything (C60). It
-    # stays declared ONLY because the whole contract is rendered into every
-    # prompt prefix, stored, and logged on the chain - removing it changes
-    # those bytes, which is a HARNESS_VERSION bump. It leaves with the next
-    # bump that happens anyway. Any other value is refused, so no prompt can
-    # ever show a ceiling different from the one nothing enforces.
-    max_taint_in: Taint = Taint.UNTRUSTED
+    # `max_taint_in` WAS HERE, and left with HARNESS_VERSION 3 (D38, C60).
+    # No check could give it a meaning - every observation tool is UNTRUSTED,
+    # so a ceiling below the default forbids reading and the default permits
+    # everything - and it was dead in code from 2026-09-15, kept only because
+    # the whole contract renders into every prompt prefix and removing it
+    # changes those bytes. Contracts stored before the bump still carry the
+    # key on disk; pydantic ignores unknown fields, so they load unchanged.
+    #
     # Where the grader lives. MUST be outside artifact_scope: a verify.py the
     # agent can read is a verify.py it can copy the expected value out of, and
     # a generated skill that said "read verify.py" would score 100% and look
     # like success. None keeps the legacy in-scope search for older suites.
     grader_dir: str | None = None
-
-    @field_validator("max_taint_in")
-    @classmethod
-    def _max_taint_in_is_dead(cls, v: Taint) -> Taint:
-        if v != Taint.UNTRUSTED:
-            raise ValueError("max_taint_in is dead (DEFERRED D38): nothing "
-                             "enforces a ceiling, so none may be declared")
-        return v
 
 
 class TokenUsage(BaseModel):

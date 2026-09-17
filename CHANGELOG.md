@@ -10,6 +10,159 @@
 Dates are commit dates. `0.1.0` is not released yet — see "Unreleased" for
 what still stands between here and a first iteration.
 
+## Section E, worked: the CLI sweep, D24, G1's ablation arms, and the inventory as a command - 2026-09-17
+
+HANDOVER E3, in its stated order. Four of its five items; the fifth (E3e, the
+frozen-app fix) is dormant and was left dormant.
+
+### E3(b) - D39: the 25 rooms behind `alpha --help` (CLOSED)
+
+`tests/test_cli_subcommands.py`, 46 tests. Each enters ONE subcommand in a
+subprocess, through `agent.cli`, and asserts its exit code plus one fact about
+what it changed. A subprocess and not an in-process `main()`: `main` catches
+every exception and returns 1, so in process the difference between "worked"
+and "raised" is invisible unless the caller also reads the return value.
+
+The scratch installation is the work the entry predicted, and `ALPHA_DATA_DIR`
+is what makes it one line: `paths.state_root` and `user_data_dir` both honour
+it, so the database, anchor, skills, `runs/`, `work/` AND the operator's
+persistent memory land under one temporary directory. Without that last one
+`alpha memory --forget` would have deleted out of the real memory files.
+`serve` and `tui` never return, so they are started, proved live and killed
+through `kill_tree`. `test_every_subcommand_is_entered_by_a_test_here` fails
+when a subcommand is added without one (DR5). Invariant 115.
+
+**The layer was empty.** Every one of the 25 behaved as documented on the
+first run - the first layer of this defect class to contain nothing. Both
+first-pass failures were wrong assertions of mine, not defects: a cache ratio
+asserted `n/a` against backends that do report cache accounting, and
+`check_fingerprint` compared against `"ok"` when it returns `intact`.
+
+### E3(c) - D24 (CLOSED), and its entry was wrong about itself
+
+**Measured before fixing, and the premise did not survive.** D24 said the
+second `INSERT` raises `UNIQUE constraint failed`, and deferred the fix
+BECAUSE it fails loudly. Nothing raises. Both writers use `INSERT OR REPLACE`,
+so the second task's DRAFT silently replaced the first task's APPROVED row;
+the first task then halted mid-run on `IntegrityError: no approved plan for
+this task`, an error naming nothing about the collision. Corrupting, not
+loud - the same failure as D23's artifact version rather than its safer
+counterpart, and the clause that made it safe to defer was the false one.
+SPEC-DELTA C68; C6.
+
+Fixed: `plans` is keyed `PRIMARY KEY (id, task_id)`, with
+`_plans_keyed_by_task` rebuilding an existing table the way the D36 `calls`
+migration does - under `PRAGMA legacy_alter_table`, so an unrelated trigger
+failing to re-parse cannot abort a migration that does not touch it. Both
+tests go red against the restored defect. Invariant 116.
+
+Swept (DR5): `artifacts` is the same keyspace, closed by D23 and written with
+`INSERT OR IGNORE`, which keeps the first row rather than destroying it;
+`semantic_cache` and `skills` are content-keyed and shared by design. `plans`
+was the last one keyed by content alone behind a destructive writer.
+
+### E3(a) - G1's ablation switches exist
+
+RELEASE's G1 named three blockers and called the third "the blocker nobody has
+costed": there was no configuration expressing "without compaction", so there
+was nothing to compare against. `config.MechanismsConfig` now carries one flag
+per mechanism, defaulting to the shipped system, and `mechanisms` / `ablated`
+travel in `profile_provenance` - which every run record already carries - so an
+ablated number cannot arrive labelled like a control one.
+
+Each flag removes the **mechanism**, never merely its enforcement:
+
+* **compaction** - both `compact()` call sites, the loop's session boundary
+  and the refused-delegation fallback in `context.py`. Gating one would have
+  left the arm compacting while its record said otherwise (DR3). The ceiling
+  is still measured and its crossing is recorded as `compaction.skipped` on
+  the chain, because "nothing to compact" and "compaction is off" are
+  different facts (DR4).
+* **semantic cache** - neither read nor written. A read-only bypass would have
+  warmed the store for whichever arm ran next, which in a paired trial is the
+  ablated arm paying for the other one's hits.
+* **prefix stability** - skills and tier-1 memory are re-read LIVE each step
+  instead of snapshotted at task start. Disarming `PrefixGuard` alone would
+  have changed no prompt byte and measured nothing: the guard DETECTS
+  stability, the snapshots CREATE it (DR2).
+* **code-as-action** - `run_code` leaves the registry, and with it the
+  schemas, the tool manual, the sandbox-library note describing what may be
+  imported inside it, and the system contract's `<code>` clause. **Found
+  while testing:** `ToolRegistry.manual()` printed the library note
+  unconditionally, so the ablated arm's prefix still advertised `run_code` -
+  the note is now conditional on the tool. A model told to use a facility
+  that is then refused measures a model arguing with a denial, which is
+  adjacent to the question rather than it.
+
+A `tool_policy` denial for `run_code` was written and then **removed**: the
+registry lookup in `execute_action` precedes the exposure check, so with the
+tool already gone the denial could never have fired. A check that exists,
+passes its test and cannot run is C3's inert-guarantee class.
+`tests/test_g1_ablation.py`, 14 tests, each run against the defect it claims
+to catch. Invariant 117.
+
+**Not done, and it is the part RELEASE should keep:** the comparison itself.
+Four suite passes, hours of wall clock and the whole machine, and it needs a
+decision about whether a code-as-action arm that cannot complete the suite is
+reporting the mechanism's token cost or the suite's dependence on it.
+
+### HARNESS_VERSION 2 -> 3 - D38 taken on its deadline, D33 re-refused
+
+`max_taint_in` is gone from the task contract and therefore from every prompt
+prefix. It changed no behaviour - dead in code since 2026-09-15, and no value
+but the default could be set - but the contract renders into the prefix, so
+removing it moves bytes the model reads, and this project has measured prefix
+STRUCTURE moving pass rates. **Every number published under 2 is incomparable
+with every number produced from here; nothing has yet been produced under 3.**
+
+**Taken because the deadline arrived, not because a bump was wanted.** D38 said
+to bump for this alone if none had come by the end of the second session after
+2026-09-15. None had.
+
+**Old rows still read.** 283 stored contracts carry `"max_taint_in"` in their
+JSON; pydantic ignores unknown fields. A bump makes old numbers incomparable,
+which is its purpose; making old rows unreadable would be data loss dressed as
+versioning. Invariant 118 supersedes 109.
+
+**D33's tier-1 move was NOT batched onto it**, though it was the bump D38
+expected to ride. Its revisit criterion - a boundary rebuild more than once per
+task - got its first number the same day, from `bench/inventory.py`: sessions
+have been opened five times and **rotated none**, and tier-1 memory has been
+written never, so the rate is **zero** against a threshold of one. Two further
+arguments, which the entry did not have: the move trades a rare cost for a
+constant one (tier 1 leaves the cached system block and is re-processed every
+step, to save ~966 tokens of schema re-processing at a boundary that has not
+happened once), and it puts a structural prefix change immediately upstream of
+a G1 measurement - the adjacency class, in the instrument built to catch it.
+D33 stays open, re-refused on its own terms rather than unexamined.
+
+### E3(d) - FINDINGS 1.25 as a command
+
+`bench/inventory.py`. 1.25 is the inventory of what has never run for real,
+taken by hand against the measurement record, which is why it is a snapshot
+dated 2026-09-14 rather than a fact anyone re-checks - the project's own
+failure mode, in the document that catalogues it. It is now a query:
+
+```
+python bench/inventory.py
+```
+
+38 rows, each a question with the signal that would answer it, counted across
+every real-model record (`agent.local.db` and the 2026-09-16 verification run;
+the `runs/demo-*` databases are scripted-model runs and count as tests). The
+current answer: **9 of 36 observable paths have run for real.**
+
+**Three states, not two.** `alpha snapshot` writes a file, the TUI paints a
+terminal, the control plane answers HTTP - none leaves a row, and reporting
+those as "never ran" would be a false negative that reads exactly like a true
+one. A fourth state was needed once it ran: Part 3's real runs used their own
+database under `ALPHA_DATA_DIR`, which `runs/` being gitignored has since
+taken, so three rows the record says ran read `never` here. They are reported
+as `ran elsewhere` with the evidence path, rather than answered for. DR4, in
+the instrument built to check DR4.
+
+Added to `tests/test_entry_points.py` in the same change (DR5, invariant 113).
+
 ## The handover, rewritten and tested - 2026-09-17
 
 `docs/HANDOVER.md` replaced: 1,035 lines to 399, and it now has a test.
