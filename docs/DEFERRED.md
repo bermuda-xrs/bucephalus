@@ -1078,7 +1078,7 @@ removing the field changes every task's prefix bytes. Options:
 Recommendation: (1), batched with the next bump. Until then it is inert, and
 documented as inert.
 
-## D39 - the CLI's 25 subcommands are reachable only through `--help`
+## D39 - the CLI's 25 subcommands are reachable only through `--help` (CLOSED 2026-09-17: `tests/test_cli_subcommands.py`, one test per room)
 
 **Found:** 2026-09-16, by the entry-point sweep (FINDINGS 1.28), and named
 here because **every layer of this defect so far has contained something.**
@@ -1097,7 +1097,41 @@ ratio (C58 - whose sibling then killed `demo.py` for ten days).
 **The shape of the fix:** one test per subcommand against a scratch database,
 asserting the exit code and one fact about what it changed. About half a day.
 
-**Why it is deferred rather than done:** it was named in the same session that
-found the layer above it, and sweeping it there would have been the third
-unplanned expansion of one task. It is the first thing a third session should
-pick up.
+**Why it was deferred rather than done:** it was named in the same session
+that found the layer above it, and sweeping it there would have been the third
+unplanned expansion of one task.
+
+**Closed 2026-09-17.** `tests/test_cli_subcommands.py` enters every one of the
+25 rooms in a SUBPROCESS, through `agent.cli` - the module the console script
+installs - and asserts the exit code plus one fact about what the command
+changed. A subprocess rather than an in-process `main()`: `main` catches every
+exception and returns 1, so called in process the difference between "worked"
+and "raised" is invisible unless the caller also reads the return value, and
+out of process the exit code is all there is.
+
+The scratch installation is the work the entry predicted. `ALPHA_DATA_DIR`
+redirects `paths.state_root` AND `user_data_dir`, so the database, anchor,
+skills store, `runs/`, `work/` and the operator's persistent memory all land
+under one temporary directory - without that last one `alpha memory --forget`
+would have deleted out of the real memory files. The seed is a task run to
+completion, a drafted and approved plan, a pending approval, a memory entry, a
+skill and a schedule, built through the same APIs the system uses, and
+`test_the_fixture_seeded_something` fails when a seed stops matching the code,
+because a green sweep over empty tables is exactly the correct-but-unusual
+result C1 says to ask about (DR4).
+
+`serve` and `tui` never return, so they are started, proved live - `/health`
+answered for the one, still running for the other - and killed through
+`kill_tree`. `channel` refuses to start unconfigured, which is its design and
+is an exit code like any other.
+`test_every_subcommand_is_entered_by_a_test_here` fails when a subcommand is
+added without one, so the sweep does not have to be re-run by hand (DR5).
+
+**What the layer contained this time: nothing.** Every one of the 25 behaved
+as documented on the first run. That is the first layer of this class to come
+back empty, and it is worth saying plainly rather than quietly: the two
+failures on the first pass were both wrong ASSERTIONS of mine - a cache ratio
+asserted as `n/a` against backends that do report cache accounting, and
+`check_fingerprint` compared against `"ok"` when it returns
+`intact`/`tampered`. The hour Part 3 spent by hand had already found the two
+real ones.
