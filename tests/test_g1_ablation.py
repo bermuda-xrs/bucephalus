@@ -1,0 +1,335 @@
+"""G1's ablation arms: each mechanism actually absent when its flag is off.
+
+RELEASE's G1 section names the blocker: ">=10x reduction in paid tokens" is a
+comparison against the same work done WITHOUT the mechanisms, and there was
+nothing to compare against - compaction, the semantic cache, prefix stability
+and code-as-action were structural in `execute/loop.py` with no switches.
+
+Every test here asserts a DIFFERENCE between the arm and the shipped system,
+never merely that a flag was read. A switch that flips a boolean the loop then
+ignores would pass a test written the other way round, and the arm would
+silently measure the shipped system twice - which is the adjacency class
+(C3) landing inside the one measurement built to detect it.
+"""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+import pytest
+
+import agent.execute.loop as loop
+from agent.context import AgentContext
+from agent.execute.loop import run_task
+from agent.kernel.tasks import create_task
+from agent.kernel.types import Budget, TaskContract
+from agent.memory.store import MemoryStore, record_fingerprint
+
+from conftest import make_config
+
+FINAL = '<final>{"answer": "done"}</final>'
+
+
+def READ(name):
+    return ('<action tool="read_file">'
+            + json.dumps({"path": f"work/{name}"}) + "</action>")
+
+
+def REMEMBER(text):
+    return '<action tool="memory_write">' + json.dumps({"text": text}) + "</action>"
+
+
+def _ctx(tmp_path, **mechanisms):
+    cfg = make_config(tmp_path)
+    for k, v in mechanisms.items():
+        setattr(cfg.mechanisms, k, v)
+    ctx = AgentContext(cfg)
+    ctx.memory = MemoryStore(tmp_path / "memory")   # never the operator's own
+    record_fingerprint(ctx.memory)
+    ctx.config.autonomy.auto_review = False
+    ctx.config.autonomy.approve_scoped_writes = True
+    work = Path(ctx.config.root) / "work"
+    work.mkdir(exist_ok=True)
+    for name in "abcde":
+        (work / f"{name}.txt").write_text(
+            f"File {name}. " + " ".join(f"{name}-{k} value {k * 7}"
+                                        for k in range(90)),
+            encoding="utf-8")
+    return ctx
+
+
+def _task(ctx, goal="ablation"):
+    return create_task(ctx.conn, ctx.log,
+                       TaskContract(goal=goal, artifact_scope=["work"]),
+                       Budget(usd=1.0, seconds=600))
+
+
+def _events(ctx, task_id, etype):
+    return [json.loads(p) for (p,) in ctx.conn.execute(
+        "SELECT payload_json FROM events WHERE task_id=? AND type=? ORDER BY seq",
+        (task_id, etype)).fetchall()]
+
+
+@pytest.fixture
+def boundary(monkeypatch):
+    """Fire the ceiling exactly once, on the Nth step - the same injection
+    `test_sessions.py` uses. C1: inject the condition rather than wait for it.
+    Waiting for a real overflow costs a long run and proves nothing when the
+    overflow does not come."""
+    def at(n):
+        seen = {"k": 0}
+
+        def fake(prefix_tokens, tail_tokens, window, ratio):
+            seen["k"] += 1
+            return "compact" if seen["k"] == n else "ok"
+        monkeypatch.setattr(loop, "enforce_ceiling", fake)
+    return at
+
+
+# -- the default is the shipped system --------------------------------------
+
+
+def test_every_mechanism_is_on_unless_a_config_says_otherwise(tmp_path):
+    from agent.config import MechanismsConfig
+
+    m = MechanismsConfig()
+    assert (m.compaction, m.semantic_cache, m.prefix_stability,
+            m.code_as_action) == (True, True, True, True)
+    assert m.ablated() == [], "the default must be the shipped system"
+
+
+def test_the_arm_travels_in_the_run_record(tmp_path):
+    """A number produced with a mechanism removed must not be able to arrive
+    anywhere labelled like a number produced without - the same argument that
+    makes the PROFILE declared and enforced rather than inferred."""
+    import yaml
+
+    from agent.config import load_config
+
+    raw = {
+        "profile": "mixed",
+        "backends": {"cloud": {"kind": "mock", "model": "m"},
+                     "review": {"kind": "mock", "model": "r"}},
+        "mechanisms": {"compaction": False, "semantic_cache": False},
+    }
+    p = tmp_path / "config.yaml"
+    p.write_text(yaml.safe_dump(raw), encoding="utf-8")
+    cfg = load_config(p)
+    assert cfg.mechanisms.compaction is False
+    assert cfg.mechanisms.prefix_stability is True
+    assert cfg.profile_provenance["ablated"] == ["compaction", "semantic_cache"]
+    assert cfg.profile_provenance["mechanisms"]["code_as_action"] is True
+
+
+# -- compaction -------------------------------------------------------------
+
+
+def _run_to_boundary(ctx, boundary):
+    task = _task(ctx)
+    boundary(3)
+    ctx.backends["cloud"].queue(READ("a.txt"), READ("b.txt"), READ("c.txt"),
+                                READ("d.txt"), FINAL)
+    run_task(ctx, task.id)
+    return task
+
+
+def test_compaction_on_tombstones_at_the_boundary(tmp_path, boundary):
+    ctx = _ctx(tmp_path)
+    task = _run_to_boundary(ctx, boundary)
+    assert [e for e in _events(ctx, task.id, "session.opened") if e.get("parent_id")], \
+        "no boundary was crossed"
+    assert not _events(ctx, task.id, "compaction.skipped")
+    ctx.close()
+
+
+def test_compaction_off_crosses_the_ceiling_and_drops_nothing(tmp_path, boundary):
+    """The ceiling is still measured and the crossing is still on the chain.
+    "nothing to compact" and "compaction off" are different facts (DR4), and a
+    run that silently grew past its window would be indistinguishable from one
+    that never reached it."""
+    ctx = _ctx(tmp_path, compaction=False)
+    task = _run_to_boundary(ctx, boundary)
+    skipped = _events(ctx, task.id, "compaction.skipped")
+    assert skipped, "the ceiling fired and nothing recorded that it did"
+    assert skipped[0]["where"] == "session_boundary"
+    assert skipped[0]["tail_tokens"] > 0
+    rotations = [e for e in _events(ctx, task.id, "session.opened")
+                 if e.get("parent_id")]
+    assert not rotations, (
+        "compaction is off, so no session may be ROTATED. Every task opens a "
+        "first session at start; only a CHILD of one is a boundary crossing, "
+        "and asserting on the bare event count would pass for the wrong "
+        "reason in both directions")
+    ctx.close()
+
+
+def test_compaction_off_also_stops_the_refused_delegation_route(tmp_path):
+    """DR3: guard the bytes, not one route to them. This second `compact()`
+    call site would otherwise go on tombstoning while the record said the arm
+    ran without compaction."""
+    from agent.ledger.entries import LedgerEntry
+
+    ctx = _ctx(tmp_path, compaction=False)
+    task = _task(ctx)
+    # TWO bulky observations: `may_delegate` refuses a tightly-coupled
+    # subtask (<=2), which is the branch that falls back to compacting. With
+    # four it delegates instead and this route is never reached at all.
+    ctx.backends["cloud"].cfg.usable_context_window = 3000   # target ~540
+    entries = [LedgerEntry.note("pinned objective", pinned=True)] + [
+        LedgerEntry.observation("x " * 4000, label=f"obs{i}") for i in range(2)]
+    out = ctx.handle_overflow_by_delegation(task, entries)
+    assert [e.kind for e in out] == [e.kind for e in entries], \
+        "the delegation fallback compacted while compaction was ablated"
+    assert _events(ctx, task.id, "compaction.skipped")[0]["where"] == \
+        "delegation_refused"
+    ctx.close()
+
+
+def test_compaction_on_keeps_the_refused_delegation_route(tmp_path):
+    from agent.ledger.entries import LedgerEntry
+
+    ctx = _ctx(tmp_path)
+    task = _task(ctx)
+    # TWO bulky observations: `may_delegate` refuses a tightly-coupled
+    # subtask (<=2), which is the branch that falls back to compacting. With
+    # four it delegates instead and this route is never reached at all.
+    ctx.backends["cloud"].cfg.usable_context_window = 3000   # target ~540
+    entries = [LedgerEntry.note("pinned objective", pinned=True)] + [
+        LedgerEntry.observation("x " * 4000, label=f"obs{i}") for i in range(2)]
+    out = ctx.handle_overflow_by_delegation(task, entries)
+    assert any(e.kind == "tombstone" for e in out), \
+        "the shipped system must still tombstone here"
+    ctx.close()
+
+
+# -- semantic cache ---------------------------------------------------------
+
+
+def _run_two_identical_compressions(ctx):
+    """Both tests take `routing_only`: compression runs on the LOCAL tier, and
+    `Router.choose` refuses to select it while M6.3 escalation has no call
+    site. These are about the CACHE, not about escalation, so they say so
+    explicitly rather than the guard being softened for everyone."""
+    ctx.config.compress_observations_over_tokens = 50   # force the summarizer
+    task = _task(ctx, "read the same file twice")
+    ctx.backends["cloud"].queue(READ("a.txt"), READ("a.txt"), FINAL)
+    run_task(ctx, task.id)
+    return task
+
+
+def test_semantic_cache_on_serves_the_second_identical_compression(
+        tmp_path, routing_only):
+    ctx = _ctx(tmp_path)
+    _run_two_identical_compressions(ctx)
+    hits = ctx.conn.execute(
+        "SELECT COALESCE(SUM(hits),0) FROM semantic_cache").fetchone()[0]
+    assert hits > 0, "the shipped system did not serve a repeat compression"
+    ctx.close()
+
+
+def test_semantic_cache_off_neither_reads_nor_writes(tmp_path, routing_only):
+    """Not merely bypassed on read. A bypass that still FILLED the store would
+    leave a warm cache for whatever ran next, which in a paired trial is the
+    ablated arm paying for the other one's hits."""
+    ctx = _ctx(tmp_path, semantic_cache=False)
+    _run_two_identical_compressions(ctx)
+    rows = ctx.conn.execute("SELECT COUNT(*) FROM semantic_cache").fetchone()[0]
+    assert rows == 0, f"{rows} cache rows written by the arm that has no cache"
+    ctx.close()
+
+
+# -- prefix stability -------------------------------------------------------
+
+
+def _prefix_fingerprints(ctx, task_id):
+    return [e["prefix_fp"] for e in _events(ctx, task_id, "model.called")
+            if "prefix_fp" in e]
+
+
+def _run_with_a_mid_task_memory_write(ctx):
+    task = _task(ctx, "remember something, then carry on")
+    ctx.backends["cloud"].queue(READ("a.txt"),
+                                REMEMBER("The deploy port is 8443."),
+                                READ("b.txt"), FINAL)
+    run_task(ctx, task.id)
+    return task
+
+
+def test_prefix_stability_on_holds_the_prefix_across_a_memory_write(tmp_path):
+    """The SNAPSHOT is the mechanism: tier 1 is taken at task start, so a
+    write during step 2 cannot move the prefix at step 3."""
+    ctx = _ctx(tmp_path)
+    task = _run_with_a_mid_task_memory_write(ctx)
+    fps = _prefix_fingerprints(ctx, task.id)
+    assert len(fps) >= 3, fps
+    assert len(set(fps)) == 1, "the prefix moved under the shipped system"
+    ctx.close()
+
+
+def test_prefix_stability_off_lets_a_memory_write_move_the_prefix(tmp_path):
+    """And the arm must not raise. Disarming the guard alone would change no
+    byte and measure nothing - the guard DETECTS stability, the snapshots
+    CREATE it - so this checks that the bytes actually moved."""
+    ctx = _ctx(tmp_path, prefix_stability=False)
+    task = _run_with_a_mid_task_memory_write(ctx)
+    fps = _prefix_fingerprints(ctx, task.id)
+    assert len(fps) >= 3, fps
+    assert len(set(fps)) > 1, (
+        "the prefix held even with stability ablated: the arm is measuring "
+        "the shipped system under another name")
+    ctx.close()
+
+
+# -- code as action ---------------------------------------------------------
+
+
+def test_code_as_action_on_offers_run_code_everywhere(tmp_path):
+    from agent.ledger.prefix import system_contract
+
+    ctx = _ctx(tmp_path)
+    assert "run_code" in ctx.tools.names()
+    assert "run_code" in ctx.tools.manual()
+    assert "<code>" in system_contract(True)
+    ctx.close()
+
+
+def test_code_as_action_off_removes_the_tool_and_its_instruction(tmp_path):
+    """The instruction leaves with the tool. A model still told to emit
+    `<code>` and then refused would measure a model arguing with a denial,
+    which is ADJACENT to "the same work without code-as-action", not it."""
+    from agent.ledger.prefix import system_contract
+
+    ctx = _ctx(tmp_path, code_as_action=False)
+    assert "run_code" not in ctx.tools.names()
+    assert "run_code" not in {s["name"] for s in ctx.tools.schemas()}
+    assert "run_code" not in ctx.tools.manual(), \
+        "still described in the prefix's tool manual"
+    assert "<code>" not in system_contract(False)
+    assert "<action tool=" in system_contract(False), \
+        "the ablated contract lost more than the code clause"
+    ctx.close()
+
+
+def test_code_as_action_off_refuses_a_code_block_that_arrives_anyway(tmp_path):
+    ctx = _ctx(tmp_path, code_as_action=False)
+    task = _task(ctx, "try to run code")
+    ctx.backends["cloud"].queue("<code>\nprint(1)\n</code>", FINAL)
+    run_task(ctx, task.id)
+    assert not _events(ctx, task.id, "tool.receipt") or all(
+        e.get("tool") != "run_code" for e in _events(ctx, task.id, "tool.receipt")), \
+        "code ran in the arm that has no code-as-action"
+    ctx.close()
+
+
+def test_the_ablated_registry_does_not_mutate_the_shared_default(tmp_path):
+    """`default_registry()` may be shared. An arm that stripped a tool out of
+    it would silently disarm every context built afterwards in the process."""
+    from agent.execute.tools import default_registry
+
+    ablated = _ctx(tmp_path / "a", code_as_action=False)
+    assert "run_code" in default_registry().names()
+    shipped = _ctx(tmp_path / "b")
+    assert "run_code" in shipped.tools.names()
+    ablated.close()
+    shipped.close()

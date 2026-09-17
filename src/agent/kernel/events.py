@@ -43,6 +43,12 @@ EVENT_TYPES = frozenset(
         "tool.receipt",
         "artifact.written",
         "artifact.tombstoned",
+        # G1's compaction arm crossed the ceiling and dropped nothing. On the
+        # CHAIN and not merely in a log, because "nothing to compact" and
+        # "compaction is off" are different facts (DR4), and a run that
+        # silently grew past its window would be indistinguishable from one
+        # that never reached it. See config.MechanismsConfig.
+        "compaction.skipped",
         "skill.loaded",
         "skill.promoted",
         "skill.demoted",

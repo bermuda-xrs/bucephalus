@@ -95,7 +95,13 @@ class ToolRegistry:
         lines = [
             t.manual_line() for t in sorted(self._tools.values(), key=lambda t: t.name)
         ]
-        libs = _library_manual()
+        # Conditional on the TOOL, not only on the libraries. This block
+        # describes what may be imported INSIDE run_code, so a registry
+        # without run_code that still printed it would put an instruction
+        # about a missing facility into the prefix - and G1's code-as-action
+        # arm would then be measuring a model reaching for something it does
+        # not have, which is adjacent to the question rather than it.
+        libs = _library_manual() if "run_code" in self._tools else ""
         if libs:
             # Aimed at the measured failure mode. The harness-tax work
             # found a 3.4B answering immediately with no working and

@@ -140,7 +140,7 @@ findings are defects in the measuring apparatus, not in the agent.**
 
 | Goal | Where it stands after iteration two |
 |---|---|
-| **G1** ≥10× reduction in paid tokens | **implemented, unmeasured.** No paid call has ever been made. One blocker was removed this iteration - C62: recorded usage is the server's own count, so nothing needed calibrating - and the remaining one is an API key, which the user has decided to supply (D26) |
+| **G1** ≥10× reduction in paid tokens | **implemented, unmeasured - but no longer unmeasurABLE.** No paid call has ever been made. Three blockers were named; two are now gone. C62 removed calibration (recorded usage is the server's own count). **2026-09-17 removed the third and largest: the ablation switches now exist** - `mechanisms:` in config turns compaction, the semantic cache, prefix stability and code-as-action off individually, so a control arm can be run at all (`tests/test_g1_ablation.py`). What remains is an API key (D26) and somebody spending the wall clock |
 | **G2** Mobile remote control | **partially implemented.** The HTTP control plane, auth and SSE exist; Phase 8 added a Telegram channel with an allowlist, approvals and a park path, driven end to end against a fake transport. No live request has ever been made (D26) |
 | **G3** Multi-agent as context isolation | **implemented, unmeasured.** Delegation, the five gates and a narrowed child policy exist; no production task has delegated |
 | **G4** Research-grounded, verified skill generation | **the gate works; the generation half is RETIRED UNANSWERED** (FINDINGS 1.27). The published baseline is -1.3 pp, the suite that would evaluate it is archived, D19 was never closed, and none of its three components ever ran |
@@ -331,7 +331,7 @@ been evaluated at all.
 | Mechanism | Enforcement point | Enforced? | Effect measured? |
 |---|---|---|---|
 | Prefix stability | `PrefixGuard.check()`, constructed at `execute/loop.py:200`, raises `PrefixMutationError` on drift | **yes**, raises | **now measurable, not yet measured at suite scale** — corrected 2026-09-06. This cell previously read "unmeasurable on Ollama, which has no cache accounting". That was WRONG: the accounting exists and the native protocol discards it. Through `/v1`, the same server on the same weights reported `cached_tokens` **5 then 205** across two identical calls on a 206-token prompt it had provably never seen, against **0 and 0** on `/api/chat`. `docs/evidence/phase1-openai-parity.json`, SPEC-DELTA C28 |
-| Deletion-based compaction | `compact()` at `execute/loop.py:249` and `context.py:290` | **yes** | **no** — no before/after token count is recorded per compaction |
+| Deletion-based compaction | `compact()` at the loop's session boundary and in `context.handle_overflow_by_delegation` | **yes**, and **ablatable** since 2026-09-17 (`mechanisms.compaction`) | **no** — no before/after token count is recorded per compaction, but a control arm can now be run |
 | Semantic cache | `cached_op()` at `execute/loop.py:594` | **yes** | **no** — hit rate is recorded but no token saving is attributed |
 | Code-as-action | inline in `execute/loop.py`; `run_code` batches tool calls into one program | **yes** | **no** — never compared against a one-tool-call-per-turn arm |
 | Context ceiling | `enforce_ceiling()` at `execute/loop.py:242` | **yes** | **no** — and it budgets against an **uncalibrated** estimator (DEFERRED D6) |
@@ -363,18 +363,44 @@ Three things, and the third is the one that is usually forgotten.
    against Anthropic's counter, is deleted: the wrong tokenizer for the local
    models, and it needed a key.
 
-3. **A control arm must exist, and today it does not.** This is the blocker
-   nobody has costed. "10× reduction" is a comparison against the same work
-   done *without* the mechanisms. Checking `config.local.yaml` and
-   `config.py`: there are **no on/off switches** for compaction, the semantic
-   cache, prefix stability, or code-as-action. They are structural in
-   `execute/loop.py`. Only `context_fill_ratio` and `usable_context_window`
-   are tunable, and those move the ceiling rather than removing it.
+3. **~~A control arm must exist, and today it does not.~~ BUILT 2026-09-17.**
+   This was the blocker nobody had costed. "10× reduction" is a comparison
+   against the same work done *without* the mechanisms, and there were **no
+   on/off switches** for compaction, the semantic cache, prefix stability or
+   code-as-action: they were structural in `execute/loop.py`, and only
+   `context_fill_ratio` and `usable_context_window` were tunable, which move
+   the ceiling rather than removing it.
 
-   So even with a funded API key and a calibrated tokenizer, **there is
-   nothing to compare against.** Measuring G1 requires first building an
-   ablation path for each mechanism — which is the same leave-one-in design
-   problem the skill ablation hit, and it is a design task, not a run.
+   `config.MechanismsConfig` now carries one flag each, defaulting to the
+   shipped system, and the settings travel in `profile_provenance` so no run
+   record can be mistaken for the other arm. Each flag removes the
+   **mechanism**, never merely its enforcement — the distinction that decides
+   whether an arm measures anything:
+
+   * *compaction* off stops both `compact()` call sites, the loop's session
+     boundary and the refused-delegation fallback, and records
+     `compaction.skipped` on the chain where the ceiling was crossed. One
+     alone would have left the arm compacting while its record said otherwise
+     (DR3).
+   * *semantic cache* off neither reads nor writes. A read-only bypass would
+     still have warmed the store for whichever arm ran next.
+   * *prefix stability* off re-reads skills and tier-1 memory LIVE each step
+     instead of snapshotting them at task start. Disarming `PrefixGuard`
+     alone would have changed no prompt byte: the guard DETECTS stability,
+     the snapshots CREATE it (DR2).
+   * *code-as-action* off removes `run_code` from the registry, from the tool
+     schemas, from the tool manual, from the sandbox-library note that
+     described what may be imported inside it, and from the system contract.
+     A model still told to emit `<code>` and then refused would measure a
+     model arguing with a denial, which is adjacent to the question and not
+     it.
+
+   **What is still a design task, and is still uncosted:** whether the
+   benchmark suite can be COMPLETED without code-as-action. The switch makes
+   that an empirical question rather than an unbuildable one, but a
+   code-as-action arm whose tasks all fail measures the suite's dependence on
+   the mechanism, not the mechanism's token cost, and the two must not be
+   reported as one number.
 
 **Estimated scope, stated because prior estimates here ran optimistic:** an
 API key and one live call is an afternoon. Calibration is another. The
@@ -554,7 +580,7 @@ capability gate has never refused a production call.
 | Goal / component | Why |
 |---|---|
 | ~~**G1 prefix-cache benefit**~~ | **MOVED OUT OF THIS LIST, 2026-09-06.** The reason given here — "Ollama has no prompt-cache accounting" — was false. Ollama has it; its *native* protocol does not report it. The OpenAI-compatible endpoint on the same server does, so the ratio is measurable on the local tier under `config.openai.yaml`. The historical statement stands for the runs it describes: `cache_read_tokens` is 0 across all 1,179 real calls, and those runs are recorded with `cache_hit_ratio: null` — **unmeasured, which is not zero** — rather than being back-filled. Still unmeasured *at suite scale*: no pass has yet run through the reporting adapter |
-| **G1 paid-token reduction** | No paid backend has ever been called. Requires an API key, a live Anthropic call, and ablation switches that do not exist. *(Calibration was listed here too; removed 2026-09-15 - the provider reports paid tokens itself, C62)* |
+| **G1 paid-token reduction** | No paid backend has ever been called. Requires an API key and a live Anthropic call. ~~and ablation switches that do not exist~~ — **the switches were built 2026-09-17**; see G1's point 3. *(Calibration was listed here too; removed 2026-09-15 - the provider reports paid tokens itself, C62)* |
 | **G1 routing / escalation** | One configured tier. The 8B alone is 7.64 GB resident against 3.6–6.4 GB free, so two models cannot be co-resident; a "routed" run would measure model swapping |
 | **8B at suite scale** | Does not fit. 7.64 GB resident at the harness's `num_ctx: 16384`. Measured, and recorded as SPEC-DELTA C20 |
 | **Token counts generally** | *Corrected 2026-09-15:* this said every token figure is an estimate. Recorded usage is the model server's own count. What is uncalibrated is the in-loop estimator invariant 11's context ceiling budgets against (DEFERRED D6); `calibrate` is deleted (C62) |

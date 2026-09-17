@@ -33,6 +33,17 @@ from .skills.store import SkillStore
 from .userdata.store import UserStore
 
 
+def _without(registry: ToolRegistry, *names: str) -> ToolRegistry:
+    """A copy of `registry` minus these tools. Never mutates the original -
+    `default_registry()` may be shared, and an ablation arm must not be able
+    to strip a tool out of a context that did not ask for it."""
+    out = ToolRegistry()
+    for name in registry.names():
+        if name not in names:
+            out.register(registry.get(name))
+    return out
+
+
 class AgentContext:
     def __init__(
         self,
@@ -47,6 +58,19 @@ class AgentContext:
         self.anchor = Anchor(config.resolve(config.anchor_path))
         self.backends = backends if backends is not None else build_backends(config)
         self.tools = tools or default_registry()
+        # G1's code-as-action arm. The tool leaves the REGISTRY, which is the
+        # one place every route passes: `execute_action` looks a tool up
+        # before anything else and refuses what is not there, `schemas()`
+        # stops offering it, and `manual()` - rendered into the prefix - stops
+        # describing it. `system_contract` drops the matching instruction.
+        #
+        # Deliberately NOT also a `tool_policy` denial. That check sits after
+        # the registry lookup, so with the tool already gone it could never
+        # fire: a check that exists, passes its test and cannot run is worse
+        # than no check, because it reads as protection. See
+        # config.MechanismsConfig.
+        if not config.mechanisms.code_as_action:
+            self.tools = _without(self.tools, "run_code")
         self.skills = SkillStore(self.conn, config.resolve(config.skills_path))
         self.userdata = UserStore(self.conn)
         # A1 tier 1. In the USER DATA dir, not the repo: memory is the user's,
@@ -529,6 +553,16 @@ class AgentContext:
         )
         ok, why = may_delegate(self, task, sub)
         if not ok:
+            # The SECOND route into compaction. Gated here as well as at the
+            # loop's session boundary, or the compaction arm would report
+            # "without compaction" while every refused delegation went on
+            # tombstoning - DR3: guard the bytes, not one route to them.
+            if not self.config.mechanisms.compaction:
+                self.log.append(task.id, "compaction.skipped",
+                                {"where": "delegation_refused", "why": why,
+                                 "n_entries": len(entries),
+                                 "reason": "compaction ablated (G1 arm)"})
+                return entries
             target = int(self.window_for("cloud") * 0.18)
             out = compact(entries, target_tokens=target)
             out.append(

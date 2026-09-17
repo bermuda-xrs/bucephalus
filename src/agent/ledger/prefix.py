@@ -44,6 +44,34 @@ Be brief between actions. Say what you are about to do in one line, act, and
 read the result. Do not restate the task back to the user."""
 
 
+# The `<code>` paragraph, lifted out verbatim so the ablated contract is the
+# shipped one MINUS this and nothing else. Two hand-written contracts would
+# drift, and the arms would then differ by an edit nobody meant to make.
+_CODE_AS_ACTION_CLAUSE = """\
+  * To run a short program instead of several tool calls, emit:
+      <code>
+      # python; call_tool(name, **kwargs) is available
+      </code>
+"""
+
+
+def system_contract(code_as_action: bool = True) -> str:
+    """The contract as this arm's model sees it. See config.MechanismsConfig.
+
+    With `code_as_action` off the instruction to emit `<code>` leaves with the
+    tool: a model told to use a facility that is then refused at dispatch
+    measures a model arguing with a denial, which is ADJACENT to "the same
+    work without code-as-action" rather than being it.
+    """
+    if code_as_action:
+        return SYSTEM_CONTRACT
+    if _CODE_AS_ACTION_CLAUSE not in SYSTEM_CONTRACT:
+        raise AssertionError(
+            "the system contract no longer contains the clause this removes; "
+            "the code-as-action arm would be identical to the control")
+    return SYSTEM_CONTRACT.replace(_CODE_AS_ACTION_CLAUSE, "")
+
+
 class PrefixBuilder:
     """Assembles the cache-stable prefix. Byte-identical across turns or it raises."""
 

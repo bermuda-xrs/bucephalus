@@ -28,7 +28,8 @@ from ..kernel.types import GateDecision, Taint, TaskStatus, join_taint
 from ..ledger.artifacts import project, read_artifact, write_artifact
 from ..ledger.compact import compact, enforce_ceiling
 from ..ledger.entries import LedgerEntry, render_tail, sum_tokens
-from ..ledger.prefix import PrefixBuilder, PrefixGuard, SYSTEM_CONTRACT
+from ..ledger.prefix import (PrefixBuilder, PrefixGuard, SYSTEM_CONTRACT,
+                             system_contract)
 from ..ledger.semantic_cache import cached_op
 from ..security.capabilities import gate_tool_call, render_preview
 from ..security.origin import is_unattended
@@ -249,7 +250,14 @@ def run_task(ctx, task_id: str) -> TaskResult:
     set_status(ctx.conn, ctx.log, task, TaskStatus.RUNNING)
     checkpoint(ctx.log, ctx.anchor, task.id)
 
-    guard = PrefixGuard()
+    # G1's prefix-stability arm. `stable` decides whether skills and tier-1
+    # memory are SNAPSHOT here once or re-read live at every step below. The
+    # guard is armed only alongside the snapshots, because the guard detects
+    # stability and the snapshots create it: disarming the guard on its own
+    # would change no prompt byte and the arm would measure nothing at all -
+    # DR2's decoy branch, in the measurement that most needs not to have one.
+    stable = ctx.config.mechanisms.prefix_stability
+    guard = PrefixGuard() if stable else None
     try:
         skills = ctx.freeze_skills(task)  # frozen at start — prefix stability
     except SkillSetChanged:
@@ -306,14 +314,24 @@ def run_task(ctx, task_id: str) -> TaskResult:
 
                 plan = verify_plan_pin(ctx, task)
 
+            if not stable:
+                # The prefix-stability arm, where the cost is paid: skills and
+                # tier-1 memory come back from their stores at every step, so
+                # anything written mid-task moves the prefix and voids the
+                # discount for everything after it. That is what the shipped
+                # system's snapshots buy, and the only way to price it is to
+                # let it happen.
+                skills = ctx.freeze_skills(task)
+                memory = ctx._snapshot_memory(task.id)  # noqa: SLF001 - live read
             builder = PrefixBuilder(
-                SYSTEM_CONTRACT,
+                system_contract(ctx.config.mechanisms.code_as_action),
                 skills,
                 json.loads(task.contract.model_dump_json()),
                 tool_manual=ctx.tools.manual(),
                 memory=memory,
             )
-            guard.check(builder, task.id)
+            if guard is not None:
+                guard.check(builder, task.id)
             prefix = builder.build()
 
             window = ctx.window_for("cloud")
@@ -323,7 +341,23 @@ def run_task(ctx, task_id: str) -> TaskResult:
                 window,
                 ctx.config.limits.context_fill_ratio,
             )
-            if action == "compact":
+            if action == "compact" and not ctx.config.mechanisms.compaction:
+                # The compaction arm. The ceiling is still MEASURED and the
+                # crossing is on the chain - an arm that silently grew past
+                # the window would be indistinguishable from one that never
+                # reached it, and "nothing to compact" and "compaction off"
+                # are different facts (DR4). Nothing is dropped, so the tail
+                # keeps growing; a prompt the backend then refuses is a
+                # BACKEND ERROR and is already excluded from task failures
+                # rather than scored as one.
+                ctx.log.append(task.id, "compaction.skipped",
+                               {"where": "session_boundary", "step": step,
+                                "prefix_tokens": count_tokens(prefix),
+                                "tail_tokens": sum_tokens(entries),
+                                "window": window,
+                                "fill_ratio": ctx.config.limits.context_fill_ratio,
+                                "reason": "compaction ablated (G1 arm)"})
+            elif action == "compact":
                 entries, memory, guard, builder, prefix = _session_boundary(
                     ctx, task, entries, window, step, plan, skills, builder,
                     prefix)
@@ -682,11 +716,18 @@ def _session_boundary(ctx, task, entries, window, step, plan, skills, builder,
         join_taint(*(e.taint for e in entries)), {"step": step})
     rot = ctx.rotate_session(task.id, seed, {**record, "step": step,
                                              "tombstoned": tombstoned})
-    guard = PrefixGuard()
+    # The same contract and the same guard rule as the top of the loop. Built
+    # from SYSTEM_CONTRACT directly, this was the route by which a
+    # code-as-action arm got the `<code>` clause back after its first
+    # compaction, and a prefix-stability arm got a guard it is meant not to
+    # have - one mechanism, two places, which is the shape DR3 names.
+    guard = PrefixGuard() if ctx.config.mechanisms.prefix_stability else None
     builder = PrefixBuilder(
-        SYSTEM_CONTRACT, skills, json.loads(task.contract.model_dump_json()),
+        system_contract(ctx.config.mechanisms.code_as_action),
+        skills, json.loads(task.contract.model_dump_json()),
         tool_manual=ctx.tools.manual(), memory=rot["memory"])
-    guard.check(builder, task.id)
+    if guard is not None:
+        guard.check(builder, task.id)
     return entries, rot["memory"], guard, builder, builder.build()
 
 
@@ -1070,7 +1111,15 @@ def condense_observation(ctx, task, text: str, taint: Taint, aid: str) -> tuple[
         return {"text": resp.text}
 
     try:
-        value, hit = cached_op(ctx.conn, op, text, taint, _summarize)
+        if ctx.config.mechanisms.semantic_cache:
+            value, hit = cached_op(ctx.conn, op, text, taint, _summarize)
+        else:
+            # The semantic-cache arm. Neither read NOR written: a bypass that
+            # still filled the store would leave a warm cache for whatever ran
+            # next, and on a paired trial that is the ablated arm paying for
+            # the other one's hits. Every compression here costs a model call,
+            # which on a CPU tier is the 30+ seconds the cache exists to save.
+            value, hit = _summarize(), False
         cache_hit["v"] = hit
         summary = value.get("text", "")
     except Exception as e:  # noqa: BLE001 - a down local tier must not fail the task

@@ -152,6 +152,60 @@ class GateConfig(BaseModel):
     min_discordant_pairs: int = 10
 
 
+class MechanismsConfig(BaseModel):
+    """G1's ablation switches. Every one defaults to ON: the shipped system.
+
+    G1 claims a >=10x reduction in paid tokens, which is a comparison against
+    the same work done WITHOUT the mechanisms - and until now there was
+    nothing to compare against. The four were structural in `execute/loop.py`
+    with no switches, so no configuration could express "without compaction",
+    and RELEASE's G1 section named that, not the API key, as the blocker
+    nobody had costed.
+
+    Each flag removes the MECHANISM, never merely its enforcement. That
+    distinction is the one this project keeps getting burned by: a control
+    turned off beside a mechanism that still runs is a decoy branch (DR2), and
+    the arm would silently measure nothing at all.
+
+      * `compaction`       - off: the ceiling still reports, nothing is
+                             tombstoned, on EITHER route (the loop's session
+                             boundary and the refused-delegation fallback).
+                             Both, or the second keeps compacting while the
+                             record says the arm did not - DR3.
+      * `semantic_cache`   - off: every compression re-summarizes. The cache
+                             is not merely bypassed on read; nothing is
+                             written either, so the arm cannot warm a store a
+                             later arm would read.
+      * `prefix_stability` - off: skills and tier-1 memory are re-read LIVE
+                             each step instead of snapshotted at task start,
+                             and the drift guard is not armed. Disarming the
+                             guard alone would change no bytes and measure
+                             nothing - the guard detects stability, the
+                             snapshots create it.
+      * `code_as_action`   - off: `run_code` is denied to every task AND
+                             removed from the tool schemas, the tool manual
+                             and the system contract. A model still told to
+                             emit `<code>` and then refused would measure a
+                             model fighting a denial, which is adjacent to
+                             the question and not it (C3's largest class).
+
+    Turning any of these off changes the prompt bytes, so an ablation arm is
+    NOT comparable with a shipped-system number as a prefix-cache measurement.
+    It is comparable as what it is: the same tasks, the same model, one
+    mechanism absent. The settings land in `profile_provenance`, so every run
+    record says which arm produced it and no chart can blend them.
+    """
+
+    compaction: bool = True
+    semantic_cache: bool = True
+    prefix_stability: bool = True
+    code_as_action: bool = True
+
+    def ablated(self) -> list[str]:
+        """The mechanisms that are OFF. Empty means the shipped system."""
+        return sorted(k for k, v in self.model_dump().items() if not v)
+
+
 class AutonomyConfig(BaseModel):
     mode: Literal["plan_then_run", "interactive", "manual"] = "plan_then_run"
     plan_required: bool = True
@@ -218,6 +272,8 @@ class Config(BaseModel):
     laptop_allowlist: list[str] = Field(default_factory=list)
     compress_observations_over_tokens: int = 1200
     gate: GateConfig = Field(default_factory=GateConfig)
+    # G1's ablation arms. Defaults are the shipped system; see MechanismsConfig.
+    mechanisms: MechanismsConfig = Field(default_factory=MechanismsConfig)
     autonomy: AutonomyConfig = Field(default_factory=AutonomyConfig)
     ui: UIConfig = Field(default_factory=UIConfig)
     channels: ChannelConfig = Field(default_factory=ChannelConfig)
@@ -274,6 +330,14 @@ def load_config(path: str | Path = "config.yaml",
     from .profiles import enforce
 
     cfg.profile_provenance = enforce(cfg, cfg.profile)
+    # Which G1 arm this is, on the channel that already reaches every run
+    # record (instrument/report.py, bench/noise.py, bench/run.py). A number
+    # produced with a mechanism ablated must not be able to arrive anywhere
+    # labelled the same as a number produced without - the same argument that
+    # makes the PROFILE declared and enforced rather than whatever config
+    # happened to be on disk.
+    cfg.profile_provenance["mechanisms"] = cfg.mechanisms.model_dump()
+    cfg.profile_provenance["ablated"] = cfg.mechanisms.ablated()
     return cfg
 
 

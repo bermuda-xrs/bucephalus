@@ -164,3 +164,23 @@ channels:                           # A4 — inbound message channels
     token_env: "ALPHA_TELEGRAM_TOKEN"
     poll_timeout_s: 25              # long poll; no webhook, no bound port
     artifact_scope: ["work"]
+
+# G1's ablation arms. Every one defaults to true, which is the shipped system;
+# set one false to run the arm WITHOUT that mechanism. Used to measure what
+# each one is worth, because ">=10x reduction in paid tokens" is a comparison
+# against the same work done without them and until 2026-09-17 there was no
+# configuration that could express the other side of it (RELEASE, G1).
+#
+# Each flag removes the MECHANISM, not merely its enforcement - see
+# `MechanismsConfig` in src/agent/config.py for what each one actually stops.
+# The settings travel in `profile_provenance`, so every run record says which
+# arm produced it and no chart can blend them.
+#
+# An ablated arm changes the prompt bytes, so its numbers are NOT comparable
+# with a shipped-system run as a prefix-cache measurement. They are comparable
+# as what they are: the same tasks, the same model, one mechanism absent.
+mechanisms:
+  compaction: true
+  semantic_cache: true
+  prefix_stability: true
+  code_as_action: true
