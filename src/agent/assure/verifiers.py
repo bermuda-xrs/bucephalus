@@ -297,8 +297,24 @@ class ExpectedValueVerifier:
     would not catch the bug they were meant to catch.
 
     `expected` is carried on the contract's output_schema under `x-expected`,
-    so a task file declares its own right answer and nothing in the agent's
-    context ever sees it.
+    so a task file declares its own right answer.
+
+    ~~"and nothing in the agent's context ever sees it."~~ **THAT SENTENCE WAS
+    FALSE FROM THE DAY IT WAS WRITTEN. Corrected 2026-09-22.** The whole
+    contract - output_schema included - was rendered into the cache-stable
+    prefix, so `x-expected` sat in the prompt of every task that declared one.
+    The model never had to read the inputs; it could read the answer.
+    Measured: on `logs-triage-005` the 3B answered correctly on turn one
+    having read no files, and across the five arms of the 2026-09-17 ablation
+    the three tasks that passed in EVERY arm were exactly the three carrying a
+    grading key, while the one with no key failed in every arm.
+
+    The sentence is also why nobody looked: it asserted the property as a fact
+    instead of naming a test that held it, and a claim with nothing behind it
+    is a comment with a runtime cost. `ledger/prefix.prompt_contract` makes it
+    true now, and `tests/test_grader_is_not_in_the_prompt.py` keeps it true -
+    by allowlist, because the next grading key will not be called
+    `x-expected`, just as this one was not called `verify.py`.
 
     Numbers compare with a relative tolerance; strings compare case- and
     whitespace-insensitively unless `x-exact` is set.

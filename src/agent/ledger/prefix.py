@@ -17,6 +17,59 @@ class PrefixMutationError(RuntimeError):
     """The stable prefix changed mid-task. The cache discount is gone."""
 
 
+# WHAT THE MODEL MAY SEE OF ITS OWN CONTRACT. An ALLOWLIST, and it has to be.
+#
+# The whole `TaskContract` used to be rendered here, which handed the model
+# two things it must never have:
+#
+#   * `output_schema["x-expected"]` - the right answer, verbatim. Measured
+#     2026-09-22: on `logs-triage-005` the 3B answered correctly on its first
+#     turn having read no files at all, and across the five G1 ablation arms
+#     the three tasks that passed in every arm were exactly the three
+#     carrying a grading key, while the one with no key failed in every arm.
+#     0.75 was not a pass rate, it was the fraction of tasks with an answer
+#     in the prompt.
+#   * `grader_dir` - the PATH to the grader. `grader_dir`'s own comment says
+#     a verify.py the agent can read is a verify.py it can copy the expected
+#     value out of; artifact_scope stops the read, and then the prefix
+#     printed the address anyway.
+#
+# So: named fields in, everything else out. A DENYLIST would have to predict
+# the next grading key's name, and the next one will not be called
+# `x-expected` - this one was not called `verify.py`, which is how it got
+# past the control that already existed for exactly this defect.
+# `test_the_grader_never_reaches_the_prompt` fails when a field is added to
+# `TaskContract` without being classified either way.
+PROMPT_VISIBLE_CONTRACT_FIELDS = frozenset({
+    "goal",               # what to do
+    "output_schema",      # the SHAPE of the answer - sanitised below
+    "success_criterion",  # which verifier will judge it, by name only
+    "artifact_scope",     # what it may touch, which it is also refused at the gate
+})
+
+
+def prompt_contract(contract: dict) -> dict:
+    """The task contract as the MODEL sees it: visible fields, no grading keys.
+
+    `x-` keys are stripped at every depth of `output_schema`. They are JSON
+    Schema's extension space and this project uses them only for harness
+    business - `x-expected`, `x-contains`, `x-exact`, `x-split` - none of
+    which is information the model is entitled to. The verifier reads them
+    off the contract OBJECT, which is untouched; only the rendering loses
+    them.
+    """
+    def strip(node):
+        if isinstance(node, dict):
+            return {k: strip(v) for k, v in node.items()
+                    if not (isinstance(k, str) and k.startswith("x-"))}
+        if isinstance(node, list):
+            return [strip(v) for v in node]
+        return node
+
+    return {k: strip(v) for k, v in contract.items()
+            if k in PROMPT_VISIBLE_CONTRACT_FIELDS}
+
+
 SYSTEM_CONTRACT = """\
 You are the execution core of alpha test 1, a hybrid local/cloud agent.
 
@@ -112,7 +165,9 @@ class PrefixBuilder:
             parts.append(s["body"].rstrip())
             parts.append("\n</skill>\n\n")
         parts.append("<task_contract>\n")
-        parts.append(canonical(self.task_contract))  # canonical, not json.dumps
+        # `prompt_contract`, never the raw contract: the raw one carries the
+        # right answer and the grader's path. Canonical, not json.dumps.
+        parts.append(canonical(prompt_contract(self.task_contract)))
         parts.append("\n</task_contract>\n")
         return "".join(parts)
 

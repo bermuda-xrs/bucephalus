@@ -1410,6 +1410,16 @@ recorded so nobody reads the gap as an omission.
 
 ### 1.30 The G1 ablation arms ran, and three of the four measured nothing
 
+> **CORRECTION 2026-09-22: every pass rate below is void.** The task contract
+> was rendered whole into the prompt, so `x-expected` handed the model its own
+> answer (1.31). The 0.75 repeated in all five arms is the fraction of tasks
+> carrying a grading key - three of four - and the one task without a key
+> failed in every arm. **The mechanism conclusions stand**: they rest on
+> `compaction.skipped`, tombstone, prefix-fingerprint and `run_code` counts,
+> none of which the leak touches. What is withdrawn is "every arm scored
+> 0.75", and with it the code-as-action arm's "same pass rate" clause - its
+> TOKEN figures still stand, its pass rate says nothing.
+
 **2026-09-17.** The switches RELEASE called "the blocker nobody has costed"
 were built the same day, and the first comparison ran immediately: the same
 suite five times - a control with the shipped system, then one arm per
@@ -1462,6 +1472,81 @@ enough to hit a cache. Until then those three arms will keep returning
 
 `docs/evidence/g1-ablation-2026-09-17.json`, with the five arm records beside
 it.
+
+
+
+### 1.31 The grader was in the prompt, and a false docstring is why nobody looked
+
+**2026-09-22, found by a pilot task that answered correctly without reading
+anything.** `logs-triage-005` asks for the worst service across four 5 KB log
+shards. The 3B answered `{"service": "billing", "errors": 20}` on turn one,
+with **one model call, zero `read_file`, zero `run_code`**. The answer was
+correct. It had not looked at a single log.
+
+It did not need to. `TaskContract` was rendered whole into the cache-stable
+prefix, and `output_schema` carries the grading key:
+
+```
+"required":["service","errors"],"type":"object",
+"x-expected":{"errors":20,"service":"billing"}}
+</task_contract>
+```
+
+**The scale of it, measured rather than feared.** Four of the five tasks in
+`bench/tasks` declare a key. Cross-referencing against the 2026-09-17
+ablation, where all five arms scored exactly 0.75:
+
+| task | verifier | key in prompt | result, all five arms |
+|---|---|---|---|
+| extract-json-001 | `expected_value` | `x-expected` | PASS |
+| summarize-untrusted-003 | `contains_all` | `x-contains` | PASS |
+| negative-control-004 | `expected_value` | `x-expected` | PASS |
+| write-function-002 | `execution` | none | **fail** |
+
+The three that pass in every arm are exactly the three that leak. The one that
+fails in every arm is the only one that does not. **0.75 was never a pass
+rate; it was the fraction of tasks with an answer in the prompt.**
+
+**A second leak, found by sweeping the shape rather than the symptom (DR5).**
+`grader_dir` is a `TaskContract` field too, so the prefix also printed the
+grader's ADDRESS. That field's own comment says a `verify.py` the agent can
+read is a `verify.py` it can copy the expected value out of - which is why
+the grader was moved outside `artifact_scope` at HARNESS_VERSION 2. Scope
+confinement stopped the read and the prompt handed over the path anyway.
+
+**This is the grader-reachability defect recurring by a new route**, and the
+route is why the existing control missed it. HARNESS_VERSION 2's fix was
+about the FILESYSTEM: keep the grader where the agent cannot read it. The
+leak was not a file. C3 predicted the class - "expect the next wherever a
+score or threshold is added" - and `x-expected` is a score added to the
+contract.
+
+**Why nobody looked, which is the transferable part.** `ExpectedValueVerifier`
+has said since it was written:
+
+> *"a task file declares its own right answer and nothing in the agent's
+> context ever sees it."*
+
+False from the first day. It asserted the property as a fact rather than
+naming a test that held it, so every later reader inherited a guarantee that
+had nothing behind it. A claim with no test is a comment, and this one was
+load-bearing for the whole benchmark. **Where a docstring states a security
+or measurement property, the same commit owes it a test** - otherwise the
+sentence is the only thing defending the property, and sentences do not fail.
+
+**The fix is an allowlist, not a filter.** Only named contract fields reach
+the prefix - `goal`, `output_schema` (with `x-` keys stripped at every depth),
+`success_criterion`, `artifact_scope` - and everything else is dropped. A
+denylist would have to predict the next grading key's name, and the next one
+will not be called `x-expected`, just as this one was not called `verify.py`.
+`tests/test_grader_is_not_in_the_prompt.py` fails when a field is added to
+`TaskContract` without being classified either way. HARNESS_VERSION 4.
+
+**What it costs:** every pass rate this project has measured on a suite with
+answer keys is too high by an unknown amount. That is the whole `bench/tasks`
+history, which is small. The 283-task `aero_calc` record is **not** affected:
+it grades with `verify.py` under `verify_program`, and declares no `x-` keys,
+so its numbers never had this route.
 
 
 ## 8. Open research questions

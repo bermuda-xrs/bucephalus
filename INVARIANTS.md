@@ -786,6 +786,28 @@ unreadable, which would be data loss dressed as versioning.
 
 ---
 
+## Added 2026-09-22 (the grader leak)
+
+**119. Nothing the grader uses reaches the model's prompt, and the rule is an
+ALLOWLIST.** Only `goal`, `output_schema`, `success_criterion` and
+`artifact_scope` are rendered from the task contract, with `x-` keys stripped
+at every depth; `grader_dir` and anything unclassified are dropped. A field
+added to `TaskContract` fails the suite until it is classified as visible or
+hidden with a reason. A denylist would have to predict the next grading key's
+name - this one was not called `verify.py`, and the next will not be called
+`x-expected`. The verifier reads the key off the contract object, which is
+untouched.
+*Caught by:* `tests/test_grader_is_not_in_the_prompt.py`.
+
+**120. No task content, and no grading key, reaches the installed package.**
+`bench/` is the developer benchmark; `--suite` is required with no default, so
+a user's numbers are always about a suite they wrote. The exclusion is
+structural - `bench/` sits outside `src/` - which is not the same as decided,
+so a real wheel is built and inspected.
+*Caught by:* `tests/test_the_wheel_ships_no_tasks.py`.
+
+---
+
 ## Design rules
 
 Not per-run invariants with a test that fires — rules for the next person

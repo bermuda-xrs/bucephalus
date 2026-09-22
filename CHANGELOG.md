@@ -106,6 +106,83 @@ Four suite passes, hours of wall clock and the whole machine, and it needs a
 decision about whether a code-as-action arm that cannot complete the suite is
 reporting the mechanism's token cost or the suite's dependence on it.
 
+## The grader was in the prompt - HARNESS_VERSION 3 -> 4 - 2026-09-22
+
+### The defect
+
+`logs-triage-005`, built as a pilot to make compaction fire, answered
+correctly on its FIRST turn with one model call and zero file reads. The
+answer was in the prompt: `TaskContract` was rendered whole into the
+cache-stable prefix, and `output_schema` carries `x-expected`.
+
+Four of the five tasks in bench/tasks declare a grading key. In the
+2026-09-17 ablation, where all five arms scored exactly 0.75, the three tasks
+that passed in EVERY arm are exactly the three that leak, and the one that
+failed in every arm is the only one that does not. 0.75 was never a pass
+rate. It was the fraction of tasks with an answer in the prompt.
+
+Swept, and there was a second one: `grader_dir` is a contract field too, so
+the prefix also printed the grader's PATH - the very thing moving the grader
+outside artifact_scope at HARNESS_VERSION 2 was meant to deny.
+
+This is grader-reachability recurring by a new route, and the route is why
+the old control missed it: that fix was about the filesystem, and this leak
+was not a file. C3 predicted the class - "expect the next wherever a score or
+threshold is added".
+
+### Why nobody looked
+
+`ExpectedValueVerifier` had said since it was written: "a task file declares
+its own right answer and nothing in the agent's context ever sees it." False
+from day one. It asserted the property as a fact instead of naming a test
+that held it, so every later reader inherited a guarantee with nothing behind
+it. **Where a docstring states a measurement or security property, the same
+commit owes it a test** - prose does not fail. SPEC-DELTA C69.
+
+### The fix
+
+An ALLOWLIST, not a filter: only `goal`, `output_schema`, `success_criterion`
+and `artifact_scope` are rendered, with `x-` keys stripped at every depth
+(`ledger/prefix.prompt_contract`). The verifier still reads the key off the
+contract object; only the rendering loses it. A denylist would have to
+predict the next grading key's name - this one was not called `verify.py`,
+and the next will not be called `x-expected`.
+
+`tests/test_grader_is_not_in_the_prompt.py` fails when a field is added to
+`TaskContract` without being classified visible or hidden, so a new grading
+field fails the suite before it can leak. Three of its five tests go red
+against the restored defect; the other two check properties the defect does
+not touch.
+
+`test_prefix_rejects_a_timestamp_in_the_contract` had to change route: it
+injected `{"now": ...}` as a bare contract key, which an allowlist no longer
+renders at all. One route closing, not the invariant weakening - a timestamp
+inside a VISIBLE field still voids the discount and still raises, and a
+companion test now pins the closed route so the two cannot be confused.
+
+### What this costs, and what it does not
+
+Every pass rate measured on a suite with answer keys is too high by an
+unknown amount. That is the bench/tasks history, which is small, and
+FINDINGS 1.30 is corrected in place: its 0.75s are void, its MECHANISM
+conclusions stand, because those rest on compaction.skipped, tombstone,
+prefix-fingerprint and run_code counts that the leak does not touch.
+
+The 283-task aero_calc record is NOT affected. It grades with verify.py under
+verify_program and declares no `x-` keys, so it never had this route.
+
+### The shipping boundary, made explicit
+
+This is a product defect, not a benchmark one: any user suite with answer
+keys leaked the same way, so it ships fixed regardless of bench/tasks.
+
+`bench/README.md` now states what bench/ is - this project's own instrument,
+not a bundled suite - and why `--suite` is required with no default. The
+exclusion from the wheel was structural (bench/ sits outside src/), which is
+not the same as decided: `tests/test_the_wheel_ships_no_tasks.py` builds a
+real wheel and asserts no task content, no grading key and no top-level
+directory but `agent/` reaches it. Invariants 119 and 120.
+
 ### The G1 comparison ran - and three of four arms measured nothing
 
 Five arms over `bench/tasks`, granite4.1:3b, HARNESS_VERSION 3, 37.1 minutes,

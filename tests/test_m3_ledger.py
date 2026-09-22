@@ -39,11 +39,35 @@ def test_prefix_guard_catches_mutation():
 
 
 def test_prefix_rejects_a_timestamp_in_the_contract():
-    """The classic way to lose the discount: a date in the stable section."""
+    """The classic way to lose the discount: a date in the stable section.
+
+    The timestamp goes in `goal`, a field the model actually sees. This test
+    injected `{"now": ...}` as a bare contract key until 2026-09-22, and
+    stopped firing when the prefix moved to an ALLOWLIST of contract fields
+    (the grader leak, HARNESS_VERSION 4): an unrecognised key cannot reach the
+    prefix now, so it cannot move it either.
+
+    That is one route closing, not the invariant weakening - anything varying
+    inside a visible field still voids the discount and still raises. The
+    companion below pins the closed route so the two cannot be confused.
+    """
     guard = PrefixGuard()
-    guard.check(PrefixBuilder(SYSTEM_CONTRACT, SKILLS, {**CONTRACT, "now": "10:00"}), "t")
+    guard.check(PrefixBuilder(SYSTEM_CONTRACT, SKILLS,
+                              {**CONTRACT, "goal": "report at 10:00"}), "t")
     with pytest.raises(PrefixMutationError):
-        guard.check(PrefixBuilder(SYSTEM_CONTRACT, SKILLS, {**CONTRACT, "now": "10:01"}), "t")
+        guard.check(PrefixBuilder(SYSTEM_CONTRACT, SKILLS,
+                                  {**CONTRACT, "goal": "report at 10:01"}), "t")
+
+
+def test_an_unrecognised_contract_key_cannot_reach_the_prefix_at_all():
+    """Why the test above changed route. An arbitrary key is not rendered, so
+    it can neither leak nor move the prefix. See
+    `tests/test_grader_is_not_in_the_prompt.py` for the defect that bought
+    this and the allowlist it has to maintain."""
+    a = PrefixBuilder(SYSTEM_CONTRACT, SKILLS, {**CONTRACT, "now": "10:00"})
+    b = PrefixBuilder(SYSTEM_CONTRACT, SKILLS, {**CONTRACT, "now": "10:01"})
+    assert a.fingerprint() == b.fingerprint()
+    assert "10:00" not in a.build()
 
 
 def test_compaction_preserves_exact_strings():

@@ -27,7 +27,21 @@ __version__ = "0.1.0"
 #      session after 2026-09-15, and none had. Every number published under 2
 #      is incomparable with every number produced from here, and nothing has
 #      yet been produced under 3.
-HARNESS_VERSION = 3
+#   4  2026-09-22: THE GRADER LEFT THE PROMPT. The whole task contract was
+#      rendered into the cache-stable prefix, which put `output_schema`'s
+#      `x-expected` - the right answer, verbatim - and `grader_dir` - the
+#      path to the grader - in front of the model on every task that had
+#      them. Only an allowlisted set of contract fields is rendered now, with
+#      `x-` keys stripped at every depth (`ledger/prefix.prompt_contract`).
+#
+#      This one is not a rule change, it is a CORRECTION: every pass rate
+#      measured on a suite with answer keys was partly a memory test. The
+#      2026-09-17 ablation's 0.75 across all five arms was exactly the
+#      fraction of its tasks that carried a key - three of four - and the one
+#      task with no key failed in every arm. Numbers under 3 and below are
+#      not merely incomparable with numbers from here, they are wrong in a
+#      known direction: too high.
+HARNESS_VERSION = 4
 
 
 # Bump this whenever the set of libraries model-written code may import

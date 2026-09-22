@@ -7,7 +7,7 @@
   "deputy": "off (auto_review false, approve_scoped_writes true) - these arms differ by one mechanism, and a nondeterministic LLM in the measurement path is noise the comparison cannot absorb",
   "suite": "bench/tasks, FOUR tasks",
   "total_minutes": 37.1,
-  "pass_rate_every_arm": 0.75,
+  "pass_rate_every_arm": "VOID - see CORRECTION_2026_09_22",
   "arms": {
     "control": {
       "tasks": 4,
@@ -92,7 +92,7 @@
     "input_tokens_vs_control": "+1029 (+4.8%)",
     "output_tokens_vs_control": "-96",
     "model_wall_s_vs_control": "+114.6 (418.4 -> 533.0)",
-    "pass_rate": "0.75, the same as every other arm",
+    "pass_rate": "VOID - see CORRECTION_2026_09_22",
     "reading": "the model completed the same three tasks without run_code, at more input tokens, more model calls and more wall clock. Directionally what code-as-action is claimed to buy. At n=4 it is a sighting, not a measurement."
   },
   "what_this_cannot_support": [
@@ -103,5 +103,15 @@
   "what_it_does_support": [
     "The switches work end to end: five arms ran to completion under HARNESS_VERSION 3, each with its mechanism setting recorded in profile_provenance, and the code-as-action arm verifiably had no run_code.",
     "The suite cannot exercise three of the four mechanisms. That is a property of bench/tasks and config.local.yaml, and it is the thing to fix before G1 is attempted again - a bigger suite is not enough on its own, the tasks have to produce observations large enough to cross a 4587-token ceiling and repeated enough to hit a cache."
-  ]
+  ],
+  "CORRECTION_2026_09_22": {
+    "what": "every pass rate in this record is void",
+    "why": "the task contract was rendered whole into the prompt, so output_schema's x-expected handed the model its own answer (FINDINGS 1.31). 0.75 in all five arms is the fraction of tasks carrying a grading key - three of four - and the one task without a key failed in every arm.",
+    "what_still_stands": "the mechanism conclusions. compaction.skipped, tombstone, session-rotation, prefix-fingerprint and run_code counts are unaffected by the leak, so 'three of four arms measured nothing' holds, as do the token figures.",
+    "withdrawn": [
+      "pass_rate_every_arm",
+      "the_one_arm_that_measured_something.pass_rate"
+    ],
+    "fixed_in": "HARNESS_VERSION 4, ledger/prefix.prompt_contract"
+  }
 }

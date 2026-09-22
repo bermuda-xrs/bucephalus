@@ -1454,3 +1454,28 @@ about a database behaviour that nobody executed. A triage that reads an entry
 inherits the entry's errors; this one cost a two-minute script to check.
 Fourth instruction-level error in this file, and the third whose defect was
 worse than its own description. C6.
+
+### C69. "nothing in the agent's context ever sees it" - a docstring that was false from the day it was written
+
+**The claim:** `ExpectedValueVerifier`, since it was added - "`expected` is
+carried on the contract's output_schema under `x-expected`, so a task file
+declares its own right answer and nothing in the agent's context ever sees
+it."
+
+**Reality, measured 2026-09-22:** the whole `TaskContract` - `output_schema`
+included - was rendered into the cache-stable prefix. The answer was in the
+prompt of every task that declared one, and `grader_dir` put the grader's
+path there too. A 3B answered a four-file aggregation task correctly on turn
+one having read nothing.
+
+**Correct version:** an allowlist of contract fields reaches the prefix, with
+`x-` keys stripped at every depth (`ledger/prefix.prompt_contract`). The
+verifier still reads the key off the contract OBJECT; only the rendering
+loses it. HARNESS_VERSION 4.
+
+**Class:** oversight, and the most expensive kind in this file - a property
+stated as fact with no test behind it. The sentence WAS the control. Fifth
+instruction-level error here, and the third whose defect was worse than its
+own description. The rule it buys: a docstring asserting a measurement or
+security property owes a test in the same commit, because prose does not
+fail. C6.
