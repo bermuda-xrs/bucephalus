@@ -30,6 +30,30 @@ ESCALATION_HEALTHY_HIGH = 0.50
 # in wall-clock and pointless in outcome.
 DEFAULT_AGREEMENT = 2 / 3
 
+# The backend slot the executor runs in. Named here rather than spelled
+# "cloud" at the comparison below, because the name is a SLOT and not a claim
+# about where it runs - under config.local.yaml it is a 3B on localhost.
+EXECUTOR_SLOT = "cloud"
+
+
+def _same_backend(cfg, a: str, b: str) -> bool:
+    """Do these two slots resolve to the same weights behind the same socket?
+
+    Compared on what determines WHICH MODEL ANSWERS - kind, model, endpoint -
+    and not on the declared `trust_tier`, which is a label in a file a human
+    edits. Same reasoning as `reaches_a_remote_provider`: the URL is what the
+    socket obeys.
+    """
+    x, y = cfg.backends.get(a), cfg.backends.get(b)
+    if x is None or y is None:
+        return False
+
+    def ident(c):
+        return (c.kind, c.model,
+                (getattr(c, "base_url", None) or getattr(c, "endpoint", None)))
+
+    return ident(x) == ident(y)
+
 
 class Router:
     def __init__(self, ctx):
@@ -85,10 +109,27 @@ class Router:
         if getattr(_m, "_ESCALATION_WIRED", False):
             return
 
-        # Narrowed: raise only where escalation SHOULD be reachable - a real
-        # second tier AND a non-empty allowlist AND an active local tier. That
-        # keeps a single-tier config (and a two-arm comparison) unblocked while
-        # making the gap un-ignorable the moment it actually matters.
+        # ONE BACKEND WEARING TWO NAMES IS NOT TWO TIERS. Narrowed again
+        # 2026-09-22: if the local tier resolves to the same kind, model and
+        # endpoint as the executor, there is nothing to escalate TO, and
+        # raising is the wrong answer to a config that is simply "one model,
+        # no cloud tier configured" - which is exactly what config.local.yaml
+        # is, and why the semantic cache could not be measured at all: the
+        # compression path needs a local tier, and asking for one crashed the
+        # task before `cached_op` was ever reached.
+        #
+        # It is still recorded, because a one-tier config that LOOKS routed
+        # must not read as a routed number.
+        if tier in cfg.backends and _same_backend(cfg, tier, EXECUTOR_SLOT):
+            prov = getattr(cfg, "profile_provenance", None)
+            if isinstance(prov, dict):
+                prov.setdefault("escalation", (
+                    f"NOT WIRED, and not reachable: active_local_tier={tier!r} "
+                    f"resolves to the same backend as {EXECUTOR_SLOT!r} "
+                    "(same kind, model and endpoint), so there is no second "
+                    "tier to escalate to and nothing was routed away."))
+            return
+
         if tier in cfg.backends:
             raise RuntimeError(
                 "escalation-by-disagreement (M6.3) is reachable but unwired: "

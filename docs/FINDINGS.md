@@ -1549,6 +1549,81 @@ it grades with `verify.py` under `verify_program`, and declares no `x-` keys,
 so its numbers never had this route.
 
 
+
+### 1.32 The mechanisms only engage when the agent reads, and this model rarely reads
+
+**2026-09-22, from four failed attempts to make compaction fire.** Each failed
+for a different reason, and together they say something larger than compaction.
+
+**Attempt 1 - four 5 KB log shards, aggregate across all four.** One model
+call, zero tool calls, correct answer. The answer was in the prompt (1.31).
+
+**Attempt 2 - the same task with the leak closed.** Three model calls, **zero
+tool calls**, status `plateau`. The model emitted
+`{"service": "serviceA", "errors": 42}` three times, 16 output tokens each -
+an invented placeholder - and gave up. It never considered reading.
+
+**Attempt 3 - one 20 KB log, one countable question.** The control arm passed;
+the ablated arm invented `auth_service`/42 and failed. **That 1.0 against 0.0
+looked exactly like a mechanism effect and was not**: the control called
+`run_code` once, which read the file INSIDE THE SANDBOX, counted, and returned
+an integer. Zero tombstones either side. The difference between arms was which
+one happened to act.
+
+**Attempt 4 - 22 KB of prose, a comprehension question.** Both arms passed
+with **zero tool calls**. The needles were "queue depth", "retry budget" and
+"renamed field" - ops vocabulary the model produces unprompted from the goal.
+A needle that can be guessed is not a needle.
+
+**What the four have in common.** Three of the four efficiency mechanisms only
+engage once tool output accumulates in the context:
+
+| mechanism | needs |
+|---|---|
+| compaction | accumulated observations crossing 4,587 tokens |
+| semantic cache | a repeated observation big enough to compress |
+| prefix stability | a session long enough to cross a boundary |
+
+None of them engages if the agent does not read. And on `granite4.1:3b` under
+this output contract, reading is the exception. Counted over the 2026-09-17
+ablation - five arms, four tasks - **three of the four tasks called a tool in
+exactly ONE arm out of five, and no tool at all in the other four.** The only
+task that acted reliably was `write-function-002`, which produced 38 `run_code`
+calls and failed in every arm.
+
+**This is the harness tax from the other side.** FINDINGS 1.6-1.8 measured a
+3.4B that is right 5 of 5 prompted directly and 0 of 5 inside the harness, and
+identified the mechanism as answer position: a response that emits the number
+first has nothing left to reason with. What 1.32 adds is the consequence for
+the efficiency machinery - a model that answers first never accumulates
+context, and a mechanism that manages accumulated context therefore never runs.
+**The scaffold's efficiency features and the scaffold's tax have the same
+root.**
+
+**And code-as-action works against the other three.** `run_code` is the one
+path the model takes readily, and it reads files inside the sandbox: the bytes
+are processed and discarded without ever entering the ledger. That is a real
+efficiency property - arguably part of what code-as-action buys - and it also
+means the more the agent uses code, the less there is for compaction or the
+cache to act on. They are not independent mechanisms.
+
+**What this obliges any G1 number to say.** The measurement that follows uses
+a SYNTHETIC boundary - `compaction_probe_step`, forced at a fixed step in both
+arms and declared in `profile_provenance` - because waiting for a real crossing
+measures the model's reluctance to read rather than the mechanism. That buys a
+clean read of what compaction costs WHEN IT FIRES, and buys nothing about how
+often it fires. **Both halves belong in the same paragraph as the number:**
+the mechanism costs X tokens when it fires, and on this model it seldom fires.
+A G1 figure quoting only the first half would describe a system nobody is
+running.
+
+**What would change this.** A model that reliably takes tool actions - the
+open question in 1.6's "it does not generalize across model sizes" - or a task
+family that cannot be answered at all without reading, which is what
+`handbook-recall-005` now is: its needles are ticket IDs that appear only in
+the document.
+
+
 ## 8. Open research questions
 
 Recorded so they are not re-derived, and kept separate from findings because

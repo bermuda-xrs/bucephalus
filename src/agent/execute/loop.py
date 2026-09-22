@@ -341,6 +341,21 @@ def run_task(ctx, task_id: str) -> TaskResult:
                 window,
                 ctx.config.limits.context_fill_ratio,
             )
+            # The synthetic boundary. Applied AFTER the real ceiling is
+            # computed, never instead of it, so the record shows both what the
+            # fill actually was and that the crossing was forced. See
+            # `Config.compaction_probe_step`: on this executor the real
+            # ceiling is essentially never reached, so waiting for it measures
+            # the model's reluctance to read rather than the mechanism.
+            if ctx.config.compaction_probe_step == step and action != "compact":
+                ctx.log.append(task.id, "compaction.skipped",
+                               {"where": "probe", "step": step,
+                                "real_action": action,
+                                "prefix_tokens": count_tokens(prefix),
+                                "tail_tokens": sum_tokens(entries),
+                                "reason": "synthetic boundary forced here; the "
+                                          "real ceiling was not crossed"})
+                action = "compact"
             if action == "compact" and not ctx.config.mechanisms.compaction:
                 # The compaction arm. The ceiling is still MEASURED and the
                 # crossing is on the chain - an arm that silently grew past

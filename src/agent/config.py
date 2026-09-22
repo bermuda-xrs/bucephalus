@@ -288,6 +288,30 @@ class Config(BaseModel):
     # measurement path must not be able to produce the second by accident -
     # see bench/measurement.py.
     isolate_retrieval: bool | None = None
+    # SYNTHETIC COMPACTION BOUNDARY, for measuring what compaction costs.
+    #
+    # Set to a step number and the loop treats the ceiling as crossed at that
+    # step, whatever the real fill is. Off (None) everywhere except a
+    # measurement that says so.
+    #
+    # Why this exists, stated here because a synthetic trigger that nobody can
+    # see in the record is a lie: the ceiling is 0.28 * 16384 = 4587 tokens,
+    # and on granite4.1:3b it is essentially never reached. Four pilot designs
+    # failed to trigger it - the model answers from nothing rather than
+    # reading (FINDINGS 1.32), and when it does act it reaches for `run_code`,
+    # which reads the file INSIDE the sandbox so the bytes never enter the
+    # context at all. Waiting for a real crossing measures the model's
+    # reluctance, not the mechanism.
+    #
+    # So the condition is injected instead, which is this project's own rule:
+    # prefer injecting a condition over waiting to observe it. What that buys
+    # is a clean read of what compaction costs WHEN IT FIRES. What it does not
+    # buy is how often it fires, and the two must be reported together or the
+    # number misleads.
+    #
+    # `profile_provenance["compaction_boundary"]` says "synthetic, step N" in
+    # every record produced this way.
+    compaction_probe_step: int | None = None
     root: str = "."
     # Filled by load_config after enforcement; travels into every report.
     profile_provenance: dict[str, Any] = Field(default_factory=dict)
@@ -338,6 +362,11 @@ def load_config(path: str | Path = "config.yaml",
     # happened to be on disk.
     cfg.profile_provenance["mechanisms"] = cfg.mechanisms.model_dump()
     cfg.profile_provenance["ablated"] = cfg.mechanisms.ablated()
+    cfg.profile_provenance["compaction_boundary"] = (
+        f"SYNTHETIC: forced at step {cfg.compaction_probe_step}, whatever the "
+        "real context fill. Measures what compaction costs when it fires, and "
+        "says nothing about how often it fires - see FINDINGS 1.32"
+        if cfg.compaction_probe_step is not None else "real: the fill ratio")
     return cfg
 
 

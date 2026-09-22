@@ -333,3 +333,86 @@ def test_the_ablated_registry_does_not_mutate_the_shared_default(tmp_path):
     assert "run_code" in shipped.tools.names()
     ablated.close()
     shipped.close()
+
+
+# -- the synthetic compaction boundary --------------------------------------
+#
+# The real ceiling (0.28 * 16384 = 4587 tokens) is essentially never reached
+# on granite4.1:3b. Four pilot task designs failed to trigger it: the model
+# answers from nothing rather than reading, and when it does act it reaches
+# for run_code, which reads the file inside the sandbox so the bytes never
+# enter the context. Waiting measures the model's reluctance; injecting
+# measures the mechanism. C1's rule, and the price is that the trigger has to
+# be declared - `profile_provenance["compaction_boundary"]` says so.
+
+
+def test_without_the_probe_nothing_is_forced(tmp_path):
+    """DR4 again: the probe must be OFF unless a config asks for it, or every
+    ordinary run silently becomes a compacting one."""
+    ctx = _ctx(tmp_path)
+    assert ctx.config.compaction_probe_step is None
+    task = _task(ctx)
+    ctx.backends["cloud"].queue(READ("a.txt"), READ("b.txt"), FINAL)
+    run_task(ctx, task.id)
+    assert not _events(ctx, task.id, "compaction.skipped")
+    assert not [e for e in _events(ctx, task.id, "session.opened")
+                if e.get("parent_id")]
+    ctx.close()
+
+
+def test_the_probe_forces_a_boundary_the_fill_would_not(tmp_path):
+    ctx = _ctx(tmp_path)
+    ctx.config.compaction_probe_step = 2
+    task = _task(ctx)
+    ctx.backends["cloud"].queue(READ("a.txt"), READ("b.txt"), READ("c.txt"),
+                                FINAL)
+    run_task(ctx, task.id)
+    probes = [e for e in _events(ctx, task.id, "compaction.skipped")
+              if e.get("where") == "probe"]
+    assert probes, "the probe did not fire"
+    assert probes[0]["step"] == 2
+    assert probes[0]["real_action"] == "ok", (
+        "the probe fired on a step the real ceiling had ALREADY crossed, so "
+        "it proves nothing about forcing")
+    assert [e for e in _events(ctx, task.id, "session.opened")
+            if e.get("parent_id")], "forced, but no boundary was crossed"
+    ctx.close()
+
+
+def test_the_probe_and_the_ablation_arm_agree(tmp_path):
+    """Forced in the ablated arm too, or the arms would differ by WHETHER the
+    boundary happened rather than by what compaction did with it - which is
+    the comparison the whole run exists to make."""
+    ctx = _ctx(tmp_path, compaction=False)
+    ctx.config.compaction_probe_step = 2
+    task = _task(ctx)
+    ctx.backends["cloud"].queue(READ("a.txt"), READ("b.txt"), READ("c.txt"),
+                                FINAL)
+    run_task(ctx, task.id)
+    where = [e.get("where") for e in _events(ctx, task.id, "compaction.skipped")]
+    assert "probe" in where and "session_boundary" in where, where
+    assert not [e for e in _events(ctx, task.id, "session.opened")
+                if e.get("parent_id")], "compaction is off; nothing may rotate"
+    ctx.close()
+
+
+def test_a_synthetic_boundary_is_declared_in_the_record(tmp_path):
+    """A forced trigger nobody can see in the record is a lie about the run."""
+    import yaml
+
+    from agent.config import load_config
+
+    raw = {"profile": "mixed",
+           "backends": {"cloud": {"kind": "mock", "model": "m"},
+                        "review": {"kind": "mock", "model": "r"}}}
+    p = tmp_path / "real.yaml"
+    p.write_text(yaml.safe_dump(raw), encoding="utf-8")
+    assert load_config(p).profile_provenance["compaction_boundary"] == \
+        "real: the fill ratio"
+
+    raw["compaction_probe_step"] = 2
+    q = tmp_path / "probe.yaml"
+    q.write_text(yaml.safe_dump(raw), encoding="utf-8")
+    note = load_config(q).profile_provenance["compaction_boundary"]
+    assert note.startswith("SYNTHETIC"), note
+    assert "step 2" in note and "how often it fires" in note

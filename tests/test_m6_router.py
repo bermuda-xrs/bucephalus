@@ -147,3 +147,82 @@ def test_compression_skipped_when_no_local_tier(ctx, workspace, scripted):
         ).fetchall()
     }
     assert "compress_tool_output" not in purposes
+
+
+# -- one backend wearing two names is not two tiers (2026-09-22) ------------
+#
+# The M6.3 guard raised whenever `active_local_tier` resolved to a backend and
+# a purpose was allowlisted to it. That is right when a REAL second tier is
+# configured and escalation has no call site. It was wrong for
+# config.local.yaml, whose `local` slot is the same model on the same endpoint
+# as the executor: there is nothing to escalate TO, and raising made the
+# semantic cache unmeasurable - the compression path needs a local tier, and
+# asking for one crashed the task before `cached_op` was ever reached.
+
+
+def _same_model_local_tier(ctx):
+    """config.local.yaml's shape: same kind, model and endpoint, declared local."""
+    from agent.models.registry import build_backend
+
+    ctx.config.backends["local"] = ctx.config.backends["cloud"].model_copy(
+        update={"trust_tier": "local"})
+    # A SEPARATE instance, not an alias to the cloud backend: aliasing makes
+    # a scripted("local", ...) call append to the EXECUTOR's own queue, which
+    # quietly rewrites the script the test just set up.
+    ctx.backends["local"] = build_backend("local", ctx.config.backends["local"])
+    ctx.config.active_local_tier = "local"
+    ctx.config.local_allowlist = ["compress_tool_output"]
+
+
+def test_a_local_tier_that_is_the_executor_does_not_raise(ctx, task):
+    _same_model_local_tier(ctx)
+    ctx.router.choose("compress_tool_output", task)      # must not raise
+    note = ctx.config.profile_provenance.get("escalation", "")
+    assert "not reachable" in note and "same backend" in note, (
+        "a one-tier config that looks routed must still say so in the record")
+
+
+def test_a_genuinely_different_second_tier_still_raises(ctx, task):
+    """The guard is NARROWED, not removed. A different model behind the local
+    tier is a real second tier with a dead escalation path, and that is the
+    case the guard exists for."""
+    import pytest
+
+    ctx.config.active_local_tier = "local"       # conftest's 'local' is mock-local
+    ctx.config.local_allowlist = ["compress_tool_output"]
+    assert ctx.config.backends["local"].model != ctx.config.backends["cloud"].model
+    with pytest.raises(RuntimeError, match="escalation-by-disagreement"):
+        ctx.router.choose("compress_tool_output", task)
+
+
+def test_the_semantic_cache_is_reachable_and_hits(ctx, task, workspace, scripted):
+    """The whole point of the narrowing: `cached_op` runs, and the second
+    identical compression is served from the store rather than re-summarised.
+    Before it, this task ended `crashed` with 0 cache rows."""
+    import json
+
+    from agent.execute.loop import run_task
+
+    _same_model_local_tier(ctx)
+    ctx.config.compress_observations_over_tokens = 50
+    ctx.config.autonomy.auto_review = False
+    ctx.config.autonomy.approve_scoped_writes = True
+    (workspace / "a.txt").write_text(
+        "File a. " + " ".join(f"a-{k} value {k * 7}" for k in range(90)),
+        encoding="utf-8")
+    read = '<action tool="read_file">' + json.dumps({"path": "work/a.txt"}) + "</action>"
+    scripted("cloud", read, read, '<final>{"answer": "done"}</final>')
+    scripted("local", "the file lists a-N value pairs",
+             "the file lists a-N value pairs")
+
+    result = run_task(ctx, task.id)
+    assert result.status != "crashed", result.status
+    compressions = ctx.conn.execute(
+        "SELECT COUNT(*) FROM calls WHERE purpose='compress_tool_output'"
+    ).fetchone()[0]
+    hits = ctx.conn.execute(
+        "SELECT COALESCE(SUM(hits),0) FROM semantic_cache").fetchone()[0]
+    assert compressions >= 1, "the compression path is still unreachable"
+    assert hits >= 1, (
+        f"{compressions} compressions and {hits} hits: two identical reads "
+        "should summarise once and serve the second from the cache")
