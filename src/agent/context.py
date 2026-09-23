@@ -597,7 +597,21 @@ class AgentContext:
                ORDER BY seq DESC LIMIT ?""",
             (task_id, limit),
         ).fetchall()
-        lines = [f"{t}: {json.dumps(json.loads(p))[:300]}" for t, p in reversed(rows)]
+        held_out = bool(getattr(self.config, "grader_held_out", False))
+        lines = []
+        for t, p in reversed(rows):
+            payload = json.loads(p)
+            if t.startswith("verify."):
+                # A REVIEWER IS A MODEL, and its reason is handed back to the
+                # executor as an observation - so anything rendered here can
+                # reach the thing being graded one hop later. `detail` is the
+                # verifier's full text, which is the answer key when the
+                # verifier grades; it is the operator's, and never rendered.
+                # Held out, the score goes too: pass/fail is the whole of it.
+                payload.pop("detail", None)
+                if held_out:
+                    payload.pop("score", None)
+            lines.append(f"{t}: {json.dumps(payload)[:300]}")
         return "\n".join(lines)
 
     def request_approval(self, task, tool, args: dict, reason: str, step: int) -> str:

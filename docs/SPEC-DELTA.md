@@ -1479,3 +1479,28 @@ instruction-level error here, and the third whose defect was worse than its
 own description. The rule it buys: a docstring asserting a measurement or
 security property owes a test in the same commit, because prose does not
 fail. C6.
+
+### C70. Retiring M11 took the held-out/visible distinction with it
+
+**The decision:** 2026-09-15, M11 retired unanswered (C63, FINDINGS 1.27), and
+with it invariants 4 and 5 - including "held-out tests never enter any prompt"
+- on the grounds that no held-out tests existed any more.
+
+**Reality, measured 2026-09-23:** the distinction was not M11's. It belonged
+to verification in general - which checks may inform the model, and which may
+only judge it - and without it every verifier did both. `expected_value`
+graded the task and then told the model "$.total: expected 4825, got 0";
+`contains_all` told it which ticket IDs were missing. Three of five tasks in
+the first leak-free-prompt run passed by copying their grader's feedback.
+
+**Correct version:** the grading verifier is held out under measurement -
+pass/fail only reaches the model, full detail goes to `verify.failed` for the
+operator - and refinement feedback may come from visible checks, which may be
+as detailed as the task author wants. Outside measurement, unchanged.
+Invariant 5 reinstated, generalised as 121. HARNESS_VERSION 5.
+
+**Class:** oversight in a retirement. Deleting a subsystem deletes its
+invariants, and an invariant that protected something BROADER than the
+subsystem goes with it silently. When an invariant is withdrawn because its
+subject is gone, the withdrawal owes one question: did it protect anything
+else?

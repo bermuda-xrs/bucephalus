@@ -50,6 +50,15 @@ MAX_BODY_CHARS = 400         # hard cap per result, after snippeting
 # cannot drift apart silently - `verify()` checks they agree.
 INDEXED_ARTIFACT_KINDS = ("answer", "plan", "doc", "skill_draft")
 
+# What a CONTRACT contributes to the index: its goal and its criterion's name,
+# nothing else. Must match `trg_search_task_ai_v2` in kernel/db.py exactly -
+# `test_a_rebuild_reproduces_the_index_exactly` holds the two together. Not
+# the whole contract_json: that carried the grader's answer key into the
+# match set (FINDINGS 1.33).
+CONTRACT_INDEX_BODY = (
+    "coalesce(json_extract(contract_json, '$.goal'), '') || ' ' || "
+    "coalesce(json_extract(contract_json, '$.success_criterion'), '')")
+
 
 class SearchUnavailable(RuntimeError):
     """FTS5 is missing from this SQLite build."""
@@ -173,9 +182,13 @@ def rebuild(conn: sqlite3.Connection) -> int:
     """
     with conn:
         conn.execute("DELETE FROM search_index")
+        # The same expression as `trg_search_task_ai_v2` - goal and criterion
+        # name only - or a rebuild would put the answer key back into the
+        # index the trigger was changed to keep it out of.
         conn.execute(
-            """INSERT INTO search_index(body, source, ref, task_id, kind, created_at)
-               SELECT contract_json, 'contract', id, id, 'contract', created_at
+            f"""INSERT INTO search_index(body, source, ref, task_id, kind, created_at)
+               SELECT {CONTRACT_INDEX_BODY}, 'contract', id, id, 'contract',
+                      created_at
                FROM tasks ORDER BY created_at, id"""
         )
         placeholders = ",".join("?" * len(INDEXED_ARTIFACT_KINDS))

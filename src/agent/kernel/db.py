@@ -356,11 +356,23 @@ CREATE VIRTUAL TABLE IF NOT EXISTS search_index USING fts5(
     tokenize = 'porter unicode61'
 );
 
-CREATE TRIGGER IF NOT EXISTS trg_search_task_ai AFTER INSERT ON tasks
+-- ONLY THE GOAL AND THE CRITERION'S NAME are indexed from a contract - what
+-- a person typed, which is also exactly what `search.summarise_contract`
+-- shows. This indexed `new.contract_json` whole until 2026-09-22, which put
+-- `output_schema["x-expected"]` in the match set: the tool redacted the
+-- SNIPPET, but `search_history("4825")` still returned a hit where
+-- `search_history("4826")` did not. An oracle on the answer key, reachable
+-- under isolation, because isolation scopes search to the task tree and the
+-- task tree includes the task itself (FINDINGS 1.33, the fourth route).
+--
+-- `_v2` so an existing database gets this trigger from the IF NOT EXISTS
+-- below; `_search_indexes_no_grader` drops the old one and re-indexes.
+CREATE TRIGGER IF NOT EXISTS trg_search_task_ai_v2 AFTER INSERT ON tasks
 BEGIN
     INSERT INTO search_index(body, source, ref, task_id, kind, created_at)
-    VALUES (new.contract_json, 'contract', new.id, new.id, 'contract',
-            new.created_at);
+    VALUES (coalesce(json_extract(new.contract_json, '$.goal'), '') || ' ' ||
+            coalesce(json_extract(new.contract_json, '$.success_criterion'), ''),
+            'contract', new.id, new.id, 'contract', new.created_at);
 END;
 
 CREATE TRIGGER IF NOT EXISTS trg_search_artifact_ai AFTER INSERT ON artifacts
@@ -603,11 +615,36 @@ def _plans_keyed_by_task(conn: sqlite3.Connection) -> bool:
     return True
 
 
+def _search_indexes_no_grader(conn: sqlite3.Connection) -> bool:
+    """Drop the pre-2026-09-22 contract trigger and re-index what it wrote.
+
+    It indexed `contract_json` whole, answer key included. SCHEMA_SQL now
+    creates `trg_search_task_ai_v2`, which indexes goal and criterion only,
+    but CREATE IF NOT EXISTS leaves the old trigger running beside it on any
+    existing database - both would fire, and every new task would be indexed
+    twice, once with its answer. So the old one is dropped by name, and the
+    rows it already wrote are rebuilt through the same expression the new
+    trigger uses. Idempotent: no old trigger, nothing to do.
+    """
+    old = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='trigger' "
+        "AND name='trg_search_task_ai'").fetchone()
+    if not old:
+        return False
+    from .search import rebuild
+
+    conn.execute("DROP TRIGGER trg_search_task_ai")
+    conn.commit()
+    rebuild(conn)
+    return True
+
+
 def init_schema(conn: sqlite3.Connection) -> None:
     conn.executescript(SCHEMA_SQL)
     _add_missing_columns(conn)
     _calls_allow_unreturned(conn)
     _plans_keyed_by_task(conn)
+    _search_indexes_no_grader(conn)
     conn.commit()
 
 

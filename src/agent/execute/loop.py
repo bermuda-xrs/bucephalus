@@ -488,11 +488,16 @@ def run_task(ctx, task_id: str) -> TaskResult:
                         return finish(ctx, task, "needs_replan", answer=best_answer,
                                       steps=step + 1)
 
-                # external observation, not "try again"
+                # External observation, not "try again" - and through
+                # `feedback_for_model`, never `report.observation` directly.
+                # This line fed the grader's answer key to the model: the
+                # 2026-09-22 ablation's handbook task "reported" three ticket
+                # IDs it never read, copied from "missing: 'INF-4471', ...".
+                # Under measurement the grader is held out and this says only
+                # that the answer failed (FINDINGS 1.33, invariant 121).
                 entries.append(
                     LedgerEntry.observation(
-                        f"Verification failed ({report.verifier_id}, "
-                        f"score {report.score:.2f}):\n{report.observation}",
+                        ctx.mesh.feedback_for_model(report),
                         taint=Taint.TRUSTED,
                         label="verifier",
                     )

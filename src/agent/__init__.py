@@ -41,7 +41,24 @@ __version__ = "0.1.0"
 #      task with no key failed in every arm. Numbers under 3 and below are
 #      not merely incomparable with numbers from here, they are wrong in a
 #      known direction: too high.
-HARNESS_VERSION = 4
+#   5  2026-09-23: THE GRADER IS HELD OUT UNDER MEASUREMENT. v4 took the
+#      answer key out of the prompt; the verifier then handed it back as
+#      feedback - "$.total: expected 4825, got 0", "missing: 'INF-4471', ..."
+#      - and the model copied it into its next turn. Under `open_measurement`
+#      the grading verifier's result now reaches the model as pass/fail only;
+#      the detail goes to `verify.*` events for the operator. And the search
+#      index stops matching against the whole contract, which made
+#      `search_history` an oracle on the answer key.
+#
+#      Outside measurement nothing changes. The defect was never that
+#      feedback is detailed - it was one verifier grading the task AND
+#      feeding refinement, which is the held-out/visible distinction M7.4
+#      had before M11 was retired took it away (FINDINGS 1.33).
+#
+#      v4 ran exactly once. Its pass rates AND its token totals are void: a
+#      task that copies the answer terminates on call two, so how many calls
+#      an arm made says as much about the leak as about its mechanism.
+HARNESS_VERSION = 5
 
 
 # Bump this whenever the set of libraries model-written code may import

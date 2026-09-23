@@ -11,8 +11,11 @@ that would catch a violation, so "I checked it" means something.
        — `test_injection_blocked_end_to_end`
  4. ☐ ~~Whoever drafts something never writes its tests~~ - WITHDRAWN
        2026-09-15 with M11, the only thing it policed (FINDINGS 1.27)
- 5. ☐ ~~Held-out tests never enter any prompt~~ - WITHDRAWN 2026-09-15 with
-       M11: no held-out tests exist any more (FINDINGS 1.27)
+ 5. ☐ Grader output never enters the model's context beyond pass/fail,
+       under measurement - REINSTATED 2026-09-23, generalised. Withdrawn with
+       M11 because no held-out tests were left, and the grading verifier then
+       fed its own answer key back as feedback (FINDINGS 1.33). See 121
+       — `tests/test_grader_never_reaches_the_model.py`
  6. ☐ Monitor output never enters agent context
        — `test_monitor_never_in_agent_context`, `test_monitor_absent_from_client_stream`,
          `test_monitor_is_not_imported_by_prompt_builders`
@@ -805,6 +808,23 @@ a user's numbers are always about a suite they wrote. The exclusion is
 structural - `bench/` sits outside `src/` - which is not the same as decided,
 so a real wheel is built and inspected.
 *Caught by:* `tests/test_the_wheel_ships_no_tasks.py`.
+
+---
+
+## Added 2026-09-23 (the grader held out)
+
+**121. Under measurement, grader output never enters any model's context
+beyond pass/fail.** Stated as a PROPERTY, because three routes - filesystem,
+prompt, feedback - were each found only after the previous one closed, and the
+sweep for the third found a fourth that no string match could catch (the
+search index, an oracle on the answer key). A sentinel known only to the
+grader appears in no prompt sent to any model, reviewer included; and the same
+scripted task under two different secrets sends the executor byte-identical
+prompts. Outside measurement, detailed feedback is unchanged: the defect was
+one verifier grading the task AND feeding refinement, not detail as such.
+`grader_held_out` is keyed on measurement, not isolation.
+*Caught by:* `tests/test_grader_never_reaches_the_model.py` - P1 disclosure,
+P2 non-interference, P3 the product is not weakened.
 
 ---
 

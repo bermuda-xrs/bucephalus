@@ -65,12 +65,41 @@ class VerificationMesh:
                     observation=f"verifier {name} raised: {type(e).__name__}: {e}",
                     verifier_id=name,
                 )
+        # The FULL detail goes on the chain, for the operator. It recorded
+        # only the score before, so when the model was being fed its own
+        # answer key there was no record of what it had been fed. Nothing
+        # that renders events for a MODEL may pass `detail` through - see
+        # `AgentContext.compact_transcript`, the one such renderer.
         self.ctx.log.append(
             task.id,
             "verify.passed" if r.passed else "verify.failed",
-            {"verifier": r.verifier_id, "score": round(r.score, 4)},
+            {"verifier": r.verifier_id, "score": round(r.score, 4),
+             "detail": r.observation},
         )
         return r
+
+    def feedback_for_model(self, r: VerifyResult) -> str:
+        """What the MODEL may be told about a failed verdict. The one place.
+
+        Held out (under measurement): that it failed. No score, no location,
+        no text - because the verifier that grades the task must not also
+        teach the answer, and `expected_value`'s own mismatch message is
+        "$.total: expected 4825, got 0". Every kind of verifier is covered,
+        not only the two that leaked: pytest and `verify_program` report the
+        grader's assertion text, which is the same leak waiting for a task
+        that fails the right way.
+
+        Not held out: unchanged, detailed. That is the product behaviour, and
+        it is correct - a user's own tests reporting "expected 9, got 7" is
+        what the refinement loop exists to deliver.
+        """
+        if getattr(self.ctx.config, "grader_held_out", False):
+            return ("Verification failed. The grader is held out under "
+                    "measurement, so you are told only that the answer did "
+                    "not pass - not why. Check your work against the task "
+                    "and its inputs.")
+        return (f"Verification failed ({r.verifier_id}, "
+                f"score {r.score:.2f}):\n{r.observation}")
 
 
 
@@ -92,12 +121,21 @@ def refine_with_ratchet(
 
     history: list[float] = [best_r.score]
     for i in range(ctx.config.limits.max_refinement_iterations):
-        observation = best_r.observation
-        if not observation.strip():
+        # Invariant #2 is checked on the VERIFIER'S OWN output - did anything
+        # external happen at all? - and only then is the verdict passed on,
+        # through `feedback_for_model`, because the revision producer is a
+        # model. Checking the wrapped text instead made #2 unable to fire:
+        # `feedback_for_model` never returns an empty string, so a verifier
+        # that said nothing sailed through (found by
+        # test_no_refinement_without_observation, 2026-09-23).
+        #
+        # No production path calls this today, which is why it had not
+        # leaked. That is disuse, not safety; the day it is wired, it holds.
+        if not best_r.observation.strip():
             raise AssertionError(
                 "refinement attempted with an empty observation — invariant #2"
             )
-        candidate = produce_revision(best, observation)
+        candidate = produce_revision(best, ctx.mesh.feedback_for_model(best_r))
         r = ctx.mesh.verify(task, candidate)
 
         if r.score > best_r.score:  # strictly better only

@@ -106,6 +106,80 @@ Four suite passes, hours of wall clock and the whole machine, and it needs a
 decision about whether a code-as-action arm that cannot complete the suite is
 reporting the mechanism's token cost or the suite's dependence on it.
 
+## The grader held out under measurement - HARNESS_VERSION 4 -> 5 - 2026-09-23
+
+### The third route
+
+The first v4 run's `handbook-recall-005` passed in all five arms with ZERO
+tool calls, reporting three ticket IDs that exist only in a file it never
+opened. The prompt was clean. The verifier was not: after a wrong first answer
+the loop appended its failure text - "missing: 'INF-4471', 'INF-5093',
+'INF-6218'", or for expected_value "$.total: expected 4825, got 0" - as a
+trusted observation, and the model copied it. v4's 0.6 baseline and its token
+deltas are void, the deltas because a task that copies the answer ends on
+call two.
+
+### The design position
+
+Not "feedback is too detailed" - a user's own tests saying "expected 9, got 7"
+is what refinement is for, and redacting globally would weaken the product to
+fix the benchmark. The defect is one verifier playing two roles, GRADING and
+FEEDING REFINEMENT. M7.4 kept them apart; retiring M11 took the distinction
+with it (SPEC-DELTA C70).
+
+Under `open_measurement` the grading verifier now reaches the model as
+pass/fail only, through `VerificationMesh.feedback_for_model`; full detail
+goes to `verify.failed`, which recorded only the score before. Outside
+measurement, unchanged. Keyed on measurement, not isolation, so the
+un-isolated prefix-stability arm holds the grader out too. Every task-grading
+entry point - run.py arms and paired, noise.py, ladder.py - opens through
+`open_measurement`.
+
+### The sweep, and the fourth route it found
+
+Every channel into a model's context enumerated (FINDINGS 1.33 has the table).
+Two live ones besides feedback:
+
+  * search_history was an ORACLE. The FTS index held contract_json whole, so a
+    query for the right answer hit and a wrong one did not - reachable under
+    isolation, which scopes search to the task tree, which includes the task.
+    The index now holds goal and criterion name only; an existing database's
+    old trigger is dropped by name (CREATE IF NOT EXISTS would have left it
+    firing beside the new one) and its rows rebuilt.
+  * compact_transcript renders verify.* events for the REVIEWER, a model whose
+    reason returns to the executor. Harmless while those events carried only a
+    score - and this fix was adding `detail` to them. Stripped always; score
+    stripped under measurement. A route the fix would have opened itself.
+
+### The guard is a property
+
+A sentinel string match would have passed the oracle, which leaks without the
+key's bytes appearing. tests/test_grader_never_reaches_the_model.py: P1 a
+grader-only sentinel appears in no prompt to any model; P2 the same task under
+two secrets sends the executor byte-identical prompts; P3 outside measurement
+the detail still arrives. Each route restored in isolation goes red - the
+oracle on P2 ONLY, which is why P2 exists - and the rejected global redaction
+turns P3 red.
+
+### A regression the fix introduced
+
+refine_with_ratchet asserts a non-empty external observation (invariant 2).
+Routed through feedback_for_model, which never returns empty, the assertion
+could not fire - found by test_no_refinement_without_observation. It now
+checks the verifier's own output and hands only the held-out text onward.
+
+### Corrections
+
+  * FINDINGS 1.30's banner said its token figures stood. They do not: token
+    totals depend on when tasks terminate, and a leaked answer terminates a
+    task early. Event counts stand; sums over calls do not.
+  * "Three departures from config.local.yaml" were named as two. The third is
+    the deputy (auto_review off, approve_scoped_writes on), which lived in a
+    separate block and was recalled from memory. g1_ablation_run.py now keeps
+    all six settings in one DEPARTURES table and writes it into summary.json.
+
+Invariant 5 reinstated, generalised as 121. SPEC-DELTA C70.
+
 ## The grader was in the prompt - HARNESS_VERSION 3 -> 4 - 2026-09-22
 
 ### The defect

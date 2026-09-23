@@ -8,19 +8,23 @@ model server's own accounting, so no API key is involved.
     python bench/g1_ablation_run.py --suite bench/tasks
 
 WHAT THIS CAN AND CANNOT SUPPORT, in the same paragraph as the instruction to
-run it. `bench/tasks` holds FOUR tasks, and its own README says the suite that
-matters is one you write for your domain, aiming at thirty. Four tasks cannot
+run it. `bench/tasks` holds FIVE tasks, and its own README says the suite that
+matters is one you write for your domain, aiming at thirty. Five tasks cannot
 carry G1's ">=10x reduction in paid tokens": at n=4 the per-task variance
-swamps the effect, and three of the four are single-shot enough that one
-budget_exhausted moves every number. What four tasks CAN do is show that each
+swamps the effect, and most of them are single-shot enough that one
+budget_exhausted moves every number. What five tasks CAN do is show that each
 arm actually runs, that the mechanism is actually absent in it, and roughly
 where the token deltas sit. Read the output as a smoke test of the instrument,
 not as G1.
 
 Every arm writes into ONE fresh database under the output directory, never
 `agent.local.db`: that record was produced under HARNESS_VERSION 2 and these
-arms run under 3, so mixing them is the exact confusion a bump exists to
-prevent.
+arms run under a later one, so mixing them is the exact confusion a bump
+exists to prevent.
+
+The grader is HELD OUT in every arm: `bench/run.py arms` opens its context
+through `open_measurement`, which pins `grader_held_out`, so a failed answer
+is told it failed and nothing else (FINDINGS 1.33).
 
 Arms run SEQUENTIALLY and nothing else may run beside them. Wall clock is this
 project's cost axis, contention corrupts it, and contention can manufacture a
@@ -38,6 +42,34 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
+PROBE_STEP = 2   # see DEPARTURES, and FINDINGS 1.32
+
+# Every way the measured arms differ from config.local.yaml, by setting, with
+# why. Applied by `write_configs` and written into summary.json, so what the
+# comparison ran under is read off the record rather than recalled.
+DEPARTURES = {
+    # 1. THE DEPUTY IS OFF. A nondeterministic LLM in the measurement path,
+    #    and these arms differ by one mechanism only. `cmd_paired` already
+    #    turns it off for the same reason, and config.local.yaml's own comment
+    #    says to for benchmark runs. The code gate still runs.
+    "autonomy.auto_review": False,
+    "autonomy.approve_scoped_writes": True,
+    # 2. THE SYNTHETIC COMPACTION BOUNDARY. The real ceiling is essentially
+    #    never reached on this executor - four pilot designs failed to trigger
+    #    it (FINDINGS 1.32) - so waiting measures the model's reluctance to
+    #    read rather than the mechanism.
+    "compaction_probe_step": PROBE_STEP,
+    # 3. THE SEMANTIC CACHE IS ON. config.local.yaml turns it off - no local
+    #    tier, empty allowlist, a threshold of 100000 - with a comment saying
+    #    compressing the executor's input on the executor is pure overhead. A
+    #    defensible shipping choice that also makes the cache arm measure
+    #    nothing. What this measures is what the cache WOULD save; what the
+    #    shipped local profile saves is zero, by configuration.
+    "active_local_tier": "local",
+    "local_allowlist": ["compress_tool_output"],
+    "compress_observations_over_tokens": 1200,   # the code's own default
+}
+
 # The control comes FIRST, deliberately: if the shipped system cannot complete
 # this suite today, no ablation number below it means anything, and the run
 # should be stopped rather than interpreted.
@@ -54,16 +86,22 @@ def write_configs(base: Path, out: Path) -> dict[str, Path]:
     import yaml
 
     raw = yaml.safe_load(base.read_text(encoding="utf-8"))
-    # One database for the whole comparison, and NOT the 283-task record.
+    # Bookkeeping, not a departure: one database for the whole comparison,
+    # and NOT the 283-task record.
     raw["db_path"] = str((out / "agent.g1.db").resolve())
     raw["anchor_path"] = str((out / "anchor" / "chain.g1.anchor").resolve())
-    # The deputy is a nondeterministic LLM in the measurement path, and these
-    # arms differ by one mechanism only. `cmd_paired` already turns it off for
-    # the same reason; the code gate still runs. config.local.yaml's own
-    # comment says to do this for benchmark runs.
+
+    # THREE DELIBERATE DEPARTURES FROM config.local.yaml - six settings, three
+    # purposes - identical in every arm so they cancel. Named here AND written
+    # into summary.json by `main`, because a measured config that
+    # differs from the shipped one and does not say so is the profile defect
+    # this project already has a control for. (This comment said "three" and
+    # numbered only two for one run: the deputy lived in a separate block and
+    # was recalled from memory instead of diffed. The record now diffs.)
     raw.setdefault("autonomy", {})
-    raw["autonomy"]["auto_review"] = False
-    raw["autonomy"]["approve_scoped_writes"] = True
+    for key, value in DEPARTURES.items():
+        section, _, leaf = key.rpartition(".")
+        (raw.setdefault(section, {}) if section else raw)[leaf] = value
 
     paths = {}
     for arm, off in ARMS:
@@ -90,7 +128,10 @@ def main(argv=None) -> int:
     configs = write_configs(Path(args.base), out)
 
     arms = [a for a, _ in ARMS if not args.only or a == args.only]
-    summary = {"started": time.strftime("%Y-%m-%dT%H:%M:%S"), "arms": {}}
+    summary = {"started": time.strftime("%Y-%m-%dT%H:%M:%S"),
+               "departures_from_config_local": DEPARTURES,
+               "grader": "held out (open_measurement): pass/fail only reaches the model",
+               "arms": {}}
     started = time.time()
 
     for arm in arms:

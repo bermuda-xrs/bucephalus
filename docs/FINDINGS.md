@@ -1417,8 +1417,17 @@ recorded so nobody reads the gap as an omission.
 > failed in every arm. **The mechanism conclusions stand**: they rest on
 > `compaction.skipped`, tombstone, prefix-fingerprint and `run_code` counts,
 > none of which the leak touches. What is withdrawn is "every arm scored
-> 0.75", and with it the code-as-action arm's "same pass rate" clause - its
-> TOKEN figures still stand, its pass rate says nothing.
+> 0.75", and with it the code-as-action arm's "same pass rate" clause.
+>
+> **FURTHER CORRECTION 2026-09-23: the token figures are void as well.** This
+> banner said they stood, and they do not. A token total depends on when each
+> task TERMINATES, and a task that can read its answer out of the prompt
+> terminates on call one. So how many calls an arm made - and therefore its
+> input-token total, and the +4.8% below - says as much about how often the
+> leak shortened a task as about the mechanism. Rotations, probe firings,
+> tombstone counts and tool mixes are event counts and stand; anything summed
+> over calls does not. (The same argument voids the 2026-09-22 run's -7.4%
+> and -20.1%; see 1.33.)
 
 **2026-09-17.** The switches RELEASE called "the blocker nobody has costed"
 were built the same day, and the first comparison ran immediately: the same
@@ -1622,6 +1631,104 @@ open question in 1.6's "it does not generalize across model sizes" - or a task
 family that cannot be answered at all without reading, which is what
 `handbook-recall-005` now is: its needles are ticket IDs that appear only in
 the document.
+
+
+
+### 1.33 The third route: the grader taught the answer through its own feedback
+
+**2026-09-23.** The first run with the answer key out of the prompt (v4) put
+`handbook-recall-005` through five arms. It passed all five with **zero tool
+calls** - reporting three ticket IDs that exist only in a file it never
+opened. The prompt was clean: prefix and tail were dumped and neither contained
+them. The event trail showed two model calls, the first failing verification
+and the second passing, with the prompt 41 tokens longer between them.
+
+Those 41 tokens were the verifier:
+
+```
+expected_value -> '$.total: expected 4825, got 0'
+contains_all   -> "missing: 'INF-4471', 'INF-5093', 'INF-6218'"
+```
+
+`execute/loop.py` appended that text to the ledger as a trusted observation,
+and the model copied it into its next answer. Three of the five tasks passed
+this way. **v4's 0.6 baseline and its -7.4% / -20.1% token deltas are all
+void** - the deltas because a task that copies the answer ends on call two, so
+call counts measured the leak as much as the mechanism.
+
+**The defect is not that feedback was detailed.** A user's own tests reporting
+"expected 9, got 7" is exactly what the refinement loop exists to deliver, and
+redacting it globally would weaken the product to fix the benchmark. The
+defect is that ONE VERIFIER PLAYED TWO ROLES: it graded the task and it fed
+refinement. M7.4 kept those apart - held-out checks never informed the model,
+visible checks could - and when M11 was retired (1.27) the distinction went
+with it. Invariant 5, "held-out tests never enter any prompt", was withdrawn
+the same day because no held-out tests were left. This is what that cost.
+
+**The fix restores the distinction, generalised.** Under measurement
+(`open_measurement`) the grading verifier's result reaches the model as pass
+or fail only - no score, no location, no text - through one function,
+`VerificationMesh.feedback_for_model`. Its full detail goes to the
+`verify.failed` event for the operator, which until now recorded only the
+score, so there was no record of what the model had been fed. Outside
+measurement nothing changes. The flag is keyed on MEASUREMENT, not isolation,
+because the prefix-stability arm runs un-isolated and must hold the grader out
+all the same. HARNESS_VERSION 5; invariant 121.
+
+**The sweep - every channel by which grader bytes could reach a model.**
+Filesystem, prompt and feedback were each found only after the previous one
+closed, so the channels were enumerated rather than waited for:
+
+| channel | grader bytes? | state |
+|---|---|---|
+| verifier feedback appended to the ledger | **yes** | held out - route 3 |
+| `refine_with_ratchet` -> `produce_revision` | **yes**, the observation verbatim | held out. No production caller: disuse, not safety |
+| `search_history` over the FTS index | **yes, as an ORACLE** | the index held `contract_json` whole, so `search_history("4825")` hit and `"4826"` did not - reachable under isolation, because isolation scopes search to the task tree and that includes the task itself. **Route 4**, found by this sweep. Now indexes goal + criterion name only; old databases migrated |
+| `compact_transcript` -> reviewer -> executor | would have been | the reviewer is a model and its reason returns to the executor. `verify.*` payloads rendered there carried only a score - until this fix added `detail` to them. Stripped always; score stripped under measurement. **A route the fix itself would have opened** |
+| `on_deviation(report.observation)` | reads it | uses it to estimate drift, stores it operator-side, emits no text into any event a model reads. Clean |
+| the prompt / `task_contract` | yes before v4 | allowlist (1.31) |
+| `grader_dir` / `verify.py` on disk | yes before v2 | protected path, `task_state_paths` |
+| `read_file` / `run_code` on the database | the tasks table holds `contract_json` | protected, `state_paths` (C41). Exercised by the guard |
+| `expand_artifact`, session and park seeds | carry ledger entries | clean once the ledger entry is; scoped under isolation |
+| tier-1 memory | model-written only | empty under isolation |
+| tool errors, budget events, the stream | no | clean |
+| `_final_sweep` | grades after the last model call | terminal. Clean |
+| the planner prompt | verifier NAMES only | clean |
+| `cache_boundary.py`, `cache_reuse_probe.py` | build a context directly | `always_pass`, no answer key - nothing to hold out |
+
+**The execution verifier, specifically.** Reported last round as having
+"nothing to leak", and that was luck: `write-function-002` failed in every
+arm, so its feedback never mattered. Registered by default, `execution` runs
+the model's own artifact, so its stdout is model-derived - but with a
+`script_path`, and for `pytest` and `verify_program`, the output IS the
+grader's assertion text: "AssertionError: expected 9, got 7" exactly. The rule
+is at the loop, not per verifier, so every kind is held out alike.
+
+**The guard is a property, not a string match.** A string match would have
+passed route 4: the oracle leaks information without the key's bytes ever
+appearing in a prompt. `tests/test_grader_never_reaches_the_model.py` states
+three properties and lets any route violate them - P1, a sentinel known only
+to the grader appears in no prompt to ANY model, reviewer included; P2, the
+same scripted task under two different secrets sends the executor
+byte-identical prompts; P3, outside measurement the detail still arrives.
+Each route restored in isolation:
+
+| route restored | goes red |
+|---|---|
+| feedback | P1, P1-constant, P2 |
+| search oracle | **P2 only** - P1 stays green, which is why P2 exists |
+| reviewer transcript | P1 |
+| prompt | P1, P2 |
+| feedback redacted globally (the rejected design) | P3 |
+
+**And one regression the fix introduced, caught by an old test.**
+`refine_with_ratchet` asserts every revision comes from a non-empty external
+observation (invariant 2). Routing it through `feedback_for_model` - which
+never returns an empty string - made that assertion unable to fire. C3's
+inert-guarantee class, created by the change meant to close a leak.
+`test_no_refinement_without_observation` went red; the check now reads the
+verifier's own output and only the producer's INPUT goes through the held-out
+function.
 
 
 ## 8. Open research questions

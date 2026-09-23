@@ -312,6 +312,25 @@ class Config(BaseModel):
     # `profile_provenance["compaction_boundary"]` says "synthetic, step N" in
     # every record produced this way.
     compaction_probe_step: int | None = None
+    # THE GRADER IS HELD OUT UNDER MEASUREMENT. Set by `open_measurement`,
+    # never from yaml, and deliberately NOT keyed on `isolate_retrieval`: the
+    # prefix-stability arm runs un-isolated on purpose, and must hold the
+    # grader out all the same.
+    #
+    # One verifier was playing two roles - GRADING the task and FEEDING
+    # REFINEMENT - and under measurement the second role handed over the
+    # first one's answer key: `expected_value` said "$.total: expected 4825,
+    # got 0", `contains_all` said "missing: 'INF-4471', ...", and the model
+    # copied them into its next turn and passed (FINDINGS 1.33). Held out,
+    # the grading verifier's result reaches the model as PASS or FAIL only -
+    # no score, no location, no text - and its full detail goes to the
+    # `verify.failed` event for the operator.
+    #
+    # Outside measurement nothing changes: a user's own tests saying
+    # "expected 9, got 7" is exactly what the refinement loop exists to
+    # deliver. It is a leak only when the thing supplying it is also the
+    # thing keeping score.
+    grader_held_out: bool = False
     root: str = "."
     # Filled by load_config after enforcement; travels into every report.
     profile_provenance: dict[str, Any] = Field(default_factory=dict)

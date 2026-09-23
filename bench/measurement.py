@@ -59,6 +59,15 @@ def open_measurement(config, *, profile: str | None, isolate: bool,
     # max_parallel_tools is pinned - the run record should never have to say
     # "a stranger could have written to this and we hope they did not".
     ctx.config.channels.telegram.enabled = False
+    # The grader is held out for EVERY measurement, isolated or not. A score
+    # the model can read its way to is not a score - three routes proved it
+    # (filesystem, prompt, feedback; FINDINGS 1.31, 1.33). Pinned here, and
+    # recorded, so no measured number can come from a run that fed its own
+    # grader's output back to the model.
+    ctx.config.grader_held_out = True
+    ctx.config.profile_provenance["grader"] = (
+        "held out: the grading verifier's result reached the model as "
+        "pass/fail only; its detail went to verify.* events for the operator")
     ctx.measurement_isolation_reason = why or (
         "isolated: a paired trial requires arms to be independent"
         if isolate else "unisolated: declared, and NOT valid for a paired trial")
