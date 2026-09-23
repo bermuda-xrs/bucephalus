@@ -16,6 +16,7 @@ measurements its claims rest on.
 | `g1-ablation-2026-09-17.json` | **The G1 ablation comparison**, 2026-09-17, HARNESS_VERSION 3. Five arms over the 4-task suite - control plus one per mechanism removed - 37.1 min, every arm 0.75. Carries the analysis: three of the four arms measured NOTHING, because their mechanisms never engaged on this suite. FINDINGS 1.30. **Its pass rates are VOID** - the grader was in the prompt (1.31); the mechanism conclusions and token figures stand. |
 | `g1-ablation-control.json` … `g1-ablation-no-code-as-action.json` | The five per-arm run records behind it. |
 | `g1-ablation-2026-09-17.db` | The run database itself, taken with `alpha snapshot` rather than copied - a file copy of a live WAL database drops the newest rows silently (C41). `bench/inventory.py` reads it. |
+| `g1-ablation-v5-*` | **The first G1 run with no known leak route**, 2026-09-23, HARNESS_VERSION 5, grader held out. Strict baseline **0/5**; no-code-as-action **2/5**, both passes verified genuine (read, then answered on the first final, no feedback sent). control, no-semantic-cache and no-prefix-stability are byte-identical task by task - one code path. no-compaction differs only by wall clock. write-function-002 shows `done_unannounced` in every arm and it is a FALSE pass: the sweep graded `"{}"` and `execution` passes any valid Python. Pending a decision on that verifier; not yet in FINDINGS. |
 
 ## The sighting shot, run twice, two days apart
 

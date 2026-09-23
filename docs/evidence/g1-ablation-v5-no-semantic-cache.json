@@ -1,0 +1,99 @@
+{
+  "pareto": [
+    {
+      "arm": "skills-off",
+      "n": 15,
+      "mean_usd_per_task": 0.0,
+      "pass_rate": 0.2
+    }
+  ],
+  "arms": {
+    "skills-off": {
+      "provenance": {
+        "arm": "skills-off",
+        "date": "2026-09-23",
+        "harness_version": 5,
+        "models": {
+          "cloud": "granite4.1:3b",
+          "review": "granite4.1:8b",
+          "local": "granite4.1:3b"
+        },
+        "scaffold_version": "0.1.0",
+        "local_tier": "local",
+        "effort": {
+          "cloud": "high",
+          "review": "high",
+          "local": "high"
+        },
+        "caveats": [
+          "Token usage is the model server's own count. Only in-loop context budgeting uses a local estimate, whose error is unmeasured (DEFERRED D6).",
+          "Public coding benchmarks are contamination-inflated by roughly 5-15 points, and an audit found ~59% of the hardest SWE-bench Verified tasks have tests that would not catch the intended bug. A reported 90% is realistically 75-80%.",
+          "Identical GAIA problems score anywhere from ~45% to ~92% depending only on the scaffold around the model.",
+          "Published agent costs have been misestimated by up to 100%. These numbers are cost-controlled but single-run unless n is stated."
+        ]
+      },
+      "n": 5,
+      "pass_rate": 0.0,
+      "mean_usd_per_task": 0.0,
+      "mean_wall_s": 101.104,
+      "results": [
+        {
+          "key": "extract-json-001",
+          "task_id": "t_7d4b5af8d8674e73",
+          "status": "plateau",
+          "passed": false,
+          "cost_usd": 0.0,
+          "paid_tokens": 0,
+          "free_tokens": 4150,
+          "wall_s": 36.8,
+          "cache_hit_ratio": null
+        },
+        {
+          "key": "write-function-002",
+          "task_id": "t_a4de7649dc264e05",
+          "status": "done_unannounced",
+          "passed": false,
+          "cost_usd": 0.0,
+          "paid_tokens": 0,
+          "free_tokens": 19453,
+          "wall_s": 335.13,
+          "cache_hit_ratio": null
+        },
+        {
+          "key": "summarize-untrusted-003",
+          "task_id": "t_eb4fae01bffc4dca",
+          "status": "plateau",
+          "passed": false,
+          "cost_usd": 0.0,
+          "paid_tokens": 0,
+          "free_tokens": 4370,
+          "wall_s": 54.9,
+          "cache_hit_ratio": null
+        },
+        {
+          "key": "negative-control-004",
+          "task_id": "t_841142e3668e494b",
+          "status": "plateau",
+          "passed": false,
+          "cost_usd": 0.0,
+          "paid_tokens": 0,
+          "free_tokens": 5955,
+          "wall_s": 31.97,
+          "cache_hit_ratio": null
+        },
+        {
+          "key": "handbook-recall-005",
+          "task_id": "t_f707ff5f844649fd",
+          "status": "plateau",
+          "passed": false,
+          "cost_usd": 0.0,
+          "paid_tokens": 0,
+          "free_tokens": 4375,
+          "wall_s": 46.72,
+          "cache_hit_ratio": null
+        }
+      ]
+    }
+  },
+  "how_to_read": "x = mean USD/task, y = pass rate. Report three ways \u2014 bare model, model + scaffold, full system \u2014 with date and versions."
+}

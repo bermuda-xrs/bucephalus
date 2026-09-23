@@ -1,0 +1,72 @@
+{
+  "started": "2026-09-23T11:11:00",
+  "departures_from_config_local": {
+    "autonomy.auto_review": false,
+    "autonomy.approve_scoped_writes": true,
+    "compaction_probe_step": 2,
+    "active_local_tier": "local",
+    "local_allowlist": [
+      "compress_tool_output"
+    ],
+    "compress_observations_over_tokens": 1200
+  },
+  "grader": "held out (open_measurement): pass/fail only reaches the model",
+  "arms": {
+    "control": {
+      "exit": 0,
+      "wall_s": 547.5,
+      "out": "runs\\g1-ablation-v5\\control.json",
+      "arms": {
+        "skills-off": {
+          "pass_rate": 0.0,
+          "n": 5
+        }
+      }
+    },
+    "no-compaction": {
+      "exit": 0,
+      "wall_s": 478.7,
+      "out": "runs\\g1-ablation-v5\\no-compaction.json",
+      "arms": {
+        "skills-off": {
+          "pass_rate": 0.0,
+          "n": 5
+        }
+      }
+    },
+    "no-semantic-cache": {
+      "exit": 0,
+      "wall_s": 512.6,
+      "out": "runs\\g1-ablation-v5\\no-semantic-cache.json",
+      "arms": {
+        "skills-off": {
+          "pass_rate": 0.0,
+          "n": 5
+        }
+      }
+    },
+    "no-prefix-stability": {
+      "exit": 0,
+      "wall_s": 510.3,
+      "out": "runs\\g1-ablation-v5\\no-prefix-stability.json",
+      "arms": {
+        "skills-off": {
+          "pass_rate": 0.0,
+          "n": 5
+        }
+      }
+    },
+    "no-code-as-action": {
+      "exit": 0,
+      "wall_s": 479.2,
+      "out": "runs\\g1-ablation-v5\\no-code-as-action.json",
+      "arms": {
+        "skills-off": {
+          "pass_rate": 0.4,
+          "n": 5
+        }
+      }
+    }
+  },
+  "total_min": 42.1
+}
