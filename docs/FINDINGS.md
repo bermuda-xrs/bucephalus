@@ -1731,6 +1731,78 @@ verifier's own output and only the producer's INPUT goes through the held-out
 function.
 
 
+
+### 1.34 A verifier that cannot fail: the v5 baseline's one pass was false
+
+**2026-09-25.** The first run with the grader held out (v5, HARNESS 5, one
+run per arm, n=5 tasks) scored the control 0/5 strict. write-function-002
+ended `done_unannounced` in all five arms - by this project's convention, a
+task whose work is right but never announced. It was not right. The model
+never submitted a final answer, so the final sweep graded
+`json.dumps(best_answer or {})`, the string "{}", with `execution`, which
+runs its input as Python. Any valid expression exits 0:
+`{"path": "work/DOES_NOT_EXIST.py"}`, `42` and `"hello"` all passed.
+
+**The class, swept.** Every registered verifier against an empty answer,
+"{}" and a sentinel-bearing wrong answer:
+
+| verifier | could it fail? | what it actually did |
+|---|---|---|
+| `execution` | **no**, without a script | ran the answer as Python |
+| `ruff` | **no** | passed "skipped" when not installed - true in this venv, so it passed everything it was ever asked; installed, linted `.` in the process cwd: the harness |
+| `pytest` | on the wrong thing | ran `python -m pytest tests` in the process cwd, ignoring `root` - the harness's own 82-file suite. That is the 60 s timeout. **It never graded a task**; no recorded task (283 in `agent.local.db`, both evidence databases) used it |
+| `json_schema` | **no**, under an empty schema or one accepting {} | |
+| `expected_value` | **no**, with `x-expected: {}` | `_compare` finds no mismatch against an empty object |
+| `contains_all` | **no**, with an empty needle | "" is in every answer |
+| `self_consistency` | **no** | measured agreement among its own k samples and never read the answer; a consistent model passed every answer. Found by the property test, not the sweep |
+| `checker_program` | **no**, with an empty program | also never constructed by anything. Removed (SPEC-DELTA C71) |
+| `always_pass` | by name | bench tasks with no criterion default to it |
+| `citation_check` | yes | the mirror defect: the registered instance has no sources, so it can never PASS either. Recorded, not fixed |
+| `verify_program` | yes | |
+
+**Fixes (HARNESS_VERSION 6).** Each refuses rather than passes: `execution`
+without a script; `json_schema` whose schema accepts {}; `expected_value`
+with nothing in `x-expected`; `contains_all` with an empty needle; `ruff`
+when absent or when the workspace holds no Python. `ruff` and `pytest` now
+look in `root/artifact_scope[0]`, and `pytest` runs there in the sandbox,
+because the tests import model-written code (its logging and faulthandler
+plugins are disabled: they open `os.devnull` for writing, which the sandbox
+refuses - the plugins went, not the rule). `self_consistency` scores the
+fraction of samples agreeing WITH the answer. The final sweep consults only a
+workspace verifier when no answer was given. Under measurement the mesh
+refuses `always_pass`. `bench/run.py arms` now passes `grader_dir` (it dropped
+it, so a `verify_program` task in `arms` could never find its grader) and
+reports `unannounced_rate` beside `pass_rate` - the convention was that both
+are reported, and only the strict one was.
+
+write-function-002 is graded by `bench/graders/write-function-002/verify.py`:
+it imports `slugify` from the workspace and checks six cases the model never
+sees, chosen to avoid the spec's ambiguities (whether an apostrophe or an
+inner hyphen splits a word).
+
+**The guard is a property** (`tests/test_every_verifier_can_fail.py`,
+invariant 122). Kinds are discovered from the registry, and a verifier class
+the registry does not hold fails a separate test. Each defect put back
+alone, each red: execution, json_schema, ruff absent, ruff in the cwd (via a
+fake always-clean ruff on PATH, since ruff is not installed here), pytest in
+the cwd, self_consistency, expected_value, contains_all, the mesh counting
+always_pass, the sweep grading "{}", a new kind arriving unregistered, a new
+kind arriving registered that cannot fail, task 002 back on execution, and a
+bench task whose only needle is "a". One restoration first stayed GREEN:
+`expected_value`'s empty key was masked because it borrowed `json_schema`'s
+verdict for its shape check, and the new json_schema refusal failed it first
+- which would also have failed every CORRECT answer on a structureless
+schema. `expected_value` now validates structure directly, and a third
+contract, structure that accepts {}, exposes the defect.
+
+**What is void.** v5's write-function-002 result in every arm. v5's strict
+counts stand (0/5 control; 2/5 no-code-as-action, both passes graded by
+`expected_value` on a submitted first answer); any figure that counted
+`done_unannounced` does not. Historical records: two `execution` "done"
+results in `agent.local.db` are the same false pass, and the eleven
+`json_schema` "done" results there graded shape only, never value (known
+since `expected_value` was introduced, now stated).
+
 ## 8. Open research questions
 
 Recorded so they are not re-derived, and kept separate from findings because

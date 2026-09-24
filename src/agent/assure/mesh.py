@@ -18,7 +18,7 @@ import inspect
 from typing import Callable
 
 from ..kernel.types import TaskContract, VerifyResult
-from .verifiers import Verifier, default_verifiers
+from .verifiers import Verifier, default_verifiers, inspects
 
 
 def choose_strategy(first_score: float, sample_variance: float) -> str:
@@ -50,6 +50,17 @@ class VerificationMesh:
                 passed=False, score=0.0,
                 observation=f"no verifier registered under {name!r}",
                 verifier_id="missing",
+            )
+        elif (inspects(verifier) == "nothing"
+              and getattr(self.ctx.config, "grader_held_out", False)):
+            # DR7. A task graded by nothing is not graded, and under
+            # measurement its pass would be counted as one - bench/run.py
+            # defaults a task with no criterion to always_pass.
+            r = VerifyResult(
+                passed=False, score=0.0,
+                observation=f"{name} inspects nothing, so under measurement it "
+                            "cannot grade - give the task a real criterion",
+                verifier_id=name,
             )
         else:
             try:

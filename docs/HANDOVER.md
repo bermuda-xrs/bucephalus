@@ -290,7 +290,7 @@ regenerates it. Verified 2026-09-17, against commit `c1fb9d6`.
 |---|---|---|
 | Branch | `measurement-2026-09-01`, no remote | `git branch --show-current` |
 | Written against | `c1fb9d6`; the test asserts this is an ancestor of HEAD | `git log --oneline -1` |
-| Harness version | **5**, bumped 2026-09-23: under measurement the grader is held out - its answer key had reached the model by the prompt (v4) and then by its own failure feedback (v5). Pass rates before 5 are too high | `grep HARNESS_VERSION src/agent/__init__.py` |
+| Harness version | **6**, bumped 2026-09-25: a check must be able to fail (DR7) - the final sweep graded "{}" and `execution` passed it; five more verifiers could not fail (FINDINGS 1.34). 5 held the grader out under measurement. Pass rates before 5 are too high | `grep HARNESS_VERSION src/agent/__init__.py` |
 | Toolset version | **6** | `grep TOOLSET_VERSION src/agent/__init__.py` |
 | Test count | *deliberately not stated* | `python -m pytest tests -q`, and read the tail line. The skips are the live-credential tests, until D26's credentials exist |
 | Open defects | *deliberately not stated* | the state table at the top of `docs/DEFERRED.md`; every entry also carries its state in its own heading |

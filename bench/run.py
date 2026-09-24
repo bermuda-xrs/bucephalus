@@ -150,6 +150,9 @@ def run_arm(ctx, suite: list[dict], arm: str, skills_on: bool) -> dict:
             success_criterion=spec.get("success_criterion", "always_pass"),
             output_schema=spec.get("output_schema", {}),
             artifact_scope=spec.get("artifact_scope", []),
+            # Dropped here until 2026-09-25, though `paired` passed it: a
+            # verify_program task in `arms` found no grader and failed.
+            grader_dir=spec.get("grader_dir"),
         )
         budget = Budget(
             usd=spec.get("budget_usd", ctx.config.limits.default_task_budget_usd),
@@ -179,6 +182,10 @@ def run_arm(ctx, suite: list[dict], arm: str, skills_on: bool) -> dict:
         "provenance": _provenance(ctx, arm),
         "n": len(results),
         "pass_rate": sum(r["passed"] for r in results) / n,
+        # The convention is that both counts are reported; only the strict
+        # one was. A sweep pass is a pass of the work, not of termination.
+        "unannounced_rate": sum(r["status"] == "done_unannounced"
+                                for r in results) / n,
         "mean_usd_per_task": sum(r["cost_usd"] for r in results) / n,
         "mean_wall_s": sum(r["wall_s"] for r in results) / n,
         "results": results,

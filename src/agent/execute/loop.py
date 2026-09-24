@@ -37,6 +37,7 @@ from ..skills.store import SkillSetChanged
 from ..security.exposure import ToolNotExposed
 from ..security.exposure import check as exposure_check
 from ..security.taint import QUARANTINE_PREFIX
+from ..assure.verifiers import inspects
 from ..tokens import count_tokens
 from .. import stream
 
@@ -600,11 +601,19 @@ def _final_sweep(ctx, task, status: str, best_answer, steps: int) -> TaskResult:
     # A sweep grades a produced ARTIFACT. `always_pass` grades nothing, so
     # sweeping it would turn every budget exhaustion into a pass - handing out
     # exactly the free credit this change must not create.
-    if task.contract.success_criterion == "always_pass":
+    #
+    # And a sweep with NO ANSWER grades only what is on disk. It used to grade
+    # `json.dumps(best_answer or {})` - the string "{}" - and `execution` ran
+    # that as Python and passed it, so write-function-002 scored
+    # done_unannounced in every v5 arm having submitted nothing (FINDINGS
+    # 1.34). An answer kind has nothing to judge; a workspace kind still does.
+    kind = inspects(ctx.mesh.registry.get(task.contract.success_criterion))
+    if kind == "nothing" or (not best_answer and kind != "workspace"):
         return finish(ctx, task, status, answer=best_answer, steps=steps)
 
     ok, report = _verify(ctx, task, best_answer if isinstance(best_answer, str)
-                         else json.dumps(best_answer or {}, indent=2))
+                         else json.dumps(best_answer, indent=2) if best_answer
+                         else "")
     if ok:
         ctx.log.append(task.id, "verify.unannounced_pass",
                        {"prior_status": status, "score": report.score})

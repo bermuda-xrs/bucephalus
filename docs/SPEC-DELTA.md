@@ -1504,3 +1504,21 @@ invariants, and an invariant that protected something BROADER than the
 subsystem goes with it silently. When an invariant is withdrawn because its
 subject is gone, the withdrawal owes one question: did it protect anything
 else?
+
+### C71. Verifiers that could not fail; checker_program removed
+
+**Spec:** M7.1 lists `execution`, `pytest`, `ruff`, `json_schema`,
+`checker_program`, `self_consistency` and others as verifiers, each "something
+real to check against".
+
+**Reality, measured 2026-09-25:** several could not return false on the
+inputs that mattered (FINDINGS 1.34). `pytest` and `ruff` graded the process
+working directory - the harness - not the task. `self_consistency` never read
+the artifact. `checker_program` was implemented, never constructed by any
+caller, and passed every answer under an empty program.
+
+**Correct version:** DR7 - every kind declares what it inspects and must
+fail an empty answer, "{}" and a sentinel-bearing wrong one. `pytest` runs in
+the task's workspace, sandboxed. `checker_program` is removed rather than
+guarded: dead code with the defect is deleted, and the spec's "a program
+written by a different model" returns when something constructs it.

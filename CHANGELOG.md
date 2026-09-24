@@ -106,6 +106,26 @@ Four suite passes, hours of wall clock and the whole machine, and it needs a
 decision about whether a code-as-action arm that cannot complete the suite is
 reporting the mechanism's token cost or the suite's dependence on it.
 
+## A check must be able to fail - HARNESS_VERSION 5 -> 6 - 2026-09-25
+
+The v5 baseline's only non-strict pass was false: with no answer submitted,
+the final sweep graded "{}", and `execution` ran it as Python and passed it.
+Swept across every verifier (FINDINGS 1.34); design rule DR7, invariant 122.
+
+  * The final sweep with no answer consults only workspace verifiers.
+  * Refusals instead of passes: `execution` without a script, `json_schema`
+    whose schema accepts {}, empty `x-expected`, empty `x-contains` entries,
+    `ruff` absent or with no Python to lint, `always_pass` under measurement.
+  * `pytest` and `ruff` grade the task's workspace, not the process cwd -
+    `pytest` had only ever run the harness's own suite - and `pytest` runs
+    sandboxed.
+  * `self_consistency` scores agreement with the answer; it never read it.
+  * `checker_program` removed: never constructed, passed an empty program.
+  * write-function-002 graded by a held-out `verify.py`; `bench/run.py arms`
+    passes `grader_dir` and reports `unannounced_rate`.
+  * `tests/test_every_verifier_can_fail.py`: kinds discovered, not listed;
+    fourteen defects restored one at a time, each red.
+
 ## The grader held out under measurement - HARNESS_VERSION 4 -> 5 - 2026-09-23
 
 ### The third route

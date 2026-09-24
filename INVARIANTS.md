@@ -828,6 +828,20 @@ P2 non-interference, P3 the product is not weakened.
 
 ---
 
+## Added 2026-09-25 (a check must be able to fail)
+
+**122. Every verifier fails an empty answer, "{}", and a wrong answer
+carrying a sentinel; one that inspects the workspace fails all three against
+an empty workspace.** Under three contracts - real keys, all keys empty, and
+structure that accepts {} - with a decoy in the process cwd that passes, so
+a verifier grading the wrong directory fails too. Only `always_pass` may
+declare that it inspects nothing, and under measurement the mesh refuses it.
+A final sweep with no answer consults only workspace verifiers. Every bench
+task's own grader fails the same three answers on its untouched inputs.
+*Caught by:* `tests/test_every_verifier_can_fail.py` (DR7).
+
+---
+
 ## Design rules
 
 Not per-run invariants with a test that fires — rules for the next person
@@ -1073,3 +1087,36 @@ exactly the harm DR1's permanent false criticals caused in `alpha verify`: a
 real entry gets scrolled past because the last twenty were noise. The record
 of a defect and the state of the code are the same fact, and they move
 together or the record stops being one.
+
+**DR7. A check must be shown able to fail before its passes mean anything.**
+
+A check that is consulted and cannot return false is worse than no check: it
+is counted. Instances, each found only after its passes had been reported:
+
+  * `check_contamination` certified ten skill/task pairs "clean" because the
+    drafting set it compared against was empty - nothing to check, so no
+    contamination found.
+  * `execution` with no script ran the ANSWER as Python. Any valid
+    expression exits 0; the final sweep fed it "{}" when no answer existed,
+    and write-function-002 scored done_unannounced in every v5 arm.
+  * `ruff` passed when ruff was not installed (as in this project's venv),
+    and installed, linted the harness's own tree instead of the task's.
+  * `pytest` ran the harness's own test suite in the process cwd. It never
+    graded a task.
+  * `json_schema` under an empty schema - or any schema accepting {} -
+    passed every hollow answer. `expected_value` with `x-expected: {}` and
+    `contains_all` with an empty needle likewise.
+  * `self_consistency` measured agreement among its own samples and never
+    read the answer at all.
+  * `always_pass` is by name unable to fail, and bench tasks with no
+    criterion defaulted to it.
+
+It has more instances than DR6 because a check that cannot fail looks
+exactly like a check that has not yet been given a failing input. The rule:
+before a check's pass is reported, name the input it fails on and run it.
+For verifiers this is a property test, not a list - every registered kind,
+discovered rather than named, must fail an empty answer, "{}", and a wrong
+answer carrying a sentinel (or, declaring it inspects the workspace, an
+empty workspace) - so a kind added later fails the test on arrival. DR4 is
+the special case: an empty key is the commonest way to build a check with
+nothing to fail on.

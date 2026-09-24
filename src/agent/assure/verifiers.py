@@ -5,9 +5,22 @@ opinion. It needs something real to check against — run the code and read the
 actual error, look up the fact. If it could spot the mistake by thinking
 harder, it would not have made it.
 
-For non-code work, citation_check and checker_program do the heavy lifting.
-Do not skip them because they are harder: a system that can only verify code
-cannot verify skills about writing.
+For non-code work, citation_check does the heavy lifting. Do not skip it
+because it is harder: a system that can only verify code cannot verify skills
+about writing. (checker_program, its partner in the spec, was built, never
+constructed by anything, and passed every answer under an empty program -
+removed 2026-09-25, SPEC-DELTA C71.)
+
+DR7: A CHECK MUST BE SHOWN ABLE TO FAIL BEFORE ITS PASSES MEAN ANYTHING.
+Every kind declares what it `inspects` - the ANSWER text, the task's
+WORKSPACE on disk, or (always_pass alone) NOTHING - and
+`tests/test_every_verifier_can_fail.py` holds each to it: an answer kind fails
+an empty answer, "{}" and a wrong answer carrying a sentinel; a workspace kind
+fails all three against an empty workspace. Four kinds could not (FINDINGS
+1.34): `execution` ran the answer as Python, `ruff` passed when not installed
+and otherwise linted the harness, `json_schema` passed anything under an
+empty schema, and `self_consistency` never read the answer at all.
+Empty means nothing (DR4): an empty key is a refusal, never a pass.
 """
 
 from __future__ import annotations
@@ -16,7 +29,6 @@ import json
 import re
 import shutil
 import subprocess
-import sys
 from pathlib import Path
 from typing import Protocol
 
@@ -25,13 +37,37 @@ from ..kernel.types import TaskContract, VerifyResult
 
 class Verifier(Protocol):
     kind: str
+    inspects: str   # "answer" | "workspace" | "nothing" - DR7, above
 
     def check(self, artifact: str, contract: TaskContract,
               root: str | None = None) -> VerifyResult: ...
 
 
+def inspects(verifier) -> str:
+    """What a verifier grades. Undeclared means the answer - the strict case,
+    so a kind added without a declaration is tested as one on arrival."""
+    return getattr(verifier, "inspects", "answer")
+
+
+def _refuse(kind: str, why: str) -> VerifyResult:
+    return VerifyResult(passed=False, score=0.0, observation=why, verifier_id=kind)
+
+
+def _workdir(contract: TaskContract, root: str | None) -> Path:
+    """The task's workspace: `root` joined with the first artifact_scope entry.
+    NOT the process working directory - which is where pytest and ruff looked
+    until 2026-09-25, grading the harness's own tree instead of the task's."""
+    base = Path(root) if root else Path.cwd()
+    return base / (contract.artifact_scope or ["."])[0]
+
+
 class AlwaysPass:
+    """Not a check: the absence of one. It inspects nothing and so cannot fail,
+    which is why the final sweep never consults it and why, under measurement,
+    `VerificationMesh.verify` refuses it rather than counting its pass."""
+
     kind = "always_pass"
+    inspects = "nothing"
 
     def check(self, artifact: str, contract: TaskContract,
               root: str | None = None) -> VerifyResult:
@@ -41,26 +77,45 @@ class AlwaysPass:
 
 
 class PytestVerifier:
-    kind = "pytest"
+    """Run the tests in the task's workspace, in the sandbox.
 
-    def __init__(self, test_path: str = "tests", cwd: str | None = None):
-        self.test_path = test_path
-        self.cwd = cwd
+    UNTIL 2026-09-25 THIS NEVER GRADED A TASK. It ran `python -m pytest tests`
+    in the PROCESS working directory and ignored `root`, so from the project
+    root it ran the harness's own test suite - which is why an "empty
+    workspace" outran a 60 s timeout - and passed or failed on whether the
+    harness was healthy. No recorded task was ever graded by it.
+
+    Now: the tests found under the workspace, run in the sandbox because they
+    import code the model wrote. No tests collected is pytest's exit 5, a
+    failure. The tests live in the workspace, so the model can edit them:
+    this is the user's-own-tests check, not a measurement grader - under
+    measurement, grade with `verify_program`, whose grader is out of scope.
+    """
+
+    kind = "pytest"
+    inspects = "workspace"
 
     def check(self, artifact: str, contract: TaskContract,
               root: str | None = None) -> VerifyResult:
-        proc = subprocess.run(  # noqa: S603
-            [sys.executable, "-m", "pytest", self.test_path, "-q", "--no-header"],
-            capture_output=True,
-            text=True,
-            cwd=self.cwd,
-            timeout=600,
-        )
-        out = (proc.stdout + proc.stderr)[-6000:]
-        passed = proc.returncode == 0
-        score = 1.0 if passed else _pytest_score(out)
+        from ..execute.sandbox import run_sandboxed
+
+        workdir = _workdir(contract, root)
+        if not workdir.is_dir():
+            return _refuse(self.kind, f"no workspace at {workdir}")
+        # logging and faulthandler open os.devnull for writing, which the
+        # sandbox refuses as a write outside scope. The plugins go, not the rule.
+        harness = (
+            f"import os, sys\nos.chdir({workdir.name!r})\n"
+            "sys.dont_write_bytecode = True\nsys.path.insert(0, os.getcwd())\n"
+            "import pytest\nsys.exit(pytest.main(['-q', '--no-header', "
+            "'-p', 'no:cacheprovider', '-p', 'no:logging', "
+            "'-p', 'no:faulthandler', '.']))\n")
+        r = run_sandboxed(harness, allowed_paths=[str(workdir)], timeout_s=120)
+        out = (r["stdout"] + r["stderr"])[-6000:]
+        passed = r["returncode"] == 0
         return VerifyResult(
-            passed=passed, score=score, observation=out, verifier_id=self.kind
+            passed=passed, score=1.0 if passed else _pytest_score(out),
+            observation=out or f"returncode={r['returncode']}", verifier_id=self.kind,
         )
 
 
@@ -73,17 +128,30 @@ def _pytest_score(output: str) -> float:
 
 
 class RuffVerifier:
+    """Lint the Python files in the task's workspace.
+
+    Two defects until 2026-09-25, either enough to pass anything: with ruff
+    not installed - as in this project's own venv - it PASSED, "skipped"; and
+    installed, it linted `.` in the process working directory, the harness,
+    not the task. A missing tool is now a refusal, and a workspace with no
+    Python in it is nothing to lint, so also a refusal. Lint-clean is style,
+    never correctness: it is not a task's grader on its own.
+    """
+
     kind = "ruff"
+    inspects = "workspace"
 
     def check(self, artifact: str, contract: TaskContract,
               root: str | None = None) -> VerifyResult:
         if shutil.which("ruff") is None:
-            return VerifyResult(
-                passed=True, score=1.0, observation="ruff not installed; skipped",
-                verifier_id=self.kind,
-            )
+            return _refuse(self.kind, "ruff is not installed, so nothing was "
+                                      "checked - a missing check is not a pass")
+        workdir = _workdir(contract, root)
+        if not workdir.is_dir() or not any(workdir.rglob("*.py")):
+            return _refuse(self.kind, f"no Python files under {workdir} to lint")
         proc = subprocess.run(  # noqa: S603
-            ["ruff", "check", "--output-format", "concise", "."],
+            ["ruff", "check", "--no-cache", "--output-format", "concise",
+             str(workdir)],
             capture_output=True, text=True, timeout=120,
         )
         out = (proc.stdout + proc.stderr)[-4000:]
@@ -100,6 +168,14 @@ class JsonSchemaVerifier:
 
     def check(self, artifact: str, contract: TaskContract,
               root: str | None = None) -> VerifyResult:
+        schema = contract.output_schema or {}
+        # DR4/DR7. An empty schema passed every JSON value there is; one that
+        # accepts {} passes the final sweep's old "{}" and every hollow answer
+        # - it cannot tell an answer from its absence. Refused.
+        if not _validate({}, schema):
+            return _refuse(self.kind, "this output_schema accepts the empty "
+                                      "object {}, so it cannot tell an answer "
+                                      "from its absence - require a key")
         try:
             data = json.loads(artifact)
         except json.JSONDecodeError as e:
@@ -107,7 +183,7 @@ class JsonSchemaVerifier:
                 passed=False, score=0.0,
                 observation=f"output is not valid JSON: {e}", verifier_id=self.kind,
             )
-        errors = _validate(data, contract.output_schema or {})
+        errors = _validate(data, schema)
         return VerifyResult(
             passed=not errors,
             score=1.0 if not errors else max(0.0, 1.0 - 0.25 * len(errors)),
@@ -144,16 +220,32 @@ def _validate(data, schema: dict, path: str = "$") -> list[str]:
 
 
 class ExecutionVerifier:
+    """Run a checking script against the workspace.
+
+    WITHOUT A SCRIPT IT RAN THE ANSWER ITSELF AS PYTHON, and any valid Python
+    expression exits 0: `{"path": "work/DOES_NOT_EXIST.py"}`, `42`, `"hello"`
+    and the final sweep's `{}` all passed. That is how write-function-002
+    scored `done_unannounced` in every arm of the v5 run having submitted no
+    answer. Running the answer checks nothing about the task, so with no
+    script this refuses. The registered instance has none: grade code with
+    `verify_program`.
+    """
+
     kind = "execution"
 
     def __init__(self, script_path: str | None = None):
         self.script_path = script_path
+        self.inspects = "workspace" if script_path else "answer"
 
     def check(self, artifact: str, contract: TaskContract,
               root: str | None = None) -> VerifyResult:
         from ..execute.sandbox import run_sandboxed
 
-        code = Path(self.script_path).read_text(encoding="utf-8") if self.script_path else artifact
+        if not self.script_path:
+            return _refuse(self.kind, "execution has no script: running the "
+                                      "answer as code checks nothing about the "
+                                      "task. Use verify_program.")
+        code = Path(self.script_path).read_text(encoding="utf-8")
         r = run_sandboxed(code, allowed_paths=contract.artifact_scope, timeout_s=30)
         ok = r["returncode"] == 0
         return VerifyResult(
@@ -228,9 +320,10 @@ class SelfConsistencyVerifier:
 
     def check(self, artifact: str, contract: TaskContract,
               root: str | None = None, task=None) -> VerifyResult:
-        from ..router.cascade import (
-            DEFAULT_AGREEMENT, max_cluster_fraction, normalize)
+        from ..router.cascade import DEFAULT_AGREEMENT, normalize
 
+        if not artifact.strip():
+            return _refuse(self.kind, "empty answer")
         backend = self.ctx.backends[self.ctx.active_local_tier() or "cloud"]
         prompt = (
             "Answer the question. Output only the answer, no preamble.\n\n"
@@ -243,7 +336,11 @@ class SelfConsistencyVerifier:
                 max_tokens=512, temperature=0.7).text
             for _ in range(self.k)
         ]
-        agreement = max_cluster_fraction([normalize(s) for s in samples])
+        # Agreement WITH THE ANSWER. It measured agreement among the samples
+        # alone and never read `artifact`, so a consistent model passed every
+        # answer - right, wrong or empty (FINDINGS 1.34).
+        mine = normalize(artifact)
+        agreement = sum(normalize(s) == mine for s in samples) / self.k
         # DEFAULT_AGREEMENT, not the literal 0.67. Two of three is 0.6667,
         # which is LESS than 0.67, so the literal rejects exactly the case it
         # was written to accept. CORRECTIONS.md 1.5 records this fix being
@@ -251,38 +348,7 @@ class SelfConsistencyVerifier:
         return VerifyResult(
             passed=agreement >= DEFAULT_AGREEMENT,
             score=agreement,
-            observation=f"agreement across {self.k} samples = {agreement:.2f}",
-            verifier_id=self.kind,
-        )
-
-
-class CheckerProgramVerifier:
-    """A generated program that asserts properties of the artifact.
-
-    The program is written by a DIFFERENT model from the drafter (M7.4 rule 1),
-    and it runs in the sandbox. Exit code 0 means the properties hold.
-    """
-
-    kind = "checker_program"
-
-    def __init__(self, program: str):
-        self.program = program
-
-    def check(self, artifact: str, contract: TaskContract,
-              root: str | None = None) -> VerifyResult:
-        from ..execute.sandbox import run_sandboxed
-
-        harness = (
-            "import json,sys\n"
-            f"ARTIFACT = {artifact!r}\n"
-            + self.program
-        )
-        r = run_sandboxed(harness, allowed_paths=[], timeout_s=30)
-        ok = r["returncode"] == 0
-        return VerifyResult(
-            passed=ok,
-            score=1.0 if ok else 0.0,
-            observation=(r["stdout"] + r["stderr"])[-3000:] or "checker silent",
+            observation=f"{agreement:.2f} of {self.k} samples agree with the answer",
             verifier_id=self.kind,
         )
 
@@ -326,19 +392,10 @@ class ExpectedValueVerifier:
               root: str | None = None) -> VerifyResult:
         schema = contract.output_schema or {}
         expected = schema.get("x-expected")
-        if expected is None:
+        if expected is None or not _checks_something(expected):
             return VerifyResult(
                 passed=False, score=0.0,
                 observation="no x-expected on this task; expected_value cannot judge it",
-                verifier_id=self.kind,
-            )
-
-        shape = JsonSchemaVerifier().check(artifact, contract)
-        if not shape.passed:
-            return VerifyResult(
-                passed=False, score=0.0,
-                observation=f"answer is not the right shape, so it cannot be "
-                            f"the right value: {shape.observation}",
                 verifier_id=self.kind,
             )
 
@@ -348,6 +405,17 @@ class ExpectedValueVerifier:
             return VerifyResult(passed=False, score=0.0,
                                 observation=f"not JSON: {e}", verifier_id=self.kind)
 
+        # The schema's structure directly, not json_schema's VERDICT: that
+        # refuses a schema accepting {}, and here x-expected is the check.
+        shape = _validate(got, schema)
+        if shape:
+            return VerifyResult(
+                passed=False, score=0.0,
+                observation=f"answer is not the right shape, so it cannot be "
+                            f"the right value: {'; '.join(shape)}",
+                verifier_id=self.kind,
+            )
+
         exact = bool(schema.get("x-exact", False))
         wrong = list(_compare(got, expected, exact, "$"))
         return VerifyResult(
@@ -356,6 +424,14 @@ class ExpectedValueVerifier:
             observation="; ".join(wrong) or "matches the expected value",
             verifier_id=self.kind,
         )
+
+
+def _checks_something(expected) -> bool:
+    """DR4. `_compare` finds no mismatch against an empty object, so
+    `x-expected: {}` passed any object - the final sweep's "{}" included."""
+    if isinstance(expected, dict):
+        return any(_checks_something(v) for v in expected.values())
+    return True
 
 
 def _norm_text(s: str) -> str:
@@ -413,11 +489,10 @@ class ContainsAllVerifier:
     def check(self, artifact: str, contract: TaskContract,
               root: str | None = None) -> VerifyResult:
         needles = (contract.output_schema or {}).get("x-contains") or []
-        if not needles:
-            return VerifyResult(
-                passed=False, score=0.0,
-                observation="no x-contains on this task", verifier_id=self.kind,
-            )
+        # An empty needle is in every haystack, so it passed everything.
+        if not needles or any(not _norm_text(n) for n in needles):
+            return _refuse(self.kind, "no x-contains on this task, or an empty "
+                                      "entry in it - which every answer contains")
         hay = _norm_text(artifact)
         missing = [n for n in needles if _norm_text(n) not in hay]
         return VerifyResult(
@@ -444,6 +519,7 @@ class VerifyProgramVerifier:
     """
 
     kind = "verify_program"
+    inspects = "workspace"
     SCRIPT = "verify.py"
 
     def check(self, artifact: str, contract: TaskContract,

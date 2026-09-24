@@ -58,7 +58,20 @@ __version__ = "0.1.0"
 #      v4 ran exactly once. Its pass rates AND its token totals are void: a
 #      task that copies the answer terminates on call two, so how many calls
 #      an arm made says as much about the leak as about its mechanism.
-HARNESS_VERSION = 5
+#   6  2026-09-25: A CHECK MUST BE ABLE TO FAIL (DR7). The final sweep graded
+#      `json.dumps(best_answer or {})` - "{}" - when no answer was given, and
+#      `execution` ran it as Python and passed it: write-function-002 scored
+#      done_unannounced in every v5 arm having submitted nothing. Now a sweep
+#      with no answer grades only the workspace; `execution` with no script
+#      refuses; `json_schema` refuses a schema that accepts {}; empty
+#      x-expected / x-contains entries refuse; `ruff` refuses when absent and
+#      lints the task, not the harness; `pytest` runs in the task's workspace,
+#      in the sandbox (it ran the harness's own suite); `self_consistency`
+#      measures agreement WITH the answer (it never read it); and under
+#      measurement `always_pass` is not a pass. write-function-002 is graded
+#      by a held-out verify.py. v5's pass counts, strict and unannounced, are
+#      void on that task (FINDINGS 1.34).
+HARNESS_VERSION = 6
 
 
 # Bump this whenever the set of libraries model-written code may import
