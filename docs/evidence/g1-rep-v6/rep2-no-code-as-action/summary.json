@@ -1,0 +1,28 @@
+{
+  "started": "2026-09-25T03:22:00",
+  "departures_from_config_local": {
+    "autonomy.auto_review": false,
+    "autonomy.approve_scoped_writes": true,
+    "compaction_probe_step": 2,
+    "active_local_tier": "local",
+    "local_allowlist": [
+      "compress_tool_output"
+    ],
+    "compress_observations_over_tokens": 1200
+  },
+  "grader": "held out (open_measurement): pass/fail only reaches the model",
+  "arms": {
+    "no-code-as-action": {
+      "exit": 0,
+      "wall_s": 691.8,
+      "out": "runs\\g1-rep-v6\\rep2-no-code-as-action\\no-code-as-action.json",
+      "arms": {
+        "skills-off": {
+          "pass_rate": 0.4,
+          "n": 5
+        }
+      }
+    }
+  },
+  "total_min": 11.5
+}

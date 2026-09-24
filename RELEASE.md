@@ -140,7 +140,7 @@ findings are defects in the measuring apparatus, not in the agent.**
 
 | Goal | Where it stands after iteration two |
 |---|---|
-| **G1** ≥10× reduction in paid tokens | **implemented, unmeasured - but no longer unmeasurABLE.** No paid call has ever been made. Three blockers were named; two are now gone. C62 removed calibration (recorded usage is the server's own count). **2026-09-17 removed the third and largest: the ablation switches now exist** - `mechanisms:` in config turns compaction, the semantic cache, prefix stability and code-as-action off individually, so a control arm can be run at all (`tests/test_g1_ablation.py`). What remains is an API key (D26) and somebody spending the wall clock - and a SUITE that can exercise the mechanisms, which `bench/tasks` cannot: the first comparison ran 2026-09-17 and three of its four arms measured nothing (FINDINGS 1.30) |
+| **G1** ≥10× reduction in paid tokens | **CLOSED 2026-09-25: not supported on this executor.** Stated per mechanism as saving-when-it-fires x fire-rate (FINDINGS 1.35): compaction ~24% / 0 real crossings in 254 steps; semantic cache 0 executor tokens / 0 compressions; prefix stability one re-prefill per write / not measurable under isolation; code-as-action ~77% when used / used on 1 task type - and removing it raised the pass rate 0/5 -> 2/5 in each of 3 runs (n=3). What would change it: a model that reads before answering. No paid call has been made (D26). Every earlier G1 number is void (v3, v4, v5) |
 | **G2** Mobile remote control | **partially implemented.** The HTTP control plane, auth and SSE exist; Phase 8 added a Telegram channel with an allowlist, approvals and a park path, driven end to end against a fake transport. No live request has ever been made (D26) |
 | **G3** Multi-agent as context isolation | **implemented, unmeasured.** Delegation, the five gates and a narrowed child policy exist; no production task has delegated |
 | **G4** Research-grounded, verified skill generation | **the gate works; the generation half is RETIRED UNANSWERED** (FINDINGS 1.27). The published baseline is -1.3 pp, the suite that would evaluate it is archived, D19 was never closed, and none of its three components ever ran |
@@ -297,7 +297,7 @@ actually stand, so a reader does not have to reconstruct it.
 
 | Goal | Status |
 |---|---|
-| G1 ≥10× reduction in **paid** tokens per completed task | **implemented and unmeasured** — and currently unmeasurable, see below |
+| G1 ≥10× reduction in **paid** tokens per completed task | **closed 2026-09-25: not supported on granite4.1:3b** — per-mechanism savings measured, fire rates ~0; see below and FINDINGS 1.35 |
 | G2 Mobile remote control | **partially implemented** — HTTP API + auth exist; nothing mobile |
 | G3 Multi-agent as context isolation | **implemented and unmeasured** |
 | G4 Research-grounded, verified skill generation | **the gate works; the generation half is RETIRED UNANSWERED** (2026-09-15, FINDINGS 1.27) |
@@ -309,6 +309,26 @@ actually stand, so a reader does not have to reconstruct it.
 ---
 
 ## G1 — ≥10× reduction in paid tokens. The headline claim, and it is unverified.
+
+> **CLOSED 2026-09-25 (FINDINGS 1.35).** G1 is now stated as two measured
+> quantities per mechanism - the token saving when it fires, measured
+> deterministically, and how often it fires on granite4.1:3b, read from the
+> records:
+>
+> | mechanism | saves when it fires | fires on the 3B |
+> |---|---|---|
+> | compaction | ~24% uncached input | 0 of 254 steps (every boundary recorded was forced) |
+> | semantic cache | 0 executor tokens; 2 of 3 local compressions | 0 of 253 steps |
+> | prefix stability | one prefix re-prefill per mid-task memory write | not measurable: 0 attempts, and isolation refuses tier-1 writes |
+> | code-as-action | ~77% on a four-file read, 5 calls -> 2 | 92 of 199 steps, all on one task type |
+>
+> **The ≥10x claim is not supported on this executor.** The one mechanism
+> effect measured is in PASS RATE and against the mechanism: without
+> code-as-action the 3B passed 2/5 in each of 3 runs, with it 0/5 in each of
+> 3 runs (n=3 runs x 5 tasks, temperature 0, the same two tasks each time).
+> The executor property that would change G1 is a model that reads before
+> answering. Everything below is the history that led here; its numbers are
+> void where FINDINGS 1.30, 1.33 and 1.34 say so.
 
 **The decisive number.** Across the whole project history the telemetry table
 holds **1,179 recorded real model calls** with the figures below. *Recorded*:
@@ -409,7 +429,7 @@ Three things, and the third is the one that is usually forgotten.
    the mechanism rather than the suite's dependence on it. At n=4 that is a
    sighting.
 
-   **What G1 now needs is a suite, not more switches:** tasks whose
+   ~~**What G1 now needs is a suite, not more switches:**~~ *(Superseded 2026-09-25: four suites later it needed an executor that reads. FINDINGS 1.35.)* tasks whose
    observations cross a 4,587-token ceiling and repeat enough to hit a cache.
    FINDINGS 1.30, `docs/evidence/g1-ablation-2026-09-17.json`.
 

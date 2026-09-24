@@ -731,7 +731,14 @@ def _session_boundary(ctx, task, entries, window, step, plan, skills, builder,
          the only way a fact flushed in step 1 reaches it.
     """
     flushed, record = _flush_memory(ctx, task, builder, prefix, entries, step, plan)
-    entries = compact(entries, target_tokens=int(window * 0.20)) + flushed
+    # The TAIL is compacted to 0.20 of the window LESS THE PREFIX. The ceiling
+    # (0.28) counts the prefix and this target did not, so a prefix over 8% of
+    # the window left prefix + target above the ceiling: the first boundary
+    # deleted nothing, each later one a single entry, the context never got
+    # back under the ceiling, and every step paid a flush call. Found by
+    # bench/g1_close.py: +55% sent tokens against compaction off (FINDINGS 1.35).
+    entries = compact(entries, target_tokens=max(
+        0, int(window * 0.20) - count_tokens(prefix))) + flushed
     tombstoned = sum(1 for e in entries if e.kind == "tombstone")
     # The seed is a RECORD of what the child starts from: referenced by the
     # session row, committed to by `session.opened` on the chain. It gets no

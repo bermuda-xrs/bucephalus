@@ -106,6 +106,23 @@ Four suite passes, hours of wall clock and the whole machine, and it needs a
 decision about whether a code-as-action arm that cannot complete the suite is
 reporting the mechanism's token cost or the suite's dependence on it.
 
+## G1 closed - 2026-09-25
+
+G1 is stated per mechanism as saving-when-it-fires x fire-rate (FINDINGS
+1.35). `bench/g1_close.py savings` measures the first deterministically
+(scripted model, byte-identical across runs); `firerate` reads the second out
+of every real-model G1 record (75 task-runs, 254 steps). The ≥10x claim is
+not supported on granite4.1:3b. The replication: no-code-as-action 2/5 in
+each of 3 runs, control 0/5 in each of 3 (temperature 0; the three runs
+reproduce rather than sample). Evidence: `docs/evidence/g1-close-*.json`,
+`g1-replication-v6.json`, `g1-rep-v6/`.
+
+  * Compaction's target now subtracts the prefix: with the prefix over 8% of
+    the window a boundary deleted nothing and re-fired every step. Latent -
+    no shipped config reached it. Tombstones are never evicted; recorded as
+    a limit, not fixed.
+  * Every earlier G1 number marked void with its reason: v3, v4, v5.
+
 ## A check must be able to fail - HARNESS_VERSION 5 -> 6 - 2026-09-25
 
 The v5 baseline's only non-strict pass was false: with no answer submitted,

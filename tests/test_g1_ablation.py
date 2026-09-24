@@ -143,6 +143,50 @@ def test_compaction_on_tombstones_at_the_boundary(tmp_path, boundary):
     ctx.close()
 
 
+def test_a_real_crossing_brings_the_context_under_the_ceiling(tmp_path):
+    """The REAL ceiling, no injection, on a window where the prefix is over 8%
+    of it. The compaction target ignored the prefix, so it deleted nothing and
+    the ceiling fired on every later step, each paying a flush call."""
+    from agent.tokens import count_tokens
+
+    ctx = _ctx(tmp_path)
+    ctx.config.limits.max_steps = 20
+    probe = _task(ctx)
+    ctx.backends["cloud"].queue(FINAL)
+    run_task(ctx, probe.id)
+    prefix = count_tokens(ctx.backends["cloud"].calls[-1]["prefix"])
+    file_tok = count_tokens((Path(ctx.config.root) / "work" / "a.txt").read_text(encoding="utf-8"))
+    window = int((prefix + 2.5 * file_tok) / 0.28)
+    assert prefix > 0.08 * window, "the geometry must put the prefix over 8%"
+    ctx.backends["cloud"].cfg.usable_context_window = window
+
+    task = _task(ctx)
+    # A responder, not the queue: the boundary's flush is a model call, and
+    # from the queue it would eat a scripted read - so a thrashing boundary
+    # would shorten the very run that is meant to expose it.
+    turns = iter([READ(f"{n}.txt") for n in "abcde"] + [READ("a.txt")] * 3)
+    ctx.backends["cloud"]._responder = lambda p, t: (  # noqa: SLF001
+        "NOTHING" if "reply with the single word NOTHING" in t else next(turns, FINAL))
+    run_task(ctx, task.id)
+    rotations = [e for e in _events(ctx, task.id, "session.opened") if e.get("parent_id")]
+    assert rotations, "the real ceiling was never crossed"
+    # Several boundaries are fine - each read here nearly fills the headroom.
+    # The defect is a boundary that leaves the context OVER the ceiling it
+    # fired on: then it fires again next step, paying a flush call each time.
+    # So: the step call after the FIRST flush must fit under the ceiling.
+    # (Only the first: tombstones are never evicted, so each later boundary
+    # starts from a higher floor - a known limit, FINDINGS 1.35, not this.)
+    ceiling = int(window * ctx.config.limits.context_fill_ratio)
+    calls = ctx.backends["cloud"].calls
+    after = [count_tokens(nxt["prefix"]) + count_tokens(nxt["tail"])
+             for cur, nxt in zip(calls, calls[1:])
+             if "reply with the single word NOTHING" in cur["tail"]]
+    assert after and after[0] <= ceiling, (
+        f"after the first compaction the context was {after[:1]} tokens "
+        f"against a ceiling of {ceiling}: the boundary did not bring it under")
+    ctx.close()
+
+
 def test_compaction_off_crosses_the_ceiling_and_drops_nothing(tmp_path, boundary):
     """The ceiling is still measured and the crossing is still on the chain.
     "nothing to compact" and "compaction off" are different facts (DR4), and a

@@ -1,0 +1,259 @@
+=== rep 1 control 02:44:15
+
+=== control ===
+{
+  "skills-off": {
+    "pass_rate": 0.0,
+    "mean_usd_per_task": 0.0
+  }
+}
+
+written to runs\g1-rep-v6\rep1-control\control.json
+--- control: exit 0, 12.7 min
+
+{
+  "started": "2026-09-25T02:44:16",
+  "departures_from_config_local": {
+    "autonomy.auto_review": false,
+    "autonomy.approve_scoped_writes": true,
+    "compaction_probe_step": 2,
+    "active_local_tier": "local",
+    "local_allowlist": [
+      "compress_tool_output"
+    ],
+    "compress_observations_over_tokens": 1200
+  },
+  "grader": "held out (open_measurement): pass/fail only reaches the model",
+  "arms": {
+    "control": {
+      "exit": 0,
+      "wall_s": 759.6,
+      "out": "runs\\g1-rep-v6\\rep1-control\\control.json",
+      "arms": {
+        "skills-off": {
+          "pass_rate": 0.0,
+          "n": 5
+        }
+      }
+    }
+  },
+  "total_min": 12.7
+}
+
+written to runs\g1-rep-v6\rep1-control
+=== rep 1 no-code-as-action 02:56:55
+
+=== no-code-as-action ===
+{
+  "skills-off": {
+    "pass_rate": 0.4,
+    "mean_usd_per_task": 0.0
+  }
+}
+
+written to runs\g1-rep-v6\rep1-no-code-as-action\no-code-as-action.json
+--- no-code-as-action: exit 0, 13.0 min
+
+{
+  "started": "2026-09-25T02:56:56",
+  "departures_from_config_local": {
+    "autonomy.auto_review": false,
+    "autonomy.approve_scoped_writes": true,
+    "compaction_probe_step": 2,
+    "active_local_tier": "local",
+    "local_allowlist": [
+      "compress_tool_output"
+    ],
+    "compress_observations_over_tokens": 1200
+  },
+  "grader": "held out (open_measurement): pass/fail only reaches the model",
+  "arms": {
+    "no-code-as-action": {
+      "exit": 0,
+      "wall_s": 777.0,
+      "out": "runs\\g1-rep-v6\\rep1-no-code-as-action\\no-code-as-action.json",
+      "arms": {
+        "skills-off": {
+          "pass_rate": 0.4,
+          "n": 5
+        }
+      }
+    }
+  },
+  "total_min": 13.0
+}
+
+written to runs\g1-rep-v6\rep1-no-code-as-action
+=== rep 2 control 03:09:53
+
+=== control ===
+{
+  "skills-off": {
+    "pass_rate": 0.0,
+    "mean_usd_per_task": 0.0
+  }
+}
+
+written to runs\g1-rep-v6\rep2-control\control.json
+--- control: exit 0, 12.1 min
+
+{
+  "started": "2026-09-25T03:09:54",
+  "departures_from_config_local": {
+    "autonomy.auto_review": false,
+    "autonomy.approve_scoped_writes": true,
+    "compaction_probe_step": 2,
+    "active_local_tier": "local",
+    "local_allowlist": [
+      "compress_tool_output"
+    ],
+    "compress_observations_over_tokens": 1200
+  },
+  "grader": "held out (open_measurement): pass/fail only reaches the model",
+  "arms": {
+    "control": {
+      "exit": 0,
+      "wall_s": 725.2,
+      "out": "runs\\g1-rep-v6\\rep2-control\\control.json",
+      "arms": {
+        "skills-off": {
+          "pass_rate": 0.0,
+          "n": 5
+        }
+      }
+    }
+  },
+  "total_min": 12.1
+}
+
+written to runs\g1-rep-v6\rep2-control
+=== rep 2 no-code-as-action 03:21:59
+
+=== no-code-as-action ===
+{
+  "skills-off": {
+    "pass_rate": 0.4,
+    "mean_usd_per_task": 0.0
+  }
+}
+
+written to runs\g1-rep-v6\rep2-no-code-as-action\no-code-as-action.json
+--- no-code-as-action: exit 0, 11.5 min
+
+{
+  "started": "2026-09-25T03:22:00",
+  "departures_from_config_local": {
+    "autonomy.auto_review": false,
+    "autonomy.approve_scoped_writes": true,
+    "compaction_probe_step": 2,
+    "active_local_tier": "local",
+    "local_allowlist": [
+      "compress_tool_output"
+    ],
+    "compress_observations_over_tokens": 1200
+  },
+  "grader": "held out (open_measurement): pass/fail only reaches the model",
+  "arms": {
+    "no-code-as-action": {
+      "exit": 0,
+      "wall_s": 691.8,
+      "out": "runs\\g1-rep-v6\\rep2-no-code-as-action\\no-code-as-action.json",
+      "arms": {
+        "skills-off": {
+          "pass_rate": 0.4,
+          "n": 5
+        }
+      }
+    }
+  },
+  "total_min": 11.5
+}
+
+written to runs\g1-rep-v6\rep2-no-code-as-action
+=== rep 3 control 03:33:32
+
+=== control ===
+{
+  "skills-off": {
+    "pass_rate": 0.0,
+    "mean_usd_per_task": 0.0
+  }
+}
+
+written to runs\g1-rep-v6\rep3-control\control.json
+--- control: exit 0, 11.7 min
+
+{
+  "started": "2026-09-25T03:33:32",
+  "departures_from_config_local": {
+    "autonomy.auto_review": false,
+    "autonomy.approve_scoped_writes": true,
+    "compaction_probe_step": 2,
+    "active_local_tier": "local",
+    "local_allowlist": [
+      "compress_tool_output"
+    ],
+    "compress_observations_over_tokens": 1200
+  },
+  "grader": "held out (open_measurement): pass/fail only reaches the model",
+  "arms": {
+    "control": {
+      "exit": 0,
+      "wall_s": 703.0,
+      "out": "runs\\g1-rep-v6\\rep3-control\\control.json",
+      "arms": {
+        "skills-off": {
+          "pass_rate": 0.0,
+          "n": 5
+        }
+      }
+    }
+  },
+  "total_min": 11.7
+}
+
+written to runs\g1-rep-v6\rep3-control
+=== rep 3 no-code-as-action 03:45:15
+
+=== no-code-as-action ===
+{
+  "skills-off": {
+    "pass_rate": 0.4,
+    "mean_usd_per_task": 0.0
+  }
+}
+
+written to runs\g1-rep-v6\rep3-no-code-as-action\no-code-as-action.json
+--- no-code-as-action: exit 0, 11.7 min
+
+{
+  "started": "2026-09-25T03:45:16",
+  "departures_from_config_local": {
+    "autonomy.auto_review": false,
+    "autonomy.approve_scoped_writes": true,
+    "compaction_probe_step": 2,
+    "active_local_tier": "local",
+    "local_allowlist": [
+      "compress_tool_output"
+    ],
+    "compress_observations_over_tokens": 1200
+  },
+  "grader": "held out (open_measurement): pass/fail only reaches the model",
+  "arms": {
+    "no-code-as-action": {
+      "exit": 0,
+      "wall_s": 700.1,
+      "out": "runs\\g1-rep-v6\\rep3-no-code-as-action\\no-code-as-action.json",
+      "arms": {
+        "skills-off": {
+          "pass_rate": 0.4,
+          "n": 5
+        }
+      }
+    }
+  },
+  "total_min": 11.7
+}
+
+written to runs\g1-rep-v6\rep3-no-code-as-action
+=== all done 03:56:56

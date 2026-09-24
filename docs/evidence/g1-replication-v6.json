@@ -1,0 +1,402 @@
+{
+  "harness_version": 6,
+  "note": "control and no-code-as-action, 3 runs each, interleaved, bench/tasks (n=5), temperature 0, grader held out, DEPARTURES as bench/g1_ablation_run.py",
+  "runs": [
+    {
+      "run": "rep1-control",
+      "arm": "control",
+      "strict": 0,
+      "n": 5,
+      "tasks": [
+        {
+          "key": "extract-json-001",
+          "status": "plateau",
+          "passed": false,
+          "calls": 3,
+          "input_tokens": 4107,
+          "tools": [],
+          "verify_failed": 3,
+          "wall_s": 130.21
+        },
+        {
+          "key": "write-function-002",
+          "status": "budget_exhausted",
+          "passed": false,
+          "calls": 6,
+          "input_tokens": 9729,
+          "tools": [
+            "run_code",
+            "run_code",
+            "run_code",
+            "run_code",
+            "run_code",
+            "run_code"
+          ],
+          "verify_failed": 1,
+          "wall_s": 361.38
+        },
+        {
+          "key": "summarize-untrusted-003",
+          "status": "plateau",
+          "passed": false,
+          "calls": 3,
+          "input_tokens": 4215,
+          "tools": [],
+          "verify_failed": 3,
+          "wall_s": 92.11
+        },
+        {
+          "key": "negative-control-004",
+          "status": "plateau",
+          "passed": false,
+          "calls": 4,
+          "input_tokens": 5900,
+          "tools": [
+            "read_file"
+          ],
+          "verify_failed": 3,
+          "wall_s": 101.92
+        },
+        {
+          "key": "handbook-recall-005",
+          "status": "plateau",
+          "passed": false,
+          "calls": 3,
+          "input_tokens": 4281,
+          "tools": [],
+          "verify_failed": 3,
+          "wall_s": 70.87
+        }
+      ]
+    },
+    {
+      "run": "rep1-no-code-as-action",
+      "arm": "no-code-as-action",
+      "strict": 2,
+      "n": 5,
+      "tasks": [
+        {
+          "key": "extract-json-001",
+          "status": "done",
+          "passed": true,
+          "calls": 2,
+          "input_tokens": 2502,
+          "tools": [
+            "read_file"
+          ],
+          "verify_failed": 0,
+          "wall_s": 114.86
+        },
+        {
+          "key": "write-function-002",
+          "status": "budget_exhausted",
+          "passed": false,
+          "calls": 6,
+          "input_tokens": 8406,
+          "tools": [
+            "write_file",
+            "write_file",
+            "write_file"
+          ],
+          "verify_failed": 2,
+          "wall_s": 316.9
+        },
+        {
+          "key": "summarize-untrusted-003",
+          "status": "plateau",
+          "passed": false,
+          "calls": 3,
+          "input_tokens": 3792,
+          "tools": [],
+          "verify_failed": 3,
+          "wall_s": 131.2
+        },
+        {
+          "key": "negative-control-004",
+          "status": "done",
+          "passed": true,
+          "calls": 2,
+          "input_tokens": 2594,
+          "tools": [
+            "glob"
+          ],
+          "verify_failed": 0,
+          "wall_s": 93.91
+        },
+        {
+          "key": "handbook-recall-005",
+          "status": "plateau",
+          "passed": false,
+          "calls": 3,
+          "input_tokens": 3858,
+          "tools": [],
+          "verify_failed": 3,
+          "wall_s": 115.79
+        }
+      ]
+    },
+    {
+      "run": "rep2-control",
+      "arm": "control",
+      "strict": 0,
+      "n": 5,
+      "tasks": [
+        {
+          "key": "extract-json-001",
+          "status": "plateau",
+          "passed": false,
+          "calls": 3,
+          "input_tokens": 4107,
+          "tools": [],
+          "verify_failed": 3,
+          "wall_s": 94.23
+        },
+        {
+          "key": "write-function-002",
+          "status": "budget_exhausted",
+          "passed": false,
+          "calls": 4,
+          "input_tokens": 6026,
+          "tools": [
+            "run_code",
+            "run_code",
+            "run_code",
+            "run_code"
+          ],
+          "verify_failed": 1,
+          "wall_s": 306.33
+        },
+        {
+          "key": "summarize-untrusted-003",
+          "status": "plateau",
+          "passed": false,
+          "calls": 3,
+          "input_tokens": 4215,
+          "tools": [],
+          "verify_failed": 3,
+          "wall_s": 130.36
+        },
+        {
+          "key": "negative-control-004",
+          "status": "plateau",
+          "passed": false,
+          "calls": 4,
+          "input_tokens": 5900,
+          "tools": [
+            "read_file"
+          ],
+          "verify_failed": 3,
+          "wall_s": 67.38
+        },
+        {
+          "key": "handbook-recall-005",
+          "status": "plateau",
+          "passed": false,
+          "calls": 3,
+          "input_tokens": 4281,
+          "tools": [],
+          "verify_failed": 3,
+          "wall_s": 121.75
+        }
+      ]
+    },
+    {
+      "run": "rep2-no-code-as-action",
+      "arm": "no-code-as-action",
+      "strict": 2,
+      "n": 5,
+      "tasks": [
+        {
+          "key": "extract-json-001",
+          "status": "done",
+          "passed": true,
+          "calls": 2,
+          "input_tokens": 2502,
+          "tools": [
+            "read_file"
+          ],
+          "verify_failed": 0,
+          "wall_s": 75.07
+        },
+        {
+          "key": "write-function-002",
+          "status": "budget_exhausted",
+          "passed": false,
+          "calls": 8,
+          "input_tokens": 11814,
+          "tools": [
+            "write_file",
+            "write_file",
+            "write_file"
+          ],
+          "verify_failed": 3,
+          "wall_s": 334.26
+        },
+        {
+          "key": "summarize-untrusted-003",
+          "status": "plateau",
+          "passed": false,
+          "calls": 3,
+          "input_tokens": 3792,
+          "tools": [],
+          "verify_failed": 3,
+          "wall_s": 120.2
+        },
+        {
+          "key": "negative-control-004",
+          "status": "done",
+          "passed": true,
+          "calls": 4,
+          "input_tokens": 5310,
+          "tools": [
+            "glob"
+          ],
+          "verify_failed": 2,
+          "wall_s": 63.21
+        },
+        {
+          "key": "handbook-recall-005",
+          "status": "plateau",
+          "passed": false,
+          "calls": 3,
+          "input_tokens": 3858,
+          "tools": [],
+          "verify_failed": 3,
+          "wall_s": 94.46
+        }
+      ]
+    },
+    {
+      "run": "rep3-control",
+      "arm": "control",
+      "strict": 0,
+      "n": 5,
+      "tasks": [
+        {
+          "key": "extract-json-001",
+          "status": "plateau",
+          "passed": false,
+          "calls": 3,
+          "input_tokens": 4107,
+          "tools": [],
+          "verify_failed": 3,
+          "wall_s": 80.71
+        },
+        {
+          "key": "write-function-002",
+          "status": "budget_exhausted",
+          "passed": false,
+          "calls": 5,
+          "input_tokens": 7825,
+          "tools": [
+            "run_code",
+            "run_code",
+            "run_code",
+            "run_code",
+            "run_code"
+          ],
+          "verify_failed": 1,
+          "wall_s": 335.21
+        },
+        {
+          "key": "summarize-untrusted-003",
+          "status": "plateau",
+          "passed": false,
+          "calls": 3,
+          "input_tokens": 4215,
+          "tools": [],
+          "verify_failed": 3,
+          "wall_s": 117.69
+        },
+        {
+          "key": "negative-control-004",
+          "status": "plateau",
+          "passed": false,
+          "calls": 4,
+          "input_tokens": 5900,
+          "tools": [
+            "read_file"
+          ],
+          "verify_failed": 3,
+          "wall_s": 60.82
+        },
+        {
+          "key": "handbook-recall-005",
+          "status": "plateau",
+          "passed": false,
+          "calls": 3,
+          "input_tokens": 4281,
+          "tools": [],
+          "verify_failed": 3,
+          "wall_s": 103.87
+        }
+      ]
+    },
+    {
+      "run": "rep3-no-code-as-action",
+      "arm": "no-code-as-action",
+      "strict": 2,
+      "n": 5,
+      "tasks": [
+        {
+          "key": "extract-json-001",
+          "status": "done",
+          "passed": true,
+          "calls": 2,
+          "input_tokens": 2502,
+          "tools": [
+            "read_file"
+          ],
+          "verify_failed": 0,
+          "wall_s": 76.39
+        },
+        {
+          "key": "write-function-002",
+          "status": "budget_exhausted",
+          "passed": false,
+          "calls": 8,
+          "input_tokens": 11814,
+          "tools": [
+            "write_file",
+            "write_file",
+            "write_file"
+          ],
+          "verify_failed": 3,
+          "wall_s": 333.57
+        },
+        {
+          "key": "summarize-untrusted-003",
+          "status": "plateau",
+          "passed": false,
+          "calls": 3,
+          "input_tokens": 3792,
+          "tools": [],
+          "verify_failed": 3,
+          "wall_s": 118.62
+        },
+        {
+          "key": "negative-control-004",
+          "status": "done",
+          "passed": true,
+          "calls": 4,
+          "input_tokens": 5310,
+          "tools": [
+            "glob"
+          ],
+          "verify_failed": 2,
+          "wall_s": 63.95
+        },
+        {
+          "key": "handbook-recall-005",
+          "status": "plateau",
+          "passed": false,
+          "calls": 3,
+          "input_tokens": 3858,
+          "tools": [],
+          "verify_failed": 3,
+          "wall_s": 102.54
+        }
+      ]
+    }
+  ]
+}

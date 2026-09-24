@@ -1410,6 +1410,11 @@ recorded so nobody reads the gap as an omission.
 
 ### 1.30 The G1 ablation arms ran, and three of the four measured nothing
 
+> **VOID - v3 (HARNESS 3), the answer was in the prompt.** Every G1 number in
+> this entry, pass rates and token deltas alike. Event counts stand. G1 is
+> closed in 1.35.
+
+
 > **CORRECTION 2026-09-22: every pass rate below is void.** The task contract
 > was rendered whole into the prompt, so `x-expected` handed the model its own
 > answer (1.31). The 0.75 repeated in all five arms is the fraction of tasks
@@ -1636,6 +1641,10 @@ the document.
 
 ### 1.33 The third route: the grader taught the answer through its own feedback
 
+> **VOID - v4 (HARNESS 4), the grader's feedback leaked the answer.** Every G1
+> number from the v4 run. G1 is closed in 1.35.
+
+
 **2026-09-23.** The first run with the answer key out of the prompt (v4) put
 `handbook-recall-005` through five arms. It passed all five with **zero tool
 calls** - reporting three ticket IDs that exist only in a file it never
@@ -1734,6 +1743,15 @@ function.
 
 ### 1.34 A verifier that cannot fail: the v5 baseline's one pass was false
 
+> **VOID - v5 (HARNESS 5), the execution false pass.** Every G1 number from the
+> v5 run, strict counts included: write-function-002 was graded by a
+> verifier that could not fail, so no v5 outcome on it was a measurement,
+> and a bump makes the rest incomparable. (The v5 strict counts happen to
+> equal v6's per task - 0/5 and 2/5 on the same two tasks - which is a
+> coincidence of the model's determinism, not a rehabilitation.) G1 is
+> closed in 1.35.
+
+
 **2026-09-25.** The first run with the grader held out (v5, HARNESS 5, one
 run per arm, n=5 tasks) scored the control 0/5 strict. write-function-002
 ended `done_unannounced` in all five arms - by this project's convention, a
@@ -1802,6 +1820,87 @@ counts stand (0/5 control; 2/5 no-code-as-action, both passes graded by
 results in `agent.local.db` are the same false pass, and the eleven
 `json_schema` "done" results there graded shape only, never value (known
 since `expected_value` was introduced, now stated).
+
+
+### 1.35 G1 closed: what each mechanism saves when it fires, and how often it fires on the 3B
+
+**2026-09-25, HARNESS 6.** Four live runs (v3-v6) agreed: on granite4.1:3b three
+of the four mechanisms never engage, because the model rarely reads (1.32).
+Another task redesign would not change a property of the model. So G1 is
+stated as two measured quantities per mechanism: the saving WHEN IT FIRES,
+measured deterministically (`bench/g1_close.py savings` - scripted model,
+controlled observations, each mechanism on and off over byte-identical work;
+run twice, byte-identical output), and the FIRE RATE, read out of every
+real-model G1 record kept (`bench/g1_close.py firerate` - v3, v5 and the v6
+replication, 75 task-runs, 254 executor steps).
+
+| mechanism | saves when it fires (scripted) | fires on granite4.1:3b |
+|---|---|---|
+| **compaction** | -24% uncached prompt tokens, -17% sent, -22% cost, at the shipped 16,384 window with 1.5k-token files crossing the real ceiling in the 3rd of 6 reads (26,617 vs 35,108 uncached); pays 2 flush calls | **0 real ceiling crossings in 254 steps.** 54 boundaries in the records, every one forced by the probe; real tails at those boundaries were 146-219 tokens |
+| **semantic cache** | **nothing on the executor** (3,908 vs 3,902 sent - it sees the same compressed text either way). Saves local-tier compression calls: 1 vs 3 calls, 538 vs 1,614 local tokens, for one file read 3 times | **0 compressions in 253 steps** - no observation reached the 1,200-token threshold, because the one large file (the 22 KB handbook) was never opened |
+| **prefix stability** | one prefix re-prefill per memory write: 1 write in 6 calls, -12% uncached, -18% cost; 3 writes in 8 calls, -23% uncached, -33% cost (8,797 vs 11,361). Per WRITE, not per call: after a write the moved prefix is cached again | **not measurable in these records.** 0 memory writes attempted in 254 steps, and every measured arm ran isolated, which refuses tier-1 writes by design (`memory_write` under `isolate_retrieval`) - so it could not have fired had the model tried |
+| **code-as-action** | -77% sent tokens (1,818 vs 7,933) and 2 calls instead of 5, when one `<code>` block reads four files. Costs +150 tokens per call when offered and unused (+9.5% over a 5-call task) | 92 `run_code` in 199 steps (46%) of arms offering it - **all 92 on write-function-002**, 0 on the four reading tasks |
+
+**The G1 statement, per mechanism.** Compaction saves ~24% of uncached input
+when it fires and fired in 0% of steps on the 3B. The semantic cache saves no
+executor tokens at all - only local-tier compressions - and fired in 0%.
+Prefix stability saves one prefix re-prefill per mid-task memory write and
+had no opportunity to fire under measurement. Code-as-action saves ~77% on a
+multi-read task when used and was used on one task type only; on the tasks
+it was not used for, it cost capability (below).
+
+**The original ≥10x claim is not supported on this executor.** The product
+of saving and fire rate is ~zero for three mechanisms, and negative in pass
+rate for the fourth. What would change it is an executor property, not a
+suite: **a model that reads before answering.** Every mechanism here is a
+way of handling OBSERVATIONS - trimming them, caching their compression,
+keeping the prefix stable while they accumulate, or keeping them out of
+context via code - and a model that answers from nothing produces none.
+None of these numbers involves a paid token: no paid call has been made
+(D26), and the mock's cost column is Anthropic-shaped pricing applied to
+scripted calls, stated as such.
+
+**The one real effect, replicated.** control and no-code-as-action, three
+runs each, interleaved, v6 harness, grader held out: **no-code-as-action
+passed 2/5 in each of 3 runs (6/15 task-runs); control passed 0/5 in each of
+3 runs (0/15).** The same two tasks every time - extract-json-001 (`read_file`
+then 4825) and negative-control-004 (`glob` then 2), both graded by
+`expected_value`, the first on a submitted first answer in all 3 runs, the
+second on the first answer in 1 of 3 runs and after two held-out failures
+(pass/fail only) in 2 of 3. In control, the same tasks made no tool call or
+read once, and plateaued. `docs/evidence/g1-replication-v6.json`.
+
+**What n=3 is worth here, stated in the same breath.** At temperature 0 the
+3B is close to deterministic: extract-json-001 took a byte-identical
+trajectory (2 calls, 2,502 input tokens) in 3 of 3 runs, and 4 of the 5
+control tasks were byte-identical across all three. So the three runs show
+the effect REPRODUCES; they are not three independent draws, and the
+effect rests on 2 tasks. It is a result about this model on these tasks:
+**on a small model, offering code-as-action cost capability rather than
+saving tokens** - removing `run_code` and its instructions made the 3B take
+the direct action it otherwise skipped. Generalising it needs more tasks or
+sampling at temperature > 0, not more runs at 0.
+
+**A compaction defect the deterministic bench found.** The session boundary
+compacted the TAIL to 0.20 of the window, while the ceiling it fired on
+(0.28) counts the PREFIX. With the prefix over 8% of the window, compaction
+left the context over the ceiling: in the first run of this bench, at a
+6,460-token window, a boundary on every step from the 3rd, the first deleting
+nothing and each later one a single entry, the context never back under the
+ceiling, each boundary costing a flush call - +55% sent tokens against
+compaction off. The target is now
+0.20 of the window LESS the prefix; the new test in
+`tests/test_g1_ablation.py` (a real crossing, no probe) goes red on the old line. No shipped config reached it (the
+executor's window is 16,384 and its real prefix 757-935 tokens, threshold
+1,311), so no recorded number moves. A limit it exposed and does not fix:
+tombstones are never evicted, so each boundary starts from a higher floor
+(+~73 tokens per boundary here); a long enough task re-enters the same
+condition. At the small window compaction is now roughly break-even (-5%
+uncached, -2% cost, +3 calls).
+
+**Every earlier G1 number is void**, each with its reason on its entry: v3
+(1.30, the answer in the prompt), v4 (1.33, the grader's feedback), v5 (1.34,
+the execution false pass).
 
 ## 8. Open research questions
 
