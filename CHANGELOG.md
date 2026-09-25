@@ -106,6 +106,20 @@ Four suite passes, hours of wall clock and the whole machine, and it needs a
 decision about whether a code-as-action arm that cannot complete the suite is
 reporting the mechanism's token cost or the suite's dependence on it.
 
+## D13 closed: the sandbox survives a freeze - 2026-09-25 (desktop-app)
+
+  * `agent/frozen.py`: a frozen build starts itself as an INTERPRETER for
+    sandboxed code (`--alpha-sandbox-child`), dispatched before any app code;
+    anything started from inside the sandbox is an interpreter too, never the
+    app. `agent/__main__.py` is the frozen CLI's entry, dispatch first.
+  * Sandbox children get `stdin=DEVNULL`: the inherited handle is invalid in
+    a frozen or windowed process, and nothing sandboxed should read it.
+  * Frozen, the read fence allows the executable file itself, which holds the
+    module archive - the equivalent of python.exe under base_prefix.
+  * `packaging/build.py --probe` freezes the sandbox's own property suites
+    and `tests/test_frozen_sandbox.py`, and runs them from the binary: 44
+    passed, 1 skipped, 3 of 3 runs. C72 on why not multiprocessing.
+
 ## G1 closed - 2026-09-25
 
 G1 is stated per mechanism as saving-when-it-fires x fire-rate (FINDINGS

@@ -27,6 +27,8 @@ import time
 from pathlib import Path
 from typing import Callable
 
+from ..frozen import CHILD_ENV, interpreter_argv
+
 IS_POSIX = os.name == "posix"
 
 MEM_LIMIT_BYTES = 512 * 1024 * 1024
@@ -206,7 +208,12 @@ _READ_FENCE = {read_fence!r}
 _INTERP_ROOTS = sorted({{_os.path.realpath(p) for p in (
     [x for x in _sys.path if x] + [_sys.prefix, _sys.base_prefix,
      _sys.exec_prefix, getattr(_sys, "base_exec_prefix", _sys.prefix),
-     _os.environ.get("SYSTEMROOT", "")]) if p}})
+     _os.environ.get("SYSTEMROOT", "")]
+    # D13. Frozen, the interpreter's modules live in an archive INSIDE the
+    # executable, which sits beside the bundle rather than under any prefix -
+    # unfrozen, python.exe is under base_prefix and already readable. That one
+    # FILE, not its directory: the equivalent allowance and no wider.
+    + ([_sys.executable] if getattr(_sys, "frozen", False) else [])) if p}})
 _READ_ROOTS = [_WORKDIR] + _ROOTS + _INTERP_ROOTS
 # A2-4. What this program touched, for the record: every open, listing,
 # database and filesystem change outside the interpreter's own paths, refusals
@@ -560,6 +567,9 @@ def _build_env(workdir: str) -> dict:
         "PYTHONIOENCODING": "utf-8",
         "PYTHONUNBUFFERED": "1",
         "SYSTEMROOT": os.environ.get("SYSTEMROOT", ""),
+        # D13: in a frozen build, anything started from inside the sandbox
+        # runs as an interpreter and never as the application (agent.frozen).
+        CHILD_ENV: "1",
     }
 
 
@@ -615,7 +625,9 @@ def run_sandboxed(
         script.write_text(guard + "\n" + preamble + "\n" + code, encoding="utf-8")
 
         env = _build_env(workdir)
-        argv = [sys.executable, "-I", "-u", str(script)]
+        # D13: an interpreter, frozen or not - never sys.executable bare,
+        # which in a frozen build is the application itself.
+        argv = [*interpreter_argv(), str(script)]
 
         if tool_handler is None:
             result = _run_batch(argv, workdir, env, timeout_s)
@@ -640,6 +652,7 @@ def _run_batch(argv: list[str], workdir: str, env: dict, timeout_s: int) -> dict
     try:
         proc = subprocess.run(  # noqa: S603 - the point of this function
             argv, cwd=workdir, env=env, capture_output=True, text=True,
+            stdin=subprocess.DEVNULL,
             encoding="utf-8", errors="replace", timeout=timeout_s,
             preexec_fn=_posix_limits(timeout_s),
         )
@@ -664,6 +677,10 @@ def _run_batch_in_job(argv: list[str], workdir: str, env: dict, timeout_s: int) 
     try:
         proc, job = spawn_in_job(
             argv, _windows_limits(timeout_s), cwd=workdir, env=env,
+            # Never the app's stdin. Inherited, it is a handle the child has
+            # no business reading - and in a frozen or windowed build it is
+            # not a valid handle at all, so every run failed to start (D13).
+            stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
             encoding="utf-8", errors="replace")
     except JobError as e:

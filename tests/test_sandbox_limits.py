@@ -23,12 +23,17 @@ if os.name == "nt":
     from agent.execute.winjob import (
         CPU_LIMIT_EXIT, JobError, JobLimits, close_job, spawn_in_job)
 
+# D13: an interpreter in a frozen build too (agent.frozen).
+from agent.frozen import interpreter_argv  # noqa: E402
+
+PY = interpreter_argv()
 SMALL = dict(memory_bytes=256 * 2**20, cpu_seconds=30, max_processes=8)
-PIPES = dict(stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+PIPES = dict(stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+             stderr=subprocess.PIPE, text=True)
 
 
 def _run(code, timeout=30, **limits):
-    proc, job = spawn_in_job([sys.executable, "-I", "-c", code],
+    proc, job = spawn_in_job([*PY, "-c", code],
                              JobLimits(**{**SMALL, **limits}), **PIPES)
     try:
         out, err = proc.communicate(timeout=timeout)
@@ -82,7 +87,7 @@ def test_the_code_runs_inside_the_job_trampoline_included():
                                    ctypes.POINTER(ctypes.c_int)]
     k32.CloseHandle.argtypes = [ctypes.c_void_p]
     proc, job = spawn_in_job(
-        [sys.executable, "-I", "-c", "import os, time; print(os.getpid(), flush=True); time.sleep(3)"],
+        [*PY, "-c", "import os, time; print(os.getpid(), flush=True); time.sleep(3)"],
         JobLimits(**SMALL), **PIPES)
     try:
         pid = int(proc.stdout.readline())
@@ -112,7 +117,7 @@ def test_the_child_is_started_suspended(monkeypatch):
         return real(*a, **k)
 
     monkeypatch.setattr(winjob.subprocess, "Popen", spy)
-    proc, job = spawn_in_job([sys.executable, "-I", "-c", "print('ok')"],
+    proc, job = spawn_in_job([*PY, "-c", "print('ok')"],
                              JobLimits(**SMALL), **PIPES)
     try:
         out, _ = proc.communicate(timeout=30)
@@ -123,7 +128,7 @@ def test_the_child_is_started_suspended(monkeypatch):
 
 
 def test_closing_the_job_kills_what_it_started():
-    proc, job = spawn_in_job([sys.executable, "-I", "-c", "import time; time.sleep(60)"],
+    proc, job = spawn_in_job([*PY, "-c", "import time; time.sleep(60)"],
                              JobLimits(**SMALL), **PIPES)
     time.sleep(0.5)
     close_job(job)
@@ -151,7 +156,7 @@ def test_a_job_that_cannot_be_applied_refuses_the_run(monkeypatch):
 
     monkeypatch.setattr(winjob, "_api", broken)
     with pytest.raises(JobError, match="never ran"):
-        spawn_in_job([sys.executable, "-I", "-c", "print('ran')"], JobLimits(**SMALL), **PIPES)
+        spawn_in_job([*PY, "-c", "print('ran')"], JobLimits(**SMALL), **PIPES)
     r = run_sandboxed("print('ran')", timeout_s=30)
     assert "ran" not in r["stdout"] and r["returncode"] == -1, r
     assert "limits could not be applied" in r["stderr"], r

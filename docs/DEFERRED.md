@@ -36,7 +36,7 @@ Everything else on this page is marked in its own heading:
 | **closed** | fixed, with the change and its test named | D1, D3, D7, D9, D10, D11, D15, D17, D18, D19, D20, D21, D22, D23, D24, D28, D29, D30, D34, D35, D36, D37, D38, D39 |
 | **deleted** | never a defect, or about an instrument nobody runs | D4, D5, D8, D12, D14 |
 | **known and accepted** | a real limit, decided rather than deferred | D32 (the sandbox is advisory: Phase 6 withdrawn) |
-| **dormant** | its subject is retired; it wakes if that returns | D13 (nothing is frozen), D19 (M11) |
+| **dormant** | its subject is retired; it wakes if that returns | D19 (M11). D13 CLOSED 2026-09-25 |
 | **under another item** | one decision unblocks it | D25, D31 (both under D26) |
 
 **One of the six is the user's**: D26 (credentials - decided yes, pending).
@@ -303,7 +303,22 @@ quoted.
 
 ---
 
-## D13 — The sandbox spawns `sys.executable`, which is fatal under any freeze (DORMANT 2026-09-16: nothing is frozen and nothing plans to be)
+## D13 — The sandbox spawns `sys.executable`, which is fatal under any freeze (CLOSED 2026-09-25, desktop-app branch: the sandbox's own property tests pass FROM the frozen binary, 3 of 3 runs)
+
+> **Closed.** `agent/frozen.py`: the sandbox starts `interpreter_argv()` -
+> frozen, `[exe, --alpha-sandbox-child]` - and a frozen entry point calls
+> `child_entry()` first, which runs the child as an interpreter before any
+> app code (freeze_support's mechanism, on the sandbox's own spawn path; why
+> not multiprocessing: SPEC-DELTA C72). Anything descended from a sandbox
+> child is an interpreter too, never the app. Two more defects that only a
+> freeze shows: an inherited stdin handle that is invalid in a frozen or
+> windowed process (every run failed to start), and the read fence refusing
+> the executable, which holds the frozen module archive. Verified by the
+> probe build (`packaging/build.py --probe`) running the sandbox's own
+> suites - scope, the Job Object, timeouts, the SQLite authorizer and URI
+> spellings, sympy, and process-tree recursion - 44 passed, 1 skipped, three
+> runs; each fix red with its defect restored. `docs/evidence/d13-freeze-gate-2026-09-25.txt`.
+
 
 **Severity:** blocking, for packaging only. Harmless in every current
 deployment.

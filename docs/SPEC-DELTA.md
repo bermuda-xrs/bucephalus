@@ -482,7 +482,7 @@ to evaluate the audit hook, the taint gate, or resource limits.
 **Class:** oversight with a hard consequence. `sys.executable` is correct for
 every non-frozen deployment and silently catastrophic for a frozen one.
 
-**Status:** blocks the desktop-app branch entirely. Iteration one ends as a
+**Status (2026-09-25): FIXED on the desktop-app branch - see C72.** Was: blocks the desktop-app branch entirely. Iteration one ends as a
 CLI plus a browser console, which is what the evidence supports.
 
 ### C27. `python -m build` fails because the repo's own `build/` shadows it
@@ -1522,3 +1522,28 @@ fail an empty answer, "{}" and a sentinel-bearing wrong one. `pytest` runs in
 the task's workspace, sandboxed. `checker_program` is removed rather than
 guarded: dead code with the defect is deleted, and the spec's "a program
 written by a different model" returns when something constructs it.
+
+### C72. The freeze fix is freeze_support's mechanism, not multiprocessing
+
+**Instruction:** fix D13 with multiprocessing spawn, `freeze_support()`,
+`set_executable()` and `sys.frozen`.
+
+**Measured against the sandbox:** a `multiprocessing.Process` child cannot be
+created SUSPENDED and assigned to its Job Object before its first
+instruction - the ordering `test_the_child_is_started_suspended` pins because
+without it a child can escape the job by luck - would not receive the
+sandbox's clean environment from `_build_env`, and would lose the
+stdin/stdout tool bridge that `call_tool` rides. Each is a sandbox property,
+and a freeze fix may not cost one.
+
+**Correct version:** what `freeze_support()` does for multiprocessing -
+dispatch on a flag before any application code runs - applied to the
+sandbox's existing spawn path (`agent/frozen.py`). `sys.frozen` selects the
+argv; `freeze_support()` is still called in the dispatcher, for any library
+that uses multiprocessing; `set_executable()` is not needed, because the
+sandbox names its interpreter itself. Every property is then verified in the
+frozen binary by the sandbox's own tests, not by a re-implementation of them.
+
+**Class:** an instruction that named a mechanism where it meant a property.
+The property - an interpreter, never the app - is met; the mechanism would
+have cost three others.
