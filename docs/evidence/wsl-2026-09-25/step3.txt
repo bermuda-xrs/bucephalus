@@ -1,0 +1,308 @@
+.....................................s.................................. [  6%]
+........................................................................ [ 13%]
+......................................................F................. [ 20%]
+.......................sssssssss........................................ [ 27%]
+...............................................................sssss.... [ 34%]
+...............................F................................sss..... [ 41%]
+...................F.................................................F.. [ 48%]
+........................................................................ [ 54%]
+........................................................................ [ 61%]
+.............................................F.......................... [ 68%]
+..............s.FF...................................................... [ 75%]
+..............ssssssss.................................................. [ 82%]
+........................................................................ [ 89%]
+........................................................................ [ 96%]
+..............F...........................                               [100%]
+=================================== FAILURES ===================================
+_____________ test_closing_the_window_kills_everything_it_started ______________
+
+ctx = <agent.context.AgentContext object at 0x7cbfa6b4ef50>
+workspace = PosixPath('/tmp/pytest-of-char1/pytest-3/test_closing_the_window_kills_0/work')
+
+    def test_closing_the_window_kills_everything_it_started(ctx, workspace):
+        """A sandboxed run mid-flight, its grandchild, and a plain child: all gone
+        after shutdown, and the server stopped. The orphan is the grandchild -
+        the process a bare terminate of the child would leave behind."""
+        from agent.execute.sandbox import run_sandboxed
+    
+        server, thread, port = desktop.start_server(ctx, "127.0.0.1")
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/health", timeout=10) as r:
+            assert r.status == 200
+        code = ("import subprocess, sys, time\n"
+                "g = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(120)'])\n"
+                "print(g.pid, flush=True)\ntime.sleep(120)\n")
+        runner = threading.Thread(target=run_sandboxed, args=(code,),
+                                  kwargs={"timeout_s": 120}, daemon=True)
+        runner.start()
+        plain = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(120)"],
+                                 stdin=subprocess.DEVNULL)
+        deadline = time.time() + 30
+        while time.time() < deadline and len(_pythons_below()) < 3:
+            time.sleep(0.2)
+        started = _pythons_below()
+        assert len(started) >= 3, f"the tree never formed: {started}"
+    
+        desktop.shutdown(server, thread)
+        time.sleep(1)
+        assert not thread.is_alive(), "the server kept running"
+        alive = [p for p in started if _alive(p)]
+>       assert not alive, f"still running after the window closed: {alive}"
+E       AssertionError: still running after the window closed: [4074]
+E       assert not [4074]
+
+tests/test_desktop.py:84: AssertionError
+__________________ test_every_path_the_handover_names_exists ___________________
+
+    def test_every_path_the_handover_names_exists():
+        """A renamed or deleted file must break the handover, not outlive it."""
+        named = _paths_named()
+        assert named, "the path scan found nothing - the regex has stopped matching"
+        missing = [p for p in named if not (ROOT / p).exists()]
+>       assert not missing, f"handover names paths that do not exist: {missing}"
+E       AssertionError: handover names paths that do not exist: ['build/']
+E       assert not ['build/']
+
+tests/test_handover_is_current.py:75: AssertionError
+_______________ test_concurrent_requests_do_not_break_the_chain ________________
+
+server = 'http://127.0.0.1:56141'
+
+    def test_concurrent_requests_do_not_break_the_chain(server):
+        """The threadpool is the point: hammer it and the chains must still verify."""
+        from concurrent.futures import ThreadPoolExecutor
+    
+        def make(i: int) -> str:
+            r = _post(server + "/tasks", timeout=20,
+                           json={"goal": f"concurrent {i}", "artifact_scope": ["work"]})
+            r.raise_for_status()
+            return r.json()["task_id"]
+    
+        with ThreadPoolExecutor(max_workers=8) as pool:
+>           ids = list(pool.map(make, range(16)))
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_m12_serve.py:308: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/lib/python3.13/concurrent/futures/_base.py:619: in result_iterator
+    yield _result_or_cancel(fs.pop())
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/lib/python3.13/concurrent/futures/_base.py:317: in _result_or_cancel
+    return fut.result(timeout)
+           ^^^^^^^^^^^^^^^^^^^
+/usr/lib/python3.13/concurrent/futures/_base.py:449: in result
+    return self.__get_result()
+           ^^^^^^^^^^^^^^^^^^^
+/usr/lib/python3.13/concurrent/futures/_base.py:401: in __get_result
+    raise self._exception
+/usr/lib/python3.13/concurrent/futures/thread.py:59: in run
+    result = self.fn(*self.args, **self.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_m12_serve.py:304: in make
+    r.raise_for_status()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <Response [500 Internal Server Error]>
+
+    def raise_for_status(self) -> Response:
+        """
+        Raise the `HTTPStatusError` if one occurred.
+        """
+        request = self._request
+        if request is None:
+            raise RuntimeError(
+                "Cannot call `raise_for_status` as the request "
+                "instance has not been set on this response."
+            )
+    
+        if self.is_success:
+            return self
+    
+        if self.has_redirect_location:
+            message = (
+                "{error_type} '{0.status_code} {0.reason_phrase}' for url '{0.url}'\n"
+                "Redirect location: '{0.headers[location]}'\n"
+                "For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/{0.status_code}"
+            )
+        else:
+            message = (
+                "{error_type} '{0.status_code} {0.reason_phrase}' for url '{0.url}'\n"
+                "For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/{0.status_code}"
+            )
+    
+        status_class = self.status_code // 100
+        error_types = {
+            1: "Informational response",
+            3: "Redirect response",
+            4: "Client error",
+            5: "Server error",
+        }
+        error_type = error_types.get(status_class, "Invalid status code")
+        message = message.format(self, error_type=error_type)
+>       raise HTTPStatusError(message, request=request, response=self)
+E       httpx.HTTPStatusError: Server error '500 Internal Server Error' for url 'http://127.0.0.1:56141/tasks'
+E       For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/500
+
+../.alpha-venv/lib/python3.13/site-packages/httpx/_models.py:829: HTTPStatusError
+_____________________________ test_sandbox_timeout _____________________________
+
+    def test_sandbox_timeout():
+        r = run_sandboxed("while True: pass", timeout_s=3)
+>       assert r["stderr"] == "TIMEOUT"
+E       AssertionError: assert '' == 'TIMEOUT'
+E         
+E         - TIMEOUT
+
+tests/test_m5_action.py:28: AssertionError
+________ test_concurrent_reads_of_the_shared_connection_do_not_corrupt _________
+
+tmp_path = PosixPath('/tmp/pytest-of-char1/pytest-3/test_concurrent_reads_of_the_s0')
+
+    def test_concurrent_reads_of_the_shared_connection_do_not_corrupt(tmp_path):
+        """`check_same_thread=False` means the pool shares one connection. Reads
+        are what a batch does, so this drives many of them at once and asserts
+        every result is intact."""
+        ctx = make_ctx(tmp_path, width=8)
+        t = new_task(ctx)
+        for i in range(8):
+            (tmp_path / "work" / f"g{i}.txt").write_text("x" * 500, encoding="utf-8")
+    
+        calls = ([{"tool": "search_history", "args": {"query": "read some files"}}] * 4
+                 + [{"tool": "read_file", "args": {"path": f"work/g{i}.txt"}}
+                    for i in range(4)])
+        out = tool_parallel(ctx, t, calls)
+        assert out["ok"]
+        for r in out["results"]:
+>           assert r["result"]["ok"] is True, r
+E           AssertionError: {'tool': 'search_history', 'args': {'query': 'read some files'}, 'result': {'ok': False, 'error': 'InterfaceError: bad parameter or other API misuse'}}
+E           assert False is True
+
+tests/test_parallel_tools.py:351: AssertionError
+______________________ test_a_genuine_orphan_is_selected _______________________
+
+family = (4513, 4514)
+
+    def test_a_genuine_orphan_is_selected(family):
+        """Kill only the parent; the abandoned branch must be recognised.
+    
+        The assertion is about the abandoned BRANCH, not the leaf, and that is
+        not a weakening - it is the trampoline again (SPEC-DELTA C13). Launching
+        the helper through the venv `python.exe` gives
+    
+            parent P  ->  wrapper W  ->  leaf C
+    
+        so killing P orphans W, while C still has W as a living parent and is
+        correctly not an orphan. `kill_tree` then takes C with W, which is the
+        behaviour wanted in production too: an abandoned `llama-server` tree
+        should go as a tree.
+    
+        Asserting `child_pid in selected` would therefore be asserting the wrong
+        thing, and it failed for that reason before this comment existed.
+        """
+        parent_pid, child_pid = family
+    
+        # NOT kill_tree: /T would take the child with it, and then there is
+        # nothing orphaned left to detect.
+        _kill_single(parent_pid)
+>       assert _wait_gone(parent_pid), "parent did not die"
+E       AssertionError: parent did not die
+E       assert False
+E        +  where False = _wait_gone(4513)
+
+tests/test_reaper_parentage.py:156: AssertionError
+________________________ test_protect_pids_is_honoured _________________________
+
+family = (4517, 4518)
+
+    def test_protect_pids_is_honoured(family):
+        """An explicitly protected pid is never selected, orphan or not."""
+        parent_pid, child_pid = family
+        _kill_single(parent_pid)
+        _wait_gone(parent_pid)
+    
+        selected = orphan_pids(names=("python",))
+>       assert selected, "precondition: something should be orphaned by now"
+E       AssertionError: precondition: something should be orphaned by now
+E       assert []
+
+tests/test_reaper_parentage.py:175: AssertionError
+__________ test_a_longer_crawl_delay_wins_but_a_shorter_one_does_not ___________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7cbfa66399b0>
+
+    def test_a_longer_crawl_delay_wins_but_a_shorter_one_does_not(monkeypatch):
+        """A site asking for more space gets it. A site asking for less does not
+        lower our floor, because the floor is our politeness, not theirs."""
+        import agent.net.politeness as pol
+    
+        class RP:
+            def __init__(self, d):
+                self.d = d
+    
+            def crawl_delay(self, ua):
+                return self.d
+    
+            def can_fetch(self, ua, url):
+                return True
+    
+        slept = []
+        monkeypatch.setattr(pol.time, "sleep", lambda s: slept.append(s))
+    
+        pol.reset()
+        monkeypatch.setattr(pol, "_robots_for", lambda url, timeout_s=5.0: RP(5))
+        pol.wait_for_turn("https://slow.example/a", min_interval_s=0.5)
+        pol.wait_for_turn("https://slow.example/b", min_interval_s=0.5)
+>       assert slept[0] >= 5, f"a declared crawl-delay of 5 must be honoured: {slept}"
+E       AssertionError: a declared crawl-delay of 5 must be honoured: [4.999959468841553]
+E       assert 4.999959468841553 >= 5
+
+tests/test_web_tools.py:306: AssertionError
+=============================== warnings summary ===============================
+tests/test_dead_code_audit.py::test_no_newly_unreferenced_machinery
+tests/test_dead_code_audit.py::test_no_newly_unreferenced_machinery
+tests/test_dead_code_audit.py::test_the_known_list_does_not_rot
+tests/test_dead_code_audit.py::test_the_known_list_does_not_rot
+tests/test_no_adapter_identity_branches.py::test_no_branch_on_adapter_identity_outside_the_registry
+tests/test_resume_is_verified.py::test_every_continuation_path_goes_through_run_task
+  <unknown>:89: SyntaxWarning: invalid escape sequence '\w'
+
+tests/test_dead_code_audit.py::test_no_newly_unreferenced_machinery
+tests/test_dead_code_audit.py::test_the_known_list_does_not_rot
+  <unknown>:7: SyntaxWarning: invalid escape sequence '\.'
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+============================= slowest 15 durations =============================
+30.08s teardown tests/test_reaper_parentage.py::test_reap_kills_exactly_what_selection_returns
+30.07s teardown tests/test_reaper_parentage.py::test_a_healthy_child_is_not_selected
+20.26s teardown tests/test_reaper_parentage.py::test_protect_pids_is_honoured
+20.25s teardown tests/test_reaper_parentage.py::test_a_genuine_orphan_is_selected
+16.12s call     tests/test_cli_subcommands.py::test_tui_starts_and_keeps_running
+15.09s call     tests/test_reaper_parentage.py::test_a_genuine_orphan_is_selected
+15.09s call     tests/test_reaper_parentage.py::test_protect_pids_is_honoured
+12.58s call     tests/test_cli_subcommands.py::test_serve_binds_and_answers_health
+11.68s call     tests/test_desktop.py::test_closing_the_window_kills_everything_it_started
+10.41s call     tests/test_m1_kernel.py::test_kill_and_resume
+10.28s call     tests/test_runlock.py::test_kill_tree_kills_the_child_not_just_the_parent
+10.09s call     tests/test_posix_platform.py::test_real_kill_tree_does_not_kill_its_caller
+10.08s call     tests/test_runlock.py::test_the_lock_is_released_when_a_process_is_killed
+8.66s call     tests/test_cli_subcommands.py::test_schedule_add_then_remove
+6.80s call     tests/test_cli_subcommands.py::test_approve_refuses_a_stale_plan_hash
+=========================== short test summary info ============================
+SKIPPED [1] tests/test_anchor_behind_is_not_tampering.py:161: no local database in this checkout
+SKIPPED [9] tests/test_every_verifier_can_fail.py:107: inspects nothing - held by the mesh under measurement
+SKIPPED [1] tests/test_frozen_sandbox.py:41: runs in the frozen probe
+SKIPPED [1] tests/test_frozen_sandbox.py:50: runs in the frozen probe
+SKIPPED [1] tests/test_frozen_sandbox.py:76: runs in the frozen probe
+SKIPPED [1] tests/test_frozen_sandbox.py:116: runs in the frozen probe
+SKIPPED [1] tests/test_frozen_sandbox.py:132: runs in the frozen probe
+SKIPPED [1] tests/test_live_credentials.py:77: ALPHA_TELEGRAM_TOKEN is not set: the live Telegram path stays UNVERIFIED (D26)
+SKIPPED [2] tests/test_live_credentials.py:84: ANTHROPIC_API_KEY is not set: the Anthropic adapter stays UNVERIFIED (D26)
+SKIPPED [1] tests/test_posix_platform.py:296: macOS only - verified on a real Mac by docs/PLATFORMS.md checklist step 5
+SKIPPED [1] tests/test_sandbox_limits.py:45: the Windows half of D37
+SKIPPED [1] tests/test_sandbox_limits.py:55: the Windows half of D37
+SKIPPED [1] tests/test_sandbox_limits.py:60: the Windows half of D37
+SKIPPED [1] tests/test_sandbox_limits.py:67: the Windows half of D37
+SKIPPED [1] tests/test_sandbox_limits.py:80: the Windows half of D37
+SKIPPED [1] tests/test_sandbox_limits.py:104: the Windows half of D37
+SKIPPED [1] tests/test_sandbox_limits.py:130: the Windows half of D37
+SKIPPED [1] tests/test_sandbox_limits.py:138: the Windows half of D37
+8 failed, 1015 passed, 27 skipped, 8 warnings in 428.60s (0:07:08)

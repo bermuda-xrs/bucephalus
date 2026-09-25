@@ -1,0 +1,4 @@
+== 0
+Python 3.13.5
+Linux LEECHANGHEE 6.18.33.2-microsoft-standard-WSL2 #1 SMP PREEMPT_DYNAMIC Thu Jun 18 21:54:43 UTC 2026 x86_64 GNU/Linux
+5a6cdf8 Phase C: fix the audit's two HIGH findings; triage the rest

@@ -1,0 +1,23 @@
+s......ssssssss..F...........................                            [100%]
+=================================== FAILURES ===================================
+_____________________________ test_sandbox_timeout _____________________________
+
+    def test_sandbox_timeout():
+        r = run_sandboxed("while True: pass", timeout_s=3)
+>       assert r["stderr"] == "TIMEOUT"
+E       AssertionError: assert '' == 'TIMEOUT'
+E         
+E         - TIMEOUT
+
+/home/char1/.alpha-build/dist/alpha-probe/_internal/tests/test_m5_action.py:28: AssertionError
+=========================== short test summary info ============================
+SKIPPED [1] ../home/char1/.alpha-build/dist/alpha-probe/_internal/tests/test_frozen_sandbox.py:27: the frozen half is below
+SKIPPED [1] ../home/char1/.alpha-build/dist/alpha-probe/_internal/tests/test_sandbox_limits.py:45: the Windows half of D37
+SKIPPED [1] ../home/char1/.alpha-build/dist/alpha-probe/_internal/tests/test_sandbox_limits.py:55: the Windows half of D37
+SKIPPED [1] ../home/char1/.alpha-build/dist/alpha-probe/_internal/tests/test_sandbox_limits.py:60: the Windows half of D37
+SKIPPED [1] ../home/char1/.alpha-build/dist/alpha-probe/_internal/tests/test_sandbox_limits.py:67: the Windows half of D37
+SKIPPED [1] ../home/char1/.alpha-build/dist/alpha-probe/_internal/tests/test_sandbox_limits.py:80: the Windows half of D37
+SKIPPED [1] ../home/char1/.alpha-build/dist/alpha-probe/_internal/tests/test_sandbox_limits.py:104: the Windows half of D37
+SKIPPED [1] ../home/char1/.alpha-build/dist/alpha-probe/_internal/tests/test_sandbox_limits.py:130: the Windows half of D37
+SKIPPED [1] ../home/char1/.alpha-build/dist/alpha-probe/_internal/tests/test_sandbox_limits.py:138: the Windows half of D37
+1 failed, 35 passed, 9 skipped in 39.02s

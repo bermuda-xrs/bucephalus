@@ -1,0 +1,2 @@
+process table rows: 18
+alive-file: survived

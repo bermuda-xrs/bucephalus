@@ -1,0 +1,117 @@
+..F.............................sssss...sssssssss....................... [ 43%]
+.......................................................................F [ 86%]
+...............FF.....                                                   [100%]
+=================================== FAILURES ===================================
+_____________________________ test_sandbox_timeout _____________________________
+
+    def test_sandbox_timeout():
+        r = run_sandboxed("while True: pass", timeout_s=3)
+>       assert r["stderr"] == "TIMEOUT"
+E       AssertionError: assert '' == 'TIMEOUT'
+E         
+E         - TIMEOUT
+
+tests/test_m5_action.py:28: AssertionError
+_____________ test_closing_the_window_kills_everything_it_started ______________
+
+ctx = <agent.context.AgentContext object at 0x79038b2b6350>
+workspace = PosixPath('/tmp/pytest-of-char1/pytest-1/test_closing_the_window_kills_0/work')
+
+    def test_closing_the_window_kills_everything_it_started(ctx, workspace):
+        """A sandboxed run mid-flight, its grandchild, and a plain child: all gone
+        after shutdown, and the server stopped. The orphan is the grandchild -
+        the process a bare terminate of the child would leave behind."""
+        from agent.execute.sandbox import run_sandboxed
+    
+        server, thread, port = desktop.start_server(ctx, "127.0.0.1")
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/health", timeout=10) as r:
+            assert r.status == 200
+        code = ("import subprocess, sys, time\n"
+                "g = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(120)'])\n"
+                "print(g.pid, flush=True)\ntime.sleep(120)\n")
+        runner = threading.Thread(target=run_sandboxed, args=(code,),
+                                  kwargs={"timeout_s": 120}, daemon=True)
+        runner.start()
+        plain = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(120)"],
+                                 stdin=subprocess.DEVNULL)
+        deadline = time.time() + 30
+        while time.time() < deadline and len(_pythons_below()) < 3:
+            time.sleep(0.2)
+        started = _pythons_below()
+        assert len(started) >= 3, f"the tree never formed: {started}"
+    
+        desktop.shutdown(server, thread)
+        time.sleep(1)
+        assert not thread.is_alive(), "the server kept running"
+        alive = [p for p in started if _alive(p)]
+>       assert not alive, f"still running after the window closed: {alive}"
+E       AssertionError: still running after the window closed: [494]
+E       assert not [494]
+
+tests/test_desktop.py:84: AssertionError
+______________________ test_a_genuine_orphan_is_selected _______________________
+
+family = (509, 510)
+
+    def test_a_genuine_orphan_is_selected(family):
+        """Kill only the parent; the abandoned branch must be recognised.
+    
+        The assertion is about the abandoned BRANCH, not the leaf, and that is
+        not a weakening - it is the trampoline again (SPEC-DELTA C13). Launching
+        the helper through the venv `python.exe` gives
+    
+            parent P  ->  wrapper W  ->  leaf C
+    
+        so killing P orphans W, while C still has W as a living parent and is
+        correctly not an orphan. `kill_tree` then takes C with W, which is the
+        behaviour wanted in production too: an abandoned `llama-server` tree
+        should go as a tree.
+    
+        Asserting `child_pid in selected` would therefore be asserting the wrong
+        thing, and it failed for that reason before this comment existed.
+        """
+        parent_pid, child_pid = family
+    
+        # NOT kill_tree: /T would take the child with it, and then there is
+        # nothing orphaned left to detect.
+        _kill_single(parent_pid)
+>       assert _wait_gone(parent_pid), "parent did not die"
+E       AssertionError: parent did not die
+E       assert False
+E        +  where False = _wait_gone(509)
+
+tests/test_reaper_parentage.py:156: AssertionError
+________________________ test_protect_pids_is_honoured _________________________
+
+family = (513, 514)
+
+    def test_protect_pids_is_honoured(family):
+        """An explicitly protected pid is never selected, orphan or not."""
+        parent_pid, child_pid = family
+        _kill_single(parent_pid)
+        _wait_gone(parent_pid)
+    
+        selected = orphan_pids(names=("python",))
+>       assert selected, "precondition: something should be orphaned by now"
+E       AssertionError: precondition: something should be orphaned by now
+E       assert []
+
+tests/test_reaper_parentage.py:175: AssertionError
+=============================== warnings summary ===============================
+tests/test_every_verifier_can_fail.py:229
+  /home/char1/alpha-checkout/tests/test_every_verifier_can_fail.py:229: SyntaxWarning: invalid escape sequence '\w'
+    "    return '-'.join(re.sub(r'[^\w\s]', '', s).lower().split())\n")
+
+tests/test_every_verifier_can_fail.py::test_every_bench_task_grader_can_fail[001_extract_json]
+  /home/char1/alpha-checkout/src/agent/workspace.py:89: SyntaxWarning: invalid escape sequence '\w'
+    PermissionError: [WinError 5] Access is denied: '...\work\M16\input'
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+SKIPPED [1] tests/test_frozen_sandbox.py:41: runs in the frozen probe
+SKIPPED [1] tests/test_frozen_sandbox.py:50: runs in the frozen probe
+SKIPPED [1] tests/test_frozen_sandbox.py:76: runs in the frozen probe
+SKIPPED [1] tests/test_frozen_sandbox.py:116: runs in the frozen probe
+SKIPPED [1] tests/test_frozen_sandbox.py:132: runs in the frozen probe
+SKIPPED [9] tests/test_every_verifier_can_fail.py:107: inspects nothing - held by the mesh under measurement
+4 failed, 148 passed, 14 skipped, 2 warnings in 182.26s (0:03:02)

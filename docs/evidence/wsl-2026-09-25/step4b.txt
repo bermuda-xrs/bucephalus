@@ -1,0 +1,6 @@
+1 '' Traceback (most recent call last):
+  File "/tmp/alpha_sbx_f4bhsmfr/_run.py", line 320, in <module>
+    b = bytearray(640 * 2**20); print('allocated')
+MemoryError
+
+notes: ["rlimits (kernel-enforced): address space 512 MB, CPU 60 s, file size 64 MB. Processes: at most 32 in this run's process group, enforced by a watchdog every 0.1 s - REACTIVE, not kernel-enforced."]

@@ -34,7 +34,7 @@ Everything else on this page is marked in its own heading:
 
 | state | what it means | items |
 |---|---|---|
-| **open** | a real defect, nobody has fixed it | D2, D6, D16, D26, D27, D33; from the audit D43, D44, D45, D46, D47, D48, D49, D50, D51, D52, D53, each with its audit severity |
+| **open** | a real defect, nobody has fixed it | D2, D6, D16, D26, D27, D33; from Linux D54-D59; from the audit D43, D44, D45, D46, D47, D48, D49, D50, D51, D52, D53, each with its audit severity |
 | **closed** | fixed, with the change and its test named | D1, D3, D7, D9, D10, D11, D15, D17, D18, D19, D20, D21, D22, D23, D24, D28, D29, D30, D34, D35, D36, D37, D38, D39, D40, D41, D42 |
 | **deleted** | never a defect, or about an instrument nobody runs | D4, D5, D8, D12, D14 |
 | **known and accepted** | a real limit, decided rather than deferred | D32 (the sandbox is advisory: Phase 6 withdrawn) |
@@ -1346,3 +1346,54 @@ CPU-bound executor that is wall clock on every step. Sits beside D33.
 `tests/test_cli_subcommands.py`, subprocess per test by design (invariant
 115), ~170 s of 535 s. A shared scratch install for the read-only ones would
 recover most of it.
+
+---
+
+# From the first Linux run, WSL2, 2026-09-25 (`docs/evidence/wsl-2026-09-25/`)
+
+Found by running PLATFORMS.md section 5 in WSL2 (Debian 13, Python 3.13).
+The Linux half of Phase A held: all seven real-kernel POSIX tests passed. These
+are what else the first run found, which is what a first run is for.
+
+## D54 - MEDIUM - POSIX `alive()` counts a zombie as alive
+
+`os.kill(pid, 0)` succeeds on an unreaped child, so `kill_tree` of its own
+child waits its full timeout and reports failure, and the desktop's
+window-close test sees a killed process as "still running". Fix: treat state
+`Z` as dead (`/proc/<pid>/stat` on Linux, `ps -o stat=` on macOS).
+Evidence: `test_closing_the_window_kills_everything_it_started` on Linux.
+
+## D55 - MEDIUM - on Linux the orphan reaper selects nothing
+
+Its rule - an orphan is a process whose parent is gone - is Windows
+semantics. Linux re-parents an orphan to init or a subreaper, so its parent
+is never gone and the reaper is inert there (C3). Fix: on POSIX, an orphan is
+a matching process re-parented to pid 1 or to a subreaper.
+Evidence: `test_a_genuine_orphan_is_selected`, `test_protect_pids_is_honoured`.
+
+## D56 - MEDIUM - the shared SQLite connection fails under concurrent threads on Linux + 3.13
+
+`InterfaceError: bad parameter or other API misuse`, surfacing as HTTP 500 on
+concurrent `/tasks` and a failed concurrent `search_history`. Never seen on
+Windows with 3.11; whether the kernel or Python 3.13 is the trigger is not
+separated. Fix: serialise use of the shared connection, or a connection per
+thread. Evidence: `test_concurrent_requests_do_not_break_the_chain`,
+`test_concurrent_reads_of_the_shared_connection_do_not_corrupt`.
+
+## D57 - LOW - RLIMIT_CPU equal to the wall-clock timeout races it
+
+On Linux the CPU limit (SIGXCPU) stops the run before the wall-clock timeout,
+so a timeout reports as a CPU kill. The run is stopped either way; the result
+differs from Windows. Fix: the CPU limit a second above the timeout, a
+backstop rather than a race. Evidence: `test_sandbox_timeout`, in the full
+suite and in the frozen gate.
+
+## D58 - LOW - the handover names `build/`, which a fresh clone does not have
+
+`test_every_path_the_handover_names_exists` fails on any fresh checkout: the
+directory exists only after a build. Fix the wording, not the test.
+
+## D59 - LOW - a crawl delay of 5 s is honoured as 4.99996 s on Linux
+
+Sleep precision against a strict `>=` in the test; the courtesy is kept to
+within 40 microseconds. Fix: wait on a monotonic deadline.
