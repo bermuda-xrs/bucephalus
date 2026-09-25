@@ -205,10 +205,18 @@ class MemoryStore:
 # realistic set: the agent reaching the files by some path other than the
 # write path, a buggy tool, a sync conflict, an editor.
 #
-# The AUTHENTICATED record is the hash chain: every `memory.written` event
-# carries the fingerprint at the time of the write and cannot be rewritten
-# without breaking the chain. This file is the cheap startup check; the chain
-# is the evidence.
+# The hash chain is EVIDENCE for a later audit, not a check. Every
+# `memory.written` event carries the fingerprint at the time of the write, and
+# that record cannot be rewritten without breaking the chain - so after the
+# fact, a reader can ask which states this database's agent actually wrote.
+# Nothing compares against it at load, deliberately (AUDIT F6, D44): memory is
+# one store per user, shared by every config, while each config's chain is its
+# own database, and `alpha memory --accept` blesses a state with no chain
+# event at all. A load-time comparison would read another config's legitimate
+# write, or an accepted state, as tampering - DR1 width, the defect the
+# per-config anchor was withdrawn for. `tests/test_memory_integrity_claim.py`
+# holds that. So this file is the check, the chain is the record, and neither
+# stops a process that can already write the user data directory.
 BLESSED_FILE = ".fingerprint"
 
 INTACT = "intact"

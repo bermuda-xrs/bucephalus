@@ -21,9 +21,9 @@ nobody reads.
 
 WHAT THE FINGERPRINT ACTUALLY DETECTS: unaccounted CHANGE, not authenticated
 tampering. Anyone with write access to the memory directory can rewrite the
-blessing too. The authenticated record is the hash chain — every
-`memory.written` event carries the fingerprint at write time and cannot be
-altered without breaking the chain.
+blessing too. The hash chain is evidence for a later audit - every
+`memory.written` event carries the fingerprint at write time - but nothing
+compares against it at load, deliberately (D44, test_memory_integrity_claim).
 """
 
 from __future__ import annotations

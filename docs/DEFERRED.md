@@ -34,8 +34,8 @@ Everything else on this page is marked in its own heading:
 
 | state | what it means | items |
 |---|---|---|
-| **open** | a real defect, nobody has fixed it | D2, D6, D16, D26, D27, D33; from Linux D54-D59; from the audit D44, D45, D46, D47, D48, D49, D50, D51, D52, D53, each with its audit severity |
-| **closed** | fixed, with the change and its test named | D1, D3, D7, D9, D10, D11, D15, D17, D18, D19, D20, D21, D22, D23, D24, D28, D29, D30, D34, D35, D36, D37, D38, D39, D40, D41, D42, D43 |
+| **open** | a real defect, nobody has fixed it | D2, D6, D16, D26, D27, D33; from Linux D54-D59; from the audit D45, D46, D47, D48, D49, D50, D51, D52, D53, each with its audit severity |
+| **closed** | fixed, with the change and its test named | D1, D3, D7, D9, D10, D11, D15, D17, D18, D19, D20, D21, D22, D23, D24, D28, D29, D30, D34, D35, D36, D37, D38, D39, D40, D41, D42, D43, D44 |
 | **deleted** | never a defect, or about an instrument nobody runs | D4, D5, D8, D12, D14 |
 | **known and accepted** | a real limit, decided rather than deferred | D32 (the sandbox is advisory: Phase 6 withdrawn) |
 | **dormant** | its subject is retired; it wakes if that returns | D19 (M11). D13 CLOSED 2026-09-25 |
@@ -1280,7 +1280,7 @@ first 2000 bytes in the planner prompt, the one file route the gate does not
 cover (DR3). Fix: the gate's protected-path check on that read.
 Evidence: `test_audit_phase.py::test_F_planner_survey_reads_protected_state_into_the_prompt`.
 
-## D44 - MEDIUM - memory integrity never reads the chained fingerprint (audit F6)
+## D44 - MEDIUM - memory integrity never reads the chained fingerprint (audit F6) (CLOSED 2026-09-25: claim corrected, not wired - measured: memory is one store per user shared by every config, each config's chain is its own database, and --accept blesses with no chain event, so a load-time chain alarm fires on legitimate writes (DR1 width). The chain is documented as audit evidence; tests/test_memory_integrity_claim.py pins the design and went red under a naive wiring)
 
 Tier-1 files are checked only against `.fingerprint` in the same directory,
 which anything that edits `MEMORY.md` can rewrite too. The chained fingerprint
