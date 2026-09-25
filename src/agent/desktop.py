@@ -100,30 +100,25 @@ def start_server(ctx, host: str):
 
 
 def descendants(root: int | None = None) -> list[int]:
-    from .proc import process_table
+    """This process's tree, start-time validated (proc.descendants, D42)."""
+    from . import proc
 
-    root = os.getpid() if root is None else root
-    kids: dict[int, list[int]] = {}
-    for pid, ppid, _ in process_table():
-        kids.setdefault(ppid, []).append(pid)
-    out, frontier = [], [root]
-    while frontier:
-        for pid in kids.get(frontier.pop(), []):
-            out.append(pid)
-            frontier.append(pid)
-    return out
+    return proc.descendants(os.getpid() if root is None else root)
 
 
 def shutdown(server, thread, timeout_s: float = 10.0) -> list[int]:
     """Stop the server, then kill every process this one started. Returns the
     pids that were still running and had to be killed."""
-    from .proc import kill_tree
+    from . import proc
 
     server.should_exit = True
     thread.join(timeout_s)
     left = descendants()
+    started = {pid: proc.process_start_time(pid) for pid in left}
     for pid in left:
-        kill_tree(pid)
+        # Pinned to the process in the snapshot: by the time this runs the
+        # pid may be someone else's (D42).
+        proc.kill_tree(pid, expect_start=started[pid])
     return left
 
 

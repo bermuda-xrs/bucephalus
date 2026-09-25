@@ -51,13 +51,46 @@ from .platform import current as _platform
 ORPHAN_NAMES = ("llama-server",)
 
 
-def kill_tree(pid: int, timeout_s: float = 10.0) -> bool:
+def descendants(pid: int) -> list[int]:
+    """Every process started under `pid`, parents before children.
+
+    A child belongs to the tree only if it started NO EARLIER than its parent.
+    A "parent" younger than its child is a recycled pid - the rule
+    `orphan_pids` already applies - and walking the (pid, ppid) table without
+    it adopts an unrelated process whose real parent died and whose pid was
+    reused (AUDIT F4, D42). An unknown start time excludes: when the question
+    is what to KILL, sparing is the safe direction.
+    """
+    kids: dict[int, list[int]] = {}
+    for p, pp, _ in process_table():
+        if p != pp:
+            kids.setdefault(pp, []).append(p)
+    out, frontier = [], [pid]
+    while frontier:
+        parent = frontier.pop(0)
+        p_start = process_start_time(parent)
+        for child in kids.get(parent, []):
+            c_start = process_start_time(child)
+            if p_start is None or c_start is None or c_start < p_start:
+                continue
+            out.append(child)
+            frontier.append(child)
+    return out
+
+
+def kill_tree(pid: int, timeout_s: float = 10.0,
+              expect_start: int | None = None) -> bool:
     """Kill `pid` and every process it spawned. True if it is gone after.
 
     Best-effort and idempotent: killing an already-dead pid is success, not
     an error, because the caller's intent is "make sure this is not running".
     """
     if pid <= 0:
+        return True
+    # A STORED pid may belong to a different process by now. With its
+    # recorded creation time, a mismatch means the process we meant is gone
+    # and this pid is someone else's: signal nothing (D42).
+    if expect_start is not None and process_start_time(pid) != expect_start:
         return True
     try:
         _platform.kill_tree_signal(pid, timeout_s)
@@ -156,7 +189,10 @@ def reap_orphans(names: tuple[str, ...] = ORPHAN_NAMES,
     """
     reaped = []
     for pid in orphan_pids(names, protect_pids):
-        if kill_tree(pid):
+        # Pinned to the process that was selected, not whatever holds the pid
+        # by the time the kill runs (D42).
+        start = process_start_time(pid)
+        if start is not None and kill_tree(pid, expect_start=start):
             reaped.append(pid)
     return reaped
 

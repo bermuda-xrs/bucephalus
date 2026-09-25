@@ -34,8 +34,8 @@ Everything else on this page is marked in its own heading:
 
 | state | what it means | items |
 |---|---|---|
-| **open** | a real defect, nobody has fixed it | D2, D6, D16, D26, D27, D33; from the audit D42, D43, D44, D45, D46, D47, D48, D49, D50, D51, D52, D53, each with its audit severity |
-| **closed** | fixed, with the change and its test named | D1, D3, D7, D9, D10, D11, D15, D17, D18, D19, D20, D21, D22, D23, D24, D28, D29, D30, D34, D35, D36, D37, D38, D39, D40, D41 |
+| **open** | a real defect, nobody has fixed it | D2, D6, D16, D26, D27, D33; from the audit D43, D44, D45, D46, D47, D48, D49, D50, D51, D52, D53, each with its audit severity |
+| **closed** | fixed, with the change and its test named | D1, D3, D7, D9, D10, D11, D15, D17, D18, D19, D20, D21, D22, D23, D24, D28, D29, D30, D34, D35, D36, D37, D38, D39, D40, D41, D42 |
 | **deleted** | never a defect, or about an instrument nobody runs | D4, D5, D8, D12, D14 |
 | **known and accepted** | a real limit, decided rather than deferred | D32 (the sandbox is advisory: Phase 6 withdrawn) |
 | **dormant** | its subject is retired; it wakes if that returns | D19 (M11). D13 CLOSED 2026-09-25 |
@@ -1264,7 +1264,7 @@ stop OneDrive. The desktop app forces platformdirs state; `alpha serve` from
 the checkout does not. Fix: keep the token (at least) under platformdirs in
 every mode, or refuse to write it into a synced folder.
 
-## D42 - MEDIUM - `desktop.descendants()` can adopt a recycled PID (audit F4)
+## D42 - MEDIUM - `desktop.descendants()` can adopt a recycled PID (audit F4) (CLOSED 2026-09-25: one tree rule in proc.descendants (a child counts only if it started no earlier than its parent); Windows terminates that validated tree instead of taskkill /T; kill_tree(expect_start=) leaves a reused pid alone; the desktop sweep and the reaper pin each kill to the start time they selected; tests/test_recycled_pids.py)
 
 The DR5 sibling of the reaper's parentage fix: `orphan_pids` compares
 start times, `descendants()` - what window-close kills - does not. A process

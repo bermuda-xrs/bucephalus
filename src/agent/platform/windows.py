@@ -18,10 +18,30 @@ from . import LimitsRefused
 
 # ---------------------------------------------------------------- processes
 
+def _terminate(pid: int) -> None:
+    k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    k32.OpenProcess.restype = ctypes.c_void_p
+    k32.OpenProcess.argtypes = [ctypes.c_uint32, ctypes.c_int, ctypes.c_uint32]
+    k32.TerminateProcess.argtypes = [ctypes.c_void_p, ctypes.c_uint]
+    k32.CloseHandle.argtypes = [ctypes.c_void_p]
+    h = k32.OpenProcess(0x0001, False, pid)          # PROCESS_TERMINATE
+    if h:
+        try:
+            k32.TerminateProcess(h, 1)
+        finally:
+            k32.CloseHandle(h)
+
+
 def kill_tree_signal(pid: int, timeout_s: float) -> None:
-    # /T is the whole point: without it the child survives.
-    subprocess.run(["taskkill", "/T", "/F", "/PID", str(pid)],
-                   capture_output=True, timeout=timeout_s)
+    """The whole tree - without it the venv trampoline's child survives - but
+    the tree as `proc.descendants` validates it. `taskkill /T` followed parent
+    ids blindly and would take a process adopted through a recycled pid
+    (D42). Leaves first, so nothing is re-parented mid-kill."""
+    from ..proc import descendants
+
+    for p in reversed(descendants(pid)):
+        _terminate(p)
+    _terminate(pid)
 
 
 def alive(pid: int) -> bool:

@@ -48,8 +48,11 @@ def test_kill_tree_never_signals_the_callers_group(monkeypatch, fake_os):
     """Defect 1. A pid sharing the caller's group was killed with killpg -
     which kills the caller. It is killed by parentage instead."""
     monkeypatch.setattr(posix.os, "getpgid", lambda pid: 500, raising=False)  # one group
+    from agent import proc
+
     table = [(10, 1, "python"), (11, 10, "python"), (12, 11, "sleep")]
-    monkeypatch.setattr(platform_pkg, "current", types.SimpleNamespace(process_table=lambda: table))
+    monkeypatch.setattr(proc, "process_table", lambda: table)
+    monkeypatch.setattr(proc, "process_start_time", lambda pid: pid)   # parents older
     posix.kill_tree_signal(10, 5)
     assert fake_os["killpg"] == [], "signalled the caller's own process group"
     assert fake_os["kill"] == [12, 11, 10], "not the whole tree, leaves first"

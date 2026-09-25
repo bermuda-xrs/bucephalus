@@ -63,21 +63,6 @@ os.execv(sys.argv[2], sys.argv[2:])
 
 # ---------------------------------------------------------------- processes
 
-def _descendants(pid: int) -> list[int]:
-    # The SELECTED module, so on a Mac this is darwin's table, not /proc.
-    from . import current
-
-    kids: dict[int, list[int]] = {}
-    for p, pp, _ in current.process_table():
-        kids.setdefault(pp, []).append(p)
-    out, frontier = [], [pid]
-    while frontier:
-        for c in kids.get(frontier.pop(), []):
-            out.append(c)
-            frontier.append(c)
-    return out
-
-
 def _sigkill(pid: int) -> None:
     try:
         os.kill(pid, signal.SIGKILL)
@@ -103,7 +88,9 @@ def kill_tree_signal(pid: int, timeout_s: float) -> None:
             return
         except OSError:
             pass
-    for p in reversed(_descendants(pid)):
+    from ..proc import descendants   # start-time validated (D42)
+
+    for p in reversed(descendants(pid)):
         _sigkill(p)
     _sigkill(pid)
 
