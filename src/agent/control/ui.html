@@ -361,10 +361,23 @@ Imperative, checkable steps. Few of them.</textarea></label>
 
 <script>
 const $ = s => document.querySelector(s);
-// Injected by the server when it serves this page to a loopback caller. A
-// page on another origin cannot read this response, so it cannot obtain the
-// token - which is what stops a website you have open from driving this.
-const TOKEN = "__ALPHA_TOKEN__";
+// The token arrives in the URL FRAGMENT from whoever launched the console
+// (the desktop app, or the link `alpha serve` prints) - never in this page,
+// which any local process can fetch (AUDIT-2026-09 F2). Kept for this tab
+// only, and taken out of the address bar so it is not in a screenshot.
+const TOKEN = (() => {
+  const fromHash = new URLSearchParams(location.hash.slice(1)).get("token");
+  try {
+    if (fromHash) { sessionStorage.setItem("alpha-token", fromHash);
+                    history.replaceState(null, "", location.pathname); }
+    return fromHash || sessionStorage.getItem("alpha-token") || "";
+  } catch { return fromHash || ""; }
+})();
+// A token pasted into an open page's address bar is a same-page navigation,
+// not a load: start over so the session picks it up.
+window.addEventListener("hashchange", () => {
+  if (new URLSearchParams(location.hash.slice(1)).get("token")) location.reload();
+});
 let CURRENT = null, POLL = null, SUITE = null;
 
 function toast(msg, bad) {
@@ -772,6 +785,10 @@ async function delGrounding(name) {
 // ------------------------------------------------------------- start
 (async () => {
   applyTheme();
+  if (!TOKEN) {
+    $("#health").textContent = "No session. Open the console from the desktop app, or the link alpha serve prints.";
+    return;
+  }
   try {
     const h = await api("/health");
     $("#health").textContent = `Models: ${h.backends.join(", ")}`;

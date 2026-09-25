@@ -113,8 +113,9 @@ class AccessGuard(BaseHTTPMiddleware):
             return await call_next(request)
 
         # --- the console itself, for a human with a browser -----------------
-        # Serving the page to a loopback caller is what lets the token reach
-        # the JS at all. A cross-origin page cannot read this response.
+        # The page itself is public to a loopback caller and holds no secret:
+        # the token reaches it in the URL fragment (server.console_url), never
+        # in this response, which any local process can read (AUDIT F2).
         if path == "/" and request.method == "GET" and is_loopback_host(host):
             return await call_next(request)
 

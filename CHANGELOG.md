@@ -106,6 +106,19 @@ Four suite passes, hours of wall clock and the whole machine, and it needs a
 decision about whether a code-as-action arm that cannot complete the suite is
 reporting the mechanism's token cost or the suite's dependence on it.
 
+## The 2026-09 audit, and its two HIGH findings fixed - 2026-09-25
+
+An independent audit by a fresh subagent (`docs/AUDIT-2026-09.md`, committed
+before any fix): 0 critical, 2 high, 4 medium, 3 low, 2 hypotheses.
+
+  * F1: a Telegram callback decides an approval only if its task is routed to
+    this channel and to the chat the button was pressed in. It could decide a
+    local task's approval that was never sent to any phone.
+  * F2: the console page no longer carries the bearer token, which any local
+    process - sandboxed code included - could read from `GET /`. The launcher
+    passes it in the URL fragment; `console_url()`.
+  * Mediums, lows, hypotheses and measured inefficiencies: DEFERRED D40-D53.
+
 ## Phase A: the POSIX fixes, the tombstone floor - 2026-09-25 (desktop-app)
 
   * The five POSIX defects found by reading, fixed - unverified until

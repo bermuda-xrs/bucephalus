@@ -496,17 +496,24 @@ def create_app(ctx: AgentContext) -> FastAPI:
         return {"verdict": d.verdict, "reason": d.reason, "detail": d.detail}
 
     # The operator console. Served from the same process as the API so there
-    # is nothing to build and nothing to deploy separately. The session token
-    # is injected here: a cross-origin page cannot read this response, so this
-    # is how the token reaches the JS without ever being guessable from
-    # outside.
+    # is nothing to build and nothing to deploy separately. It carries NO
+    # secret (AUDIT-2026-09 F2): the token used to be injected here, on the
+    # argument that a cross-origin page cannot read the response - true, and
+    # beside the point, because any LOCAL process could, sandboxed code
+    # included. The launcher that owns the token hands it over in the URL
+    # fragment (console_url), which is never sent to a server.
     @app.get("/", response_class=HTMLResponse)
     def index() -> HTMLResponse:
         html = (Path(__file__).parent / "ui.html").read_text(encoding="utf-8")
-        html = html.replace("__ALPHA_TOKEN__", token)
         return HTMLResponse(html, headers={"Cache-Control": "no-store"})
 
     return app
+
+
+def console_url(port: int, token: str, host: str = "127.0.0.1") -> str:
+    """How the console is opened: the token in the FRAGMENT. A fragment never
+    leaves the browser, so it is in no request, no server log and no proxy."""
+    return f"http://{host}:{port}/#token={token}"
 
 
 # Background runs, keyed by task. A local run takes minutes; the console

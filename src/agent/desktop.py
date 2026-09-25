@@ -147,7 +147,9 @@ def main(argv: list[str] | None = None) -> int:
     try:
         import webview
 
-        webview.create_window("alpha", f"http://127.0.0.1:{port}/",
+        from .control.server import console_url
+
+        webview.create_window("alpha", console_url(port, server.config.app.state.token),
                               width=1280, height=860, min_size=(900, 600))
         webview.start()
     finally:

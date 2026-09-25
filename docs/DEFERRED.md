@@ -23,16 +23,18 @@ instrument). Everything below waits.
 
 ---
 
-## Where this stands, 2026-09-17
+## Where this stands, 2026-09-25
 
-**Six open.** D2, D6, D16, D26, D27, D33.
-D24, D38 and D39 were closed 2026-09-17; see their headings.
+**Six open, plus fourteen from the 2026-09 audit.** D2, D6, D16, D26, D27, D33,
+and D40-D53 (`docs/AUDIT-2026-09.md`; its two HIGH findings, F1 and F2, were
+fixed in the change that recorded these). D13 closed 2026-09-25; D24, D38 and
+D39 closed 2026-09-17; see their headings.
 
 Everything else on this page is marked in its own heading:
 
 | state | what it means | items |
 |---|---|---|
-| **open** | a real defect, nobody has fixed it | D2, D6, D16, D26, D27, D33 |
+| **open** | a real defect, nobody has fixed it | D2, D6, D16, D26, D27, D33; from the audit D40-D53, each with its audit severity |
 | **closed** | fixed, with the change and its test named | D1, D3, D7, D9, D10, D11, D15, D17, D18, D19, D20, D21, D22, D23, D24, D28, D29, D30, D34, D35, D36, D37, D38, D39 |
 | **deleted** | never a defect, or about an instrument nobody runs | D4, D5, D8, D12, D14 |
 | **known and accepted** | a real limit, decided rather than deferred | D32 (the sandbox is advisory: Phase 6 withdrawn) |
@@ -1232,3 +1234,115 @@ asserted as `n/a` against backends that do report cache accounting, and
 `check_fingerprint` compared against `"ok"` when it returns
 `intact`/`tampered`. The hour Part 3 spent by hand had already found the two
 real ones.
+
+---
+
+# From the independent audit, 2026-09 (`docs/AUDIT-2026-09.md`)
+
+Severities are the AUDIT's (critical / high / medium / low). Its two HIGH
+findings were fixed, each with a test shown red first
+(`tests/test_audit_2026_09.py`). Everything below was triaged here rather than
+fixed, per the triage rule for that phase. Each audit finding's demonstration
+is in `docs/evidence/audit-2026-09/`; a passing demonstration means the defect
+is still live.
+
+## D40 - MEDIUM - the sandbox's "no network" promise is not enforced (audit F3)
+
+`execute/libraries.py` promises the sandbox has no network, and refuses a
+library that declares network use, but the audit hook has no `socket` event:
+model-written code connects out freely. Attacker: code the model writes,
+steered by untrusted input. Before F2's fix this was the path by which
+sandboxed code could fetch the console token from `GET /`. Fix: a
+`socket.connect`/`socket.getaddrinfo` audit event refusal in the guard, same
+shape as the write fence. Evidence: `test_audit_sandbox.py::test_F_sandbox_has_no_network_fence`.
+
+## D41 - MEDIUM - in checkout mode the bearer token and the database sync to OneDrive (audit F2, second half)
+
+`.alpha_token` and `agent.local.db` live in the state root, which in checkout
+mode is the repository - here, under a OneDrive folder. `.gitignore` does not
+stop OneDrive. The desktop app forces platformdirs state; `alpha serve` from
+the checkout does not. Fix: keep the token (at least) under platformdirs in
+every mode, or refuse to write it into a synced folder.
+
+## D42 - MEDIUM - `desktop.descendants()` can adopt a recycled PID (audit F4)
+
+The DR5 sibling of the reaper's parentage fix: `orphan_pids` compares
+start times, `descendants()` - what window-close kills - does not. A process
+whose dead parent's pid was recycled to the app's would be killed with its
+tree. Not observed; needs pid reuse. Fix: the same start-time comparison.
+Evidence: `probe_descendants_pid_reuse.py`.
+
+## D43 - MEDIUM - the planner survey reads protected files into its prompt (audit F5)
+
+`plan/planner.py` `_read_only_survey` reads each `artifact_scope` entry with
+no `is_protected` check, so a scope naming `.alpha_token` or `.env` puts its
+first 2000 bytes in the planner prompt, the one file route the gate does not
+cover (DR3). Fix: the gate's protected-path check on that read.
+Evidence: `test_audit_phase.py::test_F_planner_survey_reads_protected_state_into_the_prompt`.
+
+## D44 - MEDIUM - memory integrity never reads the chained fingerprint (audit F6)
+
+Tier-1 files are checked only against `.fingerprint` in the same directory,
+which anything that edits `MEMORY.md` can rewrite too. The chained fingerprint
+in `memory.written` - described as the authenticated record - is written and
+never compared. An inert guarantee (C3). Fix: `verify_memory` compares against
+the last chained fingerprint.
+Evidence: `test_audit_gate.py::test_F_memory_integrity_never_consults_the_chain`.
+
+## D45 - LOW - the console sends no X-Frame-Options or frame-ancestors (audit F7)
+
+Downgraded by F2's fix: a framed console now opens with no session, because
+the token is only ever in the URL fragment the launcher passes, and an
+attacker framing the page does not have it. The headers are still absent;
+add them as defence in depth.
+
+## D46 - LOW - plausible planner JSON crashes `parse_plan` with a 500 (audit F8)
+
+`"est_tokens": "about 500"`, an unknown `action_mode`, a bare-string step:
+each raises out of `draft_plan`, and the traceback with the model's text goes
+to the server log. Fix: validation failure degrades to the "unparseable" plan
+the no-JSON path already produces.
+Evidence: `test_audit_phase.py::test_F_plausible_planner_output_crashes_parse_plan`.
+
+## D47 - LOW - a non-ASCII credential is a 500, not a 401 (audit F9)
+
+`secrets.compare_digest` raises on non-ASCII `str`; the guard does not catch
+it. Fix: compare bytes, or catch and refuse.
+Evidence: `test_audit_control.py::test_F_non_ascii_token_header_is_a_500_not_a_401`.
+
+## D48 - HYPOTHESIS - `esc()` inside a JS string inside an HTML attribute (audit H1)
+
+`onclick="delSuite('${esc(...)}')"`: the attribute is HTML-decoded before the
+JS parser sees it, so an escaped quote comes back. Unranked: not shown that a
+stored name reaches that sink unvalidated. Fix either way: event listeners
+with `data-` attributes instead of inline `onclick` strings.
+
+## D49 - HYPOTHESIS - spawn denial misses `_winapi.CreateProcess` (audit H2)
+
+The sandbox's spawn list names `subprocess`/`os` entry points, not the Windows
+primitive underneath. The child is still born in the Job Object, so the kernel
+limits hold; the "no subprocesses" promise does not.
+
+## D50 - LOW - the desktop build is ~120 MB larger than it needs to be (audit I1)
+
+193 MB, of which scipy+numpy (~95 MB) serve one `binomtest` call, and sympy's
+source ships twice (~25 MB) through `--collect-all`. A binomial tail from
+`math.comb` and `--collect-submodules sympy` would remove both without
+changing what the model can import. Measured, not estimated.
+
+## D51 - LOW - window close takes ~8 s, and it is `kill_tree`, not uvicorn (audit I2)
+
+uvicorn stops in 0.22 s. The rest is `shutdown()` killing each descendant
+serially, each `taskkill` followed by a `tasklist` poll. One `taskkill /T` over
+the tree, or relying on the Job Objects already closing, is the fix.
+
+## D52 - LOW - tool schemas are 1,215 tokens per step (audit I3)
+
+Up from the ~966 on record as tools were added; the tool manual adds 464. On a
+CPU-bound executor that is wall clock on every step. Sits beside D33.
+
+## D53 - LOW - the CLI subprocess tests are a third of suite wall time (audit I4)
+
+`tests/test_cli_subcommands.py`, subprocess per test by design (invariant
+115), ~170 s of 535 s. A shared scratch install for the read-only ones would
+recover most of it.

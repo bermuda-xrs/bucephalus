@@ -386,6 +386,24 @@ class TelegramBot:
         if decision not in ("approve", "deny") or not approval_id:
             return {"action": "ignored", "why": "unparseable callback"}
 
+        # AUDIT-2026-09 F1 - WHICH decisions this channel owns, not only WHO
+        # may press. The allowlist check above is about the sender; nothing
+        # tied the approval to the channel, so an allowlisted - or taken-over
+        # - account could decide a LOCAL task's parked action that was never
+        # sent to any phone. A decision is the channel's only if its task is
+        # routed here, to the chat the button was pressed in.
+        row = self.ctx.conn.execute(
+            "SELECT task_id FROM approvals WHERE id=?", (approval_id,)).fetchone()
+        if row is not None:
+            routed = self._chat(row[0])
+            pressed_in = ((cb.get("message") or {}).get("chat") or {}).get("id")
+            if routed is None or str(routed) != str(pressed_in):
+                self.ctx.log.append(row[0], "channel.refused",
+                                    {"approval_id": approval_id, "sender": str(sender),
+                                     "why": "approval not routed to this chat"})
+                self.tx.answer_callback(cb_id, "not this chat's decision")
+                return {"action": "refused", "why": "approval not routed to this chat"}
+
         try:
             out = self.ctx.resolve_approval(approval_id, decision == "approve")
         except KeyError:

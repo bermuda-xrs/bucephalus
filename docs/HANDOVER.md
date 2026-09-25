@@ -284,7 +284,7 @@ regenerates it. Verified 2026-09-25, against commit `39c9439`.
 
 | Fact | Value | Regenerate with |
 |---|---|---|
-| Branch | `desktop-app`, four commits on `measurement-2026-09-01`; neither merged nor pushed - they merge after the 2026-09 audit | `git branch --show-current` |
+| Branch | `main`, the line of record, fast-forwarded to `desktop-app` after the 2026-09 audit; tag `g1-closed-2026-09-25` marks the measurement branch's tip; no remote | `git branch --show-current` |
 | Written against | `39c9439`; the test asserts this is an ancestor of HEAD | `git log --oneline -1` |
 | Harness version | **6**, bumped 2026-09-25: a check must be able to fail (DR7) - the final sweep graded "{}" and `execution` passed it; five more verifiers could not fail (FINDINGS 1.34). 5 held the grader out under measurement. Pass rates before 5 are too high | `grep HARNESS_VERSION src/agent/__init__.py` |
 | Toolset version | **6** | `grep TOOLSET_VERSION src/agent/__init__.py` |
