@@ -106,6 +106,21 @@ Four suite passes, hours of wall clock and the whole machine, and it needs a
 decision about whether a code-as-action arm that cannot complete the suite is
 reporting the mechanism's token cost or the suite's dependence on it.
 
+## The desktop app - 2026-09-25 (desktop-app)
+
+  * `agent/desktop.py`: the console in a pywebview window. Loopback only
+    unless ALPHA_ALLOW_REMOTE; state in platformdirs even from a checkout;
+    closing the window kill_trees everything the app started. Windowed builds
+    have no stdout/stderr, and uvicorn died on that - they go to desktop.log.
+  * The console redesigned around plan review: a queue ordered by what needs
+    you, the plan as a signed sheet, integrity in the theme's reserved colour
+    and nowhere else, colours and banner from themes/.
+  * `python packaging/build.py`: windowed onedir, 188 MB, refuses to build
+    with task content in it. Run frozen: window, loopback, state, a graceful
+    close leaving nothing running, a real task end to end, and the sandbox
+    from a parent with no standard handles.
+    `docs/evidence/desktop-app-2026-09-25.md`.
+
 ## D13 closed: the sandbox survives a freeze - 2026-09-25 (desktop-app)
 
   * `agent/frozen.py`: a frozen build starts itself as an INTERPRETER for
