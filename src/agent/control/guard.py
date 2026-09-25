@@ -41,16 +41,38 @@ LOOPBACK_HOSTS = {"127.0.0.1", "localhost", "::1", "[::1]"}
 
 
 def resolve_token(root: str | Path = ".") -> str:
-    """The shared secret. From the environment, or persisted next to the db.
+    """The shared secret. From the environment, or persisted in the USER
+    CONFIG DIRECTORY - in every mode (D41).
+
+    It used to live next to the database, which in checkout mode is the
+    repository: here, a OneDrive folder, so the bearer token sat on a third
+    party's servers (`.gitignore` does not stop a sync client). `root` is now
+    read only to RETIRE a token found there - deleted and never reused, since
+    it has already left the machine.
 
     Generated once and reused so restarting the server does not invalidate an
     open console tab.
     """
+    import sys
+
+    from ..paths import user_config_dir
+
     env = os.environ.get(TOKEN_ENV)
     if env:
         return env.strip()
 
-    path = Path(root) / TOKEN_FILE
+    path = user_config_dir() / TOKEN_FILE
+    legacy = Path(root) / TOKEN_FILE
+    if legacy.exists() and legacy.resolve() != path.resolve():
+        try:
+            legacy.unlink()
+            sys.stderr.write(
+                f"alpha: retired the console token found at {legacy}. It lived in "
+                "the project folder, which may sync to the cloud; a new one is in "
+                f"{path.parent}. If the folder syncs, also delete it from the "
+                "service's deleted items and version history.\n")
+        except OSError:
+            pass
     if path.exists():
         existing = path.read_text(encoding="utf-8").strip()
         if existing:

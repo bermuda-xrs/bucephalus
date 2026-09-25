@@ -34,8 +34,8 @@ Everything else on this page is marked in its own heading:
 
 | state | what it means | items |
 |---|---|---|
-| **open** | a real defect, nobody has fixed it | D2, D6, D16, D26, D27, D33; from the audit D41, D42, D43, D44, D45, D46, D47, D48, D49, D50, D51, D52, D53, each with its audit severity |
-| **closed** | fixed, with the change and its test named | D1, D3, D7, D9, D10, D11, D15, D17, D18, D19, D20, D21, D22, D23, D24, D28, D29, D30, D34, D35, D36, D37, D38, D39, D40 |
+| **open** | a real defect, nobody has fixed it | D2, D6, D16, D26, D27, D33; from the audit D42, D43, D44, D45, D46, D47, D48, D49, D50, D51, D52, D53, each with its audit severity |
+| **closed** | fixed, with the change and its test named | D1, D3, D7, D9, D10, D11, D15, D17, D18, D19, D20, D21, D22, D23, D24, D28, D29, D30, D34, D35, D36, D37, D38, D39, D40, D41 |
 | **deleted** | never a defect, or about an instrument nobody runs | D4, D5, D8, D12, D14 |
 | **known and accepted** | a real limit, decided rather than deferred | D32 (the sandbox is advisory: Phase 6 withdrawn) |
 | **dormant** | its subject is retired; it wakes if that returns | D19 (M11). D13 CLOSED 2026-09-25 |
@@ -1256,7 +1256,7 @@ sandboxed code could fetch the console token from `GET /`. Fix: a
 `socket.connect`/`socket.getaddrinfo` audit event refusal in the guard, same
 shape as the write fence. Evidence: `test_audit_sandbox.py::test_F_sandbox_has_no_network_fence`.
 
-## D41 - MEDIUM - in checkout mode the bearer token and the database sync to OneDrive (audit F2, second half)
+## D41 - MEDIUM - in checkout mode the bearer token and the database sync to OneDrive (audit F2, second half) (CLOSED 2026-09-25: the token lives in the user config directory in every mode, and one found in the checkout is retired, not reused; tests/test_secrets_location.py. The DATABASE stays in the checkout, deliberately: it holds no credential, and it is the measurement record the bench tools and evidence read by that path - moving it is the owner's decision (set db_path to an absolute platformdirs path))
 
 `.alpha_token` and `agent.local.db` live in the state root, which in checkout
 mode is the repository - here, under a OneDrive folder. `.gitignore` does not

@@ -105,6 +105,12 @@ def state_paths(ctx) -> tuple[Path, ...]:
     mem = getattr(getattr(ctx, "memory", None), "root", None)
     if mem is not None:
         out.append(Path(mem))
+    # The console token's real home since D41; `.alpha_token` above still
+    # covers a legacy copy in the checkout until it is retired.
+    from ..control.guard import TOKEN_FILE
+    from ..paths import user_config_dir
+
+    out.append(user_config_dir() / TOKEN_FILE)
     return tuple(Path(os.path.abspath(p)) for p in out)
 
 

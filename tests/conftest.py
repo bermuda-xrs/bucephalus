@@ -11,6 +11,14 @@ from agent.config import AutonomyConfig, BackendConfig, Config, GateConfig, Limi
 from agent.context import AgentContext
 
 
+@pytest.fixture(autouse=True)
+def _user_dirs_are_scratch(tmp_path_factory, monkeypatch):
+    """No test reads or writes the operator's real user directories. The
+    console token lives in the user config directory (D41), and a suite that
+    wrote tokens into the real one would be touching a live credential."""
+    monkeypatch.setenv("ALPHA_CONFIG_DIR", str(tmp_path_factory.mktemp("user_config")))
+
+
 def make_config(tmp_path: Path, **overrides) -> Config:
     cfg = Config(
         db_path=str(tmp_path / "agent.db"),
