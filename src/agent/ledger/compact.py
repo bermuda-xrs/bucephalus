@@ -71,10 +71,73 @@ def tombstone(entry: LedgerEntry, exact: list[str]) -> LedgerEntry:
     )
 
 
+# Tombstones were never dropped, so each boundary started from a higher floor:
+# ~28 tokens per dropped observation, which at the shipped window put the
+# floor alone over the ceiling by step ~60 and the context near the whole 16k
+# window by step 400 - compaction firing every step and unable to get under
+# (measured 2026-09-25). Past this share of the target, the oldest fold into
+# one bounded index.
+TOMBSTONE_SHARE = 0.25
+INDEXED_IDS = 20
+INDEX_LABEL = "tombstone-index"
+
+
+def _fold_tombstones(entries: list[LedgerEntry], budget: int) -> list[LedgerEntry]:
+    """Fold the oldest tombstones into one index entry, keeping the newest
+    individually while they fit in half the budget.
+
+    Nothing becomes unreachable: an artifact is never deleted, the index
+    names the newest INDEXED_IDS ids and counts the rest, and
+    expand_artifact(id) returns any of them in full. What leaves the CONTEXT
+    is the older tombstones' quoted exact strings - one expand away, the same
+    trade a tombstone made with its observation. The index's taint is the
+    JOIN of everything folded into it: folding must not launder provenance.
+    """
+    from ..kernel.types import join_taint
+
+    tombs = [i for i, e in enumerate(entries) if e.kind == "tombstone"]
+    if sum(entries[i].n_tokens for i in tombs) <= budget:
+        return entries
+    keep, used = set(), 0
+    for i in reversed(tombs):
+        if entries[i].label == INDEX_LABEL or used + entries[i].n_tokens > budget // 2:
+            continue
+        keep.add(i)
+        used += entries[i].n_tokens
+    folded = [i for i in tombs if i not in keep]
+    if len(folded) < 2:
+        return entries
+    ids: list[str] = []
+    count = 0
+    for i in folded:
+        e = entries[i]
+        if e.label == INDEX_LABEL:
+            count += int(e.exact_strings[0]) if e.exact_strings else 0
+            ids.extend(e.exact_strings[1:])
+        else:
+            count += 1
+            if e.artifact_id:
+                ids.append(e.artifact_id)
+    ids = ids[-INDEXED_IDS:]
+    more = count - len(ids)
+    body = (f"[{count} earlier observations dropped from context. Newest ids: "
+            + (", ".join(reversed(ids)) or "none recorded")
+            + (f", and {more} more in this task's record" if more > 0 else "")
+            + ". expand_artifact(id) returns any of them in full.]")
+    index = LedgerEntry(kind="tombstone", content=body,
+                        taint=join_taint(*(entries[i].taint for i in folded)),
+                        exact_strings=[str(count), *ids], label=INDEX_LABEL)
+    folded_set, first = set(folded), folded[0]
+    return [index if i == first else e for i, e in enumerate(entries)
+            if i == first or i not in folded_set]
+
+
 def compact(entries: list[LedgerEntry], target_tokens: int) -> list[LedgerEntry]:
     """Deletion-based. Tombstone whole entries from the tail backward.
 
     Survivors are untouched — no paraphrase, no token pruning, no rewriting.
+    Tombstones past TOMBSTONE_SHARE of the target fold into one index, so the
+    floor a long session compacts to is bounded (_fold_tombstones).
     """
     keep: list[LedgerEntry] = []
     running = 0
@@ -91,7 +154,8 @@ def compact(entries: list[LedgerEntry], target_tokens: int) -> list[LedgerEntry]
             t = tombstone(e, exact)
             keep.append(t)
             running += t.n_tokens
-    return list(reversed(keep))
+    return _fold_tombstones(list(reversed(keep)),
+                            max(200, int(target_tokens * TOMBSTONE_SHARE)))
 
 
 def enforce_ceiling(

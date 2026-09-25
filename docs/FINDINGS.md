@@ -1892,10 +1892,17 @@ compaction off. The target is now
 0.20 of the window LESS the prefix; the new test in
 `tests/test_g1_ablation.py` (a real crossing, no probe) goes red on the old line. No shipped config reached it (the
 executor's window is 16,384 and its real prefix 757-935 tokens, threshold
-1,311), so no recorded number moves. A limit it exposed and does not fix:
-tombstones are never evicted, so each boundary starts from a higher floor
-(+~73 tokens per boundary here); a long enough task re-enters the same
-condition. At the small window compaction is now roughly break-even (-5%
+1,311), so no recorded number moves. A limit it exposed, first recorded as
+efficiency and then measured as correctness (2026-09-25): tombstones were
+never evicted, ~28 tokens per dropped observation, so at the shipped window
+the floor alone crossed the ceiling by step ~60 and the context reached
+14,060 tokens by step 400 - compaction firing every step and unable to get
+under. FIXED: past a quarter of the target, the oldest tombstones fold into
+one index naming the newest 20 artifact ids and counting the rest (taint
+joined, nothing unreachable: expand_artifact). Step 400: 368 tokens of
+tombstones, context under the ceiling at every boundary
+(`tests/test_tombstone_floor.py`, and the real-crossing test now holds EVERY
+boundary, red without the fold). At the small window compaction is now roughly break-even (-5%
 uncached, -2% cost, +3 calls).
 
 **Every earlier G1 number is void**, each with its reason on its entry: v3

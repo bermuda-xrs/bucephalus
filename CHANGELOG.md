@@ -106,6 +106,23 @@ Four suite passes, hours of wall clock and the whole machine, and it needs a
 decision about whether a code-as-action arm that cannot complete the suite is
 reporting the mechanism's token cost or the suite's dependence on it.
 
+## Phase A: the POSIX fixes, the tombstone floor - 2026-09-25 (desktop-app)
+
+  * The five POSIX defects found by reading, fixed - unverified until
+    docs/PLATFORMS.md step 5 runs on a real Mac and Linux machine:
+    kill_tree no longer signals its caller's group (children lead their own
+    session); darwin.py reads the process table without /proc; limits are set
+    by a trampoline that execs the child, not in a preexec_fn; RLIMIT_NPROC
+    replaced by a process-group watchdog; macOS memory capped by a
+    phys_footprint watchdog. Watchdogs are REACTIVE and every run_code
+    receipt now records `limits` - which held, and how.
+    `tests/test_posix_platform.py`: the portable half runs here and went red
+    against the pre-fix code; the real half skips off POSIX, naming step 5.
+  * Tombstones fold into a bounded index: a 400-step session's floor was
+    10,911 tokens and never under the ceiling after step ~60; now 368, under
+    it at every boundary. Taint is joined, nothing becomes unreachable.
+  * HANDOVER: the desktop app and the platform layer, pointed at.
+
 ## Cross-platform preparation - 2026-09-25 (desktop-app)
 
   * `docs/PLATFORMS.md`: what runs where (Windows only, so far), the POSIX

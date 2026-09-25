@@ -6,11 +6,12 @@ name, and if a `sys.platform` / `os.name` check appears anywhere else in the
 package. `current` is chosen once, here.
 
     windows   has run: every function, on Windows 11, in this project's record.
-    posix     HAS NEVER RUN ANYWHERE. It is the pre-refactor code moved
-              verbatim, and its known defects are listed in
-              docs/PLATFORMS.md - read that before trusting it on a new
-              machine. macOS uses it too, and most of it reads /proc, which
-              macOS does not have.
+    posix     Linux. HAS NEVER RUN ANYWHERE. Its five known defects were
+              fixed from reading (its header); verification is the
+              docs/PLATFORMS.md checklist on a real machine.
+    darwin    macOS: posix, plus a process table without /proc and a
+              memory cap by watchdog - REACTIVE, because Darwin does not
+              enforce RLIMIT_AS. NEVER RUN ANYWHERE either.
 """
 
 from __future__ import annotations
@@ -32,7 +33,8 @@ INTERFACE = {
     "spawn_limited": "start argv with memory/CPU/process limits applied before "
                      "its first instruction; returns (proc, closer); raises "
                      "LimitsRefused if they cannot be applied",
-    "cpu_limit_note": "text for a child the CPU limit killed, else ''",
+    "exit_note": "text naming the limit that ended this child (CPU, file "
+                 "size, a watchdog's verdict), else ''",
     # file locking (agent.runlock)
     "lock_file": "exclusive, non-blocking lock on an open file; raises OSError if held",
     "unlock_file": "release lock_file's lock",
@@ -45,6 +47,8 @@ class LimitsRefused(RuntimeError):
 
 if sys.platform == "win32":
     from . import windows as current
+elif sys.platform == "darwin":
+    from . import darwin as current
 else:
     from . import posix as current
 

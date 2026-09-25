@@ -21,12 +21,19 @@ MODULES = [p for p in PLATFORM.glob("*.py") if p.name != "__init__.py"]
 
 
 def _defined(path: Path) -> set[str]:
-    return {n.name for n in ast.parse(path.read_text(encoding="utf-8")).body
-            if isinstance(n, ast.FunctionDef)}
+    """Functions defined here, or imported by name from a sibling module
+    (darwin shares most of posix, explicitly)."""
+    out = set()
+    for n in ast.parse(path.read_text(encoding="utf-8")).body:
+        if isinstance(n, ast.FunctionDef):
+            out.add(n.name)
+        elif isinstance(n, ast.ImportFrom) and n.level == 1:
+            out.update(a.asname or a.name for a in n.names)
+    return out
 
 
 def test_there_is_a_module_per_platform():
-    assert {p.stem for p in MODULES} >= {"windows", "posix"}
+    assert {p.stem for p in MODULES} >= {"windows", "posix", "darwin"}
 
 
 def test_every_platform_module_fills_in_the_whole_contract():

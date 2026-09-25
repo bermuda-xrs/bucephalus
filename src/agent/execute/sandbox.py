@@ -628,7 +628,7 @@ def _run_batch(argv: list[str], workdir: str, env: dict, timeout_s: int) -> dict
         close()
     return {
         "stdout": (out or "")[-OUTPUT_CAP:],
-        "stderr": ((err or "") + _platform.cpu_limit_note(proc.returncode, timeout_s))[-OUTPUT_CAP:],
+        "stderr": ((err or "") + _platform.exit_note(proc, timeout_s))[-OUTPUT_CAP:],
         "returncode": proc.returncode,
     }
 
@@ -713,7 +713,7 @@ def _run_with_bridge(
     return {
         "stdout": "".join(out_lines)[-OUTPUT_CAP:],
         "stderr": ("".join(stderr_parts)
-                   + _platform.cpu_limit_note(proc.returncode, timeout_s))[-OUTPUT_CAP:],
+                   + _platform.exit_note(proc, timeout_s))[-OUTPUT_CAP:],
         "returncode": proc.returncode if proc.returncode is not None else -1,
         "tool_calls": n_tool_calls,
     }

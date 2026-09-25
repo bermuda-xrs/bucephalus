@@ -225,13 +225,15 @@ def test_the_posix_claim_is_still_true():
     """B2 and C4 both tell a reader the POSIX limits have never executed. If
     someone wires them up and forgets the handover, that claim becomes a lie
     about the security posture."""
-    # Moved from execute/sandbox.py to the platform layer, 2026-09-25 (4D).
-    sandbox = (ROOT / "src" / "agent" / "platform" / "posix.py").read_text(encoding="utf-8")
-    assert "# pragma: no cover" in sandbox.split("def _posix_limits")[1][:200], (
-        "the POSIX limit path is no longer marked unreachable - if it now runs "
-        "somewhere, B2's verification scope and C4's posture both need rewriting"
-    )
-    assert "marked `# pragma: no cover` and has never executed anywhere" in FLAT
+    # The POSIX code moved to the platform layer and its defects were fixed
+    # from reading (2026-09-25); none of it has RUN. Each module says so in
+    # its header, and so must the handover.
+    for mod in ("posix.py", "darwin.py"):
+        text = (ROOT / "src" / "agent" / "platform" / mod).read_text(encoding="utf-8")
+        assert "NEVER RUN ANYWHERE" in text.split("\n", 1)[0], (
+            f"{mod} no longer says it has never run - if it now runs somewhere, "
+            "the handover's verification scope and posture need rewriting")
+    assert "has never executed anywhere" in FLAT
 
 
 if __name__ == "__main__":  # pragma: no cover - convenience

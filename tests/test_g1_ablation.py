@@ -173,17 +173,17 @@ def test_a_real_crossing_brings_the_context_under_the_ceiling(tmp_path):
     # Several boundaries are fine - each read here nearly fills the headroom.
     # The defect is a boundary that leaves the context OVER the ceiling it
     # fired on: then it fires again next step, paying a flush call each time.
-    # So: the step call after the FIRST flush must fit under the ceiling.
-    # (Only the first: tombstones are never evicted, so each later boundary
-    # starts from a higher floor - a known limit, FINDINGS 1.35, not this.)
+    # So: the step call after EVERY flush must fit under the ceiling. (This
+    # checked only the first while tombstones were never evicted and each
+    # boundary started higher; they fold into an index now - compact.py.)
     ceiling = int(window * ctx.config.limits.context_fill_ratio)
     calls = ctx.backends["cloud"].calls
     after = [count_tokens(nxt["prefix"]) + count_tokens(nxt["tail"])
              for cur, nxt in zip(calls, calls[1:])
              if "reply with the single word NOTHING" in cur["tail"]]
-    assert after and after[0] <= ceiling, (
-        f"after the first compaction the context was {after[:1]} tokens "
-        f"against a ceiling of {ceiling}: the boundary did not bring it under")
+    assert after and max(after) <= ceiling, (
+        f"after compaction the context was {after} tokens against a ceiling of "
+        f"{ceiling}: a boundary did not bring it under")
     ctx.close()
 
 

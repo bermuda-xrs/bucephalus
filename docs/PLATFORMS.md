@@ -8,15 +8,17 @@ verification. Written 2026-09-25 (desktop-app branch).
 ## 1. Inventory (4A)
 
 Every OS-specific operation now lives in `src/agent/platform/` (section 4).
-`windows.py` has run; `posix.py` serves Linux AND macOS and has never run.
+`windows.py` has run. `posix.py` (Linux) and `darwin.py` (macOS) have never
+run. The five defects in section 2 are fixed from reading, and each fix is
+verified only when the section 5 checklist runs on a real machine.
 
 | concern | Windows | Linux | macOS |
 |---|---|---|---|
-| **Sandbox resource limits** | Job Object, child created suspended then assigned: 512 MB per process, CPU = the timeout, 32 processes. No file-size limit exists on Windows. **Ran**: `test_sandbox_limits.py`, and the frozen gate 3 of 3 | rlimits AS / CPU / NPROC / FSIZE in a `preexec_fn`. **Never run** | Same code. `RLIMIT_AS` is not enforced, and a small value may be refused outright (section 3). **Never run** |
+| **Sandbox resource limits** | Job Object, child created suspended then assigned: 512 MB per process, CPU = the timeout, 32 processes. No file-size limit exists on Windows. **Ran**: `test_sandbox_limits.py`, and the frozen gate 3 of 3 | rlimits AS / CPU / FSIZE, set by a trampoline that then `exec`s the child in its own session. Process count by watchdog over the run's group, reactive. **Never run** | CPU / FSIZE by trampoline. Memory and process count by a `phys_footprint` watchdog, **reactive, not kernel-enforced** (section 3). **Never run** |
 | **Sandbox fences** (write/read audit hook, SQLite authorizer, protected paths) | **Ran**, unfrozen and frozen | Pure Python, but path semantics differ (case sensitivity, `/proc`, symlinked temp dirs). **Never run** | As Linux, plus `/tmp` → `/private/tmp` symlinks. **Never run** |
-| **Process-tree kill** (`kill_tree`) | `taskkill /T /F`. **Ran**, including both trampoline incidents | `killpg(getpgid(pid))`. **Never run, and wrong** (section 2) | Same code, same defect. **Never run** |
-| **Process table**, parentage, start time (reaper, desktop shutdown) | Toolhelp32, `GetProcessTimes`. **Ran** | `/proc`. **Never run** | **Absent.** macOS has no `/proc`, so these return nothing. The orphan reaper and the desktop's shutdown sweep see no processes. Never run |
-| **Memory metrics** (preflight, commit ratio, worker RSS) | ctypes. **Ran** | `/proc/meminfo`, `statm`. **Never run** | Absent (None / {}) |
+| **Process-tree kill** (`kill_tree`) | `taskkill /T /F`. **Ran**, including both trampoline incidents | `killpg` of the child's OWN group; a pid in the caller's group is killed by parentage. **Never run** | Same. **Never run** |
+| **Process table**, parentage, start time (reaper, desktop shutdown) | Toolhelp32, `GetProcessTimes`. **Ran** | `/proc`. **Never run** | `ps -axo`, `ps -o lstart` (`darwin.py`). **Never run** |
+| **Memory metrics** (preflight, commit ratio, worker RSS) | ctypes. **Ran** | `/proc/meminfo`, `statm`. **Never run** | `sysctl hw.memsize`, `vm_stat`, libproc `phys_footprint`. No commit ratio exists on Darwin (None = unmeasured). **Never run** |
 | **The venv trampoline** | A venv `python.exe` is a launcher that starts the real interpreter as a child. Handled by the suspended-into-job spawn. **Ran** | Not applicable: a venv python is a symlink | Not applicable |
 | **Multiprocessing start method** | Not used by the product. `freeze_support()` is called in the frozen dispatcher for libraries. **Ran**, frozen | fork by default (3.14: forkserver). Unused | spawn. Unused |
 | **Frozen interpreter** (D13, `agent/frozen.py`) | **Ran**: probe gate 3 of 3, and from a windowed parent | Code is platform-neutral. **Never run** | `sys.executable` is `alpha.app/Contents/MacOS/alpha`. **Never run** |
@@ -25,32 +27,42 @@ Every OS-specific operation now lives in `src/agent/platform/` (section 4).
 | **Packaging** | PyInstaller onedir, windowed, 188 MB. **Ran** | Onedir tarball or AppImage. **Never run** | `.app`, then codesign, notarization and hardened runtime. **Never run** |
 | **State directories** | platformdirs (`%LOCALAPPDATA%`). **Ran** | `~/.local/share/alpha-test-1`. Never run | `~/Library/Application Support/alpha-test-1`. Never run |
 | **Helper scripts** | `setup.ps1`, `ollama-serve.ps1` / `.cmd` | None exist (need `.sh`) | None exist |
-| **Platform tests** | `test_sandbox_limits.py` | **No POSIX limit tests exist.** That file skips off Windows | Same |
+| **Platform tests** | `test_sandbox_limits.py` | `test_posix_platform.py`: its portable half runs everywhere, and its real half skips off POSIX, naming step 5 | Same, plus a Mac-only test |
 
 ## 2. The POSIX sandbox has never executed (4B)
 
 Every sandbox finding in this project is Windows evidence: D13, D37, C41, the
 SQLite routes, the read fence, the frozen gate. **The first run on a Mac or a
-Linux machine is a new security audit, not a port.** Reading the code already
-finds these, before anything has run:
+Linux machine is a new security audit, not a port.** Reading the code found
+these five before anything had run. **Each is now FIXED FROM READING
+(2026-09-25). None of the fixes is verified until step 5 runs on a real
+machine.** The decisions each fix makes are tested here against a fake
+kernel, and those tests went red against the pre-fix code:
 
 1. **`kill_tree` kills its caller.** It sends SIGKILL to the target's process
    GROUP, and nothing starts the sandbox's children in a group of their own.
    So the group is the caller's, and the agent, or the desktop app, kills
-   itself. Fix: `start_new_session=True` on every spawn, and never `killpg`
-   the caller's own group.
+   itself. **Fixed:** every spawn leads its own session, and a pid sharing
+   the caller's group is killed by parentage, leaves first, never by
+   `killpg`.
 2. **No process table on macOS.** The reaper and the desktop's shutdown sweep
-   see nothing, silently. Fix: libproc (`proc_listallpids`,
-   `proc_pidinfo(PROC_PIDTBSDINFO)`), or `ps -axo pid=,ppid=,comm=`.
+   see nothing, silently. **Fixed:** `darwin.py` reads `ps`, `sysctl`,
+   `vm_stat` and libproc. psutil is not a dependency.
 3. **`preexec_fn` in a threaded process.** Python documents it as unsafe to
-   use with threads, and the control plane and desktop app are threaded. Fix:
-   apply the rlimits inside the child, first thing in the guard preamble,
-   before any user code. Lowering a hard limit can't be undone from inside.
+   use with threads, and the control plane and desktop app are threaded.
+   **Fixed:** a trampoline, a fresh single-threaded interpreter, calls
+   `setrlimit` and then `exec`s the real child. No Python runs between fork
+   and exec, and `start_new_session` is done in C. Nothing still needs
+   `preexec_fn`. A refused limit ends the trampoline with exit 126 before the
+   child exists, so the run fails closed.
 4. **`RLIMIT_NPROC` is per user, not per sandbox.** A desktop user with more
    than 32 processes gets a sandbox that can't start a single subprocess.
-   Windows' job count is per job. Fix: count inside the process group (a
-   watchdog), or use a cgroup's `pids.max` on Linux.
-5. **`RLIMIT_AS` on macOS**: absent or fatal (section 3).
+   Windows' job count is per job. **Fixed:** `RLIMIT_NPROC` is gone. A
+   watchdog counts the run's OWN process group every 100 ms and kills the
+   group past 32. That is reactive, and every run's `limits` receipt says so.
+5. **`RLIMIT_AS` on macOS**: absent or fatal. **Fixed:** not set on Darwin.
+   The memory cap there is the section 3 watchdog, labelled reactive in the
+   run record (`tool.receipt` for `run_code`, field `limits`).
 
 **Tests that must pass on the new machine before its sandbox is trusted:**
 
@@ -61,15 +73,17 @@ finds these, before anything has run:
 - `tests/test_every_verifier_can_fail.py`: runs sandboxed pytest.
 - `tests/test_desktop.py`: window close leaves no process (defect 1 lands here).
 - `tests/test_runlock.py`, `tests/test_reaper_parentage.py`.
-- **POSIX limit tests, which do not exist yet and must be written first,**
-  mirroring `test_sandbox_limits.py`:
+- `tests/test_posix_platform.py`, the real half. It skips off POSIX. It
+  covers:
   - memory past the cap fails
   - CPU past the limit is killed
-  - processes past the limit are refused
+  - processes past the limit are killed by the watchdog
   - a file larger than 64 MB is refused (POSIX has this limit; Windows doesn't)
   - the timeout kills grandchildren
-  - `kill_tree` does not kill its caller
-  - limits apply when the caller is threaded
+  - `kill_tree` does not kill its caller (run in its own session)
+  - limits hold under a threaded caller
+  - macOS sees processes and their memory
+- `tests/test_tombstone_floor.py` (platform-neutral, but part of the audit).
 - The frozen probe gate on that OS (checklist, step 6).
 
 ## 3. macOS memory cap (4C)
@@ -89,8 +103,8 @@ does nothing. The Linux path does not cover the Mac. Sources:
 [imandrakit#26](https://github.com/imandra-ai/imandrakit/issues/26),
 [llm-cad#38](https://github.com/MaximumTrainer/llm-cad/issues/38).
 
-**Proposal for `darwin.py`**, not built. It is new code, and it cannot be
-verified here:
+**Built in `darwin.py`** (2026-09-25), unverified until step 5 runs on a
+Mac:
 
 1. **No `RLIMIT_AS` on Darwin.** Keep `RLIMIT_CPU` and `RLIMIT_FSIZE`, which
    Darwin does enforce.
@@ -124,10 +138,11 @@ This is a refactor of code that already existed, so it is built.
   limits and file locks. It chooses `current` once: `windows` on win32,
   `posix` otherwise.
 - `windows.py`: the pre-refactor Windows branches, moved verbatim. Has run.
-- `posix.py`: the pre-refactor POSIX branches, moved verbatim, with the
-  defects above in its header. Never run. One deliberate change: a limit the
-  kernel refuses is now a `LimitsRefused` (fail closed, the code doesn't run)
-  instead of an uncaught crash.
+- `posix.py`: Linux, with the four section 2 fixes that apply to it. Never
+  run.
+- `darwin.py`: macOS. It is `posix` plus the process table, memory, and the
+  footprint watchdog. It imports the rest from `posix` by name, and the
+  contract test counts those imports. Never run.
 - `agent/proc.py`, `agent/runlock.py` and `agent/execute/sandbox.py` call
   `current.*` and keep their public names.
 - `tests/test_platform_layer.py`:
@@ -136,12 +151,8 @@ This is a refactor of code that already existed, so it is built.
   - no `sys.platform` / `os.name` / `IS_POSIX` check exists outside the
     layer. The scattered form it replaced had 13 of them.
 
-**A port is then:**
-
-- `darwin.py`: `posix` plus a libproc process table, start time and memory,
-  and the section 3 watchdog in `spawn_limited`.
-- Fixing defects 1, 3 and 4 in `posix.py`.
-- Adding one line to the selector in `__init__.py`.
+**A further port** (a BSD, say) is a new module that passes the contract
+test, plus one line in the selector.
 
 ## 5. Checklist: verifying a new machine (4E)
 
@@ -192,12 +203,14 @@ EOF
 #    "limits could not be applied" = every run fails closed (RLIMIT_AS refused).
 ```
 
-**STOP** if step 4 shows defect 1 live, or if `allocated` printed on Linux.
-The sandbox is not trustworthy on this machine until the fixes in section 2
-land, with the POSIX limit tests written and green.
+**STOP** if step 4 shows defect 1 live, or if `allocated` printed on Linux or
+macOS. Those are the section 2 fixes failing on a real kernel. The sandbox is
+not trustworthy on this machine until step 5 is green.
 
 ```bash
-# 5. The sandbox property suites
+# 5. The POSIX platform tests, then the sandbox property suites.
+#    test_posix_platform.py has no skips on POSIX: a skip here is a failure.
+python -m pytest tests/test_posix_platform.py tests/test_tombstone_floor.py -q -rs
 python -m pytest tests/test_m5_action.py tests/test_sqlite_routes.py \
   tests/test_sandbox_libraries.py tests/test_frozen_sandbox.py \
   tests/test_every_verifier_can_fail.py tests/test_desktop.py \

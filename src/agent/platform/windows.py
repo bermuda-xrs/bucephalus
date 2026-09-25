@@ -186,11 +186,11 @@ def spawn_limited(argv: list[str], *, timeout_s: int, memory_bytes: int,
     return proc, _JobRef(job).close
 
 
-def cpu_limit_note(returncode, timeout_s: int) -> str:
+def exit_note(proc, timeout_s: int) -> str:
     from ..execute.winjob import CPU_LIMIT_EXIT
 
     return (f"\nsandbox: CPU time limit reached ({timeout_s} s)"
-            if returncode == CPU_LIMIT_EXIT else "")
+            if proc.returncode == CPU_LIMIT_EXIT else "")
 
 
 # ---------------------------------------------------------------- file locks

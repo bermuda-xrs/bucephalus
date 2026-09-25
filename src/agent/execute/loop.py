@@ -1041,6 +1041,10 @@ def _perform(ctx, task, tool, tool_name: str, args: dict, step: int) -> LedgerEn
                "wall_ms": int((time.time() - t0) * 1000)}
     if tool_name == "run_code":
         receipt.update(_touched_record(touched))
+        # Which limits held this run, and HOW - kernel or watchdog. A macOS
+        # memory cap is reactive, and the record says so rather than a reader
+        # assuming the Windows guarantee (agent/platform/darwin.py).
+        receipt["limits"] = list(result.get("notes") or []) if isinstance(result, dict) else []
     ctx.log.append(task.id, "tool.receipt", receipt)
 
     text = _render_result(result)

@@ -49,8 +49,8 @@ FINDINGS 1.27 says why and what would reopen it. Two results came instead:
 
 ## B1. Prerequisites, and the traps
 
-Windows; Python 3.11 or 3.12 (**not 3.13+** — package gaps); Ollama ≥ 0.32.7; ~8 GB of disk
-for the two models. Every number here came from a machine with 15.5 GB of RAM doing CPU
+Windows only so far (macOS and Linux are prepared, never run: `docs/PLATFORMS.md`); Python
+3.11 or 3.12 (**not 3.13+**); Ollama ≥ 0.32.7; ~8 GB of disk for the two models. Every number here came from a machine with 15.5 GB of RAM doing CPU
 inference, so wall-clock figures do not transfer. **Five traps, each costing someone a day:**
 1. **`ANTHROPIC_API_KEY` must be unset.** `--profile local` refuses to start if any provider
    credential is visible — a stray key means a run labelled "local" might not be.
@@ -100,17 +100,17 @@ chain verifies: True (first bad seq: None) - paid 9,091 tok - $0.0353 - cache hi
 It planned, executed, **refused an instruction embedded in a web page it read**, and the
 chain verifies. **Verification scope, narrower than it looks.** Every command here was run on **Windows, on
 one machine, against a local Ollama**, on the date in section D. **Nothing in this project
-has ever run on POSIX.** The sandbox applies resource limits through `rlimit` on POSIX and a
-Job Object on Windows; the POSIX branch is marked `# pragma: no cover` and has never
-executed anywhere. A Linux reader meets that in the first ten minutes, which is why it is
-here and not only in C4.
+has ever run on POSIX.** The POSIX sandbox (`src/agent/platform/posix.py`, `src/agent/platform/darwin.py`) has
+never executed anywhere: five defects found by reading are fixed but unverified until the
+checklist in `docs/PLATFORMS.md` runs on a real machine. A Linux reader meets that first.
 
 ## B3. What each command costs
 
 | Command | Cost |
 |---|---|
 | `demo.py` | ~30 s, scripted model, no network |
-| `python -m pytest tests -q` | ~1.5 min, offline |
+| `python -m pytest tests -q` | ~10 min, offline |
+| `packaging/build.py` | ~5 min: the desktop app, windowed onedir, 188 MB. `--probe` builds the frozen sandbox gate |
 | `bench/report.py`, `bench/coverage.py`, `bench/nextstep.py` | instant, read-only |
 | `bench/ladder.py` | ~15 min for six rungs at 5 samples; `--rungs R0,R1` is ~4 min and answers "does the tax reproduce" on its own |
 | `bench/noise.py --runs 1` | **~2.5 hours.** Loads a model, holds ~3.3 GB, takes the machine |
@@ -203,9 +203,8 @@ the same session found the mirror image: two network-safety tests guarding a wra
 production path called. Both are invisible to a dead-code audit, which reads production call
 sites — `main` is called by the operating system. FINDINGS 1.28.
 
-> **The named layer, swept 2026-09-17: D39 — the CLI's 25 subcommands.** Every earlier layer
-> of this class contained something; **this one contained nothing**, said plainly rather than
-> left as a silence. **Expect the next wherever a test imports what an entry point calls.**
+> **Swept 2026-09-17: D39, the CLI's 25 subcommands — it contained nothing**, said plainly
+> rather than left as a silence. **Expect the next wherever a test imports what an entry point calls.**
 
 ## C4. Security posture
 
@@ -277,19 +276,16 @@ uncalibrated tokenizer had no live consequence, when the context ceiling budgets
 and an abort threshold that counted recovered faults together with lost data. Treat that as
 an expectation, not an anecdote: **checking an instruction is part of following it, the
 measurement wins, and the contradiction is written down beside the code defects.**
-`docs/SPEC-DELTA.md` holds instruction-level errors as well as code ones, for the reason
-FINDINGS 6.6 gives — a criterion that measures something adjacent to what it claims is the
-same defect wherever it appeared.
 
 # D — STATE
 
 **Everything volatile is here and nowhere else in this file**, each row with the command that
-regenerates it. Verified 2026-09-17, against commit `c1fb9d6`.
+regenerates it. Verified 2026-09-25, against commit `39c9439`.
 
 | Fact | Value | Regenerate with |
 |---|---|---|
-| Branch | `measurement-2026-09-01`, no remote | `git branch --show-current` |
-| Written against | `c1fb9d6`; the test asserts this is an ancestor of HEAD | `git log --oneline -1` |
+| Branch | `desktop-app`, four commits on `measurement-2026-09-01`; neither merged nor pushed - they merge after the 2026-09 audit | `git branch --show-current` |
+| Written against | `39c9439`; the test asserts this is an ancestor of HEAD | `git log --oneline -1` |
 | Harness version | **6**, bumped 2026-09-25: a check must be able to fail (DR7) - the final sweep graded "{}" and `execution` passed it; five more verifiers could not fail (FINDINGS 1.34). 5 held the grader out under measurement. Pass rates before 5 are too high | `grep HARNESS_VERSION src/agent/__init__.py` |
 | Toolset version | **6** | `grep TOOLSET_VERSION src/agent/__init__.py` |
 | Test count | *deliberately not stated* | `python -m pytest tests -q`, and read the tail line. The skips are the live-credential tests, until D26's credentials exist |
@@ -321,6 +317,10 @@ Each owns its subject; nothing here is reproduced above.
 * **`INVARIANTS.md`** — the pre-commit checklist, each item naming the test that catches its
   violation, plus C2's design rules. **`docs/DEFERRED.md`** — the open defects, each heading
   carrying its own state.
+* **`docs/PLATFORMS.md`** — what runs on which OS (only Windows has), the POSIX defects fixed
+  from reading, and the checklist that verifies a new machine. **The desktop app** is
+  `src/agent/desktop.py`, built by `packaging/build.py`; `docs/evidence/desktop-app-2026-09-25.md`
+  is what it was shown to do frozen.
 * **`docs/evidence/`** — the raw records behind every number, including superseded and
   aborted runs, each labelled with its cause. `runs/` is gitignored, so anything that
   matters is copied here before a long job.
@@ -336,9 +336,8 @@ Each owns its subject; nothing here is reproduced above.
 | **D27** — one task at a time, and the bot has no queue | Not a queue: the single-writer chain lock serialises anyway, so the honest fix is the claim-then-execute receipt protocol |
 | **D33** — tier 1 sits before the tool schemas on this template | A `HARNESS_VERSION` bump, which is a stop. Its criterion — a boundary rebuild more than once per task — is **measured at zero** as of 2026-09-17 (`bench/inventory.py`): no session has ever rotated. Re-refused, not unexamined |
 
-**D24, D38 and D39 closed 2026-09-17**; `docs/DEFERRED.md` carries them — D38 took its bump
-alone, on its own deadline, to HARNESS_VERSION 3. One of the rest is the user's: **D26**
-(credentials, decided yes, not supplied). D32's acceptance is in C4.
+**D13, D24, D38 and D39 are closed** (`docs/DEFERRED.md`). One of the rest is the user's:
+**D26** (credentials, decided yes, not supplied). D32's acceptance is in C4.
 
 ## E3. Next steps, in order
 
@@ -377,7 +376,8 @@ that nobody has used it; every row of that inventory that turns green turns gree
 **(e) The frozen-app fix, if a desktop app is ever wanted.** Dormant — nothing is frozen
 today. *My estimate:* **a day, and I am uncertain**, because nobody has pointed a freezer at
 this tree, and the failure modes (package data, the subprocess trampoline, the sandbox's own
-interpreter path) only show up then.
+interpreter path) only show up then. **Done 2026-09-25**: about a day for D13 itself, and the
+freeze found two defects only a freeze shows (SPEC-DELTA C72, `desktop-app` branch).
 
 ## E4. Open questions
 
