@@ -45,12 +45,25 @@ def kill_tree_signal(pid: int, timeout_s: float) -> None:
 
 
 def alive(pid: int) -> bool:
+    """Asked of the kernel, not of `tasklist`: a subprocess per call was
+    0.52 s, and kill_tree polls this for every pid it kills - most of the
+    window-close time (Phase F, measured). A process we may not open still
+    exists (access denied); one that is gone cannot be opened at all."""
+    k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    k32.OpenProcess.restype = ctypes.c_void_p
+    k32.OpenProcess.argtypes = [ctypes.c_uint32, ctypes.c_int, ctypes.c_uint32]
+    k32.GetExitCodeProcess.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_uint32)]
+    k32.CloseHandle.argtypes = [ctypes.c_void_p]
+    h = k32.OpenProcess(0x1000, False, pid)         # QUERY_LIMITED_INFORMATION
+    if not h:
+        return ctypes.get_last_error() == 5         # ERROR_ACCESS_DENIED: exists
     try:
-        out = subprocess.run(["tasklist", "/FI", f"PID eq {pid}", "/NH"],
-                             capture_output=True, text=True, timeout=10).stdout
-        return str(pid) in out
-    except (OSError, subprocess.SubprocessError):
-        return False
+        code = ctypes.c_uint32()
+        if not k32.GetExitCodeProcess(h, ctypes.byref(code)):
+            return True
+        return code.value == 259                    # STILL_ACTIVE
+    finally:
+        k32.CloseHandle(h)
 
 
 class _PE32(ctypes.Structure):

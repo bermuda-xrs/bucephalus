@@ -57,6 +57,7 @@ def test_the_shutdown_sweep_pins_each_pid_to_its_start_time(monkeypatch):
     _fake_os(monkeypatch)
     monkeypatch.setattr(desktop.os, "getpid", lambda: 100)
     calls = []
+    monkeypatch.setattr(proc, "_alive", lambda pid: pid in START)    # the fake OS's live set
     monkeypatch.setattr(proc, "kill_tree", lambda pid, **kw: calls.append((pid, kw)))
     server = types.SimpleNamespace(should_exit=False)
     thread = types.SimpleNamespace(join=lambda t: None)
@@ -75,3 +76,16 @@ def test_windows_terminates_exactly_the_validated_tree(monkeypatch):
     assert killed[-1] == 100 and sorted(killed[:-1]) == [200, 201]
     assert killed.index(201) < killed.index(200), "leaves first"
     assert 300 not in killed and 301 not in killed
+
+
+def test_alive_answers_from_the_kernel_correctly():
+    """The fast alive() must still be RIGHT: running, exited, never existed."""
+    import os
+    import subprocess
+    import sys
+
+    assert proc._alive(os.getpid())
+    p = subprocess.Popen([sys.executable, "-c", "pass"], stdin=subprocess.DEVNULL)
+    p.wait(30)
+    assert not proc._alive(p.pid) or p.pid == os.getpid()
+    assert not proc._alive(4_000_000_000 % 2**31)       # far beyond any live pid

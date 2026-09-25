@@ -34,8 +34,8 @@ Everything else on this page is marked in its own heading:
 
 | state | what it means | items |
 |---|---|---|
-| **open** | a real defect, nobody has fixed it | D2, D6, D16, D26, D27, D33; from Linux D54-D59; from the audit D45, D46, D47, D48, D49, D50, D51, D52, D53, each with its audit severity |
-| **closed** | fixed, with the change and its test named | D1, D3, D7, D9, D10, D11, D15, D17, D18, D19, D20, D21, D22, D23, D24, D28, D29, D30, D34, D35, D36, D37, D38, D39, D40, D41, D42, D43, D44 |
+| **open** | a real defect, nobody has fixed it | D2, D6, D16, D26, D27, D33; from Linux D54-D59; from the audit D45, D46, D47, D48, D49, D50, D52, D53, each with its audit severity |
+| **closed** | fixed, with the change and its test named | D1, D3, D7, D9, D10, D11, D15, D17, D18, D19, D20, D21, D22, D23, D24, D28, D29, D30, D34, D35, D36, D37, D38, D39, D40, D41, D42, D43, D44, D51 |
 | **deleted** | never a defect, or about an instrument nobody runs | D4, D5, D8, D12, D14 |
 | **known and accepted** | a real limit, decided rather than deferred | D32 (the sandbox is advisory: Phase 6 withdrawn) |
 | **dormant** | its subject is retired; it wakes if that returns | D19 (M11). D13 CLOSED 2026-09-25 |
@@ -1330,7 +1330,7 @@ source ships twice (~25 MB) through `--collect-all`. A binomial tail from
 `math.comb` and `--collect-submodules sympy` would remove both without
 changing what the model can import. Measured, not estimated.
 
-## D51 - LOW - window close takes ~8 s, and it is `kill_tree`, not uvicorn (audit I2)
+## D51 - LOW - window close takes ~8 s, and it is `kill_tree`, not uvicorn (audit I2) (CLOSED 2026-09-25: measured, 3 trials each: frozen window close 8.66 s -> 3.60 s median. alive() asks the kernel instead of spawning tasklist (0.518 s -> <1 ms per call), the sweep skips pids already gone, and the frozen entry exits directly once main() has closed everything, skipping ~6.4 s of pythonnet/WebView2 finalisation. The rest is WebView2's own window teardown)
 
 uvicorn stops in 0.22 s. The rest is `shutdown()` killing each descendant
 serially, each `taskkill` followed by a `tasklist` poll. One `taskkill /T` over

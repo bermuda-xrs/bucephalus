@@ -101,7 +101,7 @@ def kill_tree(pid: int, timeout_s: float = 10.0,
     while time.time() < deadline:
         if not _alive(pid):
             return True
-        time.sleep(0.2)
+        time.sleep(0.05)
     return not _alive(pid)
 
 

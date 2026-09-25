@@ -116,6 +116,10 @@ def shutdown(server, thread, timeout_s: float = 10.0) -> list[int]:
     left = descendants()
     started = {pid: proc.process_start_time(pid) for pid in left}
     for pid in left:
+        # Already gone with a parent's tree (leaves-first kills take the whole
+        # validated subtree); asking the kernel is microseconds.
+        if not proc._alive(pid):
+            continue
         # Pinned to the process in the snapshot: by the time this runs the
         # pid may be someone else's (D42).
         proc.kill_tree(pid, expect_start=started[pid])
