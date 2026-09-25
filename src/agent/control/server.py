@@ -36,7 +36,7 @@ from ..instrument.report import run_report
 from ..kernel.integrity import verify_all
 from ..kernel.tasks import create_task, load_task, set_status
 from ..kernel.types import Budget, TaskContract, TaskStatus
-from ..plan.planner import approve_plan, draft_plan, load_plan
+from ..plan.planner import approve_plan, draft_plan, load_plan, reject_plan
 from ..plan.review import decisions as review_decisions
 from ..userdata.store import SuiteTask, ValidationError
 from .events import stream_events
@@ -55,6 +55,11 @@ class CreateTask(BaseModel):
 class ApprovePlan(BaseModel):
     plan_id: str
     edits: list[dict] = Field(default_factory=list)
+
+
+class RejectPlan(BaseModel):
+    plan_id: str
+    comment: str = ""
 
 
 class Steer(BaseModel):
@@ -272,6 +277,55 @@ def create_app(ctx: AgentContext) -> FastAPI:
     @app.get("/reviews/{task_id}")
     def get_reviews(task_id: str) -> dict:
         return {"decisions": review_decisions(ctx.conn, task_id)}
+
+    @app.get("/tasks")
+    def list_tasks(limit: int = 60) -> dict:
+        """The console's queue: newest first, with each task's plan state, so
+        the list can be sorted by what needs a human rather than by time."""
+        rows = ctx.conn.execute(
+            """SELECT t.id, t.contract_json, t.status, t.created_at,
+                      (SELECT p.status FROM plans p WHERE p.task_id = t.id
+                       ORDER BY p.created_at DESC LIMIT 1)
+               FROM tasks t WHERE t.parent_id IS NULL
+               ORDER BY t.created_at DESC LIMIT ?""", (max(1, min(limit, 500)),)
+        ).fetchall()
+        return {"tasks": [{"task_id": r[0], "goal": json.loads(r[1]).get("goal", ""),
+                           "status": r[2], "created_at": r[3], "plan_status": r[4]}
+                          for r in rows]}
+
+    @app.get("/tasks/{task_id}/plan")
+    def get_plan(task_id: str) -> dict:
+        row = ctx.conn.execute(
+            "SELECT status FROM plans WHERE task_id=? ORDER BY created_at DESC LIMIT 1",
+            (task_id,)).fetchone()
+        plan = load_plan(ctx, task_id)
+        if plan is None or row is None:
+            raise HTTPException(404, "no plan drafted for this task")
+        return {"plan_id": plan.id, "status": row[0], "plan": plan.body(),
+                "rendered": plan.render()}
+
+    @app.post("/tasks/{task_id}/plan/reject")
+    def post_reject(task_id: str, body: RejectPlan) -> dict:
+        """Send a plan back. The comment goes on the chain beside the plan it
+        answers; draft again to get a new one."""
+        task = load_task(ctx.conn, task_id)
+        plan = load_plan(ctx, task_id)
+        if plan is None or plan.id != body.plan_id:
+            raise HTTPException(409, "plan_id does not match the current draft")
+        reject_plan(ctx, task, plan, body.comment)
+        return {"plan_id": plan.id, "status": "rejected"}
+
+    @app.get("/theme")
+    def get_theme() -> dict:
+        """Colours and banner from themes/ (M13.7). Display only: this is the
+        one route by which the banner leaves the package, and it goes to a
+        page, never a prompt (agent.tui.theme)."""
+        from ..tui.theme import banner_text, load
+
+        pkg = Path(__file__).resolve().parents[1]
+        t = load(pkg / "themes" / "default.toml", pkg)
+        # A browser renders the glyphs whatever the terminal could.
+        return {"colors": t["colors"], "banner": banner_text(t, pkg, glyphs=True)}
 
     @app.get("/health")
     def health() -> dict:

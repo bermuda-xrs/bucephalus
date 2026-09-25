@@ -1,5 +1,6 @@
-"""Freeze the agent with PyInstaller (onedir). One command:
+"""Freeze the agent with PyInstaller (onedir). One command each:
 
+    python packaging/build.py             # the desktop app, windowed
     python packaging/build.py --probe     # the D13 gate: sandbox tests, frozen
 
 Run it from a BUILD venv that has the project installed (non-editable) plus
@@ -16,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import importlib.util
+import json
 import os
 import sys
 import time
@@ -39,10 +41,11 @@ def _size_mb(path: Path) -> float:
     return sum(f.stat().st_size for f in path.rglob("*") if f.is_file()) / 2**20
 
 
-def build(name: str, entry: Path, extra: list[str]) -> Path:
+def build(name: str, entry: Path, extra: list[str], console: bool = True) -> Path:
     import PyInstaller.__main__
 
-    args = [str(entry), "--noconfirm", "--onedir", "--console", "--name", name,
+    args = [str(entry), "--noconfirm", "--onedir",
+            "--console" if console else "--windowed", "--name", name,
             "--distpath", str(OUT / "dist"), "--workpath", str(OUT / "work"),
             "--specpath", str(OUT), "--collect-submodules", "agent",
             "--collect-data", "agent", "--collect-all", "sympy",
@@ -56,16 +59,50 @@ def build(name: str, entry: Path, extra: list[str]) -> Path:
     return dist
 
 
+# A task is its goal plus its grader; neither ships. The suite is the user's
+# to write (bench/README.md), and a grader in the bundle is one the sandbox's
+# read fence would have to be trusted to hide.
+_TASK_PARTS = {"bench", "graders", "grading"}
+
+
+def no_task_content(dist: Path) -> list[str]:
+    """Paths in a build that are task content. Empty means clean."""
+    bad = []
+    for f in dist.rglob("*"):
+        rel = f.relative_to(dist)
+        if _TASK_PARTS & {p.lower() for p in rel.parts} or f.name == "verify.py":
+            bad.append(str(rel))
+        elif f.suffix == ".json" and f.is_file() and f.stat().st_size < 2**20:
+            try:
+                d = json.loads(f.read_text(encoding="utf-8"))
+            except (ValueError, UnicodeDecodeError):
+                continue
+            if isinstance(d, dict) and "goal" in d and "success_criterion" in d:
+                bad.append(str(rel))
+    return bad
+
+
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    p.add_argument("--probe", action="store_true", required=True,
-                   help="the D13 gate build")
-    p.parse_args(argv)
+    p.add_argument("--probe", action="store_true", help="the D13 gate build")
+    args = p.parse_args(argv)
     sep = os.pathsep
-    build("alpha-probe", ROOT / "packaging" / "probe_entry.py",
-          ["--collect-all", "pytest", "--collect-all", "_pytest",
-           "--collect-all", "pluggy", "--collect-all", "iniconfig",
-           "--add-data", f"{ROOT / 'tests'}{sep}tests"])
+    if args.probe:
+        build("alpha-probe", ROOT / "packaging" / "probe_entry.py",
+              ["--collect-all", "pytest", "--collect-all", "_pytest",
+               "--collect-all", "pluggy", "--collect-all", "iniconfig",
+               "--add-data", f"{ROOT / 'tests'}{sep}tests"])
+        return 0
+    dist = build("alpha", ROOT / "packaging" / "app_entry.py",
+                 ["--collect-all", "webview",
+                  # The first-run profile (agent.desktop._default_config).
+                  "--add-data", f"{ROOT / 'config.local.yaml'}{sep}."],
+                 console=False)
+    bad = no_task_content(dist)
+    if bad:
+        print("TASK CONTENT IN THE BUILD - refusing it:", *bad[:20], sep="\n  ")
+        return 1
+    print("no task content in the build")
     return 0
 
 

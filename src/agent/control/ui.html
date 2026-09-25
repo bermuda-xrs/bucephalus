@@ -3,428 +3,697 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>alpha test 1 — console</title>
+<title>alpha test 1</title>
 <style>
+  /* Colours come from themes/default.toml through /theme, set on :root at
+     load. These are the same values, for the first paint. --danger is the
+     integrity colour and is used by .integrity rules and nothing else
+     (tests/test_console.py holds that). */
   :root {
-    color-scheme: light;
-    --plane:#f4f4f1; --surface:#fcfcfb; --ink:#0b0b0b; --ink-2:#52514e;
-    --muted:#898781; --rule:#e1e0d9; --accent:#2a78d6; --good:#0ca30c;
-    --warn:#fab219; --warn-ink:#7a5400; --danger:#d03b3b; --field:#ffffff;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) {
-      color-scheme: dark;
-      --plane:#0d0d0d; --surface:#1a1a19; --ink:#fff; --ink-2:#c3c2b7;
-      --muted:#898781; --rule:#2c2c2a; --accent:#3987e5; --good:#0ca30c;
-      --warn:#fab219; --warn-ink:#fab219; --danger:#e66767; --field:#111110;
-    }
+    color-scheme: dark;
+    --ground:#0E1116; --sheet:#161B22; --line:#252C35; --line-2:#323B46;
+    --ink:#E8ECEF; --ink-2:#A9B1B8; --muted:#7A7A7A;
+    /* The theme muted (7A7A7A) is 4.0:1 on the sheet - under AA for small
+       text - so text uses this lift of it; the theme value stays for rules. */
+    --muted-text:#8F969E;
+    --accent:#7DB4C8; --success:#88C070; --warning:#D9A441; --danger:#FF4B4B;
+    --ui: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", sans-serif;
+    --display: "Segoe UI Variable Display", "Segoe UI", system-ui, -apple-system, sans-serif;
+    --code: "Cascadia Mono", "Cascadia Code", Consolas, "SF Mono", Menlo, monospace;
   }
   * { box-sizing:border-box; }
-  body {
-    margin:0; background:var(--plane); color:var(--ink);
-    font:400 15px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif;
+  html, body { height:100%; }
+  body { margin:0; background:var(--ground); color:var(--ink);
+         font:400 15px/1.5 var(--ui); -webkit-font-smoothing:antialiased; }
+  code, .code { font-family:var(--code); font-size:.88em; }
+  button, input, textarea, select { font:inherit; color:inherit; }
+  :focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+  [hidden] { display:none !important; }
+
+  /* ---- frame -------------------------------------------------------- */
+  .frame { display:grid; grid-template-rows:auto auto 1fr; height:100%; }
+  header.top { display:flex; align-items:center; gap:24px; padding:10px 20px;
+               border-bottom:1px solid var(--line); }
+  .banner { margin:0; font:11px/1.12 var(--code); color:var(--accent);
+            white-space:pre; letter-spacing:0; }
+  .top nav { margin-left:auto; display:flex; gap:4px; }
+  .top nav button { background:none; border:0; padding:7px 12px; border-radius:6px;
+                    color:var(--ink-2); cursor:pointer; }
+  .top nav button[aria-current="page"] { color:var(--ink); background:var(--sheet); }
+  .health { color:var(--muted-text); font-size:13px; }
+
+  /* The one red thing. It sits above everything and is not dismissible:
+     a broken record stays on screen until the record is fixed. */
+  .integrity { background:var(--danger); color:#1A0505; padding:10px 20px; }
+  .integrity strong { font-weight:650; }
+  .integrity ul { margin:4px 0 0; padding-left:18px; font-size:13.5px; }
+
+  /* ---- desk: queue + sheet ------------------------------------------ */
+  .desk { display:grid; grid-template-columns:320px 1fr; min-height:0; }
+  .queue { border-right:1px solid var(--line); overflow:auto; padding:16px 12px 40px; }
+  .queue h2 { font:600 13px/1.3 var(--ui); color:var(--ink-2); margin:18px 8px 6px; }
+  .queue h2 .n { color:var(--muted-text); font-weight:400; }
+  .qi { display:block; width:100%; text-align:left; background:none; border:0;
+        border-radius:8px; padding:9px 10px; cursor:pointer; color:var(--ink); }
+  .qi:hover { background:var(--sheet); }
+  .qi[aria-current="true"] { background:var(--sheet); box-shadow:inset 3px 0 0 var(--accent); }
+  .qi .g { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;
+           overflow:hidden; font-size:14px; line-height:1.35; }
+  .qi .s { font-size:12.5px; color:var(--muted-text); margin-top:2px; }
+  .qi.needs .s { color:var(--warning); }
+  .qi.gate { box-shadow:inset 3px 0 0 var(--warning); }
+  .empty { color:var(--muted-text); font-size:13.5px; padding:6px 10px; }
+
+  .new { background:var(--sheet); border:1px solid var(--line); border-radius:10px; padding:12px; }
+  .new textarea { width:100%; min-height:64px; resize:vertical; background:var(--ground);
+                  border:1px solid var(--line-2); border-radius:6px; padding:8px 10px; }
+  .new .row { display:flex; gap:8px; margin-top:8px; align-items:center; }
+  .new input { width:84px; background:var(--ground); border:1px solid var(--line-2);
+               border-radius:6px; padding:6px 8px; }
+  .new label { font-size:12.5px; color:var(--ink-2); }
+
+  .sheet { overflow:auto; padding:40px 56px 0; position:relative; }
+  .sheet .inner > :last-child:not(.sign) { margin-bottom:80px; }
+  .sheet .inner { max-width:880px; }
+  .welcome { max-width:52ch; color:var(--ink-2); margin-top:12vh; }
+  .welcome h1 { font:600 30px/1.2 var(--display); color:var(--ink); margin:0 0 10px; letter-spacing:-.01em; }
+
+  .kicker { color:var(--ink-2); font-size:13.5px; margin:0 0 10px; }
+  .objective { font:600 32px/1.18 var(--display); letter-spacing:-.015em; margin:0 0 28px;
+               max-width:30ch; }
+
+  /* What must be settled before signing. The plan type puts these first
+     for a reason: two-touch work means every question is asked now. */
+  .before { border-left:3px solid var(--warning); padding:4px 0 4px 18px; margin:0 0 34px; }
+  .before h3 { font:600 15px/1.3 var(--ui); margin:0 0 6px; }
+  .before ul { margin:0 0 12px; padding-left:18px; color:var(--ink-2); }
+  .before li { margin:3px 0; max-width:70ch; }
+  .before .clear { color:var(--muted-text); }
+
+  .track { list-style:none; margin:0; padding:0; position:relative; }
+  .track::before { content:""; position:absolute; left:15px; top:14px; bottom:14px;
+                   width:2px; background:var(--line-2); }
+  .step { display:grid; grid-template-columns:32px 1fr auto; gap:0 18px;
+          padding:0 0 24px; position:relative; }
+  .step .node { width:32px; height:32px; border-radius:50%; background:var(--ground);
+                border:2px solid var(--accent); color:var(--accent);
+                display:grid; place-items:center; font:600 13px var(--ui); z-index:1; }
+  .step.irrev .node { border-color:var(--warning); color:var(--warning); }
+  .step .intent { font:500 17px/1.4 var(--ui); margin:4px 0 6px; max-width:62ch; }
+  .step dl { display:grid; grid-template-columns:max-content 1fr; gap:3px 14px;
+             margin:0; font-size:13.5px; }
+  .step dt { color:var(--muted-text); }
+  .step dd { margin:0; color:var(--ink-2); }
+  .step .irrev-note { color:var(--warning); font-size:13.5px; margin:0 0 6px; }
+  .step .est { text-align:right; font-size:13px; color:var(--muted-text); white-space:nowrap;
+               padding-top:6px; font-variant-numeric:tabular-nums; }
+  .totals { margin:6px 0 0 50px; color:var(--ink-2); font-size:14px;
+            font-variant-numeric:tabular-nums; }
+
+  /* The signature. What you approve is a hash, and the hash is what the
+     anchor pins - so it is shown as the thing being signed. */
+  .sign { position:sticky; bottom:0; z-index:5; margin:40px -56px 0; padding:16px 56px 22px;
+          background:var(--ground); border-top:1px solid var(--line);
+          display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
+  .sign::before { content:""; position:absolute; left:0; right:0; bottom:100%; height:28px;
+                  background:linear-gradient(to bottom, transparent, var(--ground));
+                  pointer-events:none; }
+  .seal { display:flex; align-items:center; gap:12px; }
+  .seal .ring { width:38px; height:38px; border-radius:50%; border:2px solid var(--accent);
+                position:relative; flex:none; }
+  .seal .ring::after { content:""; position:absolute; inset:6px; border-radius:50%;
+                       background:var(--accent); transform:scale(0); }
+  .seal.signed .ring::after { transform:scale(1); transition:transform .45s cubic-bezier(.2,.9,.3,1.3); }
+  .seal .what { font-size:13px; color:var(--ink-2); line-height:1.35; }
+  .seal .hash { font:500 14px var(--code); color:var(--ink); letter-spacing:.02em; }
+  .sign .actions { margin-left:auto; display:flex; gap:10px; }
+  .btn { border-radius:8px; padding:10px 18px; cursor:pointer; border:1px solid var(--line-2);
+         background:var(--sheet); color:var(--ink); font-weight:550; }
+  .btn:hover { border-color:var(--ink-2); }
+  .btn.primary { background:var(--accent); border-color:var(--accent); color:#0B1418; }
+  .btn.primary:hover { filter:brightness(1.07); }
+  .btn.amber { border-color:var(--warning); color:var(--warning); background:none; }
+  .btn:disabled { opacity:.5; cursor:default; }
+  .sendback { display:flex; gap:8px; flex-basis:100%; }
+  .sendback input { flex:1; background:var(--sheet); border:1px solid var(--line-2);
+                    border-radius:8px; padding:9px 12px; }
+
+  /* A gate approval: the run is parked on one action. */
+  .gatecard { border-left:3px solid var(--warning); padding:6px 0 6px 18px; max-width:760px; }
+  .gatecard pre { background:var(--sheet); border:1px solid var(--line); border-radius:8px;
+                  padding:12px 14px; white-space:pre-wrap; font:13px/1.5 var(--code);
+                  color:var(--ink-2); max-height:320px; overflow:auto; }
+  .gatecard .row { display:flex; gap:10px; margin-top:14px; }
+
+  .progress { display:grid; grid-template-columns:max-content 1fr; gap:6px 18px;
+              font-size:14.5px; margin:0 0 20px; font-variant-numeric:tabular-nums; }
+  .progress dt { color:var(--muted-text); }
+  .progress dd { margin:0; }
+  .st-done { color:var(--success); }
+  .st-needs { color:var(--warning); }
+
+  /* ---- workshop ------------------------------------------------------ */
+  .workshop { overflow:auto; padding:28px 40px 80px; }
+  .workshop .inner { max-width:980px; }
+  .ws-tabs { display:flex; gap:4px; margin:0 0 22px; border-bottom:1px solid var(--line); }
+  .ws-tabs button { background:none; border:0; padding:9px 12px; color:var(--ink-2);
+                    border-bottom:2px solid transparent; cursor:pointer; }
+  .ws-tabs button[aria-selected="true"] { color:var(--ink); border-bottom-color:var(--accent); }
+  .workshop h1 { font:600 24px/1.25 var(--display); margin:0 0 6px; }
+  .lede { color:var(--ink-2); max-width:68ch; margin:0 0 20px; }
+  .panel { background:var(--sheet); border:1px solid var(--line); border-radius:10px;
+           padding:16px; margin:0 0 16px; }
+  .field { display:block; margin:0 0 10px; }
+  .field span { display:block; font-size:13px; color:var(--ink-2); margin:0 0 4px; }
+  .field input, .field textarea, .field select {
+    width:100%; background:var(--ground); border:1px solid var(--line-2); border-radius:6px;
+    padding:8px 10px; }
+  .field textarea { min-height:84px; resize:vertical; font:13px/1.5 var(--code); }
+  .cols { display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:0 14px; }
+  table { width:100%; border-collapse:collapse; font-size:14px; }
+  th, td { text-align:left; padding:9px 10px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { font-weight:500; color:var(--muted-text); font-size:13px; }
+  tr:last-child td { border-bottom:0; }
+  .link { background:none; border:0; padding:0; color:var(--accent); cursor:pointer; text-align:left; }
+  .quiet { background:none; border:0; color:var(--muted-text); cursor:pointer; padding:2px 6px; }
+  .quiet:hover { color:var(--ink); }
+  .caveat { border-left:3px solid var(--warning); padding:2px 0 2px 14px; color:var(--ink-2);
+            margin:0 0 16px; max-width:76ch; font-size:14px; }
+  .caveat.good { border-left-color:var(--success); }
+  .meter { height:4px; background:var(--line-2); border-radius:2px; overflow:hidden; margin-top:6px; width:120px; }
+  .meter i { display:block; height:100%; background:var(--accent); }
+
+  #toast { position:fixed; right:18px; bottom:18px; background:var(--sheet); color:var(--ink);
+           border:1px solid var(--line-2); border-left:3px solid var(--accent);
+           padding:11px 15px; font-size:14px; border-radius:8px; opacity:0;
+           transition:opacity .18s; pointer-events:none; max-width:420px; z-index:50; }
+  #toast.bad { border-left-color:var(--warning); }
+
+  @media (max-width: 900px) {
+    .desk { grid-template-columns:1fr; }
+    .queue { border-right:0; border-bottom:1px solid var(--line); max-height:42vh; }
+    .sheet { padding:24px 18px 0; }
+    .sign { margin:32px -18px 0; padding:14px 18px 20px; }
+    .objective { font-size:26px; }
+    .banner { display:none; }
   }
-  .mono, code, input, textarea, select, th, td, .k {
-    font-family:ui-monospace,"Cascadia Mono",Consolas,"SF Mono",Menlo,monospace;
+  @media (prefers-reduced-motion: reduce) {
+    * { transition:none !important; }
   }
-  header {
-    background:var(--surface); border-bottom:1px solid var(--rule);
-    padding:14px 22px; display:flex; align-items:baseline; gap:16px; flex-wrap:wrap;
-  }
-  header h1 { font-size:15px; margin:0; font-weight:700; letter-spacing:-.01em;
-    font-family:ui-monospace,Consolas,monospace; }
-  header .st { font-size:12px; color:var(--muted); font-family:ui-monospace,Consolas,monospace; }
-  nav { display:flex; gap:2px; padding:0 22px; background:var(--surface);
-        border-bottom:1px solid var(--rule); overflow-x:auto; }
-  nav button {
-    background:none; border:none; border-bottom:2px solid transparent;
-    padding:11px 14px; font:inherit; font-size:13px; color:var(--ink-2);
-    cursor:pointer; white-space:nowrap;
-  }
-  nav button:hover { color:var(--ink); }
-  nav button[aria-selected="true"] { color:var(--ink); border-bottom-color:var(--accent); font-weight:600; }
-  main { max-width:1060px; margin:0 auto; padding:24px 22px 80px; }
-  section[hidden] { display:none; }
-  h2 { font-size:12px; letter-spacing:.14em; text-transform:uppercase; color:var(--ink-2);
-       margin:0 0 12px; font-family:ui-monospace,Consolas,monospace; }
-  p.lede { color:var(--ink-2); max-width:66ch; margin:0 0 18px; font-size:14px; }
-  .card { background:var(--surface); border:1px solid var(--rule); padding:16px; margin-bottom:14px; }
-  .row { display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; }
-  label { display:block; font-size:11px; letter-spacing:.08em; text-transform:uppercase;
-          color:var(--muted); margin-bottom:5px; font-family:ui-monospace,Consolas,monospace; }
-  input,textarea,select {
-    background:var(--field); color:var(--ink); border:1px solid var(--rule);
-    padding:8px 10px; font-size:13px; width:100%; border-radius:2px;
-  }
-  textarea { resize:vertical; min-height:90px; line-height:1.5; }
-  input:focus,textarea:focus,select:focus { outline:2px solid var(--accent); outline-offset:-1px; }
-  .f { flex:1 1 200px; }
-  .f-sm { flex:0 0 130px; }
-  button.act {
-    background:var(--accent); color:#fff; border:none; padding:9px 15px;
-    font:inherit; font-size:13px; font-weight:600; cursor:pointer; border-radius:2px;
-  }
-  button.act:hover { filter:brightness(1.08); }
-  button.ghost { background:none; color:var(--ink-2); border:1px solid var(--rule);
-                 padding:8px 13px; font:inherit; font-size:12px; cursor:pointer; border-radius:2px; }
-  button.ghost:hover { color:var(--ink); border-color:var(--muted); }
-  button.del { color:var(--danger); border-color:transparent; background:none;
-               cursor:pointer; font:inherit; font-size:12px; padding:4px 7px; }
-  table { width:100%; border-collapse:collapse; font-size:13px; }
-  th,td { text-align:left; padding:8px 10px; border-bottom:1px solid var(--rule); vertical-align:top; }
-  th { font-size:10px; letter-spacing:.09em; text-transform:uppercase; color:var(--muted); font-weight:400; }
-  tbody tr:last-child td { border-bottom:none; }
-  .pill { display:inline-block; font-size:10px; letter-spacing:.07em; text-transform:uppercase;
-          padding:1px 7px; border:1px solid currentColor; border-radius:2px; }
-  .pill.ok { color:var(--good); } .pill.warn { color:var(--warn-ink); }
-  .pill.mut { color:var(--muted); }
-  .note { display:flex; gap:10px; background:var(--surface); border:1px solid var(--rule);
-          border-left:3px solid var(--warn); padding:12px 14px; margin-bottom:14px; font-size:13.5px;
-          color:var(--ink-2); }
-  .note b { color:var(--ink); }
-  .bar { height:5px; background:var(--rule); border-radius:3px; overflow:hidden; margin-top:8px; }
-  .bar i { display:block; height:100%; background:var(--accent); }
-  #toast {
-    position:fixed; right:18px; bottom:18px; background:var(--ink); color:var(--plane);
-    padding:11px 15px; font-size:13px; border-radius:3px; opacity:0; transition:opacity .18s;
-    pointer-events:none; max-width:380px; z-index:50;
-  }
-  #toast.bad { background:var(--danger); color:#fff; }
-  .muted { color:var(--muted); font-size:12.5px; }
-  details summary { cursor:pointer; font-size:12.5px; color:var(--ink-2); }
-  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
-  @media (max-width:720px){ .grid2{grid-template-columns:1fr;} }
 </style>
 </head>
 <body>
+<div class="frame">
+  <header class="top">
+    <pre class="banner" id="banner" aria-label="alpha test 1">alpha test 1</pre>
+    <span class="health" id="health">Connecting…</span>
+    <nav aria-label="Sections">
+      <button id="navDesk" aria-current="page">Tasks</button>
+      <button id="navShop">Workshop</button>
+    </nav>
+  </header>
 
-<header>
-  <h1>alpha test 1</h1>
-  <span class="st" id="status">connecting…</span>
-</header>
+  <div class="integrity" id="integrity" role="alert" hidden></div>
 
-<nav id="tabs">
-  <button data-t="suites" aria-selected="true">Eval suites</button>
-  <button data-t="skills" aria-selected="false">Skills</button>
-  <button data-t="policy" aria-selected="false">Reviewer policy</button>
-  <button data-t="grounding" aria-selected="false">Grounding</button>
-  <button data-t="run" aria-selected="false">Run a task</button>
-</nav>
-
-<main>
-  <!-- ------------------------------------------------ suites -->
-  <section id="suites">
-    <h2>Eval suites</h2>
-    <p class="lede">
-      The tasks that decide whether a skill actually helps. This is yours to write —
-      it measures your work, and it is the denominator of every number the system
-      reports. The gate needs <b id="minTrials">30</b> paired trials before it will
-      promote anything.
-    </p>
-
-    <div class="card">
-      <div class="row">
-        <div class="f"><label for="sName">New suite</label>
-          <input id="sName" placeholder="e.g. tps-analysis"></div>
-        <div class="f"><label for="sDesc">Description</label>
-          <input id="sDesc" placeholder="what these tasks measure"></div>
-        <button class="act" onclick="createSuite()">Create</button>
-      </div>
-    </div>
-
-    <div class="card"><table>
-      <thead><tr><th>Suite</th><th>Tasks</th><th>Gate</th><th></th></tr></thead>
-      <tbody id="suiteRows"><tr><td colspan="4" class="muted">Loading…</td></tr></tbody>
-    </table></div>
-
-    <div id="suiteDetail" hidden>
-      <h2 id="sdTitle">Tasks</h2>
-      <div class="note">
-        <span>⚠</span>
-        <div><b>A verifier that only checks shape measures nothing.</b>
-        <code>json_schema</code> accepts <code>{"total": 0}</code> for an invoice
-        totalling 4825. Use <code>expected_value</code> with the right answer, or
-        <code>contains_all</code> with strings that must survive. The expected
-        answer is stored here and never enters the agent's context.</div>
-      </div>
-
-      <div class="card">
+  <!-- ============================================================ desk -->
+  <div class="desk" id="desk">
+    <aside class="queue" aria-label="Task queue">
+      <form class="new" id="newTask">
+        <textarea id="goal" required
+          placeholder="What should it do? e.g. Read work/notes.txt and summarise it."></textarea>
         <div class="row">
-          <div class="f-sm"><label for="tKey">Key</label><input id="tKey" placeholder="task-01"></div>
-          <div class="f"><label for="tGoal">Goal</label>
-            <input id="tGoal" placeholder="what the agent must accomplish"></div>
-          <div class="f-sm"><label for="tCrit">Verifier</label>
-            <select id="tCrit" onchange="critChanged()"></select></div>
+          <label for="scope">Folder</label><input id="scope" value="work">
+          <button class="btn primary" style="margin-left:auto;padding:7px 14px">Draft a plan</button>
         </div>
-        <div class="row" style="margin-top:10px">
-          <div class="f"><label for="tExp" id="tExpLabel">Expected answer (JSON)</label>
-            <textarea id="tExp" style="min-height:64px">{"total": 4825}</textarea></div>
-          <div class="f"><label for="tSchema">Answer shape (JSON Schema)</label>
-            <textarea id="tSchema" style="min-height:64px">{"type":"object","required":["total"],"properties":{"total":{"type":"integer"}}}</textarea></div>
+      </form>
+      <h2>Needs you <span class="n" id="nNeeds"></span></h2><div id="qNeeds"></div>
+      <h2>Running <span class="n" id="nRunning"></span></h2><div id="qRunning"></div>
+      <h2>Finished <span class="n" id="nDone"></span></h2><div id="qDone"></div>
+    </aside>
+
+    <main class="sheet" id="sheet">
+      <div class="inner" id="sheetInner">
+        <div class="welcome">
+          <h1>Plan once, walk away, get told.</h1>
+          <p>Describe a task to start. It drafts a plan without touching
+          anything; you read it, settle its questions, and sign it. Only then
+          does it run, and it comes back to you if it needs a decision.</p>
         </div>
-        <div class="row" style="margin-top:10px">
-          <div class="f"><label for="tFix">Fixture files (JSON: path → contents)</label>
-            <textarea id="tFix" style="min-height:64px">{}</textarea></div>
-        </div>
-        <div class="row" style="margin-top:10px">
-          <div class="f-sm"><label for="tSecs">Seconds</label><input id="tSecs" type="number" value="180"></div>
-          <div class="f-sm"><label for="tCat">Catastrophic</label>
-            <select id="tCat"><option value="0">no</option><option value="1">yes — veto</option></select></div>
-          <button class="act" onclick="saveTask()">Save task</button>
-          <button class="ghost" onclick="importFolder()">Import bench/tasks</button>
-          <button class="ghost" onclick="closeSuite()">Close</button>
-        </div>
-        <p class="muted" style="margin-top:9px">
-          A <b>catastrophic</b> task vetoes promotion outright if a skill regresses it —
-          worse than a task neither arm passed.
-        </p>
+      </div>
+    </main>
+  </div>
+
+  <!-- ======================================================== workshop -->
+  <div class="workshop" id="shop" hidden>
+    <div class="inner">
+      <div class="ws-tabs" role="tablist">
+        <button role="tab" data-t="suites" aria-selected="true">Eval suites</button>
+        <button role="tab" data-t="skills" aria-selected="false">Skills</button>
+        <button role="tab" data-t="policy" aria-selected="false">Reviewer policy</button>
+        <button role="tab" data-t="grounding" aria-selected="false">Grounding</button>
       </div>
 
-      <div id="shapeWarn"></div>
-      <div class="card"><table>
-        <thead><tr><th>Key</th><th>Goal</th><th>Verifier</th><th>Checks</th><th></th></tr></thead>
-        <tbody id="taskRows"></tbody>
-      </table></div>
-    </div>
-  </section>
+      <section id="t-suites">
+        <h1>Eval suites</h1>
+        <p class="lede">The tasks that decide whether a skill helps. They measure
+          your work, so they are yours to write. The gate promotes nothing until a
+          suite has <b id="minTrials">30</b> paired trials.</p>
+        <div class="panel"><div class="cols">
+          <label class="field"><span>Name</span><input id="sName" placeholder="tps-analysis"></label>
+          <label class="field"><span>What it measures</span><input id="sDesc"></label>
+        </div><button class="btn primary" onclick="createSuite()">Create suite</button></div>
+        <div class="panel"><table>
+          <thead><tr><th>Suite</th><th>Tasks</th><th>Gate</th><th></th></tr></thead>
+          <tbody id="suiteRows"><tr><td colspan="4" class="empty">Loading…</td></tr></tbody>
+        </table></div>
 
-  <!-- ------------------------------------------------ skills -->
-  <section id="skills" hidden>
-    <h2>Skills</h2>
-    <p class="lede">
-      Short procedures the agent can be given. Everything added here lands as a
-      <b>candidate</b> — only the gate promotes, only after the paired trials clear
-      all four conditions, and only with you approving. Three modules maximum:
-      comprehensive skills measurably hurt.
-    </p>
-    <div class="card">
-      <div class="row">
-        <div class="f-sm"><label for="kName">Name</label><input id="kName" placeholder="csv-tidy"></div>
-        <div class="f"><label for="kWhen">Applies when</label>
-          <input id="kWhen" placeholder="cleaning a messy csv export"></div>
-      </div>
-      <div style="margin-top:10px">
-        <label for="kBody">Skill body (Markdown, ≤3 <code>##</code> sections)</label>
-        <textarea id="kBody" style="min-height:150px"># skill name
+        <div id="suiteDetail" hidden>
+          <h1 id="sdTitle">Tasks</h1>
+          <p class="caveat"><b>A check has to be able to fail.</b> <code>json_schema</code>
+            accepts <code>{"total": 0}</code> for an invoice totalling 4825, and refuses a
+            schema that accepts <code>{}</code>. Give <code>expected_value</code> the right
+            answer, or <code>contains_all</code> the strings that must survive. The answer
+            is kept here and never enters the agent's context.</p>
+          <div class="panel">
+            <div class="cols">
+              <label class="field"><span>Key</span><input id="tKey" placeholder="task-01"></label>
+              <label class="field"><span>Check</span><select id="tCrit" onchange="critChanged()"></select></label>
+              <label class="field"><span>Seconds</span><input id="tSecs" type="number" value="180"></label>
+              <label class="field"><span>If a skill regresses it</span><select id="tCat">
+                <option value="0">count it normally</option><option value="1">veto the skill</option></select></label>
+            </div>
+            <label class="field"><span>Goal</span><input id="tGoal" placeholder="what the agent must accomplish"></label>
+            <div class="cols">
+              <label class="field"><span id="tExpLabel">Expected answer (JSON)</span>
+                <textarea id="tExp">{"total": 4825}</textarea></label>
+              <label class="field"><span>Answer shape (JSON Schema)</span>
+                <textarea id="tSchema">{"type":"object","required":["total"],"properties":{"total":{"type":"integer"}}}</textarea></label>
+            </div>
+            <label class="field"><span>Input files (JSON: path to contents)</span>
+              <textarea id="tFix">{}</textarea></label>
+            <button class="btn primary" onclick="saveTask()">Save task</button>
+            <button class="btn" onclick="closeSuite()">Close</button>
+          </div>
+          <div id="shapeWarn"></div>
+          <div class="panel"><table>
+            <thead><tr><th>Key</th><th>Goal</th><th>Check</th><th>Right answer</th><th></th></tr></thead>
+            <tbody id="taskRows"></tbody>
+          </table></div>
+        </div>
+      </section>
+
+      <section id="t-skills" hidden>
+        <h1>Skills</h1>
+        <p class="lede">Short procedures the agent can be given. Anything added here is a
+          candidate: only the gate promotes, only after the paired trials clear, and
+          only with you approving. Three sections at most; long skills measurably hurt.</p>
+        <div class="panel">
+          <div class="cols">
+            <label class="field"><span>Name</span><input id="kName" placeholder="csv-tidy"></label>
+            <label class="field"><span>Applies when</span><input id="kWhen" placeholder="cleaning a messy csv export"></label>
+          </div>
+          <label class="field"><span>Skill (Markdown, up to three ## sections)</span>
+            <textarea id="kBody" style="min-height:150px"># skill name
 when this applies
 
 ## procedure
-Imperative, checkable steps. Few of them.</textarea>
-      </div>
-      <div class="row" style="margin-top:10px"><button class="act" onclick="addSkill()">Add as candidate</button></div>
-    </div>
-    <div class="card"><table>
-      <thead><tr><th>Name</th><th>v</th><th>Status</th><th>Gate</th></tr></thead>
-      <tbody id="skillRows"></tbody>
-    </table></div>
-  </section>
+Imperative, checkable steps. Few of them.</textarea></label>
+          <button class="btn primary" onclick="addSkill()">Add as candidate</button>
+        </div>
+        <div class="panel"><table>
+          <thead><tr><th>Name</th><th>Version</th><th>Status</th><th></th></tr></thead>
+          <tbody id="skillRows"></tbody>
+        </table></div>
+      </section>
 
-  <!-- ------------------------------------------------ policy -->
-  <section id="policy" hidden>
-    <h2>Reviewer policy</h2>
-    <p class="lede">
-      The rule book the deputy applies when the agent crosses a permission boundary
-      while you are away. Plain text, yours to edit.
-    </p>
-    <div class="note">
-      <span>⚠</span>
-      <div><b>Default is deny.</b> A category with no rule is refused, and an empty
-      policy refuses everything. That is deliberate: a missing rule should never be
-      read as permission.</div>
-    </div>
-    <div class="card">
-      <label for="pBody">Policy</label>
-      <textarea id="pBody" style="min-height:340px"></textarea>
-      <div class="row" style="margin-top:10px">
-        <button class="act" onclick="savePolicy()">Save policy</button>
-        <span class="muted" id="pSrc"></span>
-      </div>
-    </div>
-  </section>
+      <section id="t-policy" hidden>
+        <h1>Reviewer policy</h1>
+        <p class="lede">The rules the deputy applies when the agent reaches a permission
+          boundary while you are away. A category with no rule is refused, and an empty
+          policy refuses everything: a missing rule is never permission.</p>
+        <div class="panel">
+          <label class="field"><span>Policy</span><textarea id="pBody" style="min-height:340px"></textarea></label>
+          <button class="btn primary" onclick="savePolicy()">Save policy</button>
+          <span class="health" id="pSrc" style="margin-left:10px"></span>
+        </div>
+      </section>
 
-  <!-- ------------------------------------------------ grounding -->
-  <section id="grounding" hidden>
-    <h2>Grounding notes</h2>
-    <p class="lede">
-      Source material the skill generator drafts from. Skills written from a model's
-      memory drift slightly <em>negative</em> in the published evidence — grounding
-      them in something you chose is the whole point of this tab.
-    </p>
-    <div class="card">
-      <div class="row">
-        <div class="f-sm"><label for="gName">Name</label><input id="gName" placeholder="tps-notes"></div>
-      </div>
-      <div style="margin-top:10px">
-        <label for="gBody">Contents</label>
-        <textarea id="gBody" style="min-height:170px" placeholder="Paste notes, docs, transcripts…"></textarea>
-      </div>
-      <div class="row" style="margin-top:10px"><button class="act" onclick="saveGrounding()">Save note</button></div>
+      <section id="t-grounding" hidden>
+        <h1>Grounding notes</h1>
+        <p class="lede">Source material for drafting skills. Skills written from a model's
+          memory drift slightly negative in the published evidence; grounding them in
+          something you chose is the point.</p>
+        <div class="panel">
+          <label class="field"><span>Name</span><input id="gName" placeholder="tps-notes"></label>
+          <label class="field"><span>Contents</span><textarea id="gBody" style="min-height:170px"></textarea></label>
+          <button class="btn primary" onclick="saveGrounding()">Save note</button>
+        </div>
+        <div class="panel"><table>
+          <thead><tr><th>Name</th><th>Size</th><th></th></tr></thead>
+          <tbody id="gRows"></tbody>
+        </table></div>
+      </section>
     </div>
-    <div class="card"><table>
-      <thead><tr><th>Name</th><th>Size</th><th></th></tr></thead>
-      <tbody id="gRows"></tbody>
-    </table></div>
-  </section>
+  </div>
+</div>
 
-  <!-- ------------------------------------------------ run -->
-  <section id="run" hidden>
-    <h2>Run a task</h2>
-    <p class="lede">Give it an objective. Local models are slow — expect tens of seconds per turn.</p>
-    <div class="card">
-      <div><label for="rGoal">Objective</label>
-        <textarea id="rGoal" style="min-height:80px" placeholder="Read work/notes.txt and tell me what it says."></textarea></div>
-      <div class="row" style="margin-top:10px">
-        <div class="f-sm"><label for="rScope">Scope</label><input id="rScope" value="work"></div>
-        <div class="f-sm"><label for="rSecs">Seconds</label><input id="rSecs" type="number" value="900"></div>
-        <button class="act" onclick="createTask()">Create &amp; run</button>
-      </div>
-    </div>
-    <div class="card"><pre id="runOut" class="mono" style="margin:0;white-space:pre-wrap;font-size:12.5px;color:var(--ink-2)">No run yet.</pre></div>
-  </section>
-</main>
-
-<div id="toast"></div>
+<div id="toast" role="status" aria-live="polite"></div>
 
 <script>
 const $ = s => document.querySelector(s);
-let SUITE = null, VERIFIERS = [];
-
 // Injected by the server when it serves this page to a loopback caller. A
 // page on another origin cannot read this response, so it cannot obtain the
-// token — which is what stops a website you happen to have open from driving
-// this console.
+// token - which is what stops a website you have open from driving this.
 const TOKEN = "__ALPHA_TOKEN__";
+let CURRENT = null, POLL = null, SUITE = null;
 
 function toast(msg, bad) {
   const t = $("#toast"); t.textContent = msg; t.className = bad ? "bad" : "";
   t.style.opacity = "1"; clearTimeout(t._h);
-  t._h = setTimeout(() => t.style.opacity = "0", bad ? 6000 : 2600);
+  t._h = setTimeout(() => t.style.opacity = "0", bad ? 7000 : 2800);
 }
 async function api(path, opts) {
-  const r = await fetch(path, {
-    ...opts,
-    headers: {"Content-Type":"application/json",
-              "Authorization": "Bearer " + TOKEN,
-              ...((opts && opts.headers) || {})},
-  });
+  const r = await fetch(path, {...opts, headers: {"Content-Type": "application/json",
+    "Authorization": "Bearer " + TOKEN, ...((opts && opts.headers) || {})}});
   const txt = await r.text();
-  let data; try { data = txt ? JSON.parse(txt) : {}; } catch { data = {raw:txt}; }
-  if (!r.ok) throw new Error(data.detail || data.raw || r.statusText);
+  let data; try { data = txt ? JSON.parse(txt) : {}; } catch { data = {raw: txt}; }
+  if (!r.ok) { const e = new Error(data.detail || data.raw || r.statusText); e.status = r.status; throw e; }
   return data;
 }
-function esc(s){ return String(s ?? "").replace(/[&<>"]/g, c =>
-  ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
-function parseJSON(text, field) {
-  const t = (text || "").trim();
-  if (!t) return {};
-  try { return JSON.parse(t); }
-  catch (e) { throw new Error(`${field} is not valid JSON: ${e.message}`); }
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c =>
+  ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const firstLine = s => String(s || "").split("\n")[0];
+const secs = n => n >= 90 ? `${Math.round(n / 60)} min` : `${Math.round(n)} s`;
+const ago = t => { const d = Date.now() / 1000 - t;
+  return d < 90 ? "just now" : d < 5400 ? `${Math.round(d / 60)} min ago`
+       : d < 129600 ? `${Math.round(d / 3600)} h ago` : `${Math.round(d / 86400)} days ago`; };
+
+// ------------------------------------------------------------- theme
+async function applyTheme() {
+  try {
+    const t = await api("/theme");
+    const map = {accent:"--accent", success:"--success", warning:"--warning",
+                 danger:"--danger", muted:"--muted", background:"--ground"};
+    for (const [k, v] of Object.entries(t.colors || {}))
+      if (map[k] && /^#[0-9a-f]{3,8}$/i.test(v)) document.documentElement.style.setProperty(map[k], v);
+    $("#banner").textContent = t.banner;
+  } catch { /* the first-paint values stand */ }
 }
 
-// tabs
-$("#tabs").addEventListener("click", e => {
-  const b = e.target.closest("button"); if (!b) return;
-  document.querySelectorAll("#tabs button").forEach(x =>
-    x.setAttribute("aria-selected", String(x === b)));
-  document.querySelectorAll("main > section").forEach(s =>
-    s.hidden = s.id !== b.dataset.t);
-  ({suites:loadSuites, skills:loadSkills, policy:loadPolicy,
-    grounding:loadGrounding}[b.dataset.t] || (()=>{}))();
+// ------------------------------------------------------------- views
+function show(which) {
+  $("#desk").hidden = which !== "desk"; $("#shop").hidden = which !== "shop";
+  $("#navDesk").setAttribute("aria-current", which === "desk" ? "page" : "false");
+  $("#navShop").setAttribute("aria-current", which === "shop" ? "page" : "false");
+  if (which === "shop") loadSuites();
+}
+$("#navDesk").onclick = () => show("desk");
+$("#navShop").onclick = () => show("shop");
+
+// ------------------------------------------------------------- integrity
+async function loadAlerts() {
+  try {
+    const a = await api("/alerts");
+    const crit = (a.integrity || []).filter(f => f.severity === "critical");
+    const box = $("#integrity");
+    box.hidden = !crit.length;
+    box.innerHTML = crit.length ? `<strong>The record does not verify.</strong>
+      Something in the hash chain was changed after it was written. Do not approve
+      anything until this is explained.
+      <ul>${crit.map(f => `<li>${esc(f.detail)}${f.task_id ? ` (task <code>${esc(f.task_id)}</code>)` : ""}</li>`).join("")}</ul>` : "";
+  } catch { /* health shows reachability */ }
+}
+
+// ------------------------------------------------------------- queue
+const NEEDS_PLAN = t => t.status === "pending" && t.plan_status === "draft";
+async function loadQueue() {
+  let tasks = [], gates = [];
+  try { [tasks, gates] = await Promise.all([
+          api("/tasks").then(d => d.tasks), api("/approvals").then(d => d.pending)]); }
+  catch (e) { return; }
+  const needs = [], running = [], done = [];
+  for (const g of gates) needs.push(`<button class="qi needs gate" data-gate="${esc(g.id)}"
+      data-task="${esc(g.task_id)}"${CURRENT && CURRENT.gate === g.id ? ' aria-current="true"' : ""}><div class="g">Wants to use <code>${esc(g.tool)}</code></div>
+      <div class="s">Parked for your decision</div></button>`);
+  for (const t of tasks) {
+    const cur = CURRENT && CURRENT.task === t.task_id ? ' aria-current="true"' : "";
+    const row = (cls, state) => `<button class="qi ${cls}" data-task="${esc(t.task_id)}"${cur}>
+      <div class="g">${esc(firstLine(t.goal))}</div><div class="s">${state}</div></button>`;
+    if (NEEDS_PLAN(t)) needs.push(row("needs", "Plan ready to review"));
+    else if (t.status === "pending" && !t.plan_status) needs.push(row("needs", "No plan yet"));
+    else if (["running", "paused"].includes(t.status)) running.push(row("", t.status === "paused" ? "Paused" : "Running"));
+    else done.push(row("", `${statusWord(t.status)}, ${ago(t.created_at)}`));
+  }
+  const fill = (id, n, items, none) => { $(id).innerHTML = items.join("") || `<div class="empty">${none}</div>`;
+                                         $(n).textContent = items.length || ""; };
+  fill("#qNeeds", "#nNeeds", needs, "Nothing is waiting on you.");
+  fill("#qRunning", "#nRunning", running, "Nothing running.");
+  fill("#qDone", "#nDone", done.slice(0, 30), "Nothing yet.");
+}
+function statusWord(s) {
+  return ({done:"Done", done_unannounced:"Done, not announced", failed:"Failed",
+    budget_exhausted:"Out of budget", max_steps:"Out of steps", plateau:"Stalled",
+    paused:"Paused", rejected:"Sent back"}[s]) || s;
+}
+document.querySelector(".queue").addEventListener("click", e => {
+  const b = e.target.closest(".qi"); if (!b) return;
+  b.dataset.gate ? openGate(b.dataset.gate) : openTask(b.dataset.task);
 });
 
-// ---------------------------------------------------------------- suites
+// ------------------------------------------------------------- new task
+$("#newTask").addEventListener("submit", async e => {
+  e.preventDefault();
+  const goal = $("#goal").value.trim(); if (!goal) return;
+  try {
+    const t = await api("/tasks", {method:"POST", body:JSON.stringify({goal,
+      artifact_scope:[$("#scope").value.trim() || "work"], budget_usd:0})});
+    $("#goal").value = "";
+    await loadQueue();
+    await draft(t.task_id);
+  } catch (err) { toast(err.message, true); }
+});
+async function draft(taskId) {
+  CURRENT = {task: taskId};
+  $("#sheetInner").innerHTML = `<p class="kicker">Drafting a plan</p>
+    <p class="objective">Reading what it is allowed to read, and working out the steps.</p>
+    <p class="health">A local model takes a minute or more. Nothing is changed while it plans.</p>`;
+  try { await api(`/tasks/${taskId}/plan`, {method:"POST"}); await openTask(taskId); }
+  catch (err) { toast(err.message, true); openTask(taskId); }
+  loadQueue();
+}
+
+// ------------------------------------------------------------- the plan sheet
+async function openTask(taskId) {
+  clearInterval(POLL); CURRENT = {task: taskId}; loadQueue(); show("desk");
+  const t = await api("/tasks/" + taskId);
+  let p = null;
+  try { p = await api(`/tasks/${taskId}/plan`); } catch (e) { if (e.status !== 404) toast(e.message, true); }
+  if (t.status === "pending" && p && p.status === "draft") return renderPlan(t, p);
+  if (t.status === "pending" && !p) return renderNoPlan(t);
+  renderRun(t, p);
+}
+
+function renderNoPlan(t) {
+  $("#sheetInner").innerHTML = `<p class="kicker">No plan yet</p>
+    <h1 class="objective">${esc(t.goal)}</h1>
+    <button class="btn primary" onclick="draft('${esc(t.task_id)}')">Draft a plan</button>`;
+}
+
+function renderPlan(t, p) {
+  CURRENT = {task: t.task_id, plan: p.plan_id};
+  const pl = p.plan;
+  const list = (items, empty) => items && items.length
+    ? `<ul>${items.map(x => `<li>${esc(x)}</li>`).join("")}</ul>` : `<ul class="clear"><li>${empty}</li></ul>`;
+  const asks = (pl.open_questions || []).length + (pl.human_approvals_expected || []).length + (pl.unknowns || []).length;
+  const steps = (pl.steps || []).map((s, i) => `
+    <li class="step${s.reversible ? "" : " irrev"}">
+      <div class="node" aria-hidden="true">${i + 1}</div>
+      <div>
+        <p class="intent">${esc(s.intent)}</p>
+        ${s.reversible ? "" : `<p class="irrev-note">Can't be undone once it runs.</p>`}
+        <dl>
+          <dt>Uses</dt><dd>${(s.tools || []).map(x => `<code>${esc(x)}</code>`).join(", ") || "no tools"}${s.action_mode === "code" ? ", by writing code" : ""}</dd>
+          <dt>May touch</dt><dd>${(s.artifact_scope || []).map(x => `<code>${esc(x)}</code>`).join(", ") || "no files"}</dd>
+          <dt>Checked by</dt><dd><code>${esc(s.success_criterion)}</code></dd>
+          ${(s.depends_on || []).length ? `<dt>After</dt><dd>${s.depends_on.map(esc).join(", ")}</dd>` : ""}
+        </dl>
+      </div>
+      <div class="est">${secs(s.est_seconds || 0)}<br>${(s.est_tokens || 0).toLocaleString()} tokens</div>
+    </li>`).join("");
+  const hash = p.plan_id.replace(/(.{4})/g, "$1 ").trim();
+  $("#sheetInner").innerHTML = `
+    <p class="kicker">Plan for your approval</p>
+    <h1 class="objective">${esc(pl.objective || t.goal)}</h1>
+    <section class="before" aria-label="Before you approve">
+      <h3>${asks ? "Settle these before you sign" : "Nothing to settle before you sign"}</h3>
+      <div class="health">Questions it has</div>${list(pl.open_questions, "None.")}
+      <div class="health">Where it expects to stop and ask you</div>${list(pl.human_approvals_expected, "Nowhere. It should run to the end unattended.")}
+      <div class="health">What it doesn't know yet</div>${list(pl.unknowns, "Nothing declared.")}
+    </section>
+    <ol class="track" aria-label="Steps">${steps || '<li class="empty">The plan has no steps.</li>'}</ol>
+    <p class="totals">${(pl.steps || []).length} steps, about ${secs(pl.total_est_seconds || 0)} in total.</p>
+    <div class="sign">
+      <div class="seal" id="seal">
+        <div class="ring" aria-hidden="true"></div>
+        <div><div class="what">You are signing plan</div><div class="hash" title="${esc(p.plan_id)}">${esc(hash.slice(0, 39))}…</div></div>
+      </div>
+      <div class="actions">
+        <button class="btn" id="btnBack">Send back</button>
+        <button class="btn primary" id="btnSign">Approve and run</button>
+      </div>
+      <div class="sendback" id="sendback" hidden>
+        <input id="backWhy" placeholder="What should change? This goes on the record with the plan.">
+        <button class="btn" id="btnBackGo">Send back</button>
+      </div>
+    </div>`;
+  $("#btnSign").onclick = () => approve(t.task_id, p.plan_id);
+  $("#btnBack").onclick = () => { $("#sendback").hidden = false; $("#backWhy").focus(); };
+  $("#btnBackGo").onclick = () => sendBack(t.task_id, p.plan_id);
+}
+
+async function approve(taskId, planId) {
+  const b = $("#btnSign"); b.disabled = true;
+  try {
+    await api(`/tasks/${taskId}/plan/approve`, {method:"POST", body:JSON.stringify({plan_id: planId, edits: []})});
+    $("#seal").classList.add("signed");
+    $("#seal .what").textContent = "Signed and pinned to the record";
+    await api(`/tasks/${taskId}/run`, {method:"POST"});
+    toast("Approved. It's running.");
+    setTimeout(() => openTask(taskId), 700);
+  } catch (e) { b.disabled = false; toast(e.message, true); }
+}
+async function sendBack(taskId, planId) {
+  try {
+    await api(`/tasks/${taskId}/plan/reject`, {method:"POST",
+      body:JSON.stringify({plan_id: planId, comment: $("#backWhy").value})});
+    toast("Sent back. Draft again when you're ready.");
+    openTask(taskId);
+  } catch (e) { toast(e.message, true); }
+}
+
+// ------------------------------------------------------------- a run
+function renderRun(t, p) {
+  const live = ["running", "pending"].includes(t.status);
+  const cls = t.status.startsWith("done") ? "st-done" : t.status === "paused" ? "st-needs" : "";
+  $("#sheetInner").innerHTML = `
+    <p class="kicker">${live ? "Running" : "Finished"}</p>
+    <h1 class="objective">${esc(t.goal)}</h1>
+    <dl class="progress">
+      <dt>Status</dt><dd class="${cls}">${esc(statusWord(t.status))}</dd>
+      <dt>Model calls</dt><dd>${t.current_step}</dd>
+      <dt>Plan</dt><dd>${p ? `<code>${esc(p.plan_id.slice(0, 16))}…</code>, ${esc(p.status)}` : "none"}</dd>
+      <dt>Budget</dt><dd>${secs(t.budget.seconds || 0)}</dd>
+    </dl>
+    <div id="runMore"></div>`;
+  if (t.status === "paused")
+    $("#runMore").innerHTML = `<p class="caveat">It stopped to ask you something. The decision is under <b>Needs you</b>.</p>`;
+  if (!live) api("/metrics/" + t.task_id).then(m => {
+    $("#runMore").innerHTML += `<dl class="progress"><dt>Tokens</dt><dd>${(m.free_tokens + m.paid_tokens).toLocaleString()} (${m.paid_tokens.toLocaleString()} paid)</dd>
+      <dt>Cost</dt><dd>$${Number(m.cost_usd).toFixed(4)}</dd></dl>`;
+  }).catch(() => {});
+  if (live) POLL = setInterval(async () => {
+    const n = await api("/tasks/" + t.task_id).catch(() => null);
+    if (n && (n.status !== t.status || n.current_step !== t.current_step)) { clearInterval(POLL); renderRun(n, p); loadQueue(); }
+  }, 2500);
+}
+
+// ------------------------------------------------------------- a gate approval
+async function openGate(id) {
+  clearInterval(POLL); show("desk");
+  const g = (await api("/approvals")).pending.find(x => x.id === id);
+  if (!g) { toast("Already decided."); return loadQueue(); }
+  CURRENT = {gate: id}; loadQueue();
+  $("#sheetInner").innerHTML = `
+    <p class="kicker">Parked for your decision</p>
+    <h1 class="objective">It wants to use <code>${esc(g.tool)}</code>.</h1>
+    <div class="gatecard">
+      <p>${esc(g.reason)}</p>
+      <pre>${esc(g.preview)}</pre>
+      <div class="row">
+        <button class="btn amber" id="gAllow">Allow this once</button>
+        <button class="btn" id="gDeny">Refuse</button>
+        <button class="quiet" onclick="openTask('${esc(g.task_id)}')">See the task</button>
+      </div>
+    </div>`;
+  const decide = async d => {
+    try { await api("/approvals/" + id, {method:"POST", body:JSON.stringify({decision: d})});
+          toast(d === "approve" ? "Allowed. It carries on." : "Refused. It will be told."); openTask(g.task_id); }
+    catch (e) { toast(e.message, true); }
+  };
+  $("#gAllow").onclick = () => decide("approve");
+  $("#gDeny").onclick = () => decide("deny");
+}
+
+// ============================================================= workshop
+document.querySelector(".ws-tabs").addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b) return;
+  document.querySelectorAll(".ws-tabs button").forEach(x => x.setAttribute("aria-selected", String(x === b)));
+  document.querySelectorAll(".workshop section").forEach(s => s.hidden = s.id !== "t-" + b.dataset.t);
+  ({suites: loadSuites, skills: loadSkills, policy: loadPolicy, grounding: loadGrounding}[b.dataset.t])();
+});
+
 async function loadSuites() {
   const d = await api("/suites");
   $("#minTrials").textContent = d.min_paired_trials;
-  const tb = $("#suiteRows");
-  if (!d.suites.length) {
-    tb.innerHTML = `<tr><td colspan="4" class="muted">No suites yet. Create one above,
-      or make one and press “Import bench/tasks” to bring in the starter examples.</td></tr>`;
-    return;
-  }
-  tb.innerHTML = d.suites.map(s => {
+  $("#suiteRows").innerHTML = d.suites.length ? d.suites.map(s => {
     const pct = Math.min(100, Math.round(100 * s.n_tasks / d.min_paired_trials));
-    return `<tr>
-      <td><a href="#" onclick="openSuite('${s.id}');return false">${esc(s.name)}</a>
-          <div class="muted">${esc(s.description)}</div></td>
-      <td>${s.n_tasks}<div class="bar"><i style="width:${pct}%"></i></div></td>
-      <td>${s.ready ? '<span class="pill ok">ready</span>'
-        : `<span class="pill warn">${d.min_paired_trials - s.n_tasks} more</span>`}</td>
-      <td style="text-align:right"><button class="del"
-          onclick="delSuite('${s.id}','${esc(s.name)}')">Delete</button></td></tr>`;
-  }).join("");
+    return `<tr><td><button class="link" onclick="openSuite('${esc(s.id)}')">${esc(s.name)}</button>
+        <div class="health">${esc(s.description)}</div></td>
+      <td>${s.n_tasks}<div class="meter"><i style="width:${pct}%"></i></div></td>
+      <td>${s.ready ? "Ready" : `${d.min_paired_trials - s.n_tasks} more to go`}</td>
+      <td style="text-align:right"><button class="quiet" onclick="delSuite('${esc(s.id)}','${esc(s.name)}')">Delete</button></td></tr>`;
+  }).join("") : `<tr><td colspan="4" class="empty">No suites yet. Name one above to start.</td></tr>`;
 }
 async function createSuite() {
   const name = $("#sName").value.trim();
-  if (!name) return toast("Name the suite first.", true);
-  try {
-    const s = await api("/suites", {method:"POST", body:JSON.stringify(
-      {name, description:$("#sDesc").value})});
-    $("#sName").value = ""; $("#sDesc").value = "";
-    toast("Suite created."); await loadSuites(); openSuite(s.id);
-  } catch (e) { toast(e.message, true); }
+  if (!name) return toast("Give the suite a name first.", true);
+  try { const s = await api("/suites", {method:"POST", body:JSON.stringify({name, description:$("#sDesc").value})});
+        $("#sName").value = ""; $("#sDesc").value = ""; toast("Suite created."); await loadSuites(); openSuite(s.id); }
+  catch (e) { toast(e.message, true); }
 }
 async function delSuite(id, name) {
-  if (!confirm(`Delete suite “${name}” and all its tasks?`)) return;
+  if (!confirm(`Delete the suite "${name}" and all its tasks?`)) return;
   await api("/suites/" + id, {method:"DELETE"});
   if (SUITE && SUITE.id === id) closeSuite();
-  toast("Deleted."); loadSuites();
+  toast("Suite deleted."); loadSuites();
 }
 async function openSuite(id) {
   SUITE = await api("/suites/" + id);
-  VERIFIERS = SUITE.verifiers;
-  $("#tCrit").innerHTML = VERIFIERS.filter(v => v !== "always_pass")
-    .map(v => `<option ${v==="expected_value"?"selected":""}>${v}</option>`).join("");
-  $("#sdTitle").textContent = `Tasks — ${SUITE.name} (${SUITE.n_tasks}/${SUITE.min_paired_trials})`;
-  $("#suiteDetail").hidden = false;
-  critChanged(); renderTasks();
-  $("#suiteDetail").scrollIntoView({behavior:"smooth", block:"start"});
+  $("#tCrit").innerHTML = SUITE.verifiers.filter(v => v !== "always_pass")
+    .map(v => `<option ${v === "expected_value" ? "selected" : ""}>${esc(v)}</option>`).join("");
+  $("#sdTitle").textContent = `${SUITE.name}: ${SUITE.n_tasks} of ${SUITE.min_paired_trials} tasks`;
+  $("#suiteDetail").hidden = false; critChanged(); renderTasks();
 }
-function closeSuite(){ SUITE=null; $("#suiteDetail").hidden = true; }
+function closeSuite() { SUITE = null; $("#suiteDetail").hidden = true; }
 function critChanged() {
   const c = $("#tCrit").value;
-  $("#tExpLabel").textContent = c === "contains_all"
-    ? "Strings that must appear (JSON array)" : "Expected answer (JSON)";
-  if (c === "contains_all" && $("#tExp").value.trim().startsWith("{"))
-    $("#tExp").value = '["compressor","filter"]';
+  $("#tExpLabel").textContent = c === "contains_all" ? "Strings that must appear (JSON list)" : "Expected answer (JSON)";
+  if (c === "contains_all" && $("#tExp").value.trim().startsWith("{")) $("#tExp").value = '["compressor", "filter"]';
 }
+// Which checks look at the answer at all. `execution` refuses without a
+// script and `json_schema` checks shape only (DR7), so neither counts.
 function checksCorrectness(t) {
   const s = t.output_schema || {};
-  // execution and pytest judge by running something, so they check behaviour
-  // even without a declared answer.
-  return !!(s["x-expected"] || s["x-contains"]
-            || ["execution", "pytest", "checker_program"].includes(t.success_criterion));
+  return !!(s["x-expected"] || s["x-contains"] || ["verify_program", "pytest"].includes(t.success_criterion));
 }
 function renderTasks() {
-  const tb = $("#taskRows");
-  const warn = $("#shapeWarn");
   const shapeOnly = SUITE.tasks.filter(t => !checksCorrectness(t));
-  warn.innerHTML = !SUITE.tasks.length ? "" : shapeOnly.length
-    ? `<div class="note"><span>⚠</span><div>
-        <b>${shapeOnly.length} of ${SUITE.tasks.length} tasks cannot catch a wrong
-        answer.</b> They pass on any well-formed output:
-        <code>${shapeOnly.map(t => esc(t.key)).join("</code> <code>")}</code>.
-        A suite made of these will report a high pass rate that means nothing.</div></div>`
-    : `<div class="note" style="border-left-color:var(--good)"><span>✓</span><div>
-        All ${SUITE.tasks.length} tasks check the answer, not just its shape.</div></div>`;
-
-  if (!SUITE.tasks.length) {
-    tb.innerHTML = `<tr><td colspan="5" class="muted">No tasks yet.</td></tr>`; return;
-  }
-  tb.innerHTML = SUITE.tasks.map(t => {
+  $("#shapeWarn").innerHTML = !SUITE.tasks.length ? "" : shapeOnly.length
+    ? `<p class="caveat"><b>${shapeOnly.length} of ${SUITE.tasks.length} tasks can't catch a wrong answer:</b>
+       ${shapeOnly.map(t => `<code>${esc(t.key)}</code>`).join(", ")}. A suite of these reports a pass rate that means nothing.</p>`
+    : `<p class="caveat good">All ${SUITE.tasks.length} tasks check the answer, not only its shape.</p>`;
+  $("#taskRows").innerHTML = SUITE.tasks.length ? SUITE.tasks.map(t => {
     const s = t.output_schema || {};
-    const checks = s["x-expected"] ? `<code>${esc(JSON.stringify(s["x-expected"]))}</code>`
-      : s["x-contains"] ? `<code>${esc(JSON.stringify(s["x-contains"]))}</code>`
-      : '<span class="pill warn">shape only</span>';
-    return `<tr>
-      <td><code>${esc(t.key)}</code>${t.catastrophic
-        ? ' <span class="pill warn">veto</span>' : ''}</td>
-      <td>${esc(t.goal).slice(0,90)}</td>
-      <td><span class="pill mut">${esc(t.success_criterion)}</span></td>
-      <td>${checks}</td>
-      <td style="text-align:right"><button class="del"
-        onclick="delTask('${t.id}')">Delete</button></td></tr>`;
-  }).join("");
+    const right = s["x-expected"] ? `<code>${esc(JSON.stringify(s["x-expected"]))}</code>`
+      : s["x-contains"] ? `<code>${esc(JSON.stringify(s["x-contains"]))}</code>` : "Shape only";
+    return `<tr><td><code>${esc(t.key)}</code>${t.catastrophic ? " (veto)" : ""}</td>
+      <td>${esc(t.goal).slice(0, 90)}</td><td><code>${esc(t.success_criterion)}</code></td><td>${right}</td>
+      <td style="text-align:right"><button class="quiet" onclick="delTask('${esc(t.id)}')">Delete</button></td></tr>`;
+  }).join("") : `<tr><td colspan="5" class="empty">No tasks yet.</td></tr>`;
+}
+function parseJSON(text, field) {
+  const t = (text || "").trim(); if (!t) return {};
+  try { return JSON.parse(t); } catch (e) { throw new Error(`${field} isn't valid JSON: ${e.message}`); }
 }
 async function saveTask() {
   if (!SUITE) return;
@@ -435,76 +704,54 @@ async function saveTask() {
     if (crit === "expected_value") schema["x-expected"] = expected;
     if (crit === "contains_all") schema["x-contains"] = expected;
     await api(`/suites/${SUITE.id}/tasks`, {method:"POST", body:JSON.stringify({
-      key: $("#tKey").value.trim(), goal: $("#tGoal").value.trim(),
-      success_criterion: crit, output_schema: schema,
-      fixtures: parseJSON($("#tFix").value, "Fixture files"),
-      budget_seconds: Number($("#tSecs").value) || null,
-      catastrophic: $("#tCat").value === "1",
-    })});
-    $("#tKey").value = ""; $("#tGoal").value = "";
-    toast("Task saved."); await openSuite(SUITE.id); loadSuites();
+      key:$("#tKey").value.trim(), goal:$("#tGoal").value.trim(), success_criterion:crit,
+      output_schema:schema, fixtures:parseJSON($("#tFix").value, "Input files"),
+      budget_seconds:Number($("#tSecs").value) || null, catastrophic:$("#tCat").value === "1"})});
+    $("#tKey").value = ""; $("#tGoal").value = ""; toast("Task saved.");
+    await openSuite(SUITE.id); loadSuites();
   } catch (e) { toast(e.message, true); }
 }
 async function delTask(id) {
   await api(`/suites/${SUITE.id}/tasks/${id}`, {method:"DELETE"});
-  toast("Deleted."); await openSuite(SUITE.id); loadSuites();
-}
-async function importFolder() {
-  if (!SUITE) return;
-  try {
-    const r = await api(`/suites/${SUITE.id}/import`, {method:"POST",
-      body:JSON.stringify({folder:"bench/tasks"})});
-    toast(`Imported — ${r.n_tasks} tasks.`); await openSuite(SUITE.id); loadSuites();
-  } catch (e) { toast(e.message, true); }
+  toast("Task deleted."); await openSuite(SUITE.id); loadSuites();
 }
 
-// ---------------------------------------------------------------- skills
 async function loadSkills() {
   const d = await api("/skills");
   $("#skillRows").innerHTML = d.skills.length ? d.skills.map(s => `<tr>
       <td><code>${esc(s.name)}</code></td><td>${s.version}</td>
-      <td><span class="pill ${s.status==="promoted"?"ok":"mut"}">${esc(s.status)}</span></td>
-      <td><button class="ghost" onclick="checkGate('${s.id}')">Check gate</button></td>
-    </tr>`).join("")
-    : `<tr><td colspan="4" class="muted">No skills yet.</td></tr>`;
+      <td class="${s.status === "promoted" ? "st-done" : ""}">${esc(s.status)}</td>
+      <td style="text-align:right"><button class="quiet" onclick="checkGate('${esc(s.id)}')">Check the gate</button></td>
+    </tr>`).join("") : `<tr><td colspan="4" class="empty">No skills yet.</td></tr>`;
 }
 async function addSkill() {
-  try {
-    await api("/skills", {method:"POST", body:JSON.stringify({
-      name:$("#kName").value.trim(), body:$("#kBody").value,
-      applies_when:$("#kWhen").value.trim()})});
-    toast("Stored as a candidate."); $("#kName").value = ""; loadSkills();
-  } catch (e) { toast(e.message, true); }
+  try { await api("/skills", {method:"POST", body:JSON.stringify({name:$("#kName").value.trim(),
+          body:$("#kBody").value, applies_when:$("#kWhen").value.trim()})});
+        toast("Added as a candidate."); $("#kName").value = ""; loadSkills(); }
+  catch (e) { toast(e.message, true); }
 }
 async function checkGate(id) {
-  try {
-    const d = await api("/gate/" + id);
-    toast(`${d.verdict}: ${d.reason}`, d.verdict !== "promote");
-  } catch (e) { toast(e.message, true); }
+  try { const d = await api("/gate/" + id); toast(`${d.verdict}: ${d.reason}`, d.verdict !== "promote"); }
+  catch (e) { toast(e.message, true); }
 }
 
-// ---------------------------------------------------------------- policy
 async function loadPolicy() {
   const d = await api("/policy");
-  $("#pBody").value = d.body;
-  $("#pSrc").textContent = "in effect from: " + d.effective_source;
+  $("#pBody").value = d.body; $("#pSrc").textContent = "In effect from " + d.effective_source;
 }
 async function savePolicy() {
-  try {
-    await api("/policy", {method:"PUT", body:JSON.stringify({body:$("#pBody").value})});
-    toast("Policy saved. It applies to the next review."); loadPolicy();
-  } catch (e) { toast(e.message, true); }
+  try { await api("/policy", {method:"PUT", body:JSON.stringify({body:$("#pBody").value})});
+        toast("Policy saved. It applies from the next review."); loadPolicy(); }
+  catch (e) { toast(e.message, true); }
 }
 
-// ------------------------------------------------------------- grounding
 async function loadGrounding() {
   const d = await api("/grounding");
   $("#gRows").innerHTML = d.documents.length ? d.documents.map(g => `<tr>
-      <td><a href="#" onclick="editGrounding('${esc(g.name)}');return false">${esc(g.name)}</a></td>
-      <td>${g.bytes} bytes</td>
-      <td style="text-align:right"><button class="del"
-        onclick="delGrounding('${esc(g.name)}')">Delete</button></td></tr>`).join("")
-    : `<tr><td colspan="3" class="muted">No notes yet.</td></tr>`;
+      <td><button class="link" onclick="editGrounding('${esc(g.name)}')">${esc(g.name)}</button></td>
+      <td>${g.bytes.toLocaleString()} bytes</td>
+      <td style="text-align:right"><button class="quiet" onclick="delGrounding('${esc(g.name)}')">Delete</button></td></tr>`).join("")
+    : `<tr><td colspan="3" class="empty">No notes yet.</td></tr>`;
 }
 async function editGrounding(name) {
   const d = await api("/grounding/" + encodeURIComponent(name));
@@ -512,57 +759,25 @@ async function editGrounding(name) {
 }
 async function saveGrounding() {
   const name = $("#gName").value.trim();
-  if (!name) return toast("Name the note first.", true);
-  try {
-    await api("/grounding/" + encodeURIComponent(name), {method:"PUT",
-      body:JSON.stringify({body:$("#gBody").value})});
-    toast("Saved."); loadGrounding();
-  } catch (e) { toast(e.message, true); }
+  if (!name) return toast("Give the note a name first.", true);
+  try { await api("/grounding/" + encodeURIComponent(name), {method:"PUT", body:JSON.stringify({body:$("#gBody").value})});
+        toast("Note saved."); loadGrounding(); }
+  catch (e) { toast(e.message, true); }
 }
 async function delGrounding(name) {
   await api("/grounding/" + encodeURIComponent(name), {method:"DELETE"});
-  toast("Deleted."); loadGrounding();
+  toast("Note deleted."); loadGrounding();
 }
 
-// ------------------------------------------------------------------- run
-async function createTask() {
-  const out = $("#runOut");
-  try {
-    const t = await api("/tasks", {method:"POST", body:JSON.stringify({
-      goal:$("#rGoal").value, artifact_scope:[$("#rScope").value || "work"],
-      budget_seconds:Number($("#rSecs").value) || 900, budget_usd:0})});
-    out.textContent = `task ${t.task_id} created — running…\n`;
-    // Started in the background: a local turn is tens of seconds, so we poll
-    // rather than hold a request open with nothing to show.
-    await api(`/tasks/${t.task_id}/run`, {method:"POST"});
-
-    const started = Date.now();
-    while (true) {
-      await new Promise(r => setTimeout(r, 2000));
-      const s = await api("/tasks/" + t.task_id);
-      const secs = Math.round((Date.now() - started) / 1000);
-      out.textContent = `task ${t.task_id}\nstatus: ${s.status} · step ${s.current_step}`
-        + ` · ${secs}s elapsed · $${(s.budget.spent_usd).toFixed(4)}\n`;
-      if (!["running", "pending"].includes(s.status)) {
-        const m = await api("/metrics/" + t.task_id);
-        out.textContent += `\nfinished: ${s.status}`
-          + `\nfree tokens ${m.free_tokens} · $${m.cost_usd} · ${m.n_calls} calls`;
-        if (s.status === "paused")
-          out.textContent += `\nparked for approval — see the approvals list.`;
-        break;
-      }
-      if (secs > 3600) { out.textContent += "\nstopped watching after an hour."; break; }
-    }
-  } catch (e) { out.textContent += "\nerror: " + e.message; toast(e.message, true); }
-}
-
-// -------------------------------------------------------------- bootstrap
+// ------------------------------------------------------------- start
 (async () => {
+  applyTheme();
   try {
     const h = await api("/health");
-    $("#status").textContent = `backends: ${h.backends.join(", ")} · router ${h.router.verdict}`;
-  } catch { $("#status").textContent = "control plane unreachable"; }
-  loadSuites();
+    $("#health").textContent = `Models: ${h.backends.join(", ")}`;
+  } catch { $("#health").textContent = "Can't reach the control plane"; }
+  loadAlerts(); loadQueue();
+  setInterval(() => { loadAlerts(); loadQueue(); }, 8000);
 })();
 </script>
 </body>
