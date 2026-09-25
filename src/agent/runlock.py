@@ -25,14 +25,10 @@ from __future__ import annotations
 
 import json
 import os
-import sys
 import time
 from pathlib import Path
 
-if sys.platform == "win32":  # pragma: no cover - platform split
-    import msvcrt
-else:  # pragma: no cover
-    import fcntl
+from .platform import current as _platform
 
 
 class RunLockBusy(RuntimeError):
@@ -172,24 +168,13 @@ class RunLock:
             self._fh = None
             _HELD.discard(self)
 
-    # -- platform split ----------------------------------------------------
+    # -- the platform's file lock (agent.platform) -------------------------
 
     def _lock(self) -> None:
-        if sys.platform == "win32":
-            # msvcrt locks a byte RANGE from the current position, and "a+"
-            # leaves that position at EOF. Without this seek every opener
-            # locked a different byte and the lock silently did nothing.
-            self._fh.seek(0)
-            msvcrt.locking(self._fh.fileno(), msvcrt.LK_NBLCK, 1)
-        else:
-            fcntl.flock(self._fh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        _platform.lock_file(self._fh)
 
     def _unlock(self) -> None:
-        if sys.platform == "win32":
-            self._fh.seek(0)          # same byte we locked
-            msvcrt.locking(self._fh.fileno(), msvcrt.LK_UNLCK, 1)
-        else:
-            fcntl.flock(self._fh.fileno(), fcntl.LOCK_UN)
+        _platform.unlock_file(self._fh)
 
     def __enter__(self) -> "RunLock":
         return self.acquire()

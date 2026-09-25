@@ -225,8 +225,9 @@ def test_the_posix_claim_is_still_true():
     """B2 and C4 both tell a reader the POSIX limits have never executed. If
     someone wires them up and forgets the handover, that claim becomes a lie
     about the security posture."""
-    sandbox = (ROOT / "src" / "agent" / "execute" / "sandbox.py").read_text(encoding="utf-8")
-    assert "# pragma: no cover" in sandbox.split("_posix_limits")[1][:200], (
+    # Moved from execute/sandbox.py to the platform layer, 2026-09-25 (4D).
+    sandbox = (ROOT / "src" / "agent" / "platform" / "posix.py").read_text(encoding="utf-8")
+    assert "# pragma: no cover" in sandbox.split("def _posix_limits")[1][:200], (
         "the POSIX limit path is no longer marked unreachable - if it now runs "
         "somewhere, B2's verification scope and C4's posture both need rewriting"
     )

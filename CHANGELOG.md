@@ -106,6 +106,19 @@ Four suite passes, hours of wall clock and the whole machine, and it needs a
 decision about whether a code-as-action arm that cannot complete the suite is
 reporting the mechanism's token cost or the suite's dependence on it.
 
+## Cross-platform preparation - 2026-09-25 (desktop-app)
+
+  * `docs/PLATFORMS.md`: what runs where (Windows only, so far), the POSIX
+    sandbox's known defects before it has ever run - `kill_tree` kills its
+    caller's process group, macOS has no /proc, preexec_fn under threads,
+    per-user RLIMIT_NPROC, RLIMIT_AS absent or fatal on macOS - a macOS memory
+    watchdog proposal, and a checklist for verifying a new machine.
+  * `agent/platform/`: every OS-specific operation behind one named interface
+    (windows.py has run; posix.py is the old code moved verbatim and has
+    never run). No platform conditional remains outside it (tested). A POSIX
+    limit the kernel refuses is now a refusal rather than a crash. Full
+    suite and the frozen gate unchanged: 1006 passed; 44 passed x2 frozen.
+
 ## The desktop app - 2026-09-25 (desktop-app)
 
   * `agent/desktop.py`: the console in a pywebview window. Loopback only

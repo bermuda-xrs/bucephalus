@@ -42,11 +42,9 @@ surface.
 
 from __future__ import annotations
 
-import os
-import signal
-import subprocess
-import sys
 import time
+
+from .platform import current as _platform
 
 # Processes that outlive their parent and hold real memory. Reaped before a
 # timed run because their cost lands on the measurement, not on them.
@@ -62,15 +60,7 @@ def kill_tree(pid: int, timeout_s: float = 10.0) -> bool:
     if pid <= 0:
         return True
     try:
-        if sys.platform == "win32":
-            # /T is the whole point: without it the child survives.
-            subprocess.run(["taskkill", "/T", "/F", "/PID", str(pid)],
-                           capture_output=True, timeout=timeout_s)
-        else:
-            try:
-                os.killpg(os.getpgid(pid), signal.SIGKILL)
-            except (OSError, AttributeError):
-                os.kill(pid, signal.SIGKILL)
+        _platform.kill_tree_signal(pid, timeout_s)
     except Exception:  # noqa: BLE001 - already gone is success
         pass
 
@@ -83,16 +73,7 @@ def kill_tree(pid: int, timeout_s: float = 10.0) -> bool:
 
 
 def _alive(pid: int) -> bool:
-    try:
-        if sys.platform == "win32":
-            out = subprocess.run(
-                ["tasklist", "/FI", f"PID eq {pid}", "/NH"],
-                capture_output=True, text=True, timeout=10).stdout
-            return str(pid) in out
-        os.kill(pid, 0)
-        return True
-    except (OSError, subprocess.SubprocessError):
-        return False
+    return _platform.alive(pid)
 
 
 def process_table() -> list[tuple[int, int, str]]:
@@ -103,53 +84,7 @@ def process_table() -> list[tuple[int, int, str]]:
     dependency, and costs one syscall rather than one subprocess per lookup.
     """
     try:
-        if sys.platform == "win32":  # pragma: no cover - platform split
-            import ctypes
-            from ctypes import wintypes
-
-            class _PE32(ctypes.Structure):
-                _fields_ = [("dwSize", wintypes.DWORD),
-                            ("cntUsage", wintypes.DWORD),
-                            ("th32ProcessID", wintypes.DWORD),
-                            ("th32DefaultHeapID", ctypes.POINTER(ctypes.c_ulong)),
-                            ("th32ModuleID", wintypes.DWORD),
-                            ("cntThreads", wintypes.DWORD),
-                            ("th32ParentProcessID", wintypes.DWORD),
-                            ("pcPriClassBase", ctypes.c_long),
-                            ("dwFlags", wintypes.DWORD),
-                            ("szExeFile", ctypes.c_char * 260)]
-
-            k32 = ctypes.windll.kernel32
-            snap = k32.CreateToolhelp32Snapshot(0x00000002, 0)
-            if snap in (-1, 0xFFFFFFFF, None):
-                return []
-            rows: list[tuple[int, int, str]] = []
-            try:
-                e = _PE32()
-                e.dwSize = ctypes.sizeof(_PE32)
-                ok = k32.Process32First(snap, ctypes.byref(e))
-                while ok:
-                    rows.append((int(e.th32ProcessID),
-                                 int(e.th32ParentProcessID),
-                                 e.szExeFile.decode("utf-8", "replace")))
-                    ok = k32.Process32Next(snap, ctypes.byref(e))
-            finally:
-                k32.CloseHandle(snap)
-            return rows
-
-        rows = []
-        for entry in os.listdir("/proc"):
-            if not entry.isdigit():
-                continue
-            try:
-                with open(f"/proc/{entry}/stat", encoding="utf-8") as fh:
-                    raw = fh.read()
-                name = raw[raw.index("(") + 1:raw.rindex(")")]
-                after = raw[raw.rindex(")") + 2:].split()
-                rows.append((int(entry), int(after[1]), name))
-            except (OSError, ValueError, IndexError):
-                continue
-        return rows
+        return _platform.process_table()
     except Exception:  # noqa: BLE001 - never let bookkeeping stop a run
         return []
 
@@ -162,27 +97,7 @@ def process_start_time(pid: int) -> int | None:
     are both fine.
     """
     try:
-        if sys.platform == "win32":  # pragma: no cover - platform split
-            import ctypes
-            from ctypes import wintypes
-
-            k32 = ctypes.windll.kernel32
-            h = k32.OpenProcess(0x1000, False, pid)  # QUERY_LIMITED_INFORMATION
-            if not h:
-                return None
-            try:
-                ct, et = wintypes.FILETIME(), wintypes.FILETIME()
-                kt, ut = wintypes.FILETIME(), wintypes.FILETIME()
-                if not k32.GetProcessTimes(h, ctypes.byref(ct), ctypes.byref(et),
-                                           ctypes.byref(kt), ctypes.byref(ut)):
-                    return None
-                return (int(ct.dwHighDateTime) << 32) | int(ct.dwLowDateTime)
-            finally:
-                k32.CloseHandle(h)
-
-        with open(f"/proc/{pid}/stat", encoding="utf-8") as fh:
-            raw = fh.read()
-        return int(raw[raw.rindex(")") + 2:].split()[19])
+        return _platform.process_start_time(pid)
     except Exception:  # noqa: BLE001
         return None
 
@@ -262,53 +177,20 @@ def worker_rss_gb(names: tuple[str, ...] = ORPHAN_NAMES,
         after unload + reload     3.41 GB   (fully reclaimed)
     """
     try:
-        if sys.platform == "win32":  # pragma: no cover - platform split
-            import ctypes
-            from ctypes import wintypes
-
-            class _PMC(ctypes.Structure):
-                _fields_ = [("cb", wintypes.DWORD),
-                            ("PageFaultCount", wintypes.DWORD),
-                            ("PeakWorkingSetSize", ctypes.c_size_t),
-                            ("WorkingSetSize", ctypes.c_size_t),
-                            ("QuotaPeakPagedPoolUsage", ctypes.c_size_t),
-                            ("QuotaPagedPoolUsage", ctypes.c_size_t),
-                            ("QuotaPeakNonPagedPoolUsage", ctypes.c_size_t),
-                            ("QuotaNonPagedPoolUsage", ctypes.c_size_t),
-                            ("PagefileUsage", ctypes.c_size_t),
-                            ("PeakPagefileUsage", ctypes.c_size_t)]
-
-            k32, psapi = ctypes.windll.kernel32, ctypes.windll.psapi
-            total = 0
-            found = False
-            for pid, _ppid, image in process_table():
-                if not _name_matches(image, names):
-                    continue
-                h = k32.OpenProcess(0x1000 | 0x0010, False, pid)  # QUERY|VM_READ
-                if not h:
-                    continue
-                try:
-                    c = _PMC()
-                    c.cb = ctypes.sizeof(_PMC)
-                    if psapi.GetProcessMemoryInfo(h, ctypes.byref(c), c.cb):
-                        total += int(getattr(c, field))
-                        found = True
-                finally:
-                    k32.CloseHandle(h)
-            return round(total / 1024 ** 3, 3) if found else None
-
         total, found = 0, False
         for pid, _ppid, image in process_table():
             if not _name_matches(image, names):
                 continue
             try:
-                if field != "WorkingSetSize":
-                    return None          # D1: private commit is Windows-only here
-                with open(f"/proc/{pid}/statm", encoding="utf-8") as fh:
-                    total += int(fh.read().split()[1]) * os.sysconf("SC_PAGE_SIZE")
-                found = True
+                got = _platform.process_memory_bytes(pid, field)
+            except NotImplementedError:
+                return None              # D1: this platform has no such metric
             except (OSError, ValueError, IndexError):
                 continue
+            if got is None:              # could not open this one process
+                continue
+            total += got
+            found = True
         return round(total / 1024 ** 3, 3) if found else None
     except Exception:  # noqa: BLE001
         return None
@@ -352,86 +234,14 @@ def memory_pressure() -> dict:
     above so a later session can refine rather than re-derive them.
     """
     try:
-        if sys.platform == "win32":  # pragma: no cover - platform split
-            import ctypes
-
-            m = _mem_status()
-            if m is None:
-                return {}
-            committed = m.ullTotalPageFile - m.ullAvailPageFile
-            phys = m.ullTotalPhys
-            return {
-                "available_gb": round(m.ullAvailPhys / 1024 ** 3, 2),
-                "committed_gb": round(committed / 1024 ** 3, 2),
-                "physical_gb": round(phys / 1024 ** 3, 2),
-                "commit_ratio": round(committed / phys, 3) if phys else None,
-            }
-
-        vals = {}
-        with open("/proc/meminfo", encoding="utf-8") as fh:
-            for line in fh:
-                k, _, v = line.partition(":")
-                vals[k] = int(v.split()[0]) * 1024
-        phys = vals.get("MemTotal", 0)
-        committed = vals.get("Committed_AS", 0)
-        return {
-            "available_gb": round(vals.get("MemAvailable", 0) / 1024 ** 3, 2),
-            "committed_gb": round(committed / 1024 ** 3, 2),
-            "physical_gb": round(phys / 1024 ** 3, 2),
-            "commit_ratio": round(committed / phys, 3) if phys else None,
-        }
+        return _platform.memory_status()
     except Exception:  # noqa: BLE001 - bookkeeping must never stop a run
         return {}
-
-
-def _mem_status():
-    """Raw GlobalMemoryStatusEx, or None. Windows only."""
-    try:
-        import ctypes
-
-        class _MS(ctypes.Structure):
-            _fields_ = [("dwLength", ctypes.c_ulong),
-                        ("dwMemoryLoad", ctypes.c_ulong),
-                        ("ullTotalPhys", ctypes.c_ulonglong),
-                        ("ullAvailPhys", ctypes.c_ulonglong),
-                        ("ullTotalPageFile", ctypes.c_ulonglong),
-                        ("ullAvailPageFile", ctypes.c_ulonglong),
-                        ("ullTotalVirtual", ctypes.c_ulonglong),
-                        ("ullAvailVirtual", ctypes.c_ulonglong),
-                        ("ullAvailExtendedVirtual", ctypes.c_ulonglong)]
-
-        m = _MS()
-        m.dwLength = ctypes.sizeof(_MS)
-        ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(m))
-        return m
-    except Exception:  # noqa: BLE001
-        return None
 
 
 def free_memory_gb() -> float | None:
     """Physical memory free, or None if it cannot be read."""
     try:
-        if sys.platform == "win32":
-            import ctypes
-
-            class _MS(ctypes.Structure):
-                _fields_ = [("dwLength", ctypes.c_ulong),
-                            ("dwMemoryLoad", ctypes.c_ulong),
-                            ("ullTotalPhys", ctypes.c_ulonglong),
-                            ("ullAvailPhys", ctypes.c_ulonglong),
-                            ("ullTotalPageFile", ctypes.c_ulonglong),
-                            ("ullAvailPageFile", ctypes.c_ulonglong),
-                            ("ullTotalVirtual", ctypes.c_ulonglong),
-                            ("ullAvailVirtual", ctypes.c_ulonglong),
-                            ("ullAvailExtendedVirtual", ctypes.c_ulonglong)]
-            m = _MS()
-            m.dwLength = ctypes.sizeof(_MS)
-            ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(m))
-            return m.ullAvailPhys / 1024 ** 3
-        with open("/proc/meminfo", encoding="utf-8") as fh:
-            for line in fh:
-                if line.startswith("MemAvailable:"):
-                    return int(line.split()[1]) / 1024 ** 2
+        return _platform.free_memory_gb()
     except Exception:  # noqa: BLE001 - a missing metric must not stop a run
         return None
-    return None
