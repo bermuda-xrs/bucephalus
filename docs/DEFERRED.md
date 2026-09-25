@@ -34,8 +34,8 @@ Everything else on this page is marked in its own heading:
 
 | state | what it means | items |
 |---|---|---|
-| **open** | a real defect, nobody has fixed it | D2, D6, D16, D26, D27, D33; from Linux D54-D59; from the audit D43, D44, D45, D46, D47, D48, D49, D50, D51, D52, D53, each with its audit severity |
-| **closed** | fixed, with the change and its test named | D1, D3, D7, D9, D10, D11, D15, D17, D18, D19, D20, D21, D22, D23, D24, D28, D29, D30, D34, D35, D36, D37, D38, D39, D40, D41, D42 |
+| **open** | a real defect, nobody has fixed it | D2, D6, D16, D26, D27, D33; from Linux D54-D59; from the audit D44, D45, D46, D47, D48, D49, D50, D51, D52, D53, each with its audit severity |
+| **closed** | fixed, with the change and its test named | D1, D3, D7, D9, D10, D11, D15, D17, D18, D19, D20, D21, D22, D23, D24, D28, D29, D30, D34, D35, D36, D37, D38, D39, D40, D41, D42, D43 |
 | **deleted** | never a defect, or about an instrument nobody runs | D4, D5, D8, D12, D14 |
 | **known and accepted** | a real limit, decided rather than deferred | D32 (the sandbox is advisory: Phase 6 withdrawn) |
 | **dormant** | its subject is retired; it wakes if that returns | D19 (M11). D13 CLOSED 2026-09-25 |
@@ -1272,7 +1272,7 @@ whose dead parent's pid was recycled to the app's would be killed with its
 tree. Not observed; needs pid reuse. Fix: the same start-time comparison.
 Evidence: `probe_descendants_pid_reuse.py`.
 
-## D43 - MEDIUM - the planner survey reads protected files into its prompt (audit F5)
+## D43 - MEDIUM - the planner survey reads protected files into its prompt (audit F5) (CLOSED 2026-09-25: the survey applies the gate's is_protected check against task_state_paths before reading or listing; a refused scope is named, not read; tests/test_planner_protected.py)
 
 `plan/planner.py` `_read_only_survey` reads each `artifact_scope` entry with
 no `is_protected` check, so a scope naming `.alpha_token` or `.env` puts its

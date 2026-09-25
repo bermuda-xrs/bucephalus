@@ -87,11 +87,22 @@ def draft_plan(ctx, task, backend_name: str = "cloud") -> Plan:
 
 
 def _read_only_survey(ctx, task) -> str:
-    """What the planner is allowed to look at before planning. Reads only."""
+    """What the planner is allowed to look at before planning. Reads only.
+
+    Read-only is not unrestricted (AUDIT F5, D43). This read goes around
+    `gate_tool_call`, so it applies the gate's own protected-path check: a
+    scope that is, contains, or lies inside the agent's state - secrets,
+    databases, graders - is named as refused, never read or listed.
+    """
+    from ..security.capabilities import is_protected, task_state_paths
+
+    state = task_state_paths(ctx, task)
     out = []
     for scope in task.contract.artifact_scope[:5]:
         p = ctx.config.resolve(scope)
-        if p.is_dir():
+        if is_protected(str(scope), ctx.config.root, state):
+            out.append(f"{scope}: protected state - not read (the gate refuses it too)")
+        elif p.is_dir():
             names = sorted(x.name for x in list(p.iterdir())[:80])
             out.append(f"{scope}/ -> {', '.join(names)}")
         elif p.is_file():
