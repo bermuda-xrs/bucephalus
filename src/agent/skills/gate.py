@@ -20,10 +20,23 @@ import random
 import time
 from dataclasses import dataclass, field
 
-from scipy.stats import binomtest
+from math import comb
 
 from ..kernel.types import Budget, GateDecision, TaskContract
 from ..workspace import reset_workspace
+
+
+def binom_greater(b: int, n: int) -> float:
+    """McNemar's one-sided exact p: P(X >= b) for X ~ Binomial(n, 1/2).
+
+    Exactly scipy's `binomtest(b, n, 0.5, alternative="greater").pvalue`
+    (tests/test_gate_binomial.py checks every b for n <= 60), computed in
+    integers. scipy, and the numpy it brings, were ~95 MB of the desktop build
+    for this one call.
+    """
+    if n <= 0:
+        return 1.0
+    return sum(comb(n, k) for k in range(max(b, 0), n + 1)) / 2 ** n
 
 
 @dataclass
@@ -215,8 +228,7 @@ def evaluate_skill(
     c_ = sum(1 for _, c, s in pairs if s == 0 and c == 1)  # control wins
     discordant = b + c_
     lift_pp = 100.0 * (b - c_) / n if n else 0.0
-    p = (binomtest(b, discordant, 0.5, alternative="greater").pvalue
-         if discordant else 1.0)
+    p = binom_greater(b, discordant) if discordant else 1.0
     stats = {"n": n, "b": b, "c": c_, "discordant": discordant,
              "lift_pp": round(lift_pp, 2), "p": round(p, 5)}
 

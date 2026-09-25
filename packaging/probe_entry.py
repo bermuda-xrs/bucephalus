@@ -19,6 +19,7 @@ GATE = [
     "test_m5_action.py",           # scope refusals, the tool bridge and gate
     "test_sqlite_routes.py",       # the SQLite authorizer, file: URI spellings
     "test_sandbox_libraries.py",   # sympy inside the sandbox
+    "test_sandbox_network_fence.py",  # no sockets from the sandbox, loopback included
 ]
 
 if __name__ == "__main__":

@@ -12,7 +12,6 @@ dependencies = [
     "pyyaml>=6.0",
     "fastapi>=0.110",
     "uvicorn>=0.29",
-    "scipy>=1.13",            # McNemar / binomtest for the skill gate
     "sympy==1.13.3",
   # A8 - the TUI. Python-only, no new runtime.
   "textual>=0.80",          # SANDBOX LIBRARY, pinned: model-written
@@ -28,7 +27,8 @@ dependencies = [
 # 15-20% on prose and far more on code. See src/agent/tokens.py.
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0", "pytest-asyncio>=0.23", "httpx>=0.27"]
+dev = ["pytest>=8.0", "pytest-asyncio>=0.23", "httpx>=0.27",
+       "scipy>=1.13"]   # only to check skills/gate.binom_greater against binomtest
 
 [project.scripts]
 alpha = "agent.cli:main"

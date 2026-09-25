@@ -48,8 +48,14 @@ def build(name: str, entry: Path, extra: list[str], console: bool = True) -> Pat
             "--console" if console else "--windowed", "--name", name,
             "--distpath", str(OUT / "dist"), "--workpath", str(OUT / "work"),
             "--specpath", str(OUT), "--collect-submodules", "agent",
-            "--collect-data", "agent", "--collect-all", "sympy",
-            "--collect-all", "mpmath", *extra]
+            "--collect-data", "agent",
+            # sympy is a SANDBOX library: the model may import it, so all of it
+            # ships - as compiled modules. --collect-all also shipped its 1,501
+            # .py sources beside the archive (~25 MB, measured). scipy and
+            # numpy were pulled in by the skill gate's one binomtest, now
+            # stdlib (skills/gate.binom_greater); the model is not offered them.
+            "--collect-submodules", "sympy", "--collect-submodules", "mpmath",
+            "--exclude-module", "scipy", "--exclude-module", "numpy", *extra]
     for m in _stdlib():
         args += ["--hidden-import", m]
     t0 = time.time()

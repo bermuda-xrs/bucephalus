@@ -34,8 +34,8 @@ Everything else on this page is marked in its own heading:
 
 | state | what it means | items |
 |---|---|---|
-| **open** | a real defect, nobody has fixed it | D2, D6, D16, D26, D27, D33; from Linux D54-D59; from the audit D45, D46, D47, D48, D49, D50, D52, D53, each with its audit severity |
-| **closed** | fixed, with the change and its test named | D1, D3, D7, D9, D10, D11, D15, D17, D18, D19, D20, D21, D22, D23, D24, D28, D29, D30, D34, D35, D36, D37, D38, D39, D40, D41, D42, D43, D44, D51 |
+| **open** | a real defect, nobody has fixed it | D2, D6, D16, D26, D27, D33; from Linux D54-D59; from the audit D45, D46, D47, D48, D49, D52, D53, each with its audit severity |
+| **closed** | fixed, with the change and its test named | D1, D3, D7, D9, D10, D11, D15, D17, D18, D19, D20, D21, D22, D23, D24, D28, D29, D30, D34, D35, D36, D37, D38, D39, D40, D41, D42, D43, D44, D51, D50 |
 | **deleted** | never a defect, or about an instrument nobody runs | D4, D5, D8, D12, D14 |
 | **known and accepted** | a real limit, decided rather than deferred | D32 (the sandbox is advisory: Phase 6 withdrawn) |
 | **dormant** | its subject is retired; it wakes if that returns | D19 (M11). D13 CLOSED 2026-09-25 |
@@ -1323,7 +1323,7 @@ The sandbox's spawn list names `subprocess`/`os` entry points, not the Windows
 primitive underneath. The child is still born in the Job Object, so the kernel
 limits hold; the "no subprocesses" promise does not.
 
-## D50 - LOW - the desktop build is ~120 MB larger than it needs to be (audit I1)
+## D50 - LOW - the desktop build is ~120 MB larger than it needs to be (audit I1) (CLOSED 2026-09-25: 188 MB -> 62 MB (build.py's own measurement). scipy's one binomtest is stdlib now (skills/gate.binom_greater, checked equal to scipy for every b, n<=60), so scipy and numpy are excluded; sympy ships as compiled modules only. The frozen gate passes 47 including sympy in the sandbox)
 
 193 MB, of which scipy+numpy (~95 MB) serve one `binomtest` call, and sympy's
 source ships twice (~25 MB) through `--collect-all`. A binomial tail from
