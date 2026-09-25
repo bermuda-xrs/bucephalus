@@ -34,8 +34,8 @@ Everything else on this page is marked in its own heading:
 
 | state | what it means | items |
 |---|---|---|
-| **open** | a real defect, nobody has fixed it | D2, D6, D16, D26, D27, D33; from the audit D40-D53, each with its audit severity |
-| **closed** | fixed, with the change and its test named | D1, D3, D7, D9, D10, D11, D15, D17, D18, D19, D20, D21, D22, D23, D24, D28, D29, D30, D34, D35, D36, D37, D38, D39 |
+| **open** | a real defect, nobody has fixed it | D2, D6, D16, D26, D27, D33; from the audit D41, D42, D43, D44, D45, D46, D47, D48, D49, D50, D51, D52, D53, each with its audit severity |
+| **closed** | fixed, with the change and its test named | D1, D3, D7, D9, D10, D11, D15, D17, D18, D19, D20, D21, D22, D23, D24, D28, D29, D30, D34, D35, D36, D37, D38, D39, D40 |
 | **deleted** | never a defect, or about an instrument nobody runs | D4, D5, D8, D12, D14 |
 | **known and accepted** | a real limit, decided rather than deferred | D32 (the sandbox is advisory: Phase 6 withdrawn) |
 | **dormant** | its subject is retired; it wakes if that returns | D19 (M11). D13 CLOSED 2026-09-25 |
@@ -1246,7 +1246,7 @@ fixed, per the triage rule for that phase. Each audit finding's demonstration
 is in `docs/evidence/audit-2026-09/`; a passing demonstration means the defect
 is still live.
 
-## D40 - MEDIUM - the sandbox's "no network" promise is not enforced (audit F3)
+## D40 - MEDIUM - the sandbox's "no network" promise is not enforced (audit F3) (CLOSED 2026-09-25: the audit hook refuses socket creation, connect, bind, sends and name lookups in every sandbox run; tests/test_sandbox_network_fence.py)
 
 `execute/libraries.py` promises the sandbox has no network, and refuses a
 library that declares network use, but the audit hook has no `socket` event:

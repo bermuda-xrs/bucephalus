@@ -186,6 +186,16 @@ if {touch_path!r}:
 # rule here in a single call. Refused for agent code; harness runs keep it.
 _SPAWN = ("subprocess.Popen", "os.system", "os.exec", "os.posix_spawn",
           "os.spawn", "os.startfile")
+# AUDIT-2026-09 F3. The sandbox promises NO NETWORK (execute/libraries.py) and
+# nothing enforced it: code connected anywhere, loopback included - where the
+# control plane listens, which is how F2 was exploitable. Every run, not only
+# agent code: a grader has no business on the network either. Creating a
+# socket is refused, so every route out - connect, bind, a UDP send, a DNS
+# lookup that would itself carry data - fails at its first step. Advisory like
+# the rest of this hook (D32): ctypes or a native extension goes around it.
+_NET = ("socket.__new__", "socket.connect", "socket.bind", "socket.sendto",
+        "socket.sendmsg", "socket.getaddrinfo", "socket.gethostbyname",
+        "socket.gethostbyaddr", "socket.getnameinfo")
 
 
 def _under(path, root):
@@ -364,6 +374,11 @@ _FS_EVENTS = (
 def _audit(event, args):
     if _BUSY[0]:
         return
+    if event in _NET:
+        _touch("network", event, True, raw=True)
+        raise PermissionError("sandbox: network access is denied (%s) - "
+                              "loopback included, where the control plane "
+                              "listens" % (event,))
     if _DENY_SPAWN and event in _SPAWN:
         _touch("spawn", event, True, raw=True)
         raise PermissionError("sandbox: starting a process is denied (%s): it "
