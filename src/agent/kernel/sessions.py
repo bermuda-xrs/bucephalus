@@ -21,11 +21,12 @@ early. On the row, the snapshot lives exactly as long as its session.
 
 from __future__ import annotations
 
-import hashlib
 import json
 import sqlite3
 import time
 import uuid
+
+from .events import sha256_hex
 
 _COLS = ("id, task_id, parent_id, status, opened_reason, seed_artifact, "
          "memory_json, created_at, closed_at")
@@ -37,8 +38,7 @@ def _row(r) -> dict:
 
 
 def _sha(memory: dict) -> str:
-    return hashlib.sha256(
-        json.dumps(memory, sort_keys=True).encode("utf-8")).hexdigest()
+    return sha256_hex(json.dumps(memory, sort_keys=True))
 
 
 def current(conn: sqlite3.Connection, task_id: str) -> dict | None:

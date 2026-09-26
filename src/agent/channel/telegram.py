@@ -33,7 +33,6 @@ same way. Everything below has been driven end to end through `FakeTransport`.
 
 from __future__ import annotations
 
-import hashlib
 import json
 import os
 import time
@@ -43,6 +42,7 @@ from dataclasses import dataclass, field
 from typing import Protocol
 
 from ..execute.loop import run_task
+from ..kernel.events import sha256_hex
 from ..kernel.tasks import create_task
 from ..kernel.types import Budget, TaskContract
 from ..security.origin import TELEGRAM, clamp_budget
@@ -164,7 +164,7 @@ def record_drop(conn, channel: str, sender: str, reason: str, body: str) -> None
     Nothing here creates a task, so there is nothing for a human to approve
     later by mistake — which is the difference between "dropped" and "held".
     """
-    digest = hashlib.sha256(body[:MAX_RECORDED_BODY].encode("utf-8")).hexdigest()
+    digest = sha256_hex(body[:MAX_RECORDED_BODY])
     conn.execute(
         """INSERT INTO channel_drops(channel, sender, reason, body_sha256,
                                      body_len, created_at)

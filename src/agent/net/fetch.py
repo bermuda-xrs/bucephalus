@@ -25,7 +25,6 @@ This is a fetcher for a personal agent, not a crawler:
 
 from __future__ import annotations
 
-import hashlib
 import ipaddress
 import re
 import socket
@@ -34,6 +33,8 @@ from html.parser import HTMLParser
 from urllib.parse import urlparse
 
 import httpx
+
+from ..kernel.events import sha256_hex
 
 MAX_BYTES = 400_000
 TIMEOUT_S = 20.0
@@ -176,7 +177,7 @@ def fetch_with_provenance(url: str, *, max_bytes: int = MAX_BYTES,
             # text: the extraction is ours and could change between versions,
             # so hashing its output would make the same page hash differently
             # after an unrelated edit here.
-            "content_sha256": hashlib.sha256(raw.encode("utf-8")).hexdigest(),
+            "content_sha256": sha256_hex(raw),
             "bytes": len(raw.encode("utf-8")),
             "content_type": ctype,
             "rate_limit_waited_s": round(waited, 3),

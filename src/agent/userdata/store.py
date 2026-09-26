@@ -339,13 +339,13 @@ class UserStore:
         # said during a given run would make the runs unauditable.
         prior = self.get_document(kind, name)
         if prior is not None and prior["body"] != body:
-            import hashlib
+            from ..kernel.events import sha256_hex
 
             self.conn.execute(
                 "INSERT INTO document_history(document_id,kind,name,owner,body,"
                 "body_sha256,actor,replaced_at) VALUES (?,?,?,?,?,?,?,?)",
                 (prior["id"], kind, name, self.owner, prior["body"],
-                 hashlib.sha256(prior["body"].encode("utf-8")).hexdigest(),
+                 sha256_hex(prior["body"]),
                  actor, now),
             )
         self.conn.execute(
