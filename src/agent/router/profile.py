@@ -10,25 +10,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-# The purpose vocabulary. The allowlist is expressed in these terms, so a new
-# purpose is off-limits to the local tier until it is measured and added.
-PURPOSES = frozenset(
-    {
-        "step",  # a turn of the main loop
-        "plan",  # drafting a plan — never local until measured
-        "review",  # auto-review decision — never local
-        "monitor",  # out-of-band monitor
-        "summarize",
-        "classify",
-        "extract",
-        "compress_tool_output",
-        "draft_candidate",
-        "author_tests",
-        "verify",
-        "delegate",
-    }
-)
-
 DEFAULT_OUTPUT_TOKENS = 512
 
 
