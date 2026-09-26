@@ -318,20 +318,19 @@ def cmd_memory(ctx, args, console) -> int:
     persistent memory a person cannot read is a persistent memory they cannot
     consent to.
     """
-    from .memory.store import MemoryStore
+    from .memory.store import (MemoryStore, _render, check_fingerprint,
+                               record_fingerprint)
 
     if args.forget:
+        needle = args.forget.lower()
         removed = []
         for tier in sorted(MemoryStore.FILES):
-            kept = [e for e in ctx.memory.entries(tier)
-                    if args.forget.lower() not in e.text.lower()]
-            gone = [e for e in ctx.memory.entries(tier) if e not in kept]
+            entries = ctx.memory.entries(tier)
+            kept = [e for e in entries if needle not in e.text.lower()]
+            gone = [e for e in entries if needle in e.text.lower()]
             if gone:
-                from .memory.store import _render
                 ctx.memory.path(tier).write_text(_render(kept), encoding="utf-8")
                 removed += [f"{tier}: {e.text}" for e in gone]
-        from .memory.store import record_fingerprint
-
         record_fingerprint(ctx.memory)
         for line in removed:
             console.print(f"[red]forgotten[/red] {line}")
@@ -344,8 +343,6 @@ def cmd_memory(ctx, args, console) -> int:
         # only way to legitimately edit these files by hand would be to leave
         # a permanent critical standing - which is how a real alert becomes
         # background noise, the exact failure D17 was.
-        from .memory.store import check_fingerprint, record_fingerprint
-
         before = check_fingerprint(ctx.memory)
         for tier in sorted(MemoryStore.FILES):
             for e in ctx.memory.entries(tier):
