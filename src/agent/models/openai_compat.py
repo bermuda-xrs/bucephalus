@@ -35,7 +35,10 @@ import json
 import os
 import time
 
-import httpx
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    import httpx
 
 from ..config import BackendConfig
 from ..kernel.types import ModelResponse, TokenUsage
@@ -152,6 +155,8 @@ class OpenAICompatibleBackend(BackendBase):
         if injected is not None:
             raise injected
 
+        import httpx  # lazy: ~0.15 s off every CLI start (Phase F)
+
         client = self._client or httpx
         parts: list[str] = []
         usage_block: dict = {}
@@ -253,6 +258,8 @@ class OpenAICompatibleBackend(BackendBase):
 
     def available(self) -> bool:
         try:
+            import httpx  # lazy: ~0.15 s off every CLI start (Phase F)
+
             client = self._client or httpx
             r = client.get(f"{self.base_url}/models",
                            headers=self._headers(), timeout=2.0)

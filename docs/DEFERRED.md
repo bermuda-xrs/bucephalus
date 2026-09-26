@@ -34,8 +34,8 @@ Everything else on this page is marked in its own heading:
 
 | state | what it means | items |
 |---|---|---|
-| **open** | a real defect, nobody has fixed it | D2, D6, D16, D26, D27, D33; from Linux D54-D59; from the audit D45, D46, D47, D48, D49, D52, D53, each with its audit severity |
-| **closed** | fixed, with the change and its test named | D1, D3, D7, D9, D10, D11, D15, D17, D18, D19, D20, D21, D22, D23, D24, D28, D29, D30, D34, D35, D36, D37, D38, D39, D40, D41, D42, D43, D44, D51, D50 |
+| **open** | a real defect, nobody has fixed it | D2, D6, D16, D26, D27, D33; from Linux D54-D59; from the audit D45, D46, D47, D48, D49, D52, each with its audit severity |
+| **closed** | fixed, with the change and its test named | D1, D3, D7, D9, D10, D11, D15, D17, D18, D19, D20, D21, D22, D23, D24, D28, D29, D30, D34, D35, D36, D37, D38, D39, D40, D41, D42, D43, D44, D51, D50, D53 |
 | **deleted** | never a defect, or about an instrument nobody runs | D4, D5, D8, D12, D14 |
 | **known and accepted** | a real limit, decided rather than deferred | D32 (the sandbox is advisory: Phase 6 withdrawn) |
 | **dormant** | its subject is retired; it wakes if that returns | D19 (M11). D13 CLOSED 2026-09-25 |
@@ -1341,7 +1341,7 @@ the tree, or relying on the Job Objects already closing, is the fix.
 Up from the ~966 on record as tools were added; the tool manual adds 464. On a
 CPU-bound executor that is wall clock on every step. Sits beside D33.
 
-## D53 - LOW - the CLI subprocess tests are a third of suite wall time (audit I4)
+## D53 - LOW - the CLI subprocess tests are a third of suite wall time (audit I4) (CLOSED 2026-09-26: measured by cProfile: a CLI subprocess is ~0.96 s and ~0.91 s of it is imports - the command itself is noise. The audit's fix was already in place (the scratch install is module-scoped, shared by all 46). httpx now loads when a backend first calls out, not at import: alpha schedule list 1.52 s -> 1.25 s median, 30 interleaved samples each (-18%). The rest is pydantic building kernel.types, rich, and pydantic's plugin scan - the interpreter start the subprocess exists to exercise (invariant 115). File wall time swung 54-107 s between identical runs on this machine, so no per-file figure is claimed)
 
 `tests/test_cli_subcommands.py`, subprocess per test by design (invariant
 115), ~170 s of 535 s. A shared scratch install for the read-only ones would
