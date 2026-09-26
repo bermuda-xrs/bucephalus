@@ -8,17 +8,7 @@ in 200. A smaller model is not automatically a faster one.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-
 DEFAULT_OUTPUT_TOKENS = 512
-
-
-@dataclass
-class TaskProfile:
-    purpose: str
-    est_input_tokens: int = 0
-    requires_tools: bool = False
-    requires_planning: bool = False
 
 
 def estimate_seconds(ctx, tier: str, purpose: str) -> float:
