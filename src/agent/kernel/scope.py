@@ -39,10 +39,6 @@ from __future__ import annotations
 import sqlite3
 
 
-class ScopeViolation(RuntimeError):
-    """A read was refused because it left the attempt's scope."""
-
-
 def task_tree(conn: sqlite3.Connection, task_id: str) -> set[str]:
     """Every task id in the same tree — root, siblings, descendants.
 
