@@ -16,6 +16,7 @@ import json
 import re
 from collections import Counter
 
+from ..kernel.events import canonical
 from ..kernel.types import ModelResponse
 from .profile import estimate_seconds
 
@@ -173,7 +174,7 @@ def normalize(text: str) -> str:
     """Compare parsed objects where possible, strings otherwise."""
     s = text.strip()
     try:
-        return json.dumps(json.loads(s), sort_keys=True, separators=(",", ":"))
+        return canonical(json.loads(s))
     except (json.JSONDecodeError, ValueError):
         return re.sub(r"\s+", " ", s).strip().lower()
 
