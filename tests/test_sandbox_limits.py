@@ -3,7 +3,7 @@
 Until 2026-09-15 a Windows child got no memory, CPU or process limit at all:
 advisory path confinement plus a wall-clock timeout, under a scheduler and a
 channel that run code unattended. These run for real on this machine; the
-POSIX half is `resource` and has never run anywhere.
+POSIX half is `resource` and has run only in WSL2 (2026-09-25).
 """
 
 from __future__ import annotations

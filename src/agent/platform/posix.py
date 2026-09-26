@@ -1,7 +1,8 @@
-"""POSIX - Linux, and the base that darwin.py builds on. NEVER RUN ANYWHERE.
+"""POSIX - Linux, and the base that darwin.py builds on. RAN IN WSL2 ONLY.
 
-The first run on a real machine is a security audit: docs/PLATFORMS.md,
-section 5, is the checklist, and tests/test_posix_platform.py holds the
+First run 2026-09-25 in WSL2 (Debian 13, Python 3.13): the seven real-kernel
+properties held, and the run found D54-D59 (docs/evidence/wsl-2026-09-25).
+Bare-metal Linux has not run it. docs/PLATFORMS.md, section 5, is the checklist, and tests/test_posix_platform.py holds the
 properties (its POSIX half skips everywhere else).
 
 Five defects were found here by reading, before any of it had run, and are

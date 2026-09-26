@@ -543,7 +543,7 @@ all, on the only platform this project has run on. It ended with a Job Object
 (D37). On Windows the kernel now enforces memory (512 MB per process), CPU
 time (the task's timeout) and process count (32), and each limit was tested
 for real on this machine. File size is still unlimited on Windows and needs
-the container. The POSIX path sets all four with `rlimit` and has never run.
+the container. The POSIX path sets all four with `rlimit` and has run only in WSL2 (2026-09-25).
 
 ---
 

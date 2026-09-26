@@ -23,18 +23,20 @@ instrument). Everything below waits.
 
 ---
 
-## Where this stands, 2026-09-25
+## Where this stands, 2026-09-26
 
-**Six open, plus fourteen from the 2026-09 audit.** D2, D6, D16, D26, D27, D33,
-and D40-D53 (`docs/AUDIT-2026-09.md`; its two HIGH findings, F1 and F2, were
-fixed in the change that recorded these). D13 closed 2026-09-25; D24, D38 and
-D39 closed 2026-09-17; see their headings.
+**Six open from before the audit, six from the audit, six from the first
+Linux run and one from Phase H.** D2, D6, D16, D26, D27, D33; the audit's
+D45-D49 and D52 (`docs/AUDIT-2026-09.md`; its HIGH findings F1 and F2 were
+fixed in the change that recorded them, and D40-D44, D50, D51 and D53 are
+closed); D54-D59 (WSL2, `docs/evidence/wsl-2026-09-25/`); D60. See each
+heading.
 
 Everything else on this page is marked in its own heading:
 
 | state | what it means | items |
 |---|---|---|
-| **open** | a real defect, nobody has fixed it | D2, D6, D16, D26, D27, D33; from Linux D54-D59; from the audit D45, D46, D47, D48, D49, D52, each with its audit severity |
+| **open** | a real defect, nobody has fixed it | D2, D6, D16, D26, D27, D33; from Linux D54-D59; from the audit D45, D46, D47, D48, D49, D52, each with its audit severity; from Phase H D60 |
 | **closed** | fixed, with the change and its test named | D1, D3, D7, D9, D10, D11, D15, D17, D18, D19, D20, D21, D22, D23, D24, D28, D29, D30, D34, D35, D36, D37, D38, D39, D40, D41, D42, D43, D44, D51, D50, D53 |
 | **deleted** | never a defect, or about an instrument nobody runs | D4, D5, D8, D12, D14 |
 | **known and accepted** | a real limit, decided rather than deferred | D32 (the sandbox is advisory: Phase 6 withdrawn) |
@@ -1397,3 +1399,19 @@ directory exists only after a build. Fix the wording, not the test.
 
 Sleep precision against a strict `>=` in the test; the courtesy is kept to
 within 40 microseconds. Fix: wait on a monotonic deadline.
+
+---
+
+# From the Phase H dead-code classification, 2026-09-26
+
+## D60 - MEDIUM - a task deleted from the database is invisible to `alpha verify`
+
+`integrity.verify_all` sweeps `SELECT id FROM tasks`, so a task whose row and
+events are both deleted is never looked at, although the anchor still names
+it. `Anchor.all_tasks()` is the method that could see it, and it has no caller
+(KNOWN_INERT: "`alpha verify` iterates tasks from the task table" - true, and
+the reason the gap exists). Shown, not argued: create a task, checkpoint it,
+delete its events and its row; `verify_all` returns `[]` before and after.
+Deleting a whole task's history is the rewrite the anchor, kept outside the
+database, exists to catch. Fix: sweep `anchor.all_tasks() | tasks`, and report
+an anchored id with no events as critical. Red first against the scenario above.

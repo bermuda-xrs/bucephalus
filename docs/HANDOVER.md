@@ -49,7 +49,7 @@ FINDINGS 1.27 says why and what would reopen it. Two results came instead:
 
 ## B1. Prerequisites, and the traps
 
-Windows only so far (macOS and Linux are prepared, never run: `docs/PLATFORMS.md`); Python
+Windows, plus one Linux run in WSL2; macOS never run (`docs/PLATFORMS.md`); Python
 3.11 or 3.12 (**not 3.13+**); Ollama ≥ 0.32.7; ~8 GB of disk for the two models. Every number here came from a machine with 15.5 GB of RAM doing CPU
 inference, so wall-clock figures do not transfer. **Five traps, each costing someone a day:**
 1. **`ANTHROPIC_API_KEY` must be unset.** `--profile local` refuses to start if any provider
@@ -99,10 +99,10 @@ chain verifies: True (first bad seq: None) - paid 9,091 tok - $0.0353 - cache hi
 
 It planned, executed, **refused an instruction embedded in a web page it read**, and the
 chain verifies. **Verification scope, narrower than it looks.** Every command here was run on **Windows, on
-one machine, against a local Ollama**, on the date in section D. **Nothing in this project
-has ever run on POSIX.** The POSIX sandbox (`src/agent/platform/posix.py`, `src/agent/platform/darwin.py`) has
-never executed anywhere: five defects found by reading are fixed but unverified until the
-checklist in `docs/PLATFORMS.md` runs on a real machine. A Linux reader meets that first.
+one machine, against a local Ollama**, on the date in section D. **POSIX has run once, in
+WSL2** (2026-09-25, `docs/evidence/wsl-2026-09-25/`): the seven real-kernel sandbox properties
+held and the run found D54-D59. Bare-metal Linux has not run it, and macOS (`src/agent/platform/darwin.py`) has
+never executed anywhere; the checklist in `docs/PLATFORMS.md` section 5 is for both.
 
 ## B3. What each command costs
 
@@ -216,7 +216,7 @@ time and process count, and a wall-clock timeout. All three are real and tested.
 
 **What it is not: a boundary against code that means harm.** It constrains a cooperative
 program, not a hostile one. File size is **not limited on Windows** — the `RLIMIT_FSIZE` that
-would cap it is on the POSIX branch, which has never run anywhere; on an attended
+would cap it is on the POSIX branch, which has run only in WSL2; on an attended
 single-user machine that is resource exhaustion, not a boundary.
 
 **The capability gate — the one control that is a boundary — has never refused anything in
@@ -280,12 +280,12 @@ measurement wins, and the contradiction is written down beside the code defects.
 # D — STATE
 
 **Everything volatile is here and nowhere else in this file**, each row with the command that
-regenerates it. Verified 2026-09-25, against commit `39c9439`.
+regenerates it. Verified 2026-09-26, against commit `500a798`.
 
 | Fact | Value | Regenerate with |
 |---|---|---|
 | Branch | `main`, the line of record, fast-forwarded to `desktop-app` after the 2026-09 audit; tag `g1-closed-2026-09-25` marks the measurement branch's tip; no remote | `git branch --show-current` |
-| Written against | `39c9439`; the test asserts this is an ancestor of HEAD | `git log --oneline -1` |
+| Written against | `500a798`; the test asserts this is an ancestor of HEAD | `git log --oneline -1` |
 | Harness version | **6**, bumped 2026-09-25: a check must be able to fail (DR7) - the final sweep graded "{}" and `execution` passed it; five more verifiers could not fail (FINDINGS 1.34). 5 held the grader out under measurement. Pass rates before 5 are too high | `grep HARNESS_VERSION src/agent/__init__.py` |
 | Toolset version | **6** | `grep TOOLSET_VERSION src/agent/__init__.py` |
 | Test count | *deliberately not stated* | `python -m pytest tests -q`, and read the tail line. The skips are the live-credential tests, until D26's credentials exist |
@@ -336,14 +336,15 @@ Each owns its subject; nothing here is reproduced above.
 | **D27** — one task at a time, and the bot has no queue | Not a queue: the single-writer chain lock serialises anyway, so the honest fix is the claim-then-execute receipt protocol |
 | **D33** — tier 1 sits before the tool schemas on this template | A `HARNESS_VERSION` bump, which is a stop. Its criterion — a boundary rebuild more than once per task — is **measured at zero** as of 2026-09-17 (`bench/inventory.py`): no session has ever rotated. Re-refused, not unexamined |
 
-**D13, D24, D38 and D39 are closed** (`docs/DEFERRED.md`). One of the rest is the user's:
-**D26** (credentials, decided yes, not supplied). D32's acceptance is in C4.
+Also open: the audit's D45-D49 and D52; the WSL2 run's D54-D59; **D60**, a task deleted from the
+database is invisible to `alpha verify`. **D26** is the user's (credentials). D32's acceptance is in C4.
 
 ## E3. Next steps, in order
 
 **Estimates are mine, from my own reading of the code. Every prior estimate here ran
 optimistic, so where I am guessing I say so.** They stand as written with what has since been
 done marked beside them: a prediction edited afterwards is not one.
+**(a)-(e) are done. Next, 2026-09-26:** `docs/PLATFORMS.md` section 5 on a Mac and on bare-metal Linux; then D60; then D54-D57.
 
 **(a) Feature-flag the efficiency mechanisms, then run G1.** First, because it closes the
 headline goal — and *the reason it was never testable is a spec error, not an implementation

@@ -1,35 +1,38 @@
 # Platforms: what runs where, and how to verify a new machine
 
-**Windows 11 is the only platform anything in this project has run on.** Every
+**Windows 11 is where this project runs; Linux has run once, in WSL2.** Every
 line below marked "never run" is code that exists and has not executed once.
-Mac and Linux are wanted; this page is the preparation, and none of it is
-verification. Written 2026-09-25 (desktop-app branch).
+The WSL2 run (2026-09-25, `docs/evidence/wsl-2026-09-25/`) is a real Linux
+kernel but not a bare-metal desktop, on Python 3.13 rather than the pinned
+3.11; it found D54-D59. macOS has never run anything. Written 2026-09-25,
+updated 2026-09-26.
 
 ## 1. Inventory (4A)
 
 Every OS-specific operation now lives in `src/agent/platform/` (section 4).
-`windows.py` has run. `posix.py` (Linux) and `darwin.py` (macOS) have never
-run. The five defects in section 2 are fixed from reading, and each fix is
-verified only when the section 5 checklist runs on a real machine.
+`windows.py` has run. `posix.py` (Linux) has run in WSL2 only; `darwin.py`
+(macOS) has never run. The five defects in section 2 are fixed from reading;
+the Linux half held in WSL2, and each fix is verified on bare metal only when
+the section 5 checklist runs on a real machine.
 
 | concern | Windows | Linux | macOS |
 |---|---|---|---|
-| **Sandbox resource limits** | Job Object, child created suspended then assigned: 512 MB per process, CPU = the timeout, 32 processes. No file-size limit exists on Windows. **Ran**: `test_sandbox_limits.py`, and the frozen gate 3 of 3 | rlimits AS / CPU / FSIZE, set by a trampoline that then `exec`s the child in its own session. Process count by watchdog over the run's group, reactive. **Never run** | CPU / FSIZE by trampoline. Memory and process count by a `phys_footprint` watchdog, **reactive, not kernel-enforced** (section 3). **Never run** |
-| **Sandbox fences** (write/read audit hook, SQLite authorizer, protected paths) | **Ran**, unfrozen and frozen | Pure Python, but path semantics differ (case sensitivity, `/proc`, symlinked temp dirs). **Never run** | As Linux, plus `/tmp` → `/private/tmp` symlinks. **Never run** |
-| **Process-tree kill** (`kill_tree`) | `taskkill /T /F`. **Ran**, including both trampoline incidents | `killpg` of the child's OWN group; a pid in the caller's group is killed by parentage. **Never run** | Same. **Never run** |
-| **Process table**, parentage, start time (reaper, desktop shutdown) | Toolhelp32, `GetProcessTimes`. **Ran** | `/proc`. **Never run** | `ps -axo`, `ps -o lstart` (`darwin.py`). **Never run** |
+| **Sandbox resource limits** | Job Object, child created suspended then assigned: 512 MB per process, CPU = the timeout, 32 processes. No file-size limit exists on Windows. **Ran**: `test_sandbox_limits.py`, and the frozen gate 3 of 3 | rlimits AS / CPU / FSIZE, set by a trampoline that then `exec`s the child in its own session. Process count by watchdog over the run's group, reactive. **Ran in WSL2** (2026-09-25, `docs/evidence/wsl-2026-09-25/`, Python 3.13; not bare metal): memory, CPU, file size, process count, grandchildren on timeout, threaded caller - 7 of 7 real-kernel tests. CPU limit races the timeout (D57) | CPU / FSIZE by trampoline. Memory and process count by a `phys_footprint` watchdog, **reactive, not kernel-enforced** (section 3). **Never run** |
+| **Sandbox fences** (write/read audit hook, SQLite authorizer, protected paths) | **Ran**, unfrozen and frozen | Pure Python, but path semantics differ (case sensitivity, `/proc`, symlinked temp dirs). **Ran in WSL2** (2026-09-25, `docs/evidence/wsl-2026-09-25/`, Python 3.13; not bare metal): sandbox property suites 148 passed, 4 failed (D54, D55, D57) | As Linux, plus `/tmp` → `/private/tmp` symlinks. **Never run** |
+| **Process-tree kill** (`kill_tree`) | `taskkill /T /F`. **Ran**, including both trampoline incidents | `killpg` of the child's OWN group; a pid in the caller's group is killed by parentage. **Ran in WSL2** (2026-09-25, `docs/evidence/wsl-2026-09-25/`, Python 3.13; not bare metal): the caller survived. A zombie counts as alive (D54) | Same. **Never run** |
+| **Process table**, parentage, start time (reaper, desktop shutdown) | Toolhelp32, `GetProcessTimes`. **Ran** | `/proc`. **Ran in WSL2** (2026-09-25, `docs/evidence/wsl-2026-09-25/`, Python 3.13; not bare metal): 18 rows. The reaper is inert on Linux (D55) | `ps -axo`, `ps -o lstart` (`darwin.py`). **Never run** |
 | **Memory metrics** (preflight, commit ratio, worker RSS) | ctypes. **Ran** | `/proc/meminfo`, `statm`. **Never run** | `sysctl hw.memsize`, `vm_stat`, libproc `phys_footprint`. No commit ratio exists on Darwin (None = unmeasured). **Never run** |
 | **The venv trampoline** | A venv `python.exe` is a launcher that starts the real interpreter as a child. Handled by the suspended-into-job spawn. **Ran** | Not applicable: a venv python is a symlink | Not applicable |
 | **Multiprocessing start method** | Not used by the product. `freeze_support()` is called in the frozen dispatcher for libraries. **Ran**, frozen | fork by default (3.14: forkserver). Unused | spawn. Unused |
-| **Frozen interpreter** (D13, `agent/frozen.py`) | **Ran**: probe gate 3 of 3, and from a windowed parent | Code is platform-neutral. **Never run** | `sys.executable` is `alpha.app/Contents/MacOS/alpha`. **Never run** |
-| **File lock** (`runlock`) | `msvcrt` byte lock. **Ran** | `fcntl.flock`. **Never run** | Same. Never run |
+| **Frozen interpreter** (D13, `agent/frozen.py`) | **Ran**: probe gate 3 of 3, and from a windowed parent | Code is platform-neutral. **Ran in WSL2** (2026-09-25, `docs/evidence/wsl-2026-09-25/`, Python 3.13; not bare metal): a Linux probe build (265 MB), gate 35 passed, 1 failed (D57) | `sys.executable` is `alpha.app/Contents/MacOS/alpha`. **Never run** |
+| **File lock** (`runlock`) | `msvcrt` byte lock. **Ran** | `fcntl.flock`. **Ran in WSL2** (2026-09-25, `docs/evidence/wsl-2026-09-25/`, Python 3.13; not bare metal), in the full suite's `test_runlock.py` | Same. Never run |
 | **Desktop window** | pywebview on EdgeWebView2. **Ran**, frozen | GTK WebKit2 or Qt, from system packages. **Never run** | WKWebView through pyobjc. **Never run** |
-| **Packaging** | PyInstaller onedir, windowed, 188 MB. **Ran** | Onedir tarball or AppImage. **Never run** | `.app`, then codesign, notarization and hardened runtime. **Never run** |
+| **Packaging** | PyInstaller onedir, windowed, 62 MB (188 MB before Phase F). **Ran** | Onedir tarball or AppImage. **Never run** | `.app`, then codesign, notarization and hardened runtime. **Never run** |
 | **State directories** | platformdirs (`%LOCALAPPDATA%`). **Ran** | `~/.local/share/alpha-test-1`. Never run | `~/Library/Application Support/alpha-test-1`. Never run |
 | **Helper scripts** | `setup.ps1`, `ollama-serve.ps1` / `.cmd` | None exist (need `.sh`) | None exist |
 | **Platform tests** | `test_sandbox_limits.py` | `test_posix_platform.py`: its portable half runs everywhere, and its real half skips off POSIX, naming step 5 | Same, plus a Mac-only test |
 
-## 2. The POSIX sandbox has never executed (4B)
+## 2. The POSIX sandbox had never executed (4B) - until WSL2, 2026-09-25
 
 Every sandbox finding in this project is Windows evidence: D13, D37, C41, the
 SQLite routes, the read fence, the frozen gate. **The first run on a Mac or a

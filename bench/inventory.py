@@ -119,7 +119,7 @@ ROWS: list[tuple[str, str, str, str]] = [
     ("alpha snapshot (the backup API)", "writes a FILE", "none", ""),
     ("the TUI", "paints a terminal", "none", ""),
     ("the control plane: server, SSE, console", "answers HTTP", "none", ""),
-    ("the POSIX rlimit branch", "never run on any platform here", "none", ""),
+    ("the POSIX rlimit branch", "ran in WSL2 only (docs/evidence/wsl-2026-09-25)", "none", ""),
     ("the Anthropic adapter, live", "needs a key (D26)", "none", ""),
     ("the Telegram transport, live", "needs a token (D26)", "none", ""),
 ]
