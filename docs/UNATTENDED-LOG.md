@@ -128,3 +128,25 @@ done in Phase F; 3.2's <2 s target is open.
   been shown to pass unmutated. A timeout is now undecided (neither kill nor
   survivor) and the recheck must pass unmutated first. The corrected queue
   runs from a snapshot worktree (`~/.alpha-mut-snap`, removed at the end).
+
+## Part 2.4 - coverage, reported not chased
+
+`pytest --cov=agent` (pytest-cov 7.1, new dev dependency): **83% of 7,933
+statements**. Coverage follows the in-process suite only; code the suite runs
+in SUBPROCESSES - the CLI (46 subprocess tests), the ASGI entry, the frozen
+dispatcher, `__main__` - reads as uncovered although it runs. Under 70%:
+
+| module | cover | what the uncovered lines are |
+|---|---|---|
+| `__main__.py`, `control/asgi.py` | 0% | entry points; run as subprocesses by the CLI and serve tests |
+| `frozen.py` | 26% | the frozen child dispatch; run by the frozen gate, not the suite |
+| `cli.py` | 30% | every subcommand; run as subprocesses (test_cli_subcommands) |
+| `instrument/report.py` | 44% | run reports and CSVs for `alpha report` / bench; subprocess-run |
+| `models/ollama.py` | 50% | the live streaming loop against a real Ollama; tests use fakes |
+| `platform/posix.py` | 54% | the Linux/macOS half; runs on POSIX only (WSL2 run in Phase D) |
+| `skills/retrieve.py` | 61% | skill retrieval ranking branches |
+| `control/events.py` | 62% | **the SSE live tail - the console streams from it** |
+| `control/server.py` | 68% | routes exercised by the serve test's server subprocess |
+
+Added where it matters: `tests/test_sse_live_tail.py` (replay then live, in
+order, ephemeral ids past the chain; red with the tail cut off).
