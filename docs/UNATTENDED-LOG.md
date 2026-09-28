@@ -40,3 +40,28 @@ the end, and only if the suite, the frozen gate and the Part 5 audit pass.
 
 **Part 1 done** (commits 38edfa1..HEAD). Full suite at 0287833: 1063 passed,
 25 skipped. Next: Part 2, tests.
+
+## Part 2 - tests (in progress)
+
+- **2.1 baseline**: serial full suite 227.6 s (1063 passed, 25 skipped; this
+  machine has ranged 228-381 s serially). Slowest: CPU-limit kill 8.0 s,
+  wheel build 6.9 s, TUI 6.1 s, CLI subprocesses 2-3 s each - each is the
+  check itself.
+- **2.2 parallel (pytest-xdist 3.8.0, new dev dependency)**: default is now
+  `-n auto --dist loadgroup`. Shared-state bugs found and fixed: the wheel
+  build ran in the repo's build/ from several workers at once; three files
+  take the REAL checkout's measurement lock and read "lock busy" when run
+  concurrently. Each is pinned with an xdist_group. After: 46.7 s and
+  47.5 s, two consecutive clean runs (1063 passed). No test deleted, no
+  timeout shortened. `-n 0` runs serially.
+
+## RESUME (written 2026-09-28, usage limit reached)
+
+Branch `iteration-3`, clean after the commit that adds this section. Main
+untouched. Next exact step: Part 2.2's slow marker (optional - the parallel
+run is already 47 s), then 2.3 mutation testing (mutmut or equivalent on
+security/capabilities, security/taint, kernel/scope, kernel/events +
+integrity, assure/verifiers, the prompt-contract allowlist, the grader
+hold-out), 2.4 coverage report, 2.5 CI file (UNVERIFIED). Then Parts 3-6.
+Parts 3.1 (build 188 -> 62 MB) and 3.2 (close 8.66 -> 3.60 s) were already
+done in Phase F; 3.2's <2 s target is open.

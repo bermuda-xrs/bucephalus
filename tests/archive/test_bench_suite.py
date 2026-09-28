@@ -22,6 +22,10 @@ from pathlib import Path
 
 import pytest
 
+# Takes the REAL checkout's measurement lock (bench/run.py); see test_calibration_path.
+pytestmark = pytest.mark.xdist_group("real-measurement-lock")
+
+
 ROOT = Path(__file__).resolve().parents[2]
 TREE = ROOT / "bench" / "tasks" / "archive" / "aero_calc"
 

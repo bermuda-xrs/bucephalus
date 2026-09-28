@@ -18,6 +18,12 @@ from pathlib import Path
 
 import pytest
 
+# These take the REAL checkout's measurement lock (bench/run.py and noise.py
+# lock beside --config config.local.yaml). One worker at a time, or xdist
+# workers contend on it and read "lock busy" (iteration 3, 2.2).
+pytestmark = pytest.mark.xdist_group("real-measurement-lock")
+
+
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 

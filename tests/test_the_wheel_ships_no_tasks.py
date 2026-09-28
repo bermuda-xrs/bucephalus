@@ -32,6 +32,11 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 
+# One wheel build at a time: `pip wheel` builds IN the repository's own
+# build/ directory, and two xdist workers building at once collided there.
+# Building from a copy would not do - the point is what the REAL tree ships.
+pytestmark = pytest.mark.xdist_group("wheel-build")
+
 
 @pytest.fixture(scope="module")
 def wheel(tmp_path_factory) -> zipfile.ZipFile:
