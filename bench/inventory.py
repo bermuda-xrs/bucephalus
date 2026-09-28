@@ -61,6 +61,8 @@ DEFAULT_RECORDS = [
 #   table  - any row in this table
 #   rotate - a `session.opened` that has a parent, i.e. a BOUNDARY rather
 #            than the first session every task opens
+#   tombstoned   - a boundary's `session.opened` that tombstoned entries
+#   skill_status - skills whose recorded status is one of these
 #   none   - leaves no trace in the record; see the module docstring
 ROWS: list[tuple[str, str, str, str]] = [
     # -- the loop's own guarantees ----------------------------------------
@@ -77,7 +79,11 @@ ROWS: list[tuple[str, str, str, str]] = [
     ("deviation from the plan is detected", "deviation.detected", "event", ""),
 
     # -- context management: G1's mechanisms ------------------------------
-    ("compaction tombstones an artifact", "artifact.tombstoned", "event", ""),
+    # Counted from what the code WRITES. These three rows used to count
+    # `artifact.tombstoned`, `skill.promoted` and `skill.demoted` - registered
+    # event types nothing ever appends - so they could only ever read "never"
+    # (iteration 3; tests/test_inventory_counts_what_is_recorded.py).
+    ("compaction tombstones an artifact", "session.opened", "tombstoned", ""),
     ("a session BOUNDARY is crossed", "session.opened", "rotate", ""),
     ("a session is opened at all", "session.opened", "event", ""),
     ("the quarantined summarizer runs", "compress_tool_output", "call", ""),
@@ -100,8 +106,9 @@ ROWS: list[tuple[str, str, str, str]] = [
     ("git_push", "git_push", "tool", ""),
 
     # -- skills ------------------------------------------------------------
-    ("the gate PROMOTES a skill", "skill.promoted", "event", ""),
-    ("decay demotes a skill", "skill.demoted", "event", ""),
+    # Decay demotes only promoted skills, so a demoted one was promoted first.
+    ("the gate PROMOTES a skill", "promoted,demoted", "skill_status", ""),
+    ("decay demotes a skill", "demoted", "skill_status", ""),
     ("a paired trial is recorded", "skill_trials", "table", ""),
 
     # -- cron, channel, monitor -------------------------------------------
@@ -157,6 +164,16 @@ def _count(conn: sqlite3.Connection, kind: str, what: str) -> int | None:
                 1 for (p,) in conn.execute(
                     "SELECT payload_json FROM events WHERE type='tool.receipt'")
                 if json.loads(p).get("tool") == what)
+        if kind == "tombstoned":
+            return sum(
+                1 for (p,) in conn.execute(
+                    "SELECT payload_json FROM events WHERE type=?", (what,))
+                if (json.loads(p).get("tombstoned") or 0) > 0)
+        if kind == "skill_status":
+            states = what.split(",")
+            return conn.execute(
+                f"SELECT COUNT(*) FROM skills WHERE status IN ({','.join('?' * len(states))})",
+                states).fetchone()[0]
         if kind == "call":
             return conn.execute(
                 "SELECT COUNT(*) FROM calls WHERE purpose=?", (what,)).fetchone()[0]

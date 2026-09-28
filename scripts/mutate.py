@@ -165,13 +165,18 @@ def _run(tree_dir: Path, tests: list[str], timeout: float) -> tuple[str, float]:
         rc = p.wait(timeout)
     except subprocess.TimeoutExpired:
         _proc.kill_tree(p.pid)
-        return "killed-timeout", time.time() - t0
+        return "timeout", time.time() - t0
     return ("survived" if rc == 0 else "killed"), time.time() - t0
 
 
 def _copy(dst: Path) -> Path:
     shutil.copytree(ROOT / "src", dst / "src",
                     ignore=shutil.ignore_patterns("__pycache__", "*.egg-info"))
+    # A checkout, as the real one is: the desktop reads its default config
+    # from beside the source, and a tree without one failed the whole suite
+    # unmutated - which silently disabled every recheck (first queue).
+    for f in [ROOT / "pyproject.toml", *ROOT.glob("config*.yaml")]:
+        shutil.copy2(f, dst / f.name)
     return dst
 
 
@@ -184,12 +189,21 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--out")
     ap.add_argument("--recheck", action="store_true",
                     help="re-run each survivor against the WHOLE suite before reporting it")
+    ap.add_argument("--timeout-factor", type=float, default=4.0)
+    ap.add_argument("--min-timeout", type=float, default=60.0)
+    ap.add_argument("--rerun", help="a previous --out: re-run only its timed-out mutants")
+    ap.add_argument("--survivors-from", help="a previous --out: recheck only its survivors "
+                    "against the whole suite (implies --recheck)")
     a = ap.parse_args(argv)
     only = set(a.only.split(",")) if a.only else None
     mod = Path(a.module).resolve()
     rel = mod.relative_to(ROOT)
     source = mod.read_text(encoding="utf-8")
     ms = mutants(source, only)
+    if a.rerun:
+        prev = json.loads(Path(a.rerun).read_text(encoding="utf-8"))["results"]
+        again = {(r["node"], r["op"]) for r in prev if r["status"] in ("timeout", "killed-timeout")}
+        ms = [m for m in ms if (m["node"], m["op"]) in again]
     work = Path(tempfile.mkdtemp(prefix="alpha-mut-"))
     trees = [_copy(work / f"w{i}") for i in range(a.jobs)]
     # Baseline: the UNPARSED, unmutated module must pass, or every kill is noise.
@@ -198,7 +212,7 @@ def main(argv: list[str] | None = None) -> int:
     if status != "survived":
         print(f"baseline FAILED ({status}); fix that first")
         return 2
-    timeout = max(60.0, 4 * base)
+    timeout = max(a.min_timeout, a.timeout_factor * base)
     print(f"{rel}: {len(ms)} mutants, baseline {base:.1f}s, timeout {timeout:.0f}s")
     free = list(trees)
     import threading
@@ -215,24 +229,48 @@ def main(argv: list[str] | None = None) -> int:
                 free.append(t)
         return m
 
-    with ThreadPoolExecutor(a.jobs) as ex:
-        results = list(ex.map(one, ms))
-    if a.recheck:
+    if a.survivors_from:
+        prev = json.loads(Path(a.survivors_from).read_text(encoding="utf-8"))["results"]
+        keep = {(r["node"], r["op"]) for r in prev if r["status"] == "survived"}
+        results = [dict(r) for r in prev]
+        for r in results:
+            if (r["node"], r["op"]) in keep:
+                r["status"] = "survived"
+        a.recheck = True
+    else:
+        with ThreadPoolExecutor(a.jobs) as ex:
+            results = list(ex.map(one, ms))
+    survivors = [r for r in results if r["status"] == "survived"]
+    if a.recheck and survivors:
         # A survivor of the targeted tests may die to a test elsewhere; only
-        # what the whole suite misses is a gap worth a new test.
+        # what the whole suite misses is a gap worth a new test. The whole
+        # suite must first PASS here unmutated, or every survivor would read
+        # as killed (DR7 - it was not checked the first time).
         t = trees[0]
-        for r in (r for r in results if r["status"] == "survived"):
+        (t / rel).write_text(ast.unparse(ast.parse(source)), encoding="utf-8")
+        ok, _ = _run(t, ["tests", "-n", "12", "--dist", "loadgroup"], 1800)
+        if ok != "survived":
+            print("recheck baseline FAILED: the whole suite does not pass unmutated here; "
+                  "survivors are reported as survived")
+            survivors = []
+        for r in survivors:
             (t / rel).write_text(apply(source, r, only), encoding="utf-8")
-            st, _ = _run(t, ["tests", "-n", "8", "--dist", "loadgroup"], 900)
+            st, _ = _run(t, ["tests", "-n", "12", "--dist", "loadgroup"], 900)
             if st != "survived":
                 r["status"] = "killed-by-suite"
     shutil.rmtree(work, ignore_errors=True)
     lines = source.splitlines()
     survived = [r for r in results if r["status"] == "survived"]
+    timeouts = [r for r in results if r["status"] == "timeout"]
     for r in survived:
         print(f"  SURVIVED {rel}:{r['line']} {r['op']:<12} {lines[r['line'] - 1].strip()[:90]}")
-    score = 1 - len(survived) / len(results) if results else 1.0
-    print(f"{rel}: {len(results) - len(survived)}/{len(results)} killed, score {score:.1%}")
+    for r in timeouts:
+        print(f"  TIMEOUT  {rel}:{r['line']} {r['op']:<12} {lines[r['line'] - 1].strip()[:90]}")
+    # A timeout proves nothing either way: it is neither a kill nor a survivor.
+    decided = len(results) - len(timeouts)
+    killed = decided - len(survived)
+    score = killed / decided if decided else 1.0
+    print(f"{rel}: {killed}/{decided} killed, {len(timeouts)} undecided (timeout), score {score:.1%}")
     if a.out:
         Path(a.out).write_text(json.dumps({"module": str(rel), "only": sorted(only or []),
                                            "tests": a.tests, "score": score,

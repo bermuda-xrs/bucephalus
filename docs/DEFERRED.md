@@ -23,21 +23,21 @@ instrument). Everything below waits.
 
 ---
 
-## Where this stands, 2026-09-28
+## Where this stands, 2026-09-29
 
 **Six open from before the audit, five from the audit, six from the first
-Linux run and one from Phase H.** D2, D6, D16, D26, D27, D33; the audit's
+Linux run and one from iteration 3.** D2, D6, D16, D26, D27, D33; the audit's
 D46-D49 and D52 (`docs/AUDIT-2026-09.md`; its HIGH findings F1 and F2 were
 fixed in the change that recorded them, and D40-D45, D50, D51 and D53 are
-closed); D54-D59 (WSL2, `docs/evidence/wsl-2026-09-25/`); D60. See each
-heading.
+closed); D54-D59 (WSL2, `docs/evidence/wsl-2026-09-25/`); D63. D60-D62 and
+D64-D67 closed in iteration 3. See each heading.
 
 Everything else on this page is marked in its own heading:
 
 | state | what it means | items |
 |---|---|---|
-| **open** | a real defect, nobody has fixed it | D2, D6, D16, D26, D27, D33; from Linux D54-D59; from the audit D46, D47, D48, D49, D52, each with its audit severity; from Phase H D60 |
-| **closed** | fixed, with the change and its test named | D1, D3, D7, D9, D10, D11, D15, D17, D18, D19, D20, D21, D22, D23, D24, D28, D29, D30, D34, D35, D36, D37, D38, D39, D40, D41, D42, D43, D44, D51, D50, D53, D45, D61 |
+| **open** | a real defect, nobody has fixed it | D2, D6, D16, D26, D27, D33; from Linux D54-D59; from the audit D46, D47, D48, D49, D52, each with its audit severity; from iteration 3 D63 |
+| **closed** | fixed, with the change and its test named | D1, D3, D7, D9, D10, D11, D15, D17, D18, D19, D20, D21, D22, D23, D24, D28, D29, D30, D34, D35, D36, D37, D38, D39, D40, D41, D42, D43, D44, D51, D50, D53, D45, D61, D60, D62, D64, D65, D66, D67 |
 | **deleted** | never a defect, or about an instrument nobody runs | D4, D5, D8, D12, D14 |
 | **known and accepted** | a real limit, decided rather than deferred | D32 (the sandbox is advisory: Phase 6 withdrawn) |
 | **dormant** | its subject is retired; it wakes if that returns | D19 (M11). D13 CLOSED 2026-09-25 |
@@ -1404,7 +1404,7 @@ within 40 microseconds. Fix: wait on a monotonic deadline.
 
 # From the Phase H dead-code classification, 2026-09-26
 
-## D60 - MEDIUM - a task deleted from the database is invisible to `alpha verify`
+## D60 - MEDIUM - a task deleted from the database is invisible to `alpha verify` (CLOSED 2026-09-29: verify_all sweeps every task the anchor names as well as every row; an anchored task with no row is critical, plan pins excepted. tests/test_chain_mutants.py::test_deleting_a_checkpointed_task_is_caught was red first)
 
 `integrity.verify_all` sweeps `SELECT id FROM tasks`, so a task whose row and
 events are both deleted is never looked at, although the anchor still names
@@ -1432,3 +1432,48 @@ and read a grader; `grep(path="work")` walked through the junction on its own
 `within_scope` and `is_protected` judge a path as given AND where it really
 leads; the sandbox fences `_winapi.CreateJunction`; `grep` and `glob` judge
 every file they reach. `tests/test_junction_escape.py`, each half red first.
+
+## D62 - MEDIUM - three inventory rows could never read "ran" (CLOSED 2026-09-29: fixed in the change that found it)
+
+`bench/inventory.py` counted `skill.promoted`, `skill.demoted` and
+`artifact.tombstoned` - registered event types that no code ever appends. The
+paths they stand for record themselves as a skill's status and as the count in
+a boundary's `session.opened`. The rows read "never" whatever happened: a
+check that could not pass, DR7's mirror image. Found by the mutation run on
+kernel/events.py (dropping those types from the registry changed nothing).
+Now counted from what is written; `tests/test_inventory_counts_what_is_recorded.py`
+was red first. The real record still reads never for all three - correctly.
+
+## D63 - LOW - `step.started` and `step.completed` are client events nothing emits (open)
+
+`control/events.CLIENT_EVENTS` maps them and the registry allows them; no code
+appends either. The console and the TUI draw progress from `live.step` instead,
+so nothing is missing on screen; a client written against the documented
+vocabulary would wait for events that never come. Fix: emit them around each
+step, or remove them from the vocabulary.
+
+## D64 - MEDIUM - the console never offered a real plan for signature (CLOSED 2026-09-28)
+
+It waited for plan status `draft`; the planner writes `drafted`. Its tests
+seeded `draft` by hand and were green. Fixtures now draft through
+`planner.store_plan`; a static test holds the page to the statuses the planner
+writes (red first). Commit 6b73a77.
+
+## D65 - HIGH - the TUI ran a task on submit with no plan and no signature (CLOSED 2026-09-28)
+
+The two-touch model is the product's safety interaction; the TUI's start
+button created a task and ran it. It drafts a plan and waits for `s` now;
+`tests/test_tui_two_touch.py` was red first. Commit 6b73a77.
+
+## D66 - LOW - "Allowed. It carries on." was false (CLOSED 2026-09-28)
+
+Deciding an approval only recorded the decision; nothing resumed the parked
+run until `alpha run` or a supervisor tick. Both surfaces now resume it.
+
+## D67 - MEDIUM - the test suite wrote the operator's real tier-1 memory (CLOSED 2026-09-28)
+
+conftest redirected the config dir but not the data dir, where memory lives;
+an in-process context used the real one, and the audit's probe left
+`- [user] injected instruction` in it - in every real session's prefix since
+2026-09-25. Isolation fixed (38edfa1, `tests/test_suite_isolation.py`); the
+line itself is the user's to remove (DECISIONS U2).

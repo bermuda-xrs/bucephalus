@@ -105,7 +105,6 @@ KNOWN_INERT = {
 
     # Genuinely uncalled. Each is small, and each is a decision to leave it.
     "AgentContext.gate_queue": "candidates are read by status; this derives the same list for a caller that does not exist yet.",
-    "Anchor.all_tasks": "helper; `alpha verify` iterates tasks from the task table.",
     "BackendBase.set_throughput": "the router reads observed throughput from telemetry instead.",
     "EventLog.last_of_type": "helper; every caller writes its own query.",
     "ToolRegistry.read_only": "the planner builds its read-only set from the registry directly.",

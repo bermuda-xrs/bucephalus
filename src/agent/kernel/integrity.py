@@ -220,7 +220,18 @@ def verify_all(conn: sqlite3.Connection, log: EventLog, anchor: Anchor,
         found = verify_memory(memory)
         if found:
             findings.append(found)
-    for (task_id,) in conn.execute("SELECT id FROM tasks").fetchall():
+    known = {r[0] for r in conn.execute("SELECT id FROM tasks").fetchall()}
+    # D60. A task deleted from the database - row and events - was invisible
+    # here, and the anchor, kept outside the database, still names it. That
+    # is the rewrite the anchor exists to catch. Plan pins are keyed
+    # `plan:<task>` and name no row of their own.
+    for task_id in sorted(anchor.all_tasks() - known):
+        if not task_id.startswith("plan:"):
+            findings.append({"task_id": task_id, "severity": "critical",
+                             "detail": "the anchor has a checkpoint for this task and the "
+                                       "database has no record of it - deleted after it "
+                                       "was checkpointed"})
+    for task_id in sorted(known):
         ok, bad = log.verify(task_id)
         anchored = anchor.latest(task_id)
         head = log.head(task_id)
