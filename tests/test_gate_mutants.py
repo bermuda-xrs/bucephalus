@@ -76,3 +76,19 @@ def test_the_approval_preview_is_truncated_not_reinterpreted():
     shown = pv.split("content=", 1)[1].split(", path=", 1)[0]     # args are sorted
     assert shown.startswith("'xxx") and shown.endswith("...") and len(shown) == 80
     assert render_preview(tool, {"n": 1}) == "write_file(n=1)"
+
+
+@pytest.mark.parametrize("key", ["path", "file", "filename", "dir", "directory", "dest",
+                                 "src", "target"])
+def test_every_path_shaped_argument_is_scope_checked(key):
+    """Kills each _PATH_KEYS drop. Today's tools take only `path`; a future
+    copy(src, dest) or move(file, target) is covered because these are."""
+    ok, why = within_scope({key: "../outside.txt"}, ["work"], ".")
+    assert not ok and key in why
+
+
+def test_the_preview_stops_at_exactly_300_characters():
+    """Kills the preview limit moved by one: many arguments, each short."""
+    tool = types.SimpleNamespace(name="t")
+    pv = render_preview(tool, {f"a{i:02d}": "v" * 30 for i in range(40)})
+    assert len(pv) == 300

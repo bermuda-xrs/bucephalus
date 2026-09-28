@@ -16,6 +16,7 @@ import functools
 import inspect
 import os
 import re
+import time
 from pathlib import Path
 
 from ..kernel.types import GateDecision, Taint
@@ -39,6 +40,10 @@ PROJECT_STATE = (
     "runs", "docs/evidence",                # other attempts' results; published ones
     ".alpha_token", ".env", "policy.md",    # control-plane secret, credentials, policy
     "cal.json", ".token_calibration.json", ".measurement.lock",
+    # Synced checkouts' moved databases and anchors (iteration 3, 1.1) live
+    # under the user data dir, which is the installed mode's ROOT: protected
+    # there by name, or a root-scoped desktop task reads them (audit S4).
+    "checkouts",
 )
 
 
@@ -131,6 +136,17 @@ def task_state_paths(ctx, task) -> tuple[Path, ...]:
     return out
 
 
+def _names_a_stream(p: Path) -> bool:
+    """An NTFS alternate data stream: `name:stream` or `name::$DATA`. Opening
+    `.env::$DATA` writes `.env`, and neither the name check nor realpath sees
+    that while the file does not yet exist (AUDIT-ITERATION-3 S1). Nothing the
+    agent does needs a stream, so the spelling is refused outright. Only
+    where streams exist: on POSIX a colon is an ordinary filename character."""
+    from ..platform import current
+
+    return current.has_data_streams() and any(":" in part for part in p.parts[1:])
+
+
 def within_scope(args: dict, artifact_scope: list[str], root: str = ".") -> tuple[bool, str]:
     """Every path-shaped argument must resolve inside artifact_scope.
 
@@ -148,14 +164,16 @@ def within_scope(args: dict, artifact_scope: list[str], root: str = ".") -> tupl
                                "declare one (alpha new --scope work)")
         return True, ""
     roots = [Path(os.path.abspath(os.path.join(root, s))) for s in artifact_scope]
-    real_roots = [Path(os.path.realpath(r)) for r in roots]
+    real_roots = [_resolved(r) for r in roots]
     for key, value in args.items():
         if not _looks_like_path(key, value):
             continue
         p = Path(os.path.abspath(os.path.join(root, str(value))))
+        if _names_a_stream(p):
+            return False, f"{key}={value!r} names an alternate data stream"
         # Where it really leads, too: a junction in the workspace is a door
         # out of it (iteration 3; tests/test_junction_escape.py).
-        real = Path(os.path.realpath(p))
+        real = _resolved(p)
         if not any(_is_within(p, r) for r in roots) or                 not any(_is_within(real, r) for r in real_roots):
             return False, f"{key}={value!r} resolves outside artifact_scope"
     return True, ""
@@ -216,12 +234,35 @@ def _is_within(p: Path, root: Path) -> bool:
 def is_protected(path_value: str, root: str = ".",
                  state: tuple[Path, ...] = ()) -> bool:
     p = Path(os.path.abspath(os.path.join(root, path_value)))
-    if _protected_at(p, state):
+    if _names_a_stream(p) or _protected_at(p, state):
         return True
     # And where the path really leads: through a junction or symlink, a name
     # inside the workspace can be the grader itself (tests/test_junction_escape.py).
-    real = Path(os.path.realpath(p))
-    return real != p and _protected_at(real, tuple(Path(os.path.realpath(x)) for x in state))
+    real = _resolved(p)
+    return real != p and _protected_at(real, _real_state(tuple(state), _bucket()))
+
+
+def _bucket() -> int:
+    return int(time.monotonic() // 2)
+
+
+def _resolved(p) -> Path:
+    return _realpath(str(p), _bucket())
+
+
+# Resolution is the gate's slowest step on Windows (~1.5 ms a path), and a
+# walk or a listing asked it for the same paths many times over (audit I2).
+# ponytail: cached per 2 s bucket - a link created or swapped is seen within
+# 2 s; key on the file's identity (volume + file id) if that window matters.
+@functools.lru_cache(maxsize=8192)
+def _realpath(p: str, _b: int) -> Path:
+    return Path(os.path.realpath(p))
+
+
+@functools.lru_cache(maxsize=16)
+def _real_state(state: tuple, _b: int) -> tuple:
+    """The protected set, resolved once per bucket, not once per call."""
+    return tuple(_resolved(x) for x in state)
 
 
 def _protected_at(p: Path, state: tuple[Path, ...]) -> bool:

@@ -151,21 +151,31 @@ def apply(source: str, m: dict, only: set[str] | None = None) -> str:
     return ast.unparse(tree)
 
 
-def _run(tree_dir: Path, tests: list[str], timeout: float) -> tuple[str, float]:
+def _run(tree_dir: Path, tests: list[str], timeout: float,
+         why: list | None = None) -> tuple[str, float]:
+    """Run the tests against a tree. `why`, if given, receives the ids of the
+    tests that failed - so a kill can be traced to the test that made it, and
+    an unrelated failure (a flaky test) is visible rather than a silent kill
+    (AUDIT-ITERATION-3 B2)."""
     from agent import proc as _proc
 
     env = dict(os.environ, PYTHONPATH=str(tree_dir / "src"), PYTHONDONTWRITEBYTECODE="1")
     env.pop("ANTHROPIC_API_KEY", None)
     t0 = time.time()
+    out = tempfile.TemporaryFile()
     p = subprocess.Popen(  # noqa: S603
-        [sys.executable, "-m", "pytest", "-x", "-q", "-p", "no:cacheprovider",
+        [sys.executable, "-m", "pytest", "-x", "-q", "-rf", "-p", "no:cacheprovider",
          "-o", "addopts=", "-o", "pythonpath=", *tests],
-        cwd=str(ROOT), env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        cwd=str(ROOT), env=env, stdout=out, stderr=subprocess.STDOUT)
     try:
         rc = p.wait(timeout)
     except subprocess.TimeoutExpired:
         _proc.kill_tree(p.pid)
         return "timeout", time.time() - t0
+    if why is not None:
+        out.seek(0)
+        why.extend(line.split()[1] for line in out.read().decode("utf-8", "replace").splitlines()
+                   if line.startswith(("FAILED ", "ERROR ")) and len(line.split()) > 1)
     return ("survived" if rc == 0 else "killed"), time.time() - t0
 
 
@@ -255,9 +265,14 @@ def main(argv: list[str] | None = None) -> int:
             survivors = []
         for r in survivors:
             (t / rel).write_text(apply(source, r, only), encoding="utf-8")
-            st, _ = _run(t, ["tests", "-n", "12", "--dist", "loadgroup"], 900)
-            if st != "survived":
-                r["status"] = "killed-by-suite"
+            why: list[str] = []
+            st, _ = _run(t, ["tests", "-n", "12", "--dist", "loadgroup"], 900, why)
+            # Only a FAILING test is a kill; a timeout is undecided here too
+            # (AUDIT-ITERATION-3 B1 - the first fix stopped one phase short).
+            if st == "killed":
+                r["status"], r["killed_by"] = "killed-by-suite", why[:3]
+            elif st == "timeout":
+                r["status"] = "timeout"
     shutil.rmtree(work, ignore_errors=True)
     lines = source.splitlines()
     survived = [r for r in results if r["status"] == "survived"]

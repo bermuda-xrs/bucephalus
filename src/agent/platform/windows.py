@@ -241,6 +241,14 @@ def exit_note(proc, timeout_s: int) -> str:
             if proc.returncode == CPU_LIMIT_EXIT else "")
 
 
+# ---------------------------------------------------------------- paths
+
+def has_data_streams() -> bool:
+    """NTFS: `.env::$DATA` IS `.env`, and `name:hidden` is a second stream on
+    `name` (AUDIT-ITERATION-3 S1)."""
+    return True
+
+
 # ---------------------------------------------------------------- file locks
 
 def lock_file(fh) -> None:

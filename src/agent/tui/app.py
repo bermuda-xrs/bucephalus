@@ -391,15 +391,30 @@ class AlphaTUI(App):
         self._decide(False)
 
     def _decide(self, approve: bool) -> None:
-        pending = self.ctx.pending_approvals(self.task_id) or self.ctx.pending_approvals()
+        # Only an approval of the task ON SCREEN, whose preview the approvals
+        # tab shows. Falling back to any task's approval decided - and ran -
+        # something nobody was shown (AUDIT-ITERATION-3 S2). Pick the other
+        # task from Needs you first.
+        pending = self.ctx.pending_approvals(self.task_id) if self.task_id else []
         if not pending:
-            self.notify("Nothing is waiting for a decision.")
+            self.notify("Nothing on this task is waiting. Open the one under Needs you.")
             return
         a = pending[0]
         self.ctx.resolve_approval(a["id"], approve)
-        self.notify("Allowed once. It carries on." if approve else "Refused. It will be told.")
+        self.notify("Allowed once. It carries on." if approve else "Refused. It carries on without it.")
         self.attach(a["task_id"])
-        self._run(a["task_id"])                  # a decided, parked task resumes
+        self._resume(a["task_id"])
+
+    def _resume(self, tid: str) -> None:
+        """A decided, parked task resumes - under the same rule the server's
+        /run applies: with plans required, only on a signed plan."""
+        from ..kernel.tasks import load_task
+
+        if (self.ctx.config.autonomy.plan_required
+                and self.ctx.approved_plan(load_task(self.ctx.conn, tid)) is None):
+            self.notify("Decided. It has no signed plan, so it does not resume from here.")
+            return
+        self._run(tid)
 
     def action_new(self) -> None:
         self.conv_id = None

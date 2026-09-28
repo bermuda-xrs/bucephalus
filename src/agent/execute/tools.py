@@ -527,15 +527,22 @@ def tool_web_search(ctx, task, query: str, limit: int = 5) -> dict:
                            "retrieval": "searched", "fetched_at": time.time()}}
 
 
-def _reachable(ctx, task, f: Path) -> bool:
+def _reachable(ctx, task, f: Path, state) -> bool:
     """A file a walk reached, judged like any path the model names. The gate
     saw only the directory; the walk goes through junctions (Python 3.11 does
-    not call them symlinks), so each file is checked where it really is."""
-    from ..security.capabilities import is_protected, task_state_paths, within_scope
+    not call them symlinks), so each file is checked where it really is.
+    `state` is the task's protected set, computed once per walk (audit I2)."""
+    from ..security.capabilities import is_protected, within_scope
 
     root = ctx.config.root
     ok, _ = within_scope({"path": str(f)}, task.contract.artifact_scope, root)
-    return ok and not is_protected(str(f), root, task_state_paths(ctx, task))
+    return ok and not is_protected(str(f), root, state)
+
+
+def _walk_state(ctx, task):
+    from ..security.capabilities import task_state_paths
+
+    return task_state_paths(ctx, task)
 
 
 def tool_glob(ctx, task, pattern: str, path: str = ".") -> dict:
@@ -543,8 +550,9 @@ def tool_glob(ctx, task, pattern: str, path: str = ".") -> dict:
     root = _resolve(ctx, path)
     if not root.is_dir():
         return {"ok": False, "error": f"not a directory: {path}"}
+    state = _walk_state(ctx, task)
     hits = sorted(str(h.relative_to(root)) for h in root.glob(pattern)
-                  if h.is_file() and _reachable(ctx, task, h))
+                  if h.is_file() and _reachable(ctx, task, h, state))
     return {"ok": True, "path": str(root), "pattern": pattern,
             "matches": hits[:MAX_GLOB_HITS],
             "truncated": len(hits) > MAX_GLOB_HITS, "total": len(hits)}
@@ -569,8 +577,9 @@ def tool_grep(ctx, task, pattern: str, path: str = ".",
 
     hits: list[dict] = []
     truncated = False
+    state = _walk_state(ctx, task)
     for f in sorted(root.glob(glob)):
-        if not f.is_file() or not _reachable(ctx, task, f):
+        if not f.is_file() or not _reachable(ctx, task, f, state):
             continue
         try:
             text = f.read_text(encoding="utf-8", errors="replace")

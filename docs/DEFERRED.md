@@ -36,8 +36,8 @@ Everything else on this page is marked in its own heading:
 
 | state | what it means | items |
 |---|---|---|
-| **open** | a real defect, nobody has fixed it | D2, D6, D16, D26, D27, D33; from Linux D54-D59; from the audit D46, D47, D48, D49, D52, each with its audit severity; from iteration 3 D63 |
-| **closed** | fixed, with the change and its test named | D1, D3, D7, D9, D10, D11, D15, D17, D18, D19, D20, D21, D22, D23, D24, D28, D29, D30, D34, D35, D36, D37, D38, D39, D40, D41, D42, D43, D44, D51, D50, D53, D45, D61, D60, D62, D64, D65, D66, D67 |
+| **open** | a real defect, nobody has fixed it | D2, D6, D16, D26, D27, D33; from Linux D54-D59; from the audit D46, D47, D48, D49, D52, each with its audit severity; from iteration 3 D63; from its audit D70, D72, D74-D77 |
+| **closed** | fixed, with the change and its test named | D1, D3, D7, D9, D10, D11, D15, D17, D18, D19, D20, D21, D22, D23, D24, D28, D29, D30, D34, D35, D36, D37, D38, D39, D40, D41, D42, D43, D44, D51, D50, D53, D45, D61, D60, D62, D64, D65, D66, D67, D68, D69, D78, D71, D73 |
 | **deleted** | never a defect, or about an instrument nobody runs | D4, D5, D8, D12, D14 |
 | **known and accepted** | a real limit, decided rather than deferred | D32 (the sandbox is advisory: Phase 6 withdrawn) |
 | **dormant** | its subject is retired; it wakes if that returns | D19 (M11). D13 CLOSED 2026-09-25 |
@@ -1477,3 +1477,80 @@ an in-process context used the real one, and the audit's probe left
 `- [user] injected instruction` in it - in every real session's prefix since
 2026-09-25. Isolation fixed (38edfa1, `tests/test_suite_isolation.py`); the
 line itself is the user's to remove (DECISIONS U2).
+
+---
+
+# From the iteration-3 audit (`docs/AUDIT-ITERATION-3.md`), 2026-09-29
+
+## D68 - HIGH - a drop created a protected file through its data-stream name (audit S1) (CLOSED 2026-09-29: fixed in the change that recorded it)
+
+`.env::$DATA` is neither `.env` by name nor anything by realpath while the file
+does not exist, and writing it writes `.env`. The shared checks now refuse any
+NTFS stream spelling (`capabilities._names_a_stream`, in `within_scope` and
+`is_protected`), and the sweep found the sandbox's fence judged realpath the
+same way - fixed there too. `tests/test_audit_iteration_3_fixes.py`, red first.
+
+## D69 - HIGH - the TUI decided and ran another task's unseen approval (audit S2) (CLOSED 2026-09-29: fixed in the change that recorded it)
+
+With nothing parked on the task on screen, allow/refuse fell back to the oldest
+pending approval of ANY task and ran it, with no plan signed. The TUI now
+decides only the attached task's approvals, and resumes a task only under the
+server's rule (with plans required, a signed plan). Red first.
+
+## D70 - MEDIUM - hard links are invisible to the realpath-based gate (audit S3) (open)
+
+A hard link in a workspace to a grader or `policy.md` reads as an ordinary
+in-scope file to every reader and writer that judges realpath. The sandbox
+fences `os.link`, so model code cannot make one; it needs an out-of-band
+writer. Fix: on Windows compare volume and file id (GetFileInformationByHandle)
+against the protected set, or refuse files with a link count above 1.
+
+## D71 - MEDIUM - a checkout's moved state sat under the installed-mode root, unprotected there (audit S4) (CLOSED 2026-09-29: a regression of this run's 1.1, fixed - DECISIONS U8)
+
+1.1 moved a synced checkout's database to `<user data>/checkouts/`, and the
+user data dir is the installed mode's root: a root-scoped desktop task could
+read another checkout's whole database. `checkouts` is protected state by name
+now (`PROJECT_STATE`). `tests/test_audit_iteration_3_fixes.py`, red first.
+
+## D72 - MEDIUM - the console's poll re-verifies every chain (audit I1) (open)
+
+`/alerts` runs `verify_all`, O(every event of every task), every 6 s; ~2 s per
+poll on the 283-task record, ~10 s at 1,000 tasks. The previous console polled
+it every 8 s, so the shape predates iteration 3. Fix: verify only tasks whose
+head moved since the last sweep, or a short-TTL cache; full sweep on demand.
+
+## D73 - MEDIUM - the D61 per-file check rebuilt the protected set for every file (audit I2) (CLOSED 2026-09-29: a regression of this run's D61, fixed - DECISIONS U8)
+
+The protected set is computed once per walk or listing and its resolution
+cached for 2 s; the browser checks each entry once instead of twice.
+Measured on 2,000 files, cold cache, a loaded machine: grep 1.52 s -> 0.39 s
+(0.15 s with no check at all), a listing 27 s -> 6.2 s. A listing still pays
+one path resolution per entry (~3 ms on Windows); a further step (resolving a
+plain entry through its parent) measured no gain and was not kept.
+`test_I2_a_walk_computes_the_protected_set_once`, red first.
+
+## D74 - LOW - a 500 carries none of the security headers (audit S5) (open)
+
+An exception in a route reaches Starlette's outer error middleware and returns
+without the CSP or X-Frame-Options, contradicting "every response". The still-
+open non-ASCII-token crash (F9) is one such 500. Fix: add the headers in an
+outermost middleware, or catch in the guard.
+
+## D75 - LOW - most task routes answer 500, not 404, for an unknown id (audit S6) (open)
+
+The new `_task` helper is used by the file routes only; plan, approve, reject,
+run and pause still raise on an unknown id.
+
+## D76 - LOW - sync detection misses Box, Nextcloud, MEGA, Proton Drive, Sync.com, Synology Drive (audit S7) (open)
+
+`paths.sync_root` matches OneDrive (by env and name), Dropbox, iCloud, Google
+Drive and a few others by folder name. Add the rest, or detect a sync client's
+marker files.
+
+## D77 - LOW - an over-long drop path is an unhandled 500 (audit B3) (open)
+
+## D78 - MEDIUM - the mutation runner's recheck counted a timeout as a kill and recorded no killer (audit B1, B2) (CLOSED 2026-09-29: fixed in the change that recorded it)
+
+A recheck timeout is undecided now, and every kill records the test that made
+it, so an unrelated failure is visible. `tests/test_mutate_tool.py`, red on the
+old runner. All reported mutation scores come from the fixed runner.

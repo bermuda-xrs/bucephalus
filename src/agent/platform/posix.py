@@ -132,6 +132,11 @@ def kill_tree_signal(pid: int, timeout_s: float, expect_start: int | None = None
     _sigkill(pid, expect_start)
 
 
+def has_data_streams() -> bool:
+    """No alternate data streams: a colon is an ordinary filename character."""
+    return False
+
+
 def alive(pid: int) -> bool:
     try:
         os.kill(pid, 0)

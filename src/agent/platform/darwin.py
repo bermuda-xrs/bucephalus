@@ -31,8 +31,8 @@ import time
 
 from . import posix
 from .posix import (  # noqa: F401 - the rest of the contract, shared
-    WATCH_INTERVAL_S, alive, exit_note, kill_tree_signal, lock_file,
-    over_limits, unlock_file)
+    WATCH_INTERVAL_S, alive, exit_note, has_data_streams, kill_tree_signal,
+    lock_file, over_limits, unlock_file)
 
 RUSAGE_INFO_V4 = 4
 # rusage_info_v4: 16-byte uuid, then u64s - user_time, system_time,

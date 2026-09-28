@@ -1,0 +1,148 @@
+"""The high findings of docs/AUDIT-ITERATION-3.md, each red first.
+
+S1 - a drop created a protected file through its Windows data-stream name:
+     `.env::$DATA` is neither `.env` by name nor anything by realpath while the
+     file does not exist, and writing it writes `.env`.
+S2 - the TUI's allow/refuse decided the oldest pending approval of ANY task
+     when the one on screen had none, then ran that task with no signed plan.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import base64
+import sys
+from pathlib import Path
+
+import pytest
+from fastapi.testclient import TestClient
+
+from agent.control.server import create_app
+from agent.kernel.tasks import create_task
+from agent.kernel.types import Budget, TaskContract
+from agent.security.capabilities import gate_tool_call, is_protected, within_scope
+
+windows = pytest.mark.skipif(sys.platform != "win32", reason="NTFS data streams")
+
+
+def _client(ctx):
+    app = create_app(ctx)
+    c = TestClient(app, base_url="http://127.0.0.1")
+    c.headers["Authorization"] = "Bearer " + app.state.token
+    return c
+
+
+@windows
+@pytest.mark.parametrize("name", [".env::$DATA", ".ENV::$data", "policy.md:hidden",
+                                  "config.yaml::$DATA", "work/notes.txt:ads"])
+def test_S1_a_data_stream_spelling_is_refused_everywhere(ctx, workspace, name):
+    root = Path(ctx.config.root)
+    task = create_task(ctx.conn, ctx.log, TaskContract(goal="g", artifact_scope=["."]),
+                       Budget(usd=1.0, seconds=60))
+    before = {p.name for p in root.iterdir()}
+    r = _client(ctx).post(f"/tasks/{task.id}/files",
+                          json={"path": name, "content_b64": base64.b64encode(b"ALPHA_TOKEN=x").decode()})
+    assert r.status_code == 403, (name, r.status_code, r.text)
+    assert {p.name for p in root.iterdir()} == before, "a file appeared"
+    # The shared checks, for every other reader and writer (DR3).
+    assert is_protected(name, str(root), ())
+    assert within_scope({"path": name}, ["."], str(root))[0] is False
+    d = gate_tool_call(ctx, task, ctx.tools.get("write_file"), {"path": name, "content": "x"})
+    assert d.verdict == "deny"
+
+
+def test_S2_the_tui_never_decides_an_approval_it_is_not_showing(ctx, workspace):
+    from agent.tui.app import AlphaTUI
+
+    other = create_task(ctx.conn, ctx.log, TaskContract(goal="other", artifact_scope=["work"]),
+                        Budget(usd=1.0, seconds=60))
+    aid = ctx.request_approval(other, ctx.tools.get("write_file"),
+                               {"path": "work/report.md", "content": "x"}, "needs a human", 0)
+    shown = create_task(ctx.conn, ctx.log, TaskContract(goal="shown", artifact_scope=["work"]),
+                        Budget(usd=1.0, seconds=60))
+
+    async def go():
+        app = AlphaTUI(ctx, task_id=shown.id)
+        async with app.run_test(size=(140, 44)) as pilot:
+            await pilot.pause(0.3)
+            app.query_one("#trail").focus()
+            await pilot.press("a")
+            await pilot.pause(1.0)
+    asyncio.run(go())
+    status = ctx.conn.execute("SELECT status FROM approvals WHERE id=?", (aid,)).fetchone()[0]
+    assert status == "pending", "allow-once decided another task's approval"
+    assert not [e for e in ctx.log.events(other.id) if e["type"] == "model.called"]
+
+
+def test_S2_resuming_from_the_tui_needs_a_signed_plan_when_plans_are_required(ctx, workspace):
+    from agent.tui.app import AlphaTUI
+
+    ctx.config.autonomy.plan_required = True
+    t = create_task(ctx.conn, ctx.log, TaskContract(goal="t", artifact_scope=["work"]),
+                    Budget(usd=1.0, seconds=60))
+    ctx.request_approval(t, ctx.tools.get("write_file"),
+                         {"path": "work/a.txt", "content": "x"}, "needs a human", 0)
+
+    async def go():
+        app = AlphaTUI(ctx, task_id=t.id)
+        async with app.run_test(size=(140, 44)) as pilot:
+            await pilot.pause(0.3)
+            app.query_one("#trail").focus()
+            await pilot.press("a")
+            await pilot.pause(1.5)
+    asyncio.run(go())
+    assert not [e for e in ctx.log.events(t.id) if e["type"] == "model.called"], \
+        "a task with no signed plan ran from the TUI"
+
+
+@windows
+def test_S1_sweep_sandboxed_code_cannot_plant_a_protected_file_through_a_stream(tmp_path):
+    """DR5: the sandbox's own write fence judged realpath against the protected
+    paths too, and `.env::$DATA` is not `.env` to realpath while it does not
+    exist."""
+    from agent.execute.sandbox import run_sandboxed
+
+    target = tmp_path / ".env"
+    code = f"open({str(target) + '::$DATA'!r}, 'w').write('ALPHA_TOKEN=x')\n"
+    r = run_sandboxed(code, allowed_paths=[str(tmp_path)], timeout_s=15,
+                      protected_paths=(str(target),))
+    assert not target.exists(), "sandboxed code planted a protected file"
+    assert r["returncode"] != 0
+
+
+def test_S4_a_checkouts_moved_state_is_protected_under_the_data_root(ctx, workspace):
+    """1.1 moved a synced checkout's database to <user data>/checkouts/...,
+    which is the installed mode's ROOT - where nothing protected it."""
+    from agent.security.capabilities import state_paths
+
+    root = Path(ctx.config.root)
+    db = root / "checkouts" / "proj-1234abcd" / "agent.db"
+    db.parent.mkdir(parents=True)
+    db.write_bytes(b"SQLite format 3\x00")
+    assert is_protected("checkouts/proj-1234abcd/agent.db", str(root), state_paths(ctx))
+    task = create_task(ctx.conn, ctx.log, TaskContract(goal="g", artifact_scope=["."]),
+                       Budget(usd=1.0, seconds=60))
+    d = gate_tool_call(ctx, task, ctx.tools.get("read_file"), {"path": "checkouts/proj-1234abcd/agent.db"})
+    assert d.verdict == "deny"
+
+
+def test_I2_a_walk_computes_the_protected_set_once(ctx, workspace, monkeypatch):
+    """The per-file check rebuilt task_state_paths for every file walked:
+    grep 10x slower, a 2,000-entry listing 27 s."""
+    import agent.security.capabilities as caps
+
+    for i in range(30):
+        (workspace / f"f{i}.txt").write_text("needle\n", encoding="utf-8")
+    task = create_task(ctx.conn, ctx.log, TaskContract(goal="g", artifact_scope=["work"]),
+                       Budget(usd=1.0, seconds=60))
+    calls = []
+    real = caps.task_state_paths
+    monkeypatch.setattr(caps, "task_state_paths", lambda *a: calls.append(1) or real(*a))
+    hits = ctx.tools.get("grep").fn(ctx, task, pattern="needle", path="work")["matches"]
+    assert len(hits) == 30
+    assert len(calls) <= 2, f"task_state_paths ran {len(calls)} times for one grep"
+    calls.clear()
+    from agent.control import files
+    monkeypatch.setattr(files, "task_state_paths", lambda *a: calls.append(1) or real(*a))
+    assert len(files.browse(ctx, task, "work")["entries"]) == 30
+    assert len(calls) <= 2, f"task_state_paths ran {len(calls)} times for one listing"

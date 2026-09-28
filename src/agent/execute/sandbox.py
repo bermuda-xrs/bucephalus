@@ -155,6 +155,7 @@ _WORKDIR = _os.path.realpath({workdir!r})
 _BUSY = [False]
 _PROTECTED = [_os.path.realpath(p) for p in {protected!r}]
 _DENY_SPAWN = {deny_spawn!r}
+_STREAMS = {streams!r}
 _READ_FENCE = {read_fence!r}
 # D29 for code. Reads are fenced to what the task DECLARED plus what the
 # interpreter needs: the work directory, the linked scope, and the
@@ -221,6 +222,13 @@ def _is_protected(path):
         real = _os.path.realpath(_os.path.abspath(_os.fspath(path)))
     except Exception:
         return False
+    if isinstance(real, bytes):
+        real = _os.fsdecode(real)
+    # An NTFS data stream (`.env::$DATA` writes `.env`) is invisible to
+    # realpath while the file does not exist; no program here needs one
+    # (AUDIT-ITERATION-3 S1, swept into the sandbox).
+    if _STREAMS and ":" in real[2:]:
+        return True
     return any(_under(real, p) for p in _PROTECTED)
 
 
@@ -588,6 +596,7 @@ def run_sandboxed(
             workdir=str(Path(workdir).resolve()),
             protected=[str(p) for p in protected_paths],
             deny_spawn=bool(protected_paths),
+            streams=_platform.has_data_streams(),
             read_fence=bool(protected_paths),
             touch_path=touch_path,
         )

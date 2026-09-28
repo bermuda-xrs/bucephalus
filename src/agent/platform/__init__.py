@@ -35,6 +35,9 @@ INTERFACE = {
                      "LimitsRefused if they cannot be applied",
     "exit_note": "text naming the limit that ended this child (CPU, file "
                  "size, a watchdog's verdict), else ''",
+    # paths (agent.security.capabilities, the sandbox's fence)
+    "has_data_streams": "whether a path component may name an alternate data "
+                        "stream (`name:stream`) - NTFS; refused wherever seen",
     # file locking (agent.runlock)
     "lock_file": "exclusive, non-blocking lock on an open file; raises OSError if held",
     "unlock_file": "release lock_file's lock",

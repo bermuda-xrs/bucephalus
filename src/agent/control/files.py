@@ -39,36 +39,39 @@ class Exists(Exception):
     """409: a drop never overwrites."""
 
 
-def _allowed(ctx, task, raw: str) -> Path:
+def _allowed(ctx, task, raw: str, state=None) -> Path:
     root = ctx.config.root
     if not raw or "\x00" in raw:
         raise Refused("no path")
-    state = task_state_paths(ctx, task)
+    if state is None:
+        state = task_state_paths(ctx, task)
     scope = task.contract.artifact_scope
     given = Path(os.path.abspath(os.path.join(root, raw)))
-    real = Path(os.path.realpath(given))
-    for p in (str(given), str(real)):
-        ok, _why = within_scope({"path": p}, scope, root)
-        if not ok or is_protected(p, root, state):
-            raise Refused("outside this task's scope, or protected")
+    # Both checks judge the path as given AND where it really leads (D61),
+    # so one call each covers a link; checking the resolved spelling again
+    # doubled the cost of every listing (audit I2).
+    ok, _why = within_scope({"path": str(given)}, scope, root)
+    if not ok or is_protected(str(given), root, state):
+        raise Refused("outside this task's scope, or protected")
     return given
 
 
-def _visible(ctx, task, child: Path) -> bool:
+def _visible(ctx, task, child: Path, state) -> bool:
     try:
-        _allowed(ctx, task, str(child))
+        _allowed(ctx, task, str(child), state)
         return True
     except Refused:
         return False
 
 
 def browse(ctx, task, raw: str) -> dict:
-    p = _allowed(ctx, task, raw)
+    state = task_state_paths(ctx, task)            # once per listing (audit I2)
+    p = _allowed(ctx, task, raw, state)
     rel = os.path.relpath(p, ctx.config.root).replace(os.sep, "/")
     if p.is_dir():
         entries = []
         for c in sorted(p.iterdir(), key=lambda c: (not c.is_dir(), c.name.lower())):
-            if _visible(ctx, task, c):
+            if _visible(ctx, task, c, state):
                 entries.append({"name": c.name, "dir": c.is_dir(),
                                 "bytes": None if c.is_dir() else c.stat().st_size})
         return {"path": rel, "kind": "dir", "entries": entries}

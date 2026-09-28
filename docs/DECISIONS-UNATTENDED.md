@@ -95,3 +95,17 @@ A tray icon needs a second library (pywebview has none; pystray is the usual
 one) and a process that outlives its window - against the desktop app's
 rule that closing the window stops everything, which is what the no-orphans
 test holds. Not built. `docs/PROPOSALS.md` P4 says what it would take.
+
+## U8 - Two audit mediums fixed rather than deferred (5.4)
+
+- **The rule.** Critical and high are fixed; medium and low go to DEFERRED.
+- **What I did.** Fixed S4 (D71) and I2 (D73) anyway, and deferred the other
+  mediums (S3 hard links, I1 poll cost) and all lows.
+- **Why.** Both are REGRESSIONS this run introduced - S4 by moving state into
+  the installed mode's root (1.1), I2 by the per-file check of the D61 fix -
+  and both fixes are small and red-first. Leaving a cross-context database
+  read that this run created, on the grounds that it rated medium, would hand
+  the user a regression rather than a backlog item. The mutation runner's B1/B2
+  were fixed for a different reason: they corrupt numbers this report states.
+- **Reverse.** Revert the S4 line in `PROJECT_STATE` and the I2 caching in
+  `security/capabilities.py` / `control/files.py` / `execute/tools.py`.
