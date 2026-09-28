@@ -79,7 +79,8 @@ def test_the_wheel_contains_no_task_files(wheel):
 # still caught. A newly shipped asset is caught by
 # `test_the_only_non_python_payload_is_the_runtime_assets` first, which is
 # what forces the review that would add it here.
-MAY_NAME_A_GRADING_KEY = {"agent/control/ui.html"}
+# The console script moved out of ui.html for the CSP (iteration 3, 1.5).
+MAY_NAME_A_GRADING_KEY = {"agent/control/ui.html", "agent/control/ui.js"}
 
 
 def test_no_grading_key_is_anywhere_in_the_wheel(wheel):
@@ -113,5 +114,6 @@ def test_the_only_non_python_payload_is_the_runtime_assets(wheel):
                      if not n.endswith(".py")
                      and not n.startswith("alpha_test_1-")
                      and not n.endswith("/"))
-    assert payload == ["agent/assets/banner.ans", "agent/control/ui.html",
+    assert payload == ["agent/assets/banner.ans", "agent/control/ui.css",
+                       "agent/control/ui.html", "agent/control/ui.js",
                        "agent/themes/default.toml"], payload

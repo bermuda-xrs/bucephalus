@@ -507,6 +507,15 @@ def create_app(ctx: AgentContext) -> FastAPI:
         html = (Path(__file__).parent / "ui.html").read_text(encoding="utf-8")
         return HTMLResponse(html, headers={"Cache-Control": "no-store"})
 
+    # The page's script and styles, as files: the CSP allows no inline ones.
+    from fastapi.responses import Response
+
+    for name, media in (("ui.js", "text/javascript"), ("ui.css", "text/css")):
+        def asset(name=name, media=media) -> Response:
+            body = (Path(__file__).parent / name).read_text(encoding="utf-8")
+            return Response(body, media_type=media, headers={"Cache-Control": "no-store"})
+        app.get(f"/{name}", include_in_schema=False)(asset)
+
     return app
 
 

@@ -33,3 +33,21 @@ suite did not isolate the user data dir; fixed in 38edfa1). It is in the
 prefix of every real session since. The run's rules forbid touching real
 memory files, so it is left. To remove it:
 `alpha memory --forget "injected instruction"` (then `alpha memory` to check).
+
+## U3 - Memory integrity is not compared against the chain (1.4)
+
+- **Asked.** Compare tier-1 memory against the `memory.written` event on the
+  chain, "the authenticated record".
+- **Measured (Phase E, D44; re-read 2026-09-28).** Memory is ONE store per
+  user, shared by every config; each config's chain is its own database, and
+  `alpha memory --accept` blesses a state with no chain event. A load-time
+  comparison alarms on another config's legitimate write and on every
+  accepted state (`tests/test_memory_integrity_claim.py` went red under the
+  naive wiring). The chain is also not a stronger authenticator here: it and
+  `.fingerprint` are both local files the out-of-band writer can rewrite.
+- **Chosen.** Keep E5's correction: the chain is audit evidence, stated as
+  such. Nothing changed.
+- **Reverse / revisit.** A per-user memory journal with its own chain would
+  remove the width problem but not the local-writer one; worth it only with
+  a secret the writer cannot read (an OS keystore), which is a new
+  dependency - a user decision.

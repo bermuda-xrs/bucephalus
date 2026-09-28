@@ -101,6 +101,24 @@ def is_loopback_host(host_header: str) -> bool:
     return _host_only(host_header).lower() in LOOPBACK_HOSTS
 
 
+# The console page and its own assets: public to a loopback GET, like "/".
+# They carry no secret (the token arrives in the URL fragment, F2).
+PUBLIC_UI = frozenset({"/", "/ui.js", "/ui.css"})
+
+# On EVERY response, refusals included (iteration 3, 1.5; audit F7). No
+# 'unsafe-inline' anywhere: the page ships its script and styles as files, and
+# tests/test_console_csp.py checks it could run under this.
+SECURITY_HEADERS = {
+    "Content-Security-Policy": (
+        "default-src 'none'; script-src 'self'; style-src 'self'; "
+        "img-src 'self' data:; font-src 'self'; connect-src 'self'; "
+        "base-uri 'none'; form-action 'none'; frame-ancestors 'none'"),
+    "X-Frame-Options": "DENY",
+    "X-Content-Type-Options": "nosniff",
+    "Referrer-Policy": "no-referrer",
+}
+
+
 class AccessGuard(BaseHTTPMiddleware):
     def __init__(self, app, token: str, allow_remote: bool = False):
         super().__init__(app)
@@ -108,6 +126,12 @@ class AccessGuard(BaseHTTPMiddleware):
         self.allow_remote = allow_remote
 
     async def dispatch(self, request, call_next):
+        response = await self._dispatch(request, call_next)
+        for k, v in SECURITY_HEADERS.items():
+            response.headers[k] = v
+        return response
+
+    async def _dispatch(self, request, call_next):
         path = request.url.path
 
         # --- DNS rebinding: the Host header carries the attacker's name -----
@@ -138,7 +162,7 @@ class AccessGuard(BaseHTTPMiddleware):
         # The page itself is public to a loopback caller and holds no secret:
         # the token reaches it in the URL fragment (server.console_url), never
         # in this response, which any local process can read (AUDIT F2).
-        if path == "/" and request.method == "GET" and is_loopback_host(host):
+        if path in PUBLIC_UI and request.method == "GET" and is_loopback_host(host):
             return await call_next(request)
 
         if not self._authorised(request):

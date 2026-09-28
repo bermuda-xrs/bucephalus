@@ -43,7 +43,7 @@ where = ["src"]
 # Runtime assets the agent reads. Without these an installed wheel starts and
 # then fails on the first theme or banner lookup.
 [tool.setuptools.package-data]
-agent = ["themes/*.toml", "assets/*.ans", "control/*.html", "py.typed"]
+agent = ["themes/*.toml", "assets/*.ans", "control/*.html", "control/*.js", "control/*.css", "py.typed"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

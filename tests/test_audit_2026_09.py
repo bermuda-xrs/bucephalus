@@ -97,7 +97,7 @@ def test_F2_the_token_reaches_the_console_in_the_url_fragment():
 
     url = console_url(4321, "tok-123")
     assert url == "http://127.0.0.1:4321/#token=tok-123"
-    ui = (Path(__file__).resolve().parents[1] / "src" / "agent" / "control" / "ui.html"
-          ).read_text(encoding="utf-8")
+    ctl = Path(__file__).resolve().parents[1] / "src" / "agent" / "control"
+    ui = "".join((ctl / n).read_text(encoding="utf-8") for n in ("ui.html", "ui.js"))
     assert "__ALPHA_TOKEN__" not in ui
     assert "location.hash" in ui

@@ -22,11 +22,19 @@ import pytest
 
 from agent import desktop
 
-UI = Path(__file__).resolve().parents[1] / "src" / "agent" / "control" / "ui.html"
+CONTROL = Path(__file__).resolve().parents[1] / "src" / "agent" / "control"
+UI = CONTROL / "ui.html"
+# The console's styles and script are files since the CSP (iteration 3, 1.5).
+CSS, JS = CONTROL / "ui.css", CONTROL / "ui.js"
+
+
+def _all_ui() -> str:
+    return "".join(p.read_text(encoding="utf-8") for p in sorted(CONTROL.iterdir())
+                   if p.suffix in (".html", ".css", ".js"))
 
 
 def _css() -> str:
-    return re.search(r"<style>(.*?)</style>", UI.read_text(encoding="utf-8"), re.S).group(1)
+    return CSS.read_text(encoding="utf-8")
 
 
 def test_the_integrity_colour_styles_integrity_and_nothing_else():
@@ -37,7 +45,7 @@ def test_the_integrity_colour_styles_integrity_and_nothing_else():
                 s.strip().startswith(".integrity") for s in selector.split(",")):
             offenders.append(selector.strip())
     assert not offenders, f"--danger used outside .integrity: {offenders}"
-    literal = re.findall(r"#ff4b4b", UI.read_text(encoding="utf-8"), re.I)
+    literal = re.findall(r"#ff4b4b", _all_ui(), re.I)
     assert len(literal) == 1, "the danger colour is spelled out somewhere besides :root"
 
 
@@ -45,7 +53,7 @@ def test_the_console_makes_no_stale_claim_about_verifiers():
     """checker_program was removed and execution refuses without a script
     (DR7); a page that still counted them as checking correctness would tell
     the user a shape-only suite was sound."""
-    text = UI.read_text(encoding="utf-8")
+    text = _all_ui()
     assert "checker_program" not in text
     counted = re.search(r"function checksCorrectness.*?\n}", text, re.S).group(0)
     assert '"execution"' not in counted

@@ -36,8 +36,8 @@ Everything else on this page is marked in its own heading:
 
 | state | what it means | items |
 |---|---|---|
-| **open** | a real defect, nobody has fixed it | D2, D6, D16, D26, D27, D33; from Linux D54-D59; from the audit D45, D46, D47, D48, D49, D52, each with its audit severity; from Phase H D60 |
-| **closed** | fixed, with the change and its test named | D1, D3, D7, D9, D10, D11, D15, D17, D18, D19, D20, D21, D22, D23, D24, D28, D29, D30, D34, D35, D36, D37, D38, D39, D40, D41, D42, D43, D44, D51, D50, D53 |
+| **open** | a real defect, nobody has fixed it | D2, D6, D16, D26, D27, D33; from Linux D54-D59; from the audit D46, D47, D48, D49, D52, each with its audit severity; from Phase H D60 |
+| **closed** | fixed, with the change and its test named | D1, D3, D7, D9, D10, D11, D15, D17, D18, D19, D20, D21, D22, D23, D24, D28, D29, D30, D34, D35, D36, D37, D38, D39, D40, D41, D42, D43, D44, D51, D50, D53, D45 |
 | **deleted** | never a defect, or about an instrument nobody runs | D4, D5, D8, D12, D14 |
 | **known and accepted** | a real limit, decided rather than deferred | D32 (the sandbox is advisory: Phase 6 withdrawn) |
 | **dormant** | its subject is retired; it wakes if that returns | D19 (M11). D13 CLOSED 2026-09-25 |
@@ -1291,7 +1291,7 @@ never compared. An inert guarantee (C3). Fix: `verify_memory` compares against
 the last chained fingerprint.
 Evidence: `test_audit_gate.py::test_F_memory_integrity_never_consults_the_chain`.
 
-## D45 - LOW - the console sends no X-Frame-Options or frame-ancestors (audit F7)
+## D45 - LOW - the console sends no X-Frame-Options or frame-ancestors (audit F7) (CLOSED 2026-09-28: every console response - refusals included - carries X-Frame-Options DENY and a CSP with frame-ancestors 'none', script-src 'self' and no unsafe-inline, plus nosniff and no-referrer (control/guard.SECURITY_HEADERS). The page moved its script and styles to /ui.js and /ui.css and dispatches buttons from an explicit action map, so it runs under the policy; tests/test_console_csp.py was red first and checks both halves; clicked through in a browser with no CSP violation)
 
 Downgraded by F2's fix: a framed console now opens with no session, because
 the token is only ever in the URL fragment the launcher passes, and an
