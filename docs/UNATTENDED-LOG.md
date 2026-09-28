@@ -32,3 +32,11 @@ the end, and only if the suite, the frozen gate and the Part 5 audit pass.
   Four tests that read ui.html for content that moved now read the new file
   (same assertions); the wheel's asset list gained ui.js and ui.css - that
   list exists to force exactly this review.
+- **1.6 network fence** - researched, not built: the only non-advisory
+  no-admin mechanism is AppContainer, which needs a registry profile and ACL
+  grants on the shared Python install - persistent security changes to the
+  user's machine. Written up as `docs/PROPOSALS.md` P1; HANDOVER C4 now
+  says the audit-hook fence is advisory and names the option.
+
+**Part 1 done** (commits 38edfa1..HEAD). Full suite at 0287833: 1063 passed,
+25 skipped. Next: Part 2, tests.

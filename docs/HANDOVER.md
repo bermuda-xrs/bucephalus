@@ -210,14 +210,14 @@ sites — `main` is called by the operating system. FINDINGS 1.28.
 
 Stated plainly so it can be evaluated rather than trusted.
 
-**What the sandbox is:** advisory path confinement (writes scoped to the task workspace,
-reads to the workspace plus the interpreter), a **Windows Job Object** enforcing memory, CPU
+**What the sandbox is:** advisory path and network confinement (writes to the workspace, reads
+to it plus the interpreter, no sockets - loopback included), a **Windows Job Object**: memory, CPU
 time and process count, and a wall-clock timeout. All three are real and tested.
 
 **What it is not: a boundary against code that means harm.** It constrains a cooperative
-program, not a hostile one. File size is **not limited on Windows** — the `RLIMIT_FSIZE` that
-would cap it is on the POSIX branch, which has run only in WSL2; on an attended
-single-user machine that is resource exhaustion, not a boundary.
+program, not a hostile one: ctypes goes around both fences (the no-admin kernel fence is
+AppContainer, a user decision: `docs/PROPOSALS.md` P1). File size is **not limited on Windows**
+(`RLIMIT_FSIZE` is POSIX-only): on an attended machine, resource exhaustion, not a boundary.
 
 **The capability gate — the one control that is a boundary — has never refused anything in
 production.** It was consulted on all 614 tool calls in the measurement record and its

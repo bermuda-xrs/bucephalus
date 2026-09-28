@@ -23,12 +23,12 @@ instrument). Everything below waits.
 
 ---
 
-## Where this stands, 2026-09-26
+## Where this stands, 2026-09-28
 
-**Six open from before the audit, six from the audit, six from the first
+**Six open from before the audit, five from the audit, six from the first
 Linux run and one from Phase H.** D2, D6, D16, D26, D27, D33; the audit's
-D45-D49 and D52 (`docs/AUDIT-2026-09.md`; its HIGH findings F1 and F2 were
-fixed in the change that recorded them, and D40-D44, D50, D51 and D53 are
+D46-D49 and D52 (`docs/AUDIT-2026-09.md`; its HIGH findings F1 and F2 were
+fixed in the change that recorded them, and D40-D45, D50, D51 and D53 are
 closed); D54-D59 (WSL2, `docs/evidence/wsl-2026-09-25/`); D60. See each
 heading.
 
