@@ -55,16 +55,6 @@ the end, and only if the suite, the frozen gate and the Part 5 audit pass.
   47.5 s, two consecutive clean runs (1063 passed). No test deleted, no
   timeout shortened. `-n 0` runs serially.
 
-## RESUME (written 2026-09-28, usage limit reached)
-
-Branch `iteration-3`, clean after the commit that adds this section. Main
-untouched. Next exact step: Part 2.2's slow marker (optional - the parallel
-run is already 47 s), then 2.3 mutation testing (mutmut or equivalent on
-security/capabilities, security/taint, kernel/scope, kernel/events +
-integrity, assure/verifiers, the prompt-contract allowlist, the grader
-hold-out), 2.4 coverage report, 2.5 CI file (UNVERIFIED). Then Parts 3-6.
-Parts 3.1 (build 188 -> 62 MB) and 3.2 (close 8.66 -> 3.60 s) were already
-done in Phase F; 3.2's <2 s target is open.
 
 ## Part 4 - UI (in progress)
 
@@ -150,3 +140,28 @@ dispatcher, `__main__` - reads as uncovered although it runs. Under 70%:
 
 Added where it matters: `tests/test_sse_live_tail.py` (replay then live, in
 order, ephemeral ids past the chain; red with the tail cut off).
+
+
+## Part 5 - independent audit
+
+`docs/AUDIT-ITERATION-3.md`, by a fresh subagent, committed unedited
+(f6e293f). No critical. Two HIGH, both fixed red-first (fc17455): S1 a
+protected file created through its NTFS stream name (and the same blind spot
+in the sandbox's fence, found by the sweep); S2 the TUI deciding and running
+another task's unseen approval. Of the mediums, S4 and I2 were regressions of
+this run and were fixed (DECISIONS U8); S3 hard links and I1 poll cost are in
+DEFERRED with the lows (D70, D72, D74-D77). B1/B2, the audit's findings on my
+mutation runner, were fixed because they corrupt numbers this report states.
+
+## RESUME (2026-09-29)
+
+Branch `iteration-3` at fc17455, clean. Main untouched. Running in the
+background: the authoritative mutation recheck (`queue4.sh`, survivors of
+the v2 run re-checked against the whole suite with the fixed runner, in the
+snapshot worktree `~/.alpha-mut-snap`). Next, in order, once it finishes and
+the machine is idle: Part 3 timed measurements (3.2 shutdown, 3.3 startup,
+3.5 /alerts cost, 3.6 memory), 4.8 frozen rebuild + gate (add the junction
+and stream tests to packaging/probe_entry.py's GATE) + window + a scripted
+task + no orphans, Part 6 report, HANDOVER, cleanup (remove the snapshot
+worktree; stop the scratch planes on 8766/8767 with kill_tree), then the
+fast-forward decision.
