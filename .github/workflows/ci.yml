@@ -1,0 +1,38 @@
+# UNVERIFIED. Written 2026-09-28 (iteration 3, 2.5) with no remote to run it
+# on: nothing below has executed on GitHub Actions. Expect the first run to
+# find something.
+#
+# Known before it runs:
+#   * Linux: DEFERRED D54-D59 fail on the WSL2 evidence (a zombie counted
+#     alive, the reaper inert, shared SQLite under threads on 3.13, the CPU
+#     limit racing the timeout, the handover naming build/, a crawl delay
+#     short by 40 us). CI pins Python 3.11, which removes D56's 3.13 half only.
+#   * macOS: nothing here has ever run on a Mac (docs/PLATFORMS.md section 5).
+#   * The live-credential tests skip without secrets, by design (D26).
+#   * The frozen gate (packaging/build.py --probe) is not run: it is a
+#     separate ~4 minute build per OS.
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install
+        run: python -m pip install ".[dev]"
+      - name: Test (parallel, as pyproject's addopts says)
+        env:
+          PYTHONUTF8: "1"
+        run: python -m pytest -q

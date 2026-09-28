@@ -51,3 +51,25 @@ memory files, so it is left. To remove it:
   remove the width problem but not the local-writer one; worth it only with
   a secret the writer cannot read (an OS keystore), which is a new
   dependency - a user decision.
+
+## U4 - No "slow" marker; the default run is the whole suite, in parallel (2.2)
+
+- **Asked.** Mark genuinely slow tests so a fast default run exists, with the
+  full run one flag away.
+- **Measured.** In parallel (`-n auto --dist loadgroup`, 14 cores) the WHOLE
+  suite takes 46.7-47.5 s. No test takes more than 14 s (the wheel build's
+  setup); the frozen builds and real-model tests are not in the suite at all
+  (the frozen gate is `packaging/build.py --probe`; live models skip without
+  credentials). A fast subset would save seconds and create a second, weaker
+  definition of "the tests pass".
+- **Chosen.** One default: everything, parallel. `-n 0` for serial.
+- **Reverse.** Add `markers = ["slow: ..."]` and `-m "not slow"` to addopts.
+
+## U5 - Mutation testing with a small in-repo runner, not mutmut (2.3)
+
+- **Why.** mutmut does not support Windows; cosmic-ray needs a job database
+  and config per module. `scripts/mutate.py` (~200 lines, its own test) does
+  one AST operator per mutant in a private copy of src/, never the repo.
+- **Known bias.** Tests that spawn `python -m agent...` run the real source,
+  so a mutant only they would catch is reported as SURVIVING. Every survivor
+  was re-checked before a test was written for it.
