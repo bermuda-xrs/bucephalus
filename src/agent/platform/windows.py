@@ -18,30 +18,39 @@ from . import LimitsRefused
 
 # ---------------------------------------------------------------- processes
 
-def _terminate(pid: int) -> None:
+def _terminate(pid: int, expect_start: int | None = None) -> None:
+    """Terminate `pid` - if it is still the process that started at
+    `expect_start`. Checked through the handle the kill goes through: a
+    handle pins one process, so the pid cannot change hands between the check
+    and TerminateProcess (iteration 3, 1.2)."""
     k32 = ctypes.WinDLL("kernel32", use_last_error=True)
     k32.OpenProcess.restype = ctypes.c_void_p
     k32.OpenProcess.argtypes = [ctypes.c_uint32, ctypes.c_int, ctypes.c_uint32]
     k32.TerminateProcess.argtypes = [ctypes.c_void_p, ctypes.c_uint]
     k32.CloseHandle.argtypes = [ctypes.c_void_p]
-    h = k32.OpenProcess(0x0001, False, pid)          # PROCESS_TERMINATE
+    h = k32.OpenProcess(0x0001 | 0x1000, False, pid)   # TERMINATE | QUERY_LIMITED
     if h:
         try:
-            k32.TerminateProcess(h, 1)
+            if expect_start is None or _creation_time(h) == expect_start:
+                k32.TerminateProcess(h, 1)
         finally:
             k32.CloseHandle(h)
 
 
-def kill_tree_signal(pid: int, timeout_s: float) -> None:
+def kill_tree_signal(pid: int, timeout_s: float, expect_start: int | None = None) -> None:
     """The whole tree - without it the venv trampoline's child survives - but
     the tree as `proc.descendants` validates it. `taskkill /T` followed parent
     ids blindly and would take a process adopted through a recycled pid
-    (D42). Leaves first, so nothing is re-parented mid-kill."""
-    from ..proc import descendants
+    (D42). Leaves first, so nothing is re-parented mid-kill. Each kill is
+    pinned to the start time seen when the tree was listed."""
+    from ..proc import descendants, process_start_time
 
-    for p in reversed(descendants(pid)):
-        _terminate(p)
-    _terminate(pid)
+    kids = descendants(pid)
+    starts = {p: process_start_time(p) for p in kids}
+    for p in reversed(kids):
+        if starts[p] is not None:
+            _terminate(p, starts[p])
+    _terminate(pid, expect_start)
 
 
 def alive(pid: int) -> bool:
@@ -98,18 +107,24 @@ def process_table() -> list[tuple[int, int, str]]:
     return rows
 
 
+def _creation_time(h) -> int | None:
+    k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    k32.GetProcessTimes.argtypes = [ctypes.c_void_p] + [ctypes.POINTER(wintypes.FILETIME)] * 4
+    ct, et = wintypes.FILETIME(), wintypes.FILETIME()
+    kt, ut = wintypes.FILETIME(), wintypes.FILETIME()
+    if not k32.GetProcessTimes(h, ctypes.byref(ct), ctypes.byref(et),
+                               ctypes.byref(kt), ctypes.byref(ut)):
+        return None
+    return (int(ct.dwHighDateTime) << 32) | int(ct.dwLowDateTime)
+
+
 def process_start_time(pid: int) -> int | None:
     k32 = ctypes.windll.kernel32
     h = k32.OpenProcess(0x1000, False, pid)  # QUERY_LIMITED_INFORMATION
     if not h:
         return None
     try:
-        ct, et = wintypes.FILETIME(), wintypes.FILETIME()
-        kt, ut = wintypes.FILETIME(), wintypes.FILETIME()
-        if not k32.GetProcessTimes(h, ctypes.byref(ct), ctypes.byref(et),
-                                   ctypes.byref(kt), ctypes.byref(ut)):
-            return None
-        return (int(ct.dwHighDateTime) << 32) | int(ct.dwLowDateTime)
+        return _creation_time(h)
     finally:
         k32.CloseHandle(h)
 

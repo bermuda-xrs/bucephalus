@@ -46,7 +46,7 @@ def test_kill_tree_leaves_a_reused_pid_alone(monkeypatch):
     _fake_os(monkeypatch)
     sent = []
     monkeypatch.setattr(proc, "_platform", types.SimpleNamespace(
-        kill_tree_signal=lambda pid, t: sent.append(pid), alive=lambda pid: False))
+        kill_tree_signal=lambda pid, t, *a: sent.append(pid), alive=lambda pid: False))
     assert proc.kill_tree(300, expect_start=999) is True   # the process we meant is gone
     assert sent == [], "signalled a pid that now belongs to another process"
     proc.kill_tree(200, expect_start=60)
@@ -71,7 +71,7 @@ def test_windows_terminates_exactly_the_validated_tree(monkeypatch):
 
     _fake_os(monkeypatch)
     killed = []
-    monkeypatch.setattr(win, "_terminate", lambda pid: killed.append(pid))
+    monkeypatch.setattr(win, "_terminate", lambda pid, *a: killed.append(pid))
     win.kill_tree_signal(100, 5)
     assert killed[-1] == 100 and sorted(killed[:-1]) == [200, 201]
     assert killed.index(201) < killed.index(200), "leaves first"
@@ -89,3 +89,45 @@ def test_alive_answers_from_the_kernel_correctly():
     p.wait(30)
     assert not proc._alive(p.pid) or p.pid == os.getpid()
     assert not proc._alive(4_000_000_000 % 2**31)       # far beyond any live pid
+
+
+# Iteration 3, 1.2. Validating a pid and then signalling it by NUMBER leaves a
+# window in which the pid can change hands. The identity check now happens
+# through the same handle (Windows) or pidfd (Linux) that delivers the kill.
+
+import sys  # noqa: E402
+
+import pytest  # noqa: E402
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="the Windows handle path")
+def test_a_kill_pinned_to_another_start_time_signals_nothing():
+    import subprocess
+
+    import agent.platform.windows as win
+
+    p = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"],
+                         stdin=subprocess.DEVNULL)
+    try:
+        real = proc.process_start_time(p.pid)
+        assert real is not None
+        win._terminate(p.pid, real + 1)          # someone else's process now
+        assert p.poll() is None, "killed a process whose identity did not match"
+        win._terminate(p.pid, real)
+        assert p.wait(10) is not None
+    finally:
+        if p.poll() is None:
+            proc.kill_tree(p.pid)
+
+
+def test_posix_checks_identity_before_it_signals(monkeypatch):
+    import agent.platform.posix as posix
+
+    sent = []
+    monkeypatch.setattr(posix.os, "kill", lambda pid, sig: sent.append(pid), raising=False)
+    monkeypatch.delattr(posix.os, "pidfd_open", raising=False)
+    monkeypatch.setattr(proc, "process_start_time", lambda pid: 99)
+    posix._sigkill(4242, expect_start=98)
+    assert sent == [], "signalled a pid whose start time did not match"
+    posix._sigkill(4242, expect_start=99)
+    assert sent == [4242]

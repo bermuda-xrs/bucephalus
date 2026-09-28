@@ -39,6 +39,7 @@ import time
 from . import LimitsRefused  # noqa: F401 - part of the layer's vocabulary
 
 WATCH_INTERVAL_S = 0.1
+_SIGKILL = getattr(signal, "SIGKILL", 9)   # imported on Windows by the portable tests
 REFUSED_EXIT = 126
 
 
@@ -64,20 +65,52 @@ os.execv(sys.argv[2], sys.argv[2:])
 
 # ---------------------------------------------------------------- processes
 
-def _sigkill(pid: int) -> None:
+def _same(pid: int, expect_start: int | None) -> bool:
+    from .. import proc
+
+    return expect_start is None or proc.process_start_time(pid) == expect_start
+
+
+def _sigkill(pid: int, expect_start: int | None = None, group: int | None = None) -> None:
+    """SIGKILL `pid` (or its group) - if it is still the process that started
+    at `expect_start` (iteration 3, 1.2). Where the kernel has pidfds the
+    check is made on the process the pidfd pins, and the signal goes through
+    it, so the pid cannot change hands in between. macOS has none: there it
+    is check-then-signal, a window of microseconds, stated rather than hidden.
+    A group kill cannot go through a pidfd; it is sent only after `pid`'s
+    identity is confirmed through one. Raises OSError if the group signal
+    fails, so the caller can fall back to parentage."""
+    fd = None
     try:
-        os.kill(pid, signal.SIGKILL)
-    except OSError:
-        pass
+        fd = os.pidfd_open(pid)
+    except (AttributeError, OSError):
+        fd = None
+    try:
+        if not _same(pid, expect_start):
+            return
+        if group is not None:
+            os.killpg(group, _SIGKILL)
+            return
+        try:
+            if fd is not None:
+                signal.pidfd_send_signal(fd, _SIGKILL)
+            else:
+                os.kill(pid, _SIGKILL)
+        except OSError:
+            pass
+    finally:
+        if fd is not None:
+            os.close(fd)
 
 
-def kill_tree_signal(pid: int, timeout_s: float) -> None:
+def kill_tree_signal(pid: int, timeout_s: float, expect_start: int | None = None) -> None:
     """Kill pid and everything it started - never the caller.
 
     A sandbox child leads its own session (spawn_limited), so its group is
     exactly its tree and killpg is precise. A pid in the CALLER's group was
     not started that way; signalling that group is how this used to kill the
-    agent itself. It is killed by parentage instead, leaves first.
+    agent itself. It is killed by parentage instead, leaves first, each pinned
+    to the start time seen when the tree was listed.
     """
     try:
         pgid = os.getpgid(pid)
@@ -85,15 +118,18 @@ def kill_tree_signal(pid: int, timeout_s: float) -> None:
         return
     if pgid != os.getpgid(0):
         try:
-            os.killpg(pgid, signal.SIGKILL)
+            _sigkill(pid, expect_start, group=pgid)
             return
         except OSError:
             pass
-    from ..proc import descendants   # start-time validated (D42)
+    from ..proc import descendants, process_start_time   # start-time validated (D42)
 
-    for p in reversed(descendants(pid)):
-        _sigkill(p)
-    _sigkill(pid)
+    kids = descendants(pid)
+    starts = {p: process_start_time(p) for p in kids}
+    for p in reversed(kids):
+        if starts[p] is not None:
+            _sigkill(p, starts[p])
+    _sigkill(pid, expect_start)
 
 
 def alive(pid: int) -> bool:

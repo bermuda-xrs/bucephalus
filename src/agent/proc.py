@@ -90,10 +90,12 @@ def kill_tree(pid: int, timeout_s: float = 10.0,
     # A STORED pid may belong to a different process by now. With its
     # recorded creation time, a mismatch means the process we meant is gone
     # and this pid is someone else's: signal nothing (D42).
-    if expect_start is not None and process_start_time(pid) != expect_start:
+    now = process_start_time(pid)
+    if expect_start is not None and now != expect_start:
         return True
     try:
-        _platform.kill_tree_signal(pid, timeout_s)
+        # Pinned again at the signal itself, through a handle or pidfd.
+        _platform.kill_tree_signal(pid, timeout_s, now)
     except Exception:  # noqa: BLE001 - already gone is success
         pass
 
