@@ -73,3 +73,25 @@ memory files, so it is left. To remove it:
 - **Known bias.** Tests that spawn `python -m agent...` run the real source,
   so a mutant only they would catch is reported as SURVIVING. Every survivor
   was re-checked before a test was written for it.
+
+## U6 - The console's design direction (4.1)
+
+- **Question.** Hermes' layout was pinned; the look was not.
+- **Chosen.** Your theme's own palette (themes/default.toml: #0E1116 ground,
+  steel-cyan accent), amber kept for "needs you", the integrity red for
+  integrity only; the system sans for text and a monospace only for data
+  (hashes, paths, tool arguments). One bold element: the plan card as a
+  document you sign - the objective as its headline, what to settle first in
+  an amber block, a numbered track (a real sequence) with irreversible steps
+  ringed, the hash in a seal that stamps when signed (the one animation;
+  reduced-motion respected). WCAG AA measured for every text/background pair,
+  both themes (lowest 5.39:1). No web fonts: the CSP allows none from
+  elsewhere and bundling one adds weight for no information.
+- **Reverse.** ui.css tokens on :root; the plan card is `.plan` and `.seal`.
+
+## U7 - No minimize-to-tray (4.6): WAITING FOR USER, as proposal P4
+
+A tray icon needs a second library (pywebview has none; pystray is the usual
+one) and a process that outlives its window - against the desktop app's
+rule that closing the window stops everything, which is what the no-orphans
+test holds. Not built. `docs/PROPOSALS.md` P4 says what it would take.

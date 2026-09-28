@@ -28,6 +28,7 @@ window.addEventListener("hashchange", () => {
   if (new URLSearchParams(location.hash.slice(1)).get("token")) location.reload();
 });
 
+let RETURN_FOCUS = null;           // where focus goes back when a dialog closes
 const S = {conv: null, thread: null, loose: null, archived: false, streams: new Map(), trails: new Map(),
            drafting: new Set(), filesTask: null, filesPath: "", pane: "memory",
            settings: null, lastSide: ""};
@@ -502,10 +503,13 @@ drop.addEventListener("paste", e => { [...(e.clipboardData || {}).files || []].f
 
 // ------------------------------------------------------------- Control Center
 function openControl(pane) {
+  if ($("#control").hidden) RETURN_FOCUS = document.activeElement;
   $("#control").hidden = false; openPane(pane || S.pane);
 }
-function closeControl() { $("#control").hidden = true; }
+function closeControl() { $("#control").hidden = true; restoreFocus(); }
+function restoreFocus() { const r = RETURN_FOCUS; RETURN_FOCUS = null; if (r && r.focus && r.offsetParent !== null) r.focus(); }
 async function openPane(name) {
+  if ($("#control").hidden) RETURN_FOCUS = document.activeElement;
   S.pane = name; $("#control").hidden = false;
   $$(".cc-nav button").forEach(b => b.setAttribute("aria-current", String(b.dataset.pane === name)));
   const body = $("#ccBody");
@@ -792,9 +796,10 @@ const COMMANDS = [
 ];
 let PAL = [], PAL_I = 0;
 function openPalette() {
+  if ($("#palette").hidden) RETURN_FOCUS = document.activeElement;
   $("#palette").hidden = false; $("#palInput").value = ""; renderPalette(); $("#palInput").focus();
 }
-function closePalette() { $("#palette").hidden = true; }
+function closePalette() { $("#palette").hidden = true; restoreFocus(); }
 function renderPalette() {
   const q = $("#palInput").value.toLowerCase().trim();
   PAL = COMMANDS.filter(c => !q || c[0].toLowerCase().includes(q));
@@ -816,7 +821,20 @@ $("#palInput").addEventListener("keydown", e => {
 $("#palList").addEventListener("click", e => { const li = e.target.closest("[data-pal]"); if (li) runPalette(Number(li.dataset.pal)); });
 function focusSearch() { $("#app").classList.add("side-open"); $("#convSearch").focus(); }
 
+// An open dialog keeps Tab inside it (aria-modal is a promise, not a behaviour).
+function trapTab(e) {
+  const box = !$("#palette").hidden ? $("#palette") : !$("#control").hidden ? $("#control") : null;
+  if (!box || e.key !== "Tab") return;
+  const f = [...box.querySelectorAll("button, input, textarea, select, [tabindex]:not([tabindex='-1'])")]
+    .filter(x => !x.disabled && x.offsetParent !== null);
+  if (!f.length) return;
+  const first = f[0], last = f[f.length - 1];
+  if (!box.contains(document.activeElement)) { e.preventDefault(); first.focus(); }
+  else if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+  else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+}
 document.addEventListener("keydown", e => {
+  trapTab(e);
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") { e.preventDefault(); openPalette(); }
   else if (e.key === "Escape") {
     if (!$("#palette").hidden) closePalette();
@@ -825,7 +843,7 @@ document.addEventListener("keydown", e => {
   }
 });
 for (const id of ["#palette", "#control"]) $(id).addEventListener("click", e => {
-  if (e.target === $(id)) { $(id).hidden = true; }
+  if (e.target === $(id)) { $(id).hidden = true; restoreFocus(); }
 });
 
 // ------------------------------------------------------------- dispatch

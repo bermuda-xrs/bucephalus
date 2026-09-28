@@ -45,3 +45,62 @@ then pass through it, frozen too).
 
 **Decide.** Is a registry profile plus ACL grants acceptable on this machine,
 and on the shared interpreter or a private copy?
+
+## P2 - What the model is shown every step, and what it costs (3.7)
+
+Measured 2026-09-28 with the in-loop estimator (`agent.tokens.count_tokens`,
+uncalibrated against the model's tokenizer - D6; the "~966" in the brief is
+a different counter), on the default toolset, a one-line goal and no memory:
+
+| | code_as_action on | off |
+|---|---|---|
+| tools exposed | 17 | 16 |
+| tool schemas sent every step | 1,215 tok | 1,157 tok |
+| tool manual in the prefix | 464 tok | 355 tok |
+| system contract | 319 tok | 278 tok |
+| whole stable prefix | 819 tok | 668 tok |
+
+Per-tool schema cost (on): parallel 108, edit_file 102, search_history 81,
+grep 80, append_to_outbox 78, write_file 74, git_push 71, web_search 71,
+glob 69, memory_write 69, expand_artifact 61, web_fetch 60,
+memory_consolidate 58, read_file 58, run_code 58, memory_read 57, list_dir 54.
+
+**Options, each a HARNESS_VERSION bump (prompt bytes change):**
+1. **Expose only the tools a task's profile grants.** A task with no network
+   grant is still sent web_fetch and web_search (131 tok); one that never
+   pushes is sent git_push (71). Per-profile exposure would cut ~300-450 tok
+   per step on a typical local task. Risk: the model cannot ask for a tool it
+   cannot see - which is the point of B3 (`tool.not_exposed`), already built.
+2. **code_as_action off by default for small local models.** 209 tok per
+   step (151 prefix + 58 schema) - and FINDINGS reports that on the 3B,
+   offering code-as-action cost capability: with `run_code` removed it took
+   the direct action it otherwise skipped (2 tasks, 3 deterministic runs;
+   an effect that reproduces, not three independent draws).
+3. **Shorter schema descriptions.** Unmeasured gain; the descriptions carry
+   the refusal rules the gate enforces, so shortening them is a behaviour
+   change to measure, not a free saving.
+
+**Decide.** Which, if any, to run through the G1 harness as a new arm. None
+changes a recorded number until then.
+
+## P3 - A conversation's earlier exchanges, given to its next task (4.2, D30)
+
+The console groups tasks into conversations; a follow-up is a new task with
+its own plan. D30's option 3 also hands the NEXT task the earlier (goal,
+answer) pairs, so "now count them" can mean something. That changes what the
+model sees for every follow-up - a prompt change, so not made unattended.
+Built, it is: the prior exchanges as a bounded, UNTRUSTED-tainted block in the
+tail (they contain model output), never in the stable prefix, compacted with
+the rest of the tail. **Decide:** whether follow-ups should see history at all,
+and at what bound.
+
+## P4 - Minimize to the system tray (4.6)
+
+Would take: `pystray` and Pillow (two new dependencies - pystray draws its
+icon through Pillow), a tray thread beside
+pywebview's loop, and a changed rule: "closing the window stops everything"
+becomes "Quit from the tray stops everything". The no-orphans guarantee then
+rests on the tray's Quit and on the OS logoff path, both of which need their
+own tests (a logoff kill is not a window close). **Decide:** whether a
+long-running agent should keep running with no window, which is what a tray
+icon is for.

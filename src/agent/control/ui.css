@@ -217,6 +217,8 @@ kbd { border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 3p
 .file .sz { margin-left: auto; color: var(--dim); }
 .preview { flex: 1; overflow: auto; background: var(--ground); border-radius: var(--r-sm); padding: 8px 10px;
            font-family: var(--mono); font-size: 12px; white-space: pre-wrap; word-break: break-word; min-height: 80px; }
+.preview:empty { display: none; }
+.file-list { flex: 0 1 auto; }
 .drop { border: 1px dashed var(--line); border-radius: var(--r); padding: 10px; font-size: 12px; color: var(--dim); }
 .drop.over { border-color: var(--accent); color: var(--text); }
 
@@ -290,6 +292,7 @@ td.r, th.r { text-align: right; }
   .items { padding: 14px 12px 8px; }
   .composer { padding: 10px 12px 12px; }
   .ring-wrap { margin-left: 0; }
+  #chipModel, #chipProfile { display: none; }   /* in Settings; the composer stays two rows */
   .plan { padding: 16px 14px; }
   .track > li { grid-template-columns: 26px 1fr; }
   .track .est { grid-column: 2; text-align: left; }

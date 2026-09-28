@@ -110,3 +110,21 @@ done in Phase F; 3.2's <2 s target is open.
 - **Flake fixed** - `test_reap_kills_exactly_what_selection_returns` read the
   live process table twice; under a parallel suite it changed in between.
   It now reads one frozen view (the property is the plumbing, not the table).
+- **4.7 verified visually** - 40 screenshots in `docs/evidence/ui/` (8 states
+  x dark/light x desktop/phone, plus a tampered chain), README there with the
+  method, WCAG AA contrast for every pair (lowest 5.39:1) and the keyboard
+  checks. Phone shots go through DevTools device emulation: headless Edge
+  will not lay out below ~500 px from a window size (the first phone set was
+  a cropped desktop and was replaced). Focus now stays inside an open dialog
+  and returns on close.
+- **4.6 tray** - not built: a second library and a process that outlives its
+  window, against the no-orphans rule (DECISIONS U7, PROPOSALS P4).
+- **3.7** - PROPOSALS P2 with measurements (schemas 1,215 tok/step, prefix
+  819 vs 668 tok with and without code-as-action); P3 for conversation
+  history. No prompt bytes changed.
+- **2.3 mutation - INSTRUMENT BUG FOUND IN MY OWN RUNNER, re-run under way.**
+  The first full queue reported 100% everywhere; 134 of 190 verifier "kills"
+  were TIMEOUTS under 10-way contention, and the whole-suite recheck had never
+  been shown to pass unmutated. A timeout is now undecided (neither kill nor
+  survivor) and the recheck must pass unmutated first. The corrected queue
+  runs from a snapshot worktree (`~/.alpha-mut-snap`, removed at the end).
