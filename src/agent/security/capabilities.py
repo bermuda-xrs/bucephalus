@@ -90,9 +90,13 @@ def state_paths(ctx) -> tuple[Path, ...]:
     """
     cfg = ctx.config
     root = Path(os.path.abspath(cfg.root))
-    db = str(cfg.resolve(cfg.db_path))
+    db = str(cfg.resolve_state(cfg.db_path))
     out = [Path(db + s) for s in DB_FILES]
-    out += [cfg.resolve(cfg.anchor_path), cfg.resolve(cfg.skills_path)]
+    out += [cfg.resolve_state(cfg.anchor_path), cfg.resolve(cfg.skills_path)]
+    # A synced checkout's runtime state, all of it (config.state_dir), and
+    # every sibling config's state there as well as at its legacy place.
+    if cfg.state_dir:
+        out.append(Path(cfg.state_dir))
     # Item 2's sweep widened this from the active config's state to all of it:
     # every config's databases, the graders, the run records, the secrets.
     out += [root / rel for rel in PROJECT_STATE]

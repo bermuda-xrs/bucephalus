@@ -53,9 +53,9 @@ class AgentContext:
         tools: ToolRegistry | None = None,
     ):
         self.config = config
-        self.conn = conn or open_db(config.resolve(config.db_path))
+        self.conn = conn or open_db(config.resolve_state(config.db_path))
         self.log = EventLog(self.conn)
-        self.anchor = Anchor(config.resolve(config.anchor_path))
+        self.anchor = Anchor(config.resolve_state(config.anchor_path))
         self.backends = backends if backends is not None else build_backends(config)
         self.tools = tools or default_registry()
         # G1's code-as-action arm. The tool leaves the REGISTRY, which is the
@@ -497,7 +497,7 @@ class AgentContext:
         return [s["id"] for s in self.skills.by_status("candidate")]
 
     def record_promotion(self, skill_id: str, detail: dict) -> None:
-        path = Path(self.config.root) / "runs" / "promotions.jsonl"
+        path = self.config.resolve_state("runs") / "promotions.jsonl"
         path.parent.mkdir(parents=True, exist_ok=True)
         with path.open("a", encoding="utf-8") as f:
             f.write(json.dumps({"skill_id": skill_id, "at": time.time(), **detail}) + "\n")

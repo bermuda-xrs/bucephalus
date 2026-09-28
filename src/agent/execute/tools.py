@@ -622,7 +622,7 @@ def tool_append_to_outbox(ctx, task, to: str, body: str) -> dict:
     real target for the capability gate and the idempotency guard. Swap in a
     real transport here and the surrounding machinery does not change.
     """
-    outbox = Path(ctx.config.root) / "runs" / "outbox.log"
+    outbox = ctx.config.resolve_state("runs") / "outbox.log"
     outbox.parent.mkdir(parents=True, exist_ok=True)
     with outbox.open("a", encoding="utf-8") as f:
         f.write(f"{task.id}\t{to}\t{body!r}\n")

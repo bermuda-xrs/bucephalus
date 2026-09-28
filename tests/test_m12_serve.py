@@ -69,6 +69,10 @@ def server(tmp_path_factory):
         "PYTHONUTF8": "1",
         "ALPHA_CONFIG": str(cfg_path),
         "ALPHA_TOKEN": TEST_TOKEN,
+        # Scratch user dirs: without them the server opened the operator's
+        # real memory directory (test_suite_isolation.py, 2026-09-28).
+        "ALPHA_DATA_DIR": str(tmp / "user_data"),
+        "ALPHA_CONFIG_DIR": str(tmp / "user_config"),
     }
     proc = subprocess.Popen(  # noqa: S603
         [sys.executable, "-m", "uvicorn", "agent.control.asgi:app",

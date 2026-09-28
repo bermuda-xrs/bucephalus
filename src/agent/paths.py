@@ -76,6 +76,41 @@ def state_root(config_path: str | Path | None = None) -> Path:
     return root if root is not None else user_data_dir()
 
 
+# Folders a sync client uploads. Matched by directory NAME, because the client
+# is not always running and its settings are not always readable; the
+# environment variables are Windows' own record of where OneDrive lives.
+_SYNC_ENV = ("OneDrive", "OneDriveConsumer", "OneDriveCommercial")
+_SYNC_NAMES = ("dropbox", "iclouddrive", "icloud drive", "google drive", "my drive",
+               "mobile documents", "cloudstorage", "box sync", "pcloud drive")
+
+
+def sync_root(path: str | Path) -> Path | None:
+    """The synced folder `path` is inside, or None."""
+    p = Path(path).resolve()
+    for var in _SYNC_ENV:
+        v = os.environ.get(var)
+        if v:
+            r = Path(v).resolve()
+            if r == p or r in p.parents:
+                return r
+    for cand in (p, *p.parents):
+        n = cand.name.lower()
+        if n.startswith("onedrive") or n in _SYNC_NAMES:
+            return cand
+    return None
+
+
+def checkout_state_dir(root: str | Path) -> Path:
+    """Where a checkout inside a synced folder keeps its runtime state: the
+    database, the anchor, the run records. One directory per checkout, so two
+    clones never share a database."""
+    import hashlib
+
+    r = Path(root).resolve()
+    tag = hashlib.sha256(str(r).encode("utf-8")).hexdigest()[:8]
+    return user_data_dir() / "checkouts" / f"{r.name}-{tag}"
+
+
 def ensure_state_dirs(root: str | Path) -> list[Path]:
     """Create the state directories. Returns the ones created."""
     made = []

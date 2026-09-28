@@ -420,7 +420,7 @@ def cmd_search(ctx, args, console) -> int:
 
 def cmd_report(ctx, args, console) -> int:
     report = run_report(ctx.conn, ctx.telemetry, args.task_id)
-    out_dir = Path(ctx.config.root) / "runs"
+    out_dir = ctx.config.resolve_state("runs")
     write_run_json(out_dir / f"{args.task_id}.json", report)
     write_calls_csv(ctx.conn, out_dir / f"{args.task_id}_calls.csv", args.task_id)
     console.print_json(json.dumps(report))

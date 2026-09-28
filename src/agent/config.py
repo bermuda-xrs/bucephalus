@@ -332,12 +332,21 @@ class Config(BaseModel):
     # thing keeping score.
     grader_held_out: bool = False
     root: str = "."
+    # Runtime state (database, anchor, run records) when it must not sit
+    # under `root`: a checkout inside a synced folder (paths.sync_root).
+    # Empty means `root`.
+    state_dir: str = ""
     # Filled by load_config after enforcement; travels into every report.
     profile_provenance: dict[str, Any] = Field(default_factory=dict)
 
     def resolve(self, relative: str) -> Path:
         p = Path(relative)
         return p if p.is_absolute() else (Path(self.root) / p).resolve()
+
+    def resolve_state(self, relative: str) -> Path:
+        """`resolve` for runtime state: the database, the anchor, `runs/`."""
+        p = Path(relative)
+        return p if p.is_absolute() else (Path(self.state_dir or self.root) / p).resolve()
 
     def validate_autonomy(self) -> None:
         """Invariant 14: the reviewer backend must exist and must not be the executor."""
@@ -365,6 +374,7 @@ def load_config(path: str | Path = "config.yaml",
 
     raw["root"] = str(state_root(path))
     ensure_state_dirs(raw["root"])
+    raw["state_dir"] = _synced_state_dir(raw)
     if profile is not None:
         raw["profile"] = profile
     cfg = Config.model_validate(raw)
@@ -387,6 +397,40 @@ def load_config(path: str | Path = "config.yaml",
         "says nothing about how often it fires - see FINDINGS 1.32"
         if cfg.compaction_probe_step is not None else "real: the fill ratio")
     return cfg
+
+
+def _synced_state_dir(raw: dict) -> str:
+    """A checkout inside a synced folder keeps its runtime state outside it.
+
+    Checkout mode kept the database - every task's goals, answers and tool
+    output - and the anchor that authenticates it beside the source, and a
+    checkout in OneDrive uploaded all of it (iteration 3, 1.1). Existing files
+    are NOT moved: they are the user's, possibly a measurement record, and
+    remain where they are until the user moves them. Said once, when the new
+    directory is created.
+    """
+    import sys
+
+    from .paths import checkout_root, checkout_state_dir, sync_root
+
+    root = Path(raw["root"])
+    if os.environ.get("ALPHA_DATA_DIR") or checkout_root(root) != root.resolve():
+        return ""
+    synced = sync_root(root)
+    if synced is None:
+        return ""
+    state = checkout_state_dir(root)
+    if not state.exists():
+        state.mkdir(parents=True)
+        (state / "runs").mkdir()
+        old = [str(root / raw[k]) for k in ("db_path", "anchor_path")
+               if raw.get(k) and not Path(raw[k]).is_absolute() and (root / raw[k]).exists()]
+        print(f"alpha: this checkout is inside a synced folder ({synced}), so its "
+              f"database, anchor and run records now live in {state} and are not "
+              "uploaded." + (" Existing state was NOT moved and is still synced: "
+                             + ", ".join(old) + ". Move or delete it yourself."
+                             if old else ""), file=sys.stderr)
+    return str(state)
 
 
 def load_dotenv(path: str | Path = ".env") -> None:
