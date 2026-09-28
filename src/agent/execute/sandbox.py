@@ -368,6 +368,9 @@ _FS_EVENTS = (
     "os.remove", "os.rmdir", "os.mkdir", "os.rename", "os.link",
     "os.symlink", "os.truncate", "shutil.copyfile", "shutil.move",
     "shutil.rmtree",
+    # A directory junction is a link that needs no privilege on Windows; both
+    # ends must be in scope, as for os.symlink (tests/test_junction_escape.py).
+    "_winapi.CreateJunction",
 )
 
 

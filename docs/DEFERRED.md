@@ -37,7 +37,7 @@ Everything else on this page is marked in its own heading:
 | state | what it means | items |
 |---|---|---|
 | **open** | a real defect, nobody has fixed it | D2, D6, D16, D26, D27, D33; from Linux D54-D59; from the audit D46, D47, D48, D49, D52, each with its audit severity; from Phase H D60 |
-| **closed** | fixed, with the change and its test named | D1, D3, D7, D9, D10, D11, D15, D17, D18, D19, D20, D21, D22, D23, D24, D28, D29, D30, D34, D35, D36, D37, D38, D39, D40, D41, D42, D43, D44, D51, D50, D53, D45 |
+| **closed** | fixed, with the change and its test named | D1, D3, D7, D9, D10, D11, D15, D17, D18, D19, D20, D21, D22, D23, D24, D28, D29, D30, D34, D35, D36, D37, D38, D39, D40, D41, D42, D43, D44, D51, D50, D53, D45, D61 |
 | **deleted** | never a defect, or about an instrument nobody runs | D4, D5, D8, D12, D14 |
 | **known and accepted** | a real limit, decided rather than deferred | D32 (the sandbox is advisory: Phase 6 withdrawn) |
 | **dormant** | its subject is retired; it wakes if that returns | D19 (M11). D13 CLOSED 2026-09-25 |
@@ -1415,3 +1415,20 @@ delete its events and its row; `verify_all` returns `[]` before and after.
 Deleting a whole task's history is the rewrite the anchor, kept outside the
 database, exists to catch. Fix: sweep `anchor.all_tasks() | tasks`, and report
 an anchored id with no events as critical. Red first against the scenario above.
+
+---
+
+# From iteration 3 (unattended), 2026-09-28
+
+## D61 - HIGH - a directory junction walked the gate and the sandbox out of the workspace (CLOSED 2026-09-28: fixed in the change that found it)
+
+Found building the console's file browser. The sandbox fenced `os.symlink`
+(both ends in scope) but not `_winapi.CreateJunction`, which needs no
+privilege on Windows: model-written code could link `work/gj` to `grading/`.
+The gate judged tool paths by `abspath` and never followed a link, so
+`read_file("work/gj/t1/verify.py")` was in scope and named nothing protected -
+and read a grader; `grep(path="work")` walked through the junction on its own
+(Python 3.11 does not call a junction a symlink). Fixed at the shared checks:
+`within_scope` and `is_protected` judge a path as given AND where it really
+leads; the sandbox fences `_winapi.CreateJunction`; `grep` and `glob` judge
+every file they reach. `tests/test_junction_escape.py`, each half red first.

@@ -65,3 +65,14 @@ integrity, assure/verifiers, the prompt-contract allowlist, the grader
 hold-out), 2.4 coverage report, 2.5 CI file (UNVERIFIED). Then Parts 3-6.
 Parts 3.1 (build 188 -> 62 MB) and 3.2 (close 8.66 -> 3.60 s) were already
 done in Phase F; 3.2's <2 s target is open.
+
+## Part 4 - UI (in progress)
+
+- **4.4 file browser and drag-and-drop, backend** - `control/files.py`:
+  GET/POST `/tasks/{id}/files`, through `within_scope` + `is_protected` on
+  the path as given and as resolved; listings hide protected names; a drop
+  never overwrites and is recorded as `human.uploaded`, taint untrusted.
+  `tests/test_file_browser.py` was red against a naive route (25 of 26).
+- **Found on the way: D61 (HIGH), closed** - a junction led the gate, the
+  sandbox and grep/glob out of the workspace to the graders. Fixed at the
+  shared checks; `tests/test_junction_escape.py` red first.

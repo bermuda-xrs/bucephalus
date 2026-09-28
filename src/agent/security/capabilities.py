@@ -148,11 +148,15 @@ def within_scope(args: dict, artifact_scope: list[str], root: str = ".") -> tupl
                                "declare one (alpha new --scope work)")
         return True, ""
     roots = [Path(os.path.abspath(os.path.join(root, s))) for s in artifact_scope]
+    real_roots = [Path(os.path.realpath(r)) for r in roots]
     for key, value in args.items():
         if not _looks_like_path(key, value):
             continue
         p = Path(os.path.abspath(os.path.join(root, str(value))))
-        if not any(_is_within(p, r) for r in roots):
+        # Where it really leads, too: a junction in the workspace is a door
+        # out of it (iteration 3; tests/test_junction_escape.py).
+        real = Path(os.path.realpath(p))
+        if not any(_is_within(p, r) for r in roots) or                 not any(_is_within(real, r) for r in real_roots):
             return False, f"{key}={value!r} resolves outside artifact_scope"
     return True, ""
 
@@ -212,6 +216,15 @@ def _is_within(p: Path, root: Path) -> bool:
 def is_protected(path_value: str, root: str = ".",
                  state: tuple[Path, ...] = ()) -> bool:
     p = Path(os.path.abspath(os.path.join(root, path_value)))
+    if _protected_at(p, state):
+        return True
+    # And where the path really leads: through a junction or symlink, a name
+    # inside the workspace can be the grader itself (tests/test_junction_escape.py).
+    real = Path(os.path.realpath(p))
+    return real != p and _protected_at(real, tuple(Path(os.path.realpath(x)) for x in state))
+
+
+def _protected_at(p: Path, state: tuple[Path, ...]) -> bool:
     parts = {x.lower() for x in p.parts}
     if any(d in parts for d in PROTECTED_DIRS):
         return True

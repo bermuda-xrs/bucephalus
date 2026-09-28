@@ -99,6 +99,11 @@ class DocIn(BaseModel):
     body: str
 
 
+class Upload(BaseModel):
+    path: str
+    content_b64: str
+
+
 class SkillIn(BaseModel):
     name: str
     body: str
@@ -115,6 +120,12 @@ def create_app(ctx: AgentContext) -> FastAPI:
     allow_remote = os.environ.get(ALLOW_REMOTE_ENV, "") == "1"
     app.state.token = token
     app.add_middleware(AccessGuard, token=token, allow_remote=allow_remote)
+
+    def _task(task_id: str):
+        try:
+            return load_task(ctx.conn, task_id)
+        except KeyError:
+            raise HTTPException(404, "no such task") from None
 
     @app.post("/tasks")
     def post_task(body: CreateTask) -> dict:
@@ -314,6 +325,33 @@ def create_app(ctx: AgentContext) -> FastAPI:
             raise HTTPException(409, "plan_id does not match the current draft")
         reject_plan(ctx, task, plan, body.comment)
         return {"plan_id": plan.id, "status": "rejected"}
+
+    # The file browser and drag-and-drop (iteration 3, 4.4): a reader and a
+    # writer, through the same scope and protected-path checks as every
+    # other (control/files.py).
+    @app.get("/tasks/{task_id}/files")
+    def get_files(task_id: str, path: str = "") -> dict:
+        from . import files
+
+        task = _task(task_id)
+        try:
+            return files.browse(ctx, task, path or (task.contract.artifact_scope or [""])[0])
+        except files.Refused as e:
+            raise HTTPException(403, str(e)) from None
+        except files.Missing:
+            raise HTTPException(404, "no such file in this task's scope") from None
+
+    @app.post("/tasks/{task_id}/files")
+    def post_files(task_id: str, body: Upload) -> dict:
+        from . import files
+
+        task = _task(task_id)
+        try:
+            return files.drop(ctx, task, body.path, body.content_b64)
+        except files.Refused as e:
+            raise HTTPException(403, str(e)) from None
+        except files.Exists as e:
+            raise HTTPException(409, str(e)) from None
 
     @app.get("/theme")
     def get_theme() -> dict:

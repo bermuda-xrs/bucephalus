@@ -91,6 +91,10 @@ EVENT_TYPES = frozenset(
         # an agent that cannot SEE a tool works around it silently.
         "tool.not_exposed",
         "human.approved",
+        # A file a person dropped into the task's workspace from the console
+        # (iteration 3, 4.4). Its content is UNTRUSTED - recorded here with
+        # its hash, so what the agent later read can be traced to who put it.
+        "human.uploaded",
         "human.denied",
         "human.steered",
         "integrity.halt",
