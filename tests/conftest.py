@@ -17,6 +17,10 @@ def _user_dirs_are_scratch(tmp_path_factory, monkeypatch):
     console token lives in the user config directory (D41), and a suite that
     wrote tokens into the real one would be touching a live credential."""
     monkeypatch.setenv("ALPHA_CONFIG_DIR", str(tmp_path_factory.mktemp("user_config")))
+    # And the user DATA dir, where tier-1 memory lives: an in-process context
+    # wrote the operator's real MEMORY.md (test_suite_isolation.py).
+    data = str(tmp_path_factory.mktemp("user_data"))
+    monkeypatch.setattr("platformdirs.user_data_dir", lambda *a, **k: data)
 
 
 def make_config(tmp_path: Path, **overrides) -> Config:
