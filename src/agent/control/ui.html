@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -7,162 +7,106 @@
 <link rel="stylesheet" href="/ui.css">
 </head>
 <body>
-<div class="frame">
-  <header class="top">
-    <pre class="banner" id="banner" aria-label="alpha test 1">alpha test 1</pre>
-    <span class="health" id="health">Connecting…</span>
-    <nav aria-label="Sections">
-      <button id="navDesk" aria-current="page">Tasks</button>
-      <button id="navShop">Workshop</button>
-    </nav>
-  </header>
+<a class="skip" href="#ask">Skip to the composer</a>
+<div class="app" id="app">
 
-  <div class="integrity" id="integrity" role="alert" hidden></div>
-
-  <!-- ============================================================ desk -->
-  <div class="desk" id="desk">
-    <aside class="queue" aria-label="Task queue">
-      <form class="new" id="newTask">
-        <textarea id="goal" required
-          placeholder="What should it do? e.g. Read work/notes.txt and summarise it."></textarea>
-        <div class="row">
-          <label for="scope">Folder</label><input id="scope" value="work">
-          <button class="btn primary push-right">Draft a plan</button>
-        </div>
-      </form>
-      <h2>Needs you <span class="n" id="nNeeds"></span></h2><div id="qNeeds"></div>
-      <h2>Running <span class="n" id="nRunning"></span></h2><div id="qRunning"></div>
-      <h2>Finished <span class="n" id="nDone"></span></h2><div id="qDone"></div>
-    </aside>
-
-    <main class="sheet" id="sheet">
-      <div class="inner" id="sheetInner">
-        <div class="welcome">
-          <h1>Plan once, walk away, get told.</h1>
-          <p>Describe a task to start. It drafts a plan without touching
-          anything; you read it, settle its questions, and sign it. Only then
-          does it run, and it comes back to you if it needs a decision.</p>
-        </div>
-      </div>
-    </main>
-  </div>
-
-  <!-- ======================================================== workshop -->
-  <div class="workshop" id="shop" hidden>
-    <div class="inner">
-      <div class="ws-tabs" role="tablist">
-        <button role="tab" data-t="suites" aria-selected="true">Eval suites</button>
-        <button role="tab" data-t="skills" aria-selected="false">Skills</button>
-        <button role="tab" data-t="policy" aria-selected="false">Reviewer policy</button>
-        <button role="tab" data-t="grounding" aria-selected="false">Grounding</button>
-      </div>
-
-      <section id="t-suites">
-        <h1>Eval suites</h1>
-        <p class="lede">The tasks that decide whether a skill helps. They measure
-          your work, so they are yours to write. The gate promotes nothing until a
-          suite has <b id="minTrials">30</b> paired trials.</p>
-        <div class="panel"><div class="cols">
-          <label class="field"><span>Name</span><input id="sName" placeholder="tps-analysis"></label>
-          <label class="field"><span>What it measures</span><input id="sDesc"></label>
-        </div><button class="btn primary" data-action="createSuite">Create suite</button></div>
-        <div class="panel"><table>
-          <thead><tr><th>Suite</th><th>Tasks</th><th>Gate</th><th></th></tr></thead>
-          <tbody id="suiteRows"><tr><td colspan="4" class="empty">Loading…</td></tr></tbody>
-        </table></div>
-
-        <div id="suiteDetail" hidden>
-          <h1 id="sdTitle">Tasks</h1>
-          <p class="caveat"><b>A check has to be able to fail.</b> <code>json_schema</code>
-            accepts <code>{"total": 0}</code> for an invoice totalling 4825, and refuses a
-            schema that accepts <code>{}</code>. Give <code>expected_value</code> the right
-            answer, or <code>contains_all</code> the strings that must survive. The answer
-            is kept here and never enters the agent's context.</p>
-          <div class="panel">
-            <div class="cols">
-              <label class="field"><span>Key</span><input id="tKey" placeholder="task-01"></label>
-              <label class="field"><span>Check</span><select id="tCrit" data-change="critChanged"></select></label>
-              <label class="field"><span>Seconds</span><input id="tSecs" type="number" value="180"></label>
-              <label class="field"><span>If a skill regresses it</span><select id="tCat">
-                <option value="0">count it normally</option><option value="1">veto the skill</option></select></label>
-            </div>
-            <label class="field"><span>Goal</span><input id="tGoal" placeholder="what the agent must accomplish"></label>
-            <div class="cols">
-              <label class="field"><span id="tExpLabel">Expected answer (JSON)</span>
-                <textarea id="tExp">{"total": 4825}</textarea></label>
-              <label class="field"><span>Answer shape (JSON Schema)</span>
-                <textarea id="tSchema">{"type":"object","required":["total"],"properties":{"total":{"type":"integer"}}}</textarea></label>
-            </div>
-            <label class="field"><span>Input files (JSON: path to contents)</span>
-              <textarea id="tFix">{}</textarea></label>
-            <button class="btn primary" data-action="saveTask">Save task</button>
-            <button class="btn" data-action="closeSuite">Close</button>
-          </div>
-          <div id="shapeWarn"></div>
-          <div class="panel"><table>
-            <thead><tr><th>Key</th><th>Goal</th><th>Check</th><th>Right answer</th><th></th></tr></thead>
-            <tbody id="taskRows"></tbody>
-          </table></div>
-        </div>
-      </section>
-
-      <section id="t-skills" hidden>
-        <h1>Skills</h1>
-        <p class="lede">Short procedures the agent can be given. Anything added here is a
-          candidate: only the gate promotes, only after the paired trials clear, and
-          only with you approving. Three sections at most; long skills measurably hurt.</p>
-        <div class="panel">
-          <div class="cols">
-            <label class="field"><span>Name</span><input id="kName" placeholder="csv-tidy"></label>
-            <label class="field"><span>Applies when</span><input id="kWhen" placeholder="cleaning a messy csv export"></label>
-          </div>
-          <label class="field"><span>Skill (Markdown, up to three ## sections)</span>
-            <textarea id="kBody" class="h150"># skill name
-when this applies
-
-## procedure
-Imperative, checkable steps. Few of them.</textarea></label>
-          <button class="btn primary" data-action="addSkill">Add as candidate</button>
-        </div>
-        <div class="panel"><table>
-          <thead><tr><th>Name</th><th>Version</th><th>Status</th><th></th></tr></thead>
-          <tbody id="skillRows"></tbody>
-        </table></div>
-      </section>
-
-      <section id="t-policy" hidden>
-        <h1>Reviewer policy</h1>
-        <p class="lede">The rules the deputy applies when the agent reaches a permission
-          boundary while you are away. A category with no rule is refused, and an empty
-          policy refuses everything: a missing rule is never permission.</p>
-        <div class="panel">
-          <label class="field"><span>Policy</span><textarea id="pBody" class="h340"></textarea></label>
-          <button class="btn primary" data-action="savePolicy">Save policy</button>
-          <span class="health ml10" id="pSrc"></span>
-        </div>
-      </section>
-
-      <section id="t-grounding" hidden>
-        <h1>Grounding notes</h1>
-        <p class="lede">Source material for drafting skills. Skills written from a model's
-          memory drift slightly negative in the published evidence; grounding them in
-          something you chose is the point.</p>
-        <div class="panel">
-          <label class="field"><span>Name</span><input id="gName" placeholder="tps-notes"></label>
-          <label class="field"><span>Contents</span><textarea id="gBody" class="h170"></textarea></label>
-          <button class="btn primary" data-action="saveGrounding">Save note</button>
-        </div>
-        <div class="panel"><table>
-          <thead><tr><th>Name</th><th>Size</th><th></th></tr></thead>
-          <tbody id="gRows"></tbody>
-        </table></div>
-      </section>
+  <aside class="side" id="side" aria-label="Conversations">
+    <div class="brand">
+      <pre id="banner" class="banner" aria-hidden="true"></pre>
+      <p class="health" id="health">Connecting</p>
     </div>
+    <button class="btn new" data-action="newConversation">New conversation</button>
+    <input id="convSearch" class="search" type="search" placeholder="Search conversations"
+           aria-label="Search conversations" autocomplete="off">
+    <section class="needs" aria-labelledby="needsH">
+      <h2 id="needsH">Needs you <span id="nNeeds" class="count"></span></h2>
+      <div id="needsList"></div>
+    </section>
+    <section class="convs" aria-labelledby="convH">
+      <h2 id="convH">Conversations</h2>
+      <nav id="convList" aria-label="Conversation list"></nav>
+      <button class="quiet" id="archToggle" data-action="toggleArchived">Show archived</button>
+    </section>
+    <footer class="side-foot">
+      <button class="cc-open" data-action="openControl">Control Center</button>
+      <button class="quiet kbd" data-action="openPalette" aria-label="Command palette, Control K"><kbd>Ctrl</kbd><kbd>K</kbd></button>
+    </footer>
+  </aside>
+
+  <main class="thread" aria-label="Conversation">
+    <header class="thread-head">
+      <button class="quiet menu" data-action="toggleSide" aria-controls="side" aria-label="Conversations">Menu</button>
+      <h1 id="convTitle">New conversation</h1>
+      <div class="head-actions">
+        <button class="quiet" data-action="renameConversation">Rename</button>
+        <button class="quiet" data-action="archiveConversation" id="archBtn">Archive</button>
+        <button class="quiet" data-action="toggleFiles" aria-controls="files">Files</button>
+      </div>
+    </header>
+    <div id="integrity" class="integrity" role="alert" hidden></div>
+    <div id="items" class="items"></div>
+    <form id="composer" class="composer" aria-label="Ask for something">
+      <textarea id="ask" rows="3" aria-label="What should it do?"
+        placeholder="Describe the work. It drafts a plan first; nothing runs until you sign it."></textarea>
+      <div class="controls">
+        <button type="button" class="chip" data-action="openPane" data-args='["settings"]' id="chipModel" title="Which model runs, from Settings">Model</button>
+        <button type="button" class="chip" data-action="openPane" data-args='["settings"]' id="chipProfile" title="The profile this console runs under">Profile</button>
+        <label class="chip field-chip">Workspace <input id="scope" value="work" size="7" aria-describedby="scopeHelp"></label>
+        <span id="scopeHelp" class="sr">The folder this task may read and write. Everything else is refused.</span>
+        <label class="chip field-chip">Budget $ <input id="budUsd" type="number" min="0" step="0.01" size="5"></label>
+        <div class="ring-wrap" id="ringWrap">
+          <svg class="ring" viewBox="0 0 36 36" role="img" aria-labelledby="ringLabel">
+            <circle class="ring-track" cx="18" cy="18" r="15.5"/>
+            <circle class="ring-used" id="ringUsed" cx="18" cy="18" r="15.5" pathLength="100"/>
+            <line class="ring-ceiling" id="ringCeiling" x1="30.5" y1="18" x2="35.5" y2="18"/>
+          </svg>
+          <span id="ringLabel" class="ring-label">Context</span>
+        </div>
+        <button class="btn primary send" type="submit">Draft a plan</button>
+      </div>
+    </form>
+  </main>
+
+  <aside class="files" id="files" aria-label="Workspace files">
+    <header class="files-head">
+      <h2>Workspace</h2>
+      <button class="quiet" data-action="toggleFiles" aria-label="Close the file panel">Close</button>
+    </header>
+    <p class="crumb" id="filePath">Pick a task to see its workspace.</p>
+    <div id="fileList" class="file-list"></div>
+    <div id="filePreview" class="preview" tabindex="0" aria-label="File preview"></div>
+    <div class="drop" id="drop" tabindex="0">Drop or paste a file here to add it to this task's workspace. It is marked untrusted: the agent reads it as data, never as instructions.</div>
+  </aside>
+</div>
+
+<div class="overlay" id="control" hidden>
+  <div class="cc" role="dialog" aria-modal="true" aria-labelledby="ccTitle">
+    <nav class="cc-nav" aria-label="Control Center">
+      <h2 id="ccTitle">Control Center</h2>
+      <button data-pane="memory">Memory</button>
+      <button data-pane="schedules">Schedules</button>
+      <button data-pane="channels">Channels</button>
+      <button data-pane="skills">Skills</button>
+      <button data-pane="suites">Eval suites</button>
+      <button data-pane="policy">Reviewer policy</button>
+      <button data-pane="integrity">Integrity</button>
+      <button data-pane="measurement">Measurement</button>
+      <button data-pane="settings">Settings</button>
+      <button data-pane="logs">Logs</button>
+    </nav>
+    <section class="cc-body" id="ccBody" tabindex="-1"></section>
+    <button class="quiet cc-close" data-action="closeControl">Close</button>
+  </div>
+</div>
+
+<div class="overlay" id="palette" hidden>
+  <div class="pal" role="dialog" aria-modal="true" aria-label="Command palette">
+    <input id="palInput" placeholder="Type a command" aria-label="Command" aria-controls="palList" autocomplete="off">
+    <ul id="palList" role="listbox" aria-label="Commands"></ul>
   </div>
 </div>
 
 <div id="toast" role="status" aria-live="polite"></div>
-
 <script src="/ui.js"></script>
 </body>
 </html>

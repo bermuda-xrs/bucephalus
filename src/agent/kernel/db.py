@@ -451,6 +451,26 @@ CREATE TABLE IF NOT EXISTS sessions (
     closed_at       REAL
 );
 CREATE INDEX IF NOT EXISTS idx_sessions_task ON sessions(task_id);
+
+-- The console's conversations (iteration 3, 4.2; DEFERRED D30 option 3): a
+-- thread SPANNING tasks. A follow-up in a conversation is a new task in it.
+-- Grouping only - nothing here reaches a prompt (feeding earlier exchanges to
+-- the next task would change prompt bytes: docs/PROPOSALS.md). Not on the
+-- chain: every task in it has its own.
+CREATE TABLE IF NOT EXISTS conversations (
+    id          TEXT PRIMARY KEY,
+    title       TEXT NOT NULL,
+    created_at  REAL NOT NULL,
+    updated_at  REAL NOT NULL,
+    archived    INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS conversation_tasks (
+    task_id         TEXT PRIMARY KEY REFERENCES tasks(id),
+    conversation_id TEXT NOT NULL REFERENCES conversations(id),
+    position        INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_conversation_tasks
+    ON conversation_tasks(conversation_id, position);
 -- At most one open session per task: a boundary closes before it opens.
 CREATE UNIQUE INDEX IF NOT EXISTS idx_sessions_one_open
     ON sessions(task_id) WHERE status = 'open';

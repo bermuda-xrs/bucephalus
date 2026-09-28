@@ -1,13 +1,24 @@
+"use strict";
+// alpha console (iteration 3). No framework, no build step: served as
+// /ui.js under a CSP that allows no inline script, so every control is a
+// data-action looked up in ACTIONS below - the whole list of what a click,
+// a key or the command palette can do.
+
 const $ = s => document.querySelector(s);
+const $$ = s => [...document.querySelectorAll(s)];
+
 // The token arrives in the URL FRAGMENT from whoever launched the console
 // (the desktop app, or the link `alpha serve` prints) - never in this page,
 // which any local process can fetch (AUDIT-2026-09 F2). Kept for this tab
 // only, and taken out of the address bar so it is not in a screenshot.
+// The fragment may also name where to open: conv, task, pane, theme. A link
+// the desktop app can hand over; never sent to the server either.
+const OPEN = Object.fromEntries(new URLSearchParams(location.hash.slice(1)));
 const TOKEN = (() => {
-  const fromHash = new URLSearchParams(location.hash.slice(1)).get("token");
+  const fromHash = OPEN.token;
   try {
-    if (fromHash) { sessionStorage.setItem("alpha-token", fromHash);
-                    history.replaceState(null, "", location.pathname); }
+    if (fromHash) sessionStorage.setItem("alpha-token", fromHash);
+    if (location.hash) history.replaceState(null, "", location.pathname);
     return fromHash || sessionStorage.getItem("alpha-token") || "";
   } catch { return fromHash || ""; }
 })();
@@ -16,12 +27,15 @@ const TOKEN = (() => {
 window.addEventListener("hashchange", () => {
   if (new URLSearchParams(location.hash.slice(1)).get("token")) location.reload();
 });
-let CURRENT = null, POLL = null, SUITE = null;
 
+const S = {conv: null, thread: null, loose: null, archived: false, streams: new Map(), trails: new Map(),
+           drafting: new Set(), filesTask: null, filesPath: "", pane: "memory",
+           settings: null, lastSide: ""};
+
+// ------------------------------------------------------------- basics
 function toast(msg, bad) {
-  const t = $("#toast"); t.textContent = msg; t.className = bad ? "bad" : "";
-  t.style.opacity = "1"; clearTimeout(t._h);
-  t._h = setTimeout(() => t.style.opacity = "0", bad ? 7000 : 2800);
+  const t = $("#toast"); t.textContent = msg; t.className = "show" + (bad ? " bad" : "");
+  clearTimeout(t._h); t._h = setTimeout(() => { t.className = ""; }, bad ? 7000 : 2800);
 }
 async function api(path, opts) {
   const r = await fetch(path, {...opts, headers: {"Content-Type": "application/json",
@@ -31,35 +45,44 @@ async function api(path, opts) {
   if (!r.ok) { const e = new Error(data.detail || data.raw || r.statusText); e.status = r.status; throw e; }
   return data;
 }
+const post = (path, body) => api(path, {method: "POST", body: JSON.stringify(body || {})});
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c =>
-  ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+  ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c]));
+const args = (...xs) => `data-args='${esc(JSON.stringify(xs))}'`;
 const firstLine = s => String(s || "").split("\n")[0];
 const secs = n => n >= 90 ? `${Math.round(n / 60)} min` : `${Math.round(n)} s`;
+const ktok = n => n >= 1000 ? `${(n / 1000).toFixed(n >= 10000 ? 0 : 1)}k` : String(n || 0);
 const ago = t => { const d = Date.now() / 1000 - t;
   return d < 90 ? "just now" : d < 5400 ? `${Math.round(d / 60)} min ago`
        : d < 129600 ? `${Math.round(d / 3600)} h ago` : `${Math.round(d / 86400)} days ago`; };
+const FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+setInterval(() => { const f = FRAMES[Math.floor(Date.now() / 90) % FRAMES.length];
+  $$(".spin").forEach(s => { s.textContent = f; }); }, 90);
+
+function statusWord(s) {
+  return ({pending: "Waiting", running: "Running", done: "Done", done_unannounced: "Done, not announced",
+    failed: "Failed", budget_exhausted: "Out of budget", max_steps: "Out of steps", plateau: "Stalled",
+    paused: "Paused", rejected: "Sent back"}[s]) || s;
+}
+const TERMINAL = s => !["pending", "running", "paused"].includes(s);
 
 // ------------------------------------------------------------- theme
 async function applyTheme() {
   try {
     const t = await api("/theme");
-    const map = {accent:"--accent", success:"--success", warning:"--warning",
-                 danger:"--danger", muted:"--muted", background:"--ground"};
+    const map = {accent: "--theme-accent", success: "--theme-success", warning: "--theme-warning",
+                 background: "--theme-background"};
     for (const [k, v] of Object.entries(t.colors || {}))
       if (map[k] && /^#[0-9a-f]{3,8}$/i.test(v)) document.documentElement.style.setProperty(map[k], v);
-    $("#banner").textContent = t.banner;
+    $("#banner").textContent = t.banner || "";
   } catch { /* the first-paint values stand */ }
 }
-
-// ------------------------------------------------------------- views
-function show(which) {
-  $("#desk").hidden = which !== "desk"; $("#shop").hidden = which !== "shop";
-  $("#navDesk").setAttribute("aria-current", which === "desk" ? "page" : "false");
-  $("#navShop").setAttribute("aria-current", which === "shop" ? "page" : "false");
-  if (which === "shop") loadSuites();
+function setTheme(mode) {
+  document.documentElement.dataset.theme = mode;
+  try { localStorage.setItem("alpha-theme", mode); } catch { /* per-viewer only */ }
 }
-$("#navDesk").onclick = () => show("desk");
-$("#navShop").onclick = () => show("shop");
+function toggleTheme() { setTheme(document.documentElement.dataset.theme === "light" ? "dark" : "light"); }
+try { const m = localStorage.getItem("alpha-theme"); if (m) document.documentElement.dataset.theme = m; } catch { /* dark */ }
 
 // ------------------------------------------------------------- integrity
 async function loadAlerts() {
@@ -71,240 +94,599 @@ async function loadAlerts() {
     box.innerHTML = crit.length ? `<strong>The record does not verify.</strong>
       Something in the hash chain was changed after it was written. Do not approve
       anything until this is explained.
-      <ul>${crit.map(f => `<li>${esc(f.detail)}${f.task_id ? ` (task <code>${esc(f.task_id)}</code>)` : ""}</li>`).join("")}</ul>` : "";
+      <ul>${crit.map(f => `<li>${esc(f.detail)}${f.task_id ? ` (task <code>${esc(f.task_id)}</code>)` : ""}</li>`).join("")}</ul>
+      <button class="link" data-action="openPane" ${args("integrity")}>Open Integrity</button>` : "";
   } catch { /* health shows reachability */ }
 }
 
-// ------------------------------------------------------------- queue
-const NEEDS_PLAN = t => t.status === "pending" && t.plan_status === "draft";
-async function loadQueue() {
-  let tasks = [], gates = [];
-  try { [tasks, gates] = await Promise.all([
-          api("/tasks").then(d => d.tasks), api("/approvals").then(d => d.pending)]); }
-  catch (e) { return; }
-  const needs = [], running = [], done = [];
-  for (const g of gates) needs.push(`<button class="qi needs gate" data-gate="${esc(g.id)}"
-      data-task="${esc(g.task_id)}"${CURRENT && CURRENT.gate === g.id ? ' aria-current="true"' : ""}><div class="g">Wants to use <code>${esc(g.tool)}</code></div>
-      <div class="s">Parked for your decision</div></button>`);
-  for (const t of tasks) {
-    const cur = CURRENT && CURRENT.task === t.task_id ? ' aria-current="true"' : "";
-    const row = (cls, state) => `<button class="qi ${cls}" data-task="${esc(t.task_id)}"${cur}>
-      <div class="g">${esc(firstLine(t.goal))}</div><div class="s">${state}</div></button>`;
-    if (NEEDS_PLAN(t)) needs.push(row("needs", "Plan ready to review"));
-    else if (t.status === "pending" && !t.plan_status) needs.push(row("needs", "No plan yet"));
-    else if (["running", "paused"].includes(t.status)) running.push(row("", t.status === "paused" ? "Paused" : "Running"));
-    else done.push(row("", `${statusWord(t.status)}, ${ago(t.created_at)}`));
-  }
-  const fill = (id, n, items, none) => { $(id).innerHTML = items.join("") || `<div class="empty">${none}</div>`;
-                                         $(n).textContent = items.length || ""; };
-  fill("#qNeeds", "#nNeeds", needs, "Nothing is waiting on you.");
-  fill("#qRunning", "#nRunning", running, "Nothing running.");
-  fill("#qDone", "#nDone", done.slice(0, 30), "Nothing yet.");
-}
-function statusWord(s) {
-  return ({done:"Done", done_unannounced:"Done, not announced", failed:"Failed",
-    budget_exhausted:"Out of budget", max_steps:"Out of steps", plateau:"Stalled",
-    paused:"Paused", rejected:"Sent back"}[s]) || s;
-}
-document.querySelector(".queue").addEventListener("click", e => {
-  const b = e.target.closest(".qi"); if (!b) return;
-  b.dataset.gate ? openGate(b.dataset.gate) : openTask(b.dataset.task);
-});
-
-// ------------------------------------------------------------- new task
-$("#newTask").addEventListener("submit", async e => {
-  e.preventDefault();
-  const goal = $("#goal").value.trim(); if (!goal) return;
+// ------------------------------------------------------------- sidebar
+async function loadSide() {
+  let convs = [], gates = [];
   try {
-    const t = await api("/tasks", {method:"POST", body:JSON.stringify({goal,
-      artifact_scope:[$("#scope").value.trim() || "work"], budget_usd:0})});
-    $("#goal").value = "";
-    await loadQueue();
-    await draft(t.task_id);
-  } catch (err) { toast(err.message, true); }
-});
-async function draft(taskId) {
-  CURRENT = {task: taskId};
-  $("#sheetInner").innerHTML = `<p class="kicker">Drafting a plan</p>
-    <p class="objective">Reading what it is allowed to read, and working out the steps.</p>
-    <p class="health">A local model takes a minute or more. Nothing is changed while it plans.</p>`;
-  try { await api(`/tasks/${taskId}/plan`, {method:"POST"}); await openTask(taskId); }
-  catch (err) { toast(err.message, true); openTask(taskId); }
-  loadQueue();
+    [convs, gates] = await Promise.all([
+      api(`/conversations?archived=${S.archived}&q=${encodeURIComponent($("#convSearch").value)}`)
+        .then(d => d.conversations),
+      api("/approvals").then(d => d.pending)]);
+  } catch (e) { $("#health").textContent = "Can't reach the control plane"; return; }
+  const sig = JSON.stringify([convs, gates, S.conv]);
+  if (sig === S.lastSide) return;
+  S.lastSide = sig;
+  const needs = [];
+  for (const g of gates) needs.push(`<button class="side-item needs-item" data-action="openTaskOf" ${args(g.task_id)}>
+      <span class="t">Wants to use <code>${esc(g.tool)}</code></span><span class="s">Parked for your decision</span></button>`);
+  for (const c of convs.filter(c => c.needs_you)) needs.push(`<button class="side-item needs-item" data-action="selectConversation" ${args(c.id)}>
+      <span class="t">${esc(c.title)}</span><span class="s">${c.needs_you} to sign or decide</span></button>`);
+  $("#needsList").innerHTML = needs.join("") || `<div class="empty">Nothing is waiting on you.</div>`;
+  $("#nNeeds").textContent = needs.length || "";
+  $("#convList").innerHTML = convs.map(c => `<button class="side-item" data-action="selectConversation" ${args(c.id)}
+      ${c.id === S.conv ? 'aria-current="true"' : ""}><span class="t">${esc(c.title)}</span>
+      <span class="s">${c.n_tasks} ${c.n_tasks === 1 ? "task" : "tasks"}, ${ago(c.updated_at)}</span></button>`).join("")
+    + `<button class="side-item" data-action="openLooseList"><span class="s">Tasks started elsewhere</span></button>`
+    || `<div class="empty">${S.archived ? "Nothing archived." : "No conversations yet."}</div>`;
+  $("#archToggle").textContent = S.archived ? "Show active" : "Show archived";
+}
+function toggleArchived() { S.archived = !S.archived; S.lastSide = ""; loadSide(); }
+let searchTimer = null;
+$("#convSearch").addEventListener("input", () => { clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => { S.lastSide = ""; loadSide(); }, 200); });
+
+// ------------------------------------------------------------- conversations
+async function newConversation() {
+  closeStreams(); S.conv = null; S.thread = null; S.loose = null;
+  $("#convTitle").textContent = "New conversation";
+  renderWelcome(); S.lastSide = ""; loadSide(); updateRing(null); $("#ask").focus();
+  closeSideOnPhone();
+}
+function renderWelcome() {
+  $("#items").innerHTML = `<div class="welcome"><h2>Plan once, walk away, get told.</h2>
+    <p>Describe what you want done. It drafts a plan without touching anything; you settle its
+    questions and sign it. Only then does it run, and it comes back to you when it needs a decision.</p>
+    <p>A follow-up in the same conversation is a new task, with its own plan.</p></div>`;
+}
+async function selectConversation(id) {
+  if (id !== S.conv) closeStreams();
+  S.conv = id; S.loose = null; S.lastSide = "";
+  await refreshThread(true); loadSide(); closeSideOnPhone();
+}
+async function refreshThread(scroll) {
+  if (!S.conv) return;
+  let th;
+  try { th = await api("/conversations/" + S.conv); } catch (e) { toast(e.message, true); return; }
+  S.thread = th;
+  $("#convTitle").textContent = th.conversation.title;
+  $("#archBtn").textContent = th.conversation.archived ? "Unarchive" : "Archive";
+  renderItems(th.items);
+  const last = th.items[th.items.length - 1];
+  updateRing(last ? last.task_id : null);
+  if (last && S.filesTask !== last.task_id) loadFiles(last.task_id, "");
+  for (const it of th.items) if (["running", "pending", "paused"].includes(it.status) && it.plan && it.plan.status === "approved") openStream(it.task_id);
+  if (scroll) $("#items").scrollTop = $("#items").scrollHeight;
+}
+async function renameConversation() {
+  if (!S.conv) return toast("Start a conversation first.");
+  const t = prompt("Rename this conversation", $("#convTitle").textContent);
+  if (t === null || !t.trim()) return;
+  await api("/conversations/" + S.conv, {method: "PATCH", body: JSON.stringify({title: t})});
+  refreshThread(); S.lastSide = ""; loadSide();
+}
+async function archiveConversation() {
+  if (!S.conv || !S.thread) return;
+  const now = !S.thread.conversation.archived;
+  await api("/conversations/" + S.conv, {method: "PATCH", body: JSON.stringify({archived: now})});
+  toast(now ? "Archived. It is under Show archived." : "Back in the list.");
+  S.lastSide = ""; loadSide(); refreshThread();
 }
 
-// ------------------------------------------------------------- the plan sheet
-async function openTask(taskId) {
-  clearInterval(POLL); CURRENT = {task: taskId}; loadQueue(); show("desk");
-  const t = await api("/tasks/" + taskId);
-  let p = null;
-  try { p = await api(`/tasks/${taskId}/plan`); } catch (e) { if (e.status !== 404) toast(e.message, true); }
-  if (t.status === "pending" && p && p.status === "draft") return renderPlan(t, p);
-  if (t.status === "pending" && !p) return renderNoPlan(t);
-  renderRun(t, p);
+// ------------------------------------------------------------- the thread
+function renderItems(items) {
+  if (!items.length) return renderWelcome();
+  $("#items").innerHTML = items.map(renderItem).join("");
 }
-
-function renderNoPlan(t) {
-  $("#sheetInner").innerHTML = `<p class="kicker">No plan yet</p>
-    <h1 class="objective">${esc(t.goal)}</h1>
-    <button class="btn primary" data-action="draft" data-args='${esc(JSON.stringify([t.task_id]))}'>Draft a plan</button>`;
+function renderItem(it) {
+  return `<article class="exchange" id="t-${esc(it.task_id)}" aria-label="${esc(firstLine(it.goal))}">
+    <div class="ask-bubble">${esc(it.goal)}</div>
+    <div class="ask-meta">${it.scope && it.scope.length ? `may touch <code>${it.scope.map(esc).join(", ")}</code>, ` : "no files, "}${ago(it.created_at)}</div>
+    ${stateCard(it)}
+    ${(it.approvals || []).map(approvalCard).join("")}
+  </article>`;
 }
-
-function renderPlan(t, p) {
-  CURRENT = {task: t.task_id, plan: p.plan_id};
-  const pl = p.plan;
-  const list = (items, empty) => items && items.length
-    ? `<ul>${items.map(x => `<li>${esc(x)}</li>`).join("")}</ul>` : `<ul class="clear"><li>${empty}</li></ul>`;
-  const asks = (pl.open_questions || []).length + (pl.human_approvals_expected || []).length + (pl.unknowns || []).length;
+function stateCard(it) {
+  const p = it.plan;
+  if (S.drafting.has(it.task_id)) return `<div class="card drafting"><span class="spin"></span>
+      <div>Drafting a plan. It reads only what it may read, and changes nothing while it plans.
+      A local model takes a minute or more.</div></div>`;
+  if (it.status === "pending" && !p) return `<div class="card"><h3>No plan yet</h3>
+      <button class="btn primary" data-action="draft" ${args(it.task_id)}>Draft a plan</button></div>`;
+  if (it.status === "pending" && p && p.status === "drafted") return planCard(it);
+  if (p && p.status === "rejected" && it.status === "pending") return `<div class="card"><h3>Sent back</h3>
+      <p class="note">The plan was sent back with your comment on the record.</p>
+      <button class="btn" data-action="draft" ${args(it.task_id)}>Draft again</button></div>`;
+  return runCard(it);
+}
+function planCard(it) {
+  const pl = it.plan.body, id = it.plan.plan_id;
+  const list = (xs, lbl) => xs && xs.length ? `<div class="lbl">${lbl}</div><ul>${xs.map(x => `<li>${esc(x)}</li>`).join("")}</ul>` : "";
+  const settle = list(pl.open_questions, "Questions it has") + list(pl.human_approvals_expected, "Where it expects to stop and ask you")
+               + list(pl.unknowns, "What it doesn't know yet");
   const steps = (pl.steps || []).map((s, i) => `
-    <li class="step${s.reversible ? "" : " irrev"}">
+    <li class="${s.reversible === false ? "irrev" : ""}">
       <div class="node" aria-hidden="true">${i + 1}</div>
       <div>
         <p class="intent">${esc(s.intent)}</p>
-        ${s.reversible ? "" : `<p class="irrev-note">Can't be undone once it runs.</p>`}
+        ${s.reversible === false ? `<p class="irrev-note">Can't be undone once it runs.</p>` : ""}
         <dl>
           <dt>Uses</dt><dd>${(s.tools || []).map(x => `<code>${esc(x)}</code>`).join(", ") || "no tools"}${s.action_mode === "code" ? ", by writing code" : ""}</dd>
           <dt>May touch</dt><dd>${(s.artifact_scope || []).map(x => `<code>${esc(x)}</code>`).join(", ") || "no files"}</dd>
           <dt>Checked by</dt><dd><code>${esc(s.success_criterion)}</code></dd>
-          ${(s.depends_on || []).length ? `<dt>After</dt><dd>${s.depends_on.map(esc).join(", ")}</dd>` : ""}
+          ${(s.depends_on || []).length ? `<dt>After step</dt><dd>${s.depends_on.map(esc).join(", ")}</dd>` : ""}
         </dl>
       </div>
-      <div class="est">${secs(s.est_seconds || 0)}<br>${(s.est_tokens || 0).toLocaleString()} tokens</div>
+      <div class="est">${secs(s.est_seconds || 0)}<br>${ktok(s.est_tokens || 0)} tokens</div>
     </li>`).join("");
-  const hash = p.plan_id.replace(/(.{4})/g, "$1 ").trim();
-  $("#sheetInner").innerHTML = `
-    <p class="kicker">Plan for your approval</p>
-    <h1 class="objective">${esc(pl.objective || t.goal)}</h1>
-    <section class="before" aria-label="Before you approve">
-      <h3>${asks ? "Settle these before you sign" : "Nothing to settle before you sign"}</h3>
-      <div class="health">Questions it has</div>${list(pl.open_questions, "None.")}
-      <div class="health">Where it expects to stop and ask you</div>${list(pl.human_approvals_expected, "Nowhere. It should run to the end unattended.")}
-      <div class="health">What it doesn't know yet</div>${list(pl.unknowns, "Nothing declared.")}
-    </section>
+  const hash = id.replace(/(.{4})/g, "$1 ").trim();
+  return `<section class="card plan" aria-label="Plan for your signature">
+    <h3>Plan for your signature</h3>
+    <p class="objective">${esc(pl.objective || it.goal)}</p>
+    ${settle ? `<div class="settle"><h4>Settle these before you sign</h4>${settle}</div>`
+             : `<div class="settle clear">Nothing to settle. It should run to the end unattended.</div>`}
     <ol class="track" aria-label="Steps">${steps || '<li class="empty">The plan has no steps.</li>'}</ol>
     <p class="totals">${(pl.steps || []).length} steps, about ${secs(pl.total_est_seconds || 0)} in total.</p>
     <div class="sign">
-      <div class="seal" id="seal">
-        <div class="ring" aria-hidden="true"></div>
-        <div><div class="what">You are signing plan</div><div class="hash" title="${esc(p.plan_id)}">${esc(hash.slice(0, 39))}…</div></div>
+      <div class="seal" id="seal-${esc(it.task_id)}">
+        <div class="seal-ring" aria-hidden="true"></div>
+        <div><div class="what">You are signing plan</div><div class="hash" title="${esc(id)}">${esc(hash.slice(0, 39))}…</div></div>
       </div>
-      <div class="actions">
-        <button class="btn" id="btnBack">Send back</button>
-        <button class="btn primary" id="btnSign">Approve and run</button>
+      <div class="row">
+        <button class="btn" data-action="showSendBack" ${args(it.task_id)}>Send back</button>
+        <button class="btn primary" data-action="sign" ${args(it.task_id, id)}>Sign and run</button>
       </div>
-      <div class="sendback" id="sendback" hidden>
-        <input id="backWhy" placeholder="What should change? This goes on the record with the plan.">
-        <button class="btn" id="btnBackGo">Send back</button>
+      <div class="sendback" id="back-${esc(it.task_id)}" hidden>
+        <input id="why-${esc(it.task_id)}" placeholder="What should change? This goes on the record with the plan." aria-label="What should change">
+        <button class="btn" data-action="sendBack" ${args(it.task_id, id)}>Send back</button>
       </div>
-    </div>`;
-  $("#btnSign").onclick = () => approve(t.task_id, p.plan_id);
-  $("#btnBack").onclick = () => { $("#sendback").hidden = false; $("#backWhy").focus(); };
-  $("#btnBackGo").onclick = () => sendBack(t.task_id, p.plan_id);
+    </div>
+  </section>`;
+}
+function runCard(it) {
+  const b = it.budget || {}, live = ["running", "pending"].includes(it.status);
+  const pct = b.usd ? Math.min(100, Math.round(100 * (b.spent_usd || 0) / b.usd)) : 0;
+  const cls = it.status.startsWith("done") ? "st-done" : it.status === "paused" ? "st-needs" : "";
+  return `<section class="card run" aria-label="Run">
+    <div class="status"><span><b class="${cls}">${esc(statusWord(it.status))}</b></span>
+      <span>$${Number(b.spent_usd || 0).toFixed(4)} of $${Number(b.usd || 0).toFixed(2)}</span>
+      <span>${secs(b.spent_seconds || 0)} of ${secs(b.seconds || 0)}</span>
+      <span id="steps-${esc(it.task_id)}">${trail(it.task_id).step ? `step ${trail(it.task_id).step}` : ""}</span></div>
+    <div class="budget" aria-hidden="true"><i data-pct="${pct}"></i></div>
+    <p class="prefill" id="pre-${esc(it.task_id)}" ${trail(it.task_id).waiting ? "" : "hidden"}><span class="spin"></span> Reading its prompt before the first word. On a CPU this is most of a turn.</p>
+    <div class="live" id="live-${esc(it.task_id)}" aria-live="off">${esc(trail(it.task_id).live)}</div>
+    <div class="tools" id="tools-${esc(it.task_id)}">${trail(it.task_id).tools.map(toolCard).join("")}</div>
+    ${it.status === "paused" && !(it.approvals || []).length ? `<p class="note">Paused. It stopped to ask something; check Needs you.</p>` : ""}
+    ${!live && !it.answer && TERMINAL(it.status) ? `<p class="note">It finished without an answer.</p>` : ""}
+  </section>
+  ${it.answer ? `<section class="card answer" aria-label="Answer"><h3>Answer</h3><pre>${esc(it.answer)}</pre></section>` : ""}`;
+}
+function approvalCard(g) {
+  return `<section class="card approval" aria-label="Decision needed">
+    <h3>It wants to use <code>${esc(g.tool)}</code> and is waiting for you</h3>
+    <p>${esc(g.reason)}</p><pre>${esc(g.preview)}</pre>
+    <div class="row">
+      <button class="btn amber" data-action="decide" ${args(g.id, "approve", g.task_id)}>Allow this once</button>
+      <button class="btn" data-action="decide" ${args(g.id, "deny", g.task_id)}>Refuse</button>
+    </div></section>`;
 }
 
-async function approve(taskId, planId) {
-  const b = $("#btnSign"); b.disabled = true;
+// ------------------------------------------------------------- composing
+$("#composer").addEventListener("submit", e => { e.preventDefault(); send(); });
+$("#ask").addEventListener("keydown", e => {
+  if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); send(); }
+});
+async function send() {
+  const text = $("#ask").value.trim();
+  if (!text) return $("#ask").focus();
   try {
-    await api(`/tasks/${taskId}/plan/approve`, {method:"POST", body:JSON.stringify({plan_id: planId, edits: []})});
-    $("#seal").classList.add("signed");
-    $("#seal .what").textContent = "Signed and pinned to the record";
-    await api(`/tasks/${taskId}/run`, {method:"POST"});
-    toast("Approved. It's running.");
-    setTimeout(() => openTask(taskId), 700);
-  } catch (e) { b.disabled = false; toast(e.message, true); }
+    if (!S.conv) { const c = await post("/conversations", {}); S.conv = c.id; }
+    const usd = $("#budUsd").value;
+    const m = await post(`/conversations/${S.conv}/messages`, {text,
+      artifact_scope: [$("#scope").value.trim() || "work"], budget_usd: usd === "" ? null : Number(usd)});
+    $("#ask").value = "";
+    S.lastSide = ""; loadSide();
+    await draft(m.task_id);
+  } catch (err) { toast(err.message, true); }
+}
+async function draft(taskId) {
+  S.drafting.add(taskId);
+  await refreshThread(true);
+  try { await post(`/tasks/${taskId}/plan`); }
+  catch (err) { toast(err.message, true); }
+  S.drafting.delete(taskId);
+  await refreshThread(true); S.lastSide = ""; loadSide();
+}
+function showSendBack(taskId) { $("#back-" + taskId).hidden = false; $("#why-" + taskId).focus(); }
+async function sign(taskId, planId) {
+  try {
+    await post(`/tasks/${taskId}/plan/approve`, {plan_id: planId, edits: []});
+    const seal = $("#seal-" + taskId);
+    if (seal) { seal.classList.add("signed"); seal.querySelector(".what").textContent = "Signed and pinned to the record"; }
+    await post(`/tasks/${taskId}/run`);
+    toast("Signed. It's running.");
+    setTimeout(async () => { await afterChange(); openStream(taskId); }, 650);
+  } catch (e) { toast(e.message, true); }
 }
 async function sendBack(taskId, planId) {
   try {
-    await api(`/tasks/${taskId}/plan/reject`, {method:"POST",
-      body:JSON.stringify({plan_id: planId, comment: $("#backWhy").value})});
-    toast("Sent back. Draft again when you're ready.");
-    openTask(taskId);
+    await post(`/tasks/${taskId}/plan/reject`, {plan_id: planId, comment: $("#why-" + taskId).value});
+    toast("Sent back. Draft again when you're ready."); afterChange();
   } catch (e) { toast(e.message, true); }
 }
-
-// ------------------------------------------------------------- a run
-function renderRun(t, p) {
-  const live = ["running", "pending"].includes(t.status);
-  const cls = t.status.startsWith("done") ? "st-done" : t.status === "paused" ? "st-needs" : "";
-  $("#sheetInner").innerHTML = `
-    <p class="kicker">${live ? "Running" : "Finished"}</p>
-    <h1 class="objective">${esc(t.goal)}</h1>
-    <dl class="progress">
-      <dt>Status</dt><dd class="${cls}">${esc(statusWord(t.status))}</dd>
-      <dt>Model calls</dt><dd>${t.current_step}</dd>
-      <dt>Plan</dt><dd>${p ? `<code>${esc(p.plan_id.slice(0, 16))}…</code>, ${esc(p.status)}` : "none"}</dd>
-      <dt>Budget</dt><dd>${secs(t.budget.seconds || 0)}</dd>
-    </dl>
-    <div id="runMore"></div>`;
-  if (t.status === "paused")
-    $("#runMore").innerHTML = `<p class="caveat">It stopped to ask you something. The decision is under <b>Needs you</b>.</p>`;
-  if (!live) api("/metrics/" + t.task_id).then(m => {
-    $("#runMore").innerHTML += `<dl class="progress"><dt>Tokens</dt><dd>${(m.free_tokens + m.paid_tokens).toLocaleString()} (${m.paid_tokens.toLocaleString()} paid)</dd>
-      <dt>Cost</dt><dd>$${Number(m.cost_usd).toFixed(4)}</dd></dl>`;
-  }).catch(() => {});
-  if (live) POLL = setInterval(async () => {
-    const n = await api("/tasks/" + t.task_id).catch(() => null);
-    if (n && (n.status !== t.status || n.current_step !== t.current_step)) { clearInterval(POLL); renderRun(n, p); loadQueue(); }
-  }, 2500);
+async function decide(id, d, taskId) {
+  try {
+    await post("/approvals/" + id, {decision: d});
+    // A decision only records itself; the parked run resumes when it is
+    // started again, and that is what "it carries on" has to mean.
+    try { await post(`/tasks/${taskId}/run`); } catch (e) { if (e.status !== 409) throw e; }
+    toast(d === "approve" ? "Allowed once. It carries on." : "Refused. It carries on without it.");
+    afterChange(); if (S.conv) setTimeout(() => openStream(taskId), 400);
+  } catch (e) { toast(e.message, true); }
+}
+async function afterChange() {
+  S.lastSide = ""; loadSide();
+  if (S.conv) return refreshThread();
+  if (S.loose) return openTaskAlone(S.loose);
 }
 
-// ------------------------------------------------------------- a gate approval
-async function openGate(id) {
-  clearInterval(POLL); show("desk");
-  const g = (await api("/approvals")).pending.find(x => x.id === id);
-  if (!g) { toast("Already decided."); return loadQueue(); }
-  CURRENT = {gate: id}; loadQueue();
-  $("#sheetInner").innerHTML = `
-    <p class="kicker">Parked for your decision</p>
-    <h1 class="objective">It wants to use <code>${esc(g.tool)}</code>.</h1>
-    <div class="gatecard">
-      <p>${esc(g.reason)}</p>
-      <pre>${esc(g.preview)}</pre>
-      <div class="row">
-        <button class="btn amber" id="gAllow">Allow this once</button>
-        <button class="btn" id="gDeny">Refuse</button>
-        <button class="quiet" data-action="openTask" data-args='${esc(JSON.stringify([g.task_id]))}'>See the task</button>
-      </div>
-    </div>`;
-  const decide = async d => {
-    try { await api("/approvals/" + id, {method:"POST", body:JSON.stringify({decision: d})});
-          toast(d === "approve" ? "Allowed. It carries on." : "Refused. It will be told."); openTask(g.task_id); }
-    catch (e) { toast(e.message, true); }
-  };
-  $("#gAllow").onclick = () => decide("approve");
-  $("#gDeny").onclick = () => decide("deny");
+// ------------------------------------------------------------- tasks outside conversations
+async function openTaskOf(taskId) {
+  const t = await api("/tasks/" + taskId).catch(e => { toast(e.message, true); return null; });
+  if (!t) return;
+  if (t.conversation_id) { await selectConversation(t.conversation_id);
+    const el = $("#t-" + taskId); if (el) el.scrollIntoView({block: "center"}); return; }
+  openTaskAlone(taskId);
+}
+async function looseItem(taskId) {
+  const [t, gates] = await Promise.all([api("/tasks/" + taskId), api("/approvals?task_id=" + taskId)]);
+  let plan = null;
+  try { const p = await api(`/tasks/${taskId}/plan`); plan = {plan_id: p.plan_id, status: p.status, body: p.plan}; }
+  catch (e) { if (e.status !== 404) toast(e.message, true); }
+  return {task_id: taskId, goal: t.goal, scope: [], status: t.status, created_at: Date.now() / 1000,
+          budget: t.budget, plan, approvals: gates.pending, answer: t.answer};
+}
+async function openTaskAlone(taskId) {
+  closeStreams(); S.conv = null; S.loose = taskId;
+  const it = await looseItem(taskId);
+  $("#convTitle").textContent = firstLine(it.goal);
+  $("#items").innerHTML = renderItem(it);
+  updateRing(taskId); loadFiles(taskId, "");
+  if (it.status === "running") openStream(taskId);
+  closeSideOnPhone();
+}
+async function openLooseList() {
+  closeStreams(); S.conv = null; S.loose = null;
+  const d = await api("/tasks");
+  const loose = [];
+  for (const t of d.tasks) loose.push(`<button class="side-item" data-action="openTaskAlone" ${args(t.task_id)}>
+      <span class="t">${esc(firstLine(t.goal))}</span><span class="s">${esc(statusWord(t.status))}, ${ago(t.created_at)}</span></button>`);
+  $("#convTitle").textContent = "Tasks started elsewhere";
+  $("#items").innerHTML = `<div class="card"><h3>From the CLI, the TUI, schedules and channels</h3>${loose.join("") || '<div class="empty">None.</div>'}</div>`;
+  closeSideOnPhone();
 }
 
-// ============================================================= workshop
-document.querySelector(".ws-tabs").addEventListener("click", e => {
-  const b = e.target.closest("button"); if (!b) return;
-  document.querySelectorAll(".ws-tabs button").forEach(x => x.setAttribute("aria-selected", String(x === b)));
-  document.querySelectorAll(".workshop section").forEach(s => s.hidden = s.id !== "t-" + b.dataset.t);
-  ({suites: loadSuites, skills: loadSkills, policy: loadPolicy, grounding: loadGrounding}[b.dataset.t])();
-});
+// ------------------------------------------------------------- live output
+function closeStreams() { for (const c of S.streams.values()) c.abort(); S.streams.clear(); }
+async function openStream(taskId) {
+  if (S.streams.has(taskId)) return;
+  const ctl = new AbortController(); S.streams.set(taskId, ctl);
+  S.trails.set(taskId, {tools: [], live: "", waiting: false, step: null});   // the replay rebuilds it
+  const tools = $("#tools-" + taskId); if (tools) tools.innerHTML = "";
+  try {
+    const r = await fetch(`/tasks/${taskId}/stream`, {headers: {"Authorization": "Bearer " + TOKEN}, signal: ctl.signal});
+    const reader = r.body.getReader(), dec = new TextDecoder();
+    let buf = "";
+    for (;;) {
+      const {value, done} = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, {stream: true});
+      let i;
+      while ((i = buf.indexOf("\n\n")) >= 0) {
+        const block = buf.slice(0, i); buf = buf.slice(i + 2);
+        const ev = {};
+        for (const line of block.split("\n")) {
+          const k = line.indexOf(": "); if (k < 0) continue;
+          ev[line.slice(0, k)] = line.slice(k + 2);
+        }
+        if (ev.event) onEvent(taskId, ev.event, JSON.parse(ev.data || "{}"));
+      }
+    }
+  } catch (e) { if (e.name !== "AbortError") toast("Live output stopped: " + e.message, true); }
+  S.streams.delete(taskId);
+}
+// Each task's live trail lives HERE, not only in the DOM: a thread refresh
+// re-renders the cards from it, so nothing the stream delivered is lost.
+function trail(taskId) {
+  if (!S.trails.has(taskId)) S.trails.set(taskId, {tools: [], live: "", waiting: false, step: null});
+  return S.trails.get(taskId);
+}
+function toolCard(t) {
+  const res = t.ok === undefined ? `<span class="spin"></span>` : `${t.ok ? "done" : "failed"}, ${t.ms} ms`;
+  return `<div class="tool ${t.ok === undefined ? "" : t.ok ? "ok" : "bad"}">
+    <span class="name">${esc(t.tool)}</span><span class="pv" title="${esc(t.preview)}">${esc(t.preview)}</span>
+    <span class="res">${res}</span></div>`;
+}
+function onEvent(taskId, name, d) {
+  const tr = trail(taskId);
+  const live = $("#live-" + taskId), pre = $("#pre-" + taskId), tools = $("#tools-" + taskId);
+  const redrawTools = () => { if (tools) tools.innerHTML = tr.tools.map(toolCard).join(""); };
+  if (name === "live.waiting") { tr.waiting = true; if (pre) pre.hidden = false; }
+  else if (name === "live.token") {
+    tr.waiting = false; if (pre) pre.hidden = true;
+    tr.live = (tr.live + (d.text || "")).slice(-6000);
+    if (live) { live.textContent = tr.live; live.scrollTop = live.scrollHeight; }
+  } else if (name === "live.step") {
+    tr.waiting = false; if (pre) pre.hidden = true;
+    tr.step = d.step + 1;
+    const s = $("#steps-" + taskId); if (s) s.textContent = `step ${tr.step}`;
+    updateRing(taskId);
+  } else if (name === "tool.called") {
+    tr.tools.push({key: d.key || "", tool: d.tool, preview: d.preview || ""});
+    tr.live = ""; if (live) live.textContent = "";
+    redrawTools();
+  } else if (name === "tool.returned") {
+    const t = [...tr.tools].reverse().find(x => x.key === (d.key || "") && x.ok === undefined);
+    if (t) { t.ok = !!d.ok; t.ms = d.wall_ms; redrawTools(); }
+  } else if (name === "delegation.opened") {
+    tr.tools.push({key: "", tool: "delegated", preview: d.child_task_id || d.goal || "a sub-task", ok: true, ms: 0});
+    redrawTools();
+  } else if (name === "task.status" && TERMINAL(d.status || "")) {
+    setTimeout(afterChange, 300);
+  } else if (name === "task.status" || name === "budget.updated") {
+    clearTimeout(onEvent._t); onEvent._t = setTimeout(afterChange, 1500);
+  }
+}
 
+// ------------------------------------------------------------- the context ring
+async function updateRing(taskId) {
+  let m;
+  try { m = await api("/context" + (taskId ? "?task_id=" + taskId : "")); } catch { return; }
+  const used = Math.min(100, 100 * m.used / m.window), ceil = 100 * m.ceiling / m.window;
+  const u = $("#ringUsed");
+  u.style.strokeDasharray = `${used} 100`;
+  u.classList.toggle("near", m.used >= m.ceiling * 0.8);
+  $("#ringCeiling").setAttribute("transform", `rotate(${ceil * 3.6} 18 18)`);
+  $("#ringLabel").textContent = `${ktok(m.used)} of ${ktok(m.ceiling)}`;
+  $("#ringWrap").title = `About ${m.used.toLocaleString()} tokens in use (estimated). It compacts at the ceiling,
+${m.ceiling.toLocaleString()} tokens (${Math.round(m.fill_ratio * 100)}% of the ${m.window.toLocaleString()}-token window). The tick marks the ceiling.`;
+}
+
+// ------------------------------------------------------------- files
+function toggleFiles() { $("#app").classList.toggle("files-closed"); }
+function toggleSide() { $("#app").classList.toggle("side-open"); }
+function closeSideOnPhone() { $("#app").classList.remove("side-open"); }
+async function loadFiles(taskId, path) {
+  S.filesTask = taskId;
+  let d;
+  try { d = await api(`/tasks/${taskId}/files?path=${encodeURIComponent(path)}`); }
+  catch (e) {
+    $("#filePath").textContent = e.status === 404 ? "Nothing here yet." : e.message;
+    $("#fileList").innerHTML = ""; return;
+  }
+  if (d.kind === "dir") {
+    S.filesPath = d.path;
+    $("#filePath").textContent = d.path + "/";
+    const up = d.path.includes("/") ? `<button class="file" data-action="openFile" ${args(d.path.split("/").slice(0, -1).join("/"))}>..</button>` : "";
+    $("#fileList").innerHTML = up + (d.entries.map(e => `<button class="file" data-action="openFile" ${args(d.path + "/" + e.name)}>
+        <span>${esc(e.name)}${e.dir ? "/" : ""}</span><span class="sz">${e.dir ? "" : ktok(e.bytes) + "B"}</span></button>`).join("")
+        || `<div class="empty">Empty so far.</div>`);
+  } else {
+    $$(".file").forEach(f => f.setAttribute("aria-current", String(f.dataset.args === JSON.stringify([d.path]))));
+    $("#filePreview").textContent = d.text !== undefined ? d.text
+      : d.too_large ? `Too large to preview (${d.bytes.toLocaleString()} bytes).`
+      : `Binary file, ${d.bytes.toLocaleString()} bytes.`;
+  }
+}
+function openFile(path) { if (S.filesTask) loadFiles(S.filesTask, path); }
+async function upload(file) {
+  if (!S.filesTask) return toast("Pick a task first: files go into a task's workspace.", true);
+  if (file.size > 10 * 1024 * 1024) return toast("Larger than 10 MB; not added.", true);
+  const b64 = await new Promise((ok, bad) => { const r = new FileReader();
+    r.onload = () => ok(String(r.result).split(",", 2)[1] || ""); r.onerror = bad; r.readAsDataURL(file); });
+  try {
+    const dir = S.filesPath || "work";
+    const out = await post(`/tasks/${S.filesTask}/files`, {path: `${dir}/${file.name}`, content_b64: b64});
+    toast(`Added ${out.path}, marked untrusted.`); loadFiles(S.filesTask, dir);
+  } catch (e) { toast(e.message, true); }
+}
+const drop = $("#drop");
+["dragenter", "dragover"].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.add("over"); }));
+["dragleave", "drop"].forEach(t => drop.addEventListener(t, () => drop.classList.remove("over")));
+drop.addEventListener("drop", e => { e.preventDefault(); [...e.dataTransfer.files].forEach(upload); });
+drop.addEventListener("paste", e => { [...(e.clipboardData || {}).files || []].forEach(upload); });
+
+// ------------------------------------------------------------- Control Center
+function openControl(pane) {
+  $("#control").hidden = false; openPane(pane || S.pane);
+}
+function closeControl() { $("#control").hidden = true; }
+async function openPane(name) {
+  S.pane = name; $("#control").hidden = false;
+  $$(".cc-nav button").forEach(b => b.setAttribute("aria-current", String(b.dataset.pane === name)));
+  const body = $("#ccBody");
+  body.innerHTML = `<p class="note"><span class="spin"></span> Loading</p>`;
+  try { body.innerHTML = await PANES[name](); } catch (e) { body.innerHTML = `<p class="caveat">${esc(e.message)}</p>`; }
+  body.focus();
+  if (name === "suites") loadSuites();
+}
+$(".cc-nav").addEventListener("click", e => { const b = e.target.closest("button[data-pane]"); if (b) openPane(b.dataset.pane); });
+
+const PANES = {
+  async memory() {
+    const m = await api("/memory");
+    const state = {intact: "Blessed. It matches what you last accepted.",
+                   tampered: "Changed since you last accepted it. Read it, then accept it if the change is yours.",
+                   unrecorded: "Never accepted. Read it, then accept it."}[m.blessing] || m.blessing;
+    return `<h3>Memory</h3><p class="lede">What the agent carries into every session. It is in the prompt, so every
+      line here shapes what it does. Stored in <code>${esc(m.root)}</code>.</p>
+      <p class="${m.blessing === "intact" ? "caveat good" : "caveat"}">${esc(state)}</p>
+      ${m.tiers.map(t => `<h4>${esc(t.file)}, ${t.chars} of ${t.cap} characters</h4>
+        ${t.entries.map(e => `<div class="entry"><span class="taint">${esc(e.taint)}</span> ${esc(e.text)}</div>`).join("")
+          || '<div class="empty">Empty.</div>'}`).join("")}
+      <h4>Accept what is here</h4><p class="note">Same as <code>alpha memory --accept</code>. Remove a line with
+      <code>alpha memory --forget "text"</code>.</p>
+      <button class="btn" data-action="acceptMemory">Accept this memory</button>`;
+  },
+  async schedules() {
+    const d = await api("/panels/schedules");
+    return `<h3>Schedules</h3><p class="lede">Each firing creates a task that still needs its plan signed.
+      Missed occurrences are recorded, never run late.</p>
+      <table><tr><th>Every</th><th>Goal</th><th>Next</th><th class="r">Missed</th></tr>
+      ${d.schedules.map(s => `<tr><td><code>${esc(s.spec)}</code></td><td>${esc(firstLine(s.goal))}</td>
+        <td>${new Date(s.next_fire * 1000).toLocaleString()}</td><td class="r">${s.missed}</td></tr>`).join("")
+        || '<tr><td colspan="4" class="empty">No schedules. Add one with alpha schedule add.</td></tr>'}</table>
+      <h4>Parked runs</h4>${d.parked.map(n => `<div class="entry"><code>${esc(n.task_id)}</code> ${esc(n.kind)}, ${ago(n.created_at)}</div>`).join("")
+        || '<div class="empty">None.</div>'}`;
+  },
+  async channels() {
+    const d = await api("/panels/channels");
+    return `<h3>Channels</h3><p class="lede">Telegram is ${d.telegram.enabled ? "on" : "off"}. An empty allowlist
+      means nobody, not everybody.</p>
+      <h4>Allowed senders</h4>${d.telegram.allowed_senders.map(s => `<code>${esc(s)}</code>`).join(", ") || '<span class="empty">Nobody.</span>'}
+      <h4>Dropped messages</h4><p class="note">From senders not on the list. Only a hash and a length are kept, never the text.</p>
+      <table><tr><th>When</th><th>Sender</th><th>Why</th><th>Hash</th><th class="r">Length</th></tr>
+      ${d.drops.map(x => `<tr><td>${ago(x.created_at)}</td><td><code>${esc(x.sender)}</code></td><td>${esc(x.reason)}</td>
+        <td><code>${esc(String(x.body_sha256).slice(0, 12))}</code></td><td class="r">${x.body_len}</td></tr>`).join("")
+        || '<tr><td colspan="5" class="empty">None.</td></tr>'}</table>`;
+  },
+  async skills() {
+    const d = await api("/skills");
+    return `<h3>Skills</h3><p class="lede">A skill starts as a candidate. Only the gate can promote it, after enough paired trials.</p>
+      <table><tr><th>Name</th><th>Version</th><th>Status</th><th></th></tr>
+      ${d.skills.map(s => `<tr><td><code>${esc(s.name)}</code></td><td>${s.version}</td>
+        <td class="${s.status === "promoted" ? "st-done" : ""}">${esc(s.status)}</td>
+        <td class="r"><button class="quiet" data-action="checkGate" ${args(s.id)}>Check the gate</button></td></tr>`).join("")
+        || '<tr><td colspan="4" class="empty">No skills yet.</td></tr>'}</table>
+      <h4>Add a candidate</h4>
+      <div class="grid2"><label class="field">Name<input id="kName"></label>
+      <label class="field">Applies when<input id="kWhen"></label></div>
+      <label class="field">Body<textarea id="kBody"># skill name
+
+What to do, in the words a model reads.</textarea></label>
+      <button class="btn primary" data-action="addSkill">Add as a candidate</button>`;
+  },
+  async suites() {
+    return `<h3>Eval suites</h3><p class="lede">The tasks a skill is measured against. The gate needs
+      <span id="minTrials">30</span> paired trials, so a suite needs at least that many tasks.</p>
+      <table><tr><th>Suite</th><th>Tasks</th><th>Ready</th><th></th></tr><tbody id="suiteRows"></tbody></table>
+      <h4>New suite</h4><div class="grid2"><label class="field">Name<input id="sName" placeholder="tps-analysis"></label>
+      <label class="field">What it measures<input id="sDesc"></label></div>
+      <button class="btn primary" data-action="createSuite">Create suite</button>
+      <div id="suiteDetail" hidden>
+        <h4 id="sdTitle"></h4><div id="shapeWarn"></div>
+        <table><tr><th>Key</th><th>Goal</th><th>Check</th><th>Right answer</th><th></th></tr><tbody id="taskRows"></tbody></table>
+        <h4>Add a task</h4>
+        <div class="grid2"><label class="field">Key<input id="tKey"></label>
+        <label class="field">Check<select id="tCrit" data-change="critChanged"></select></label></div>
+        <label class="field">Goal<textarea id="tGoal"></textarea></label>
+        <div class="grid2"><label class="field"><span id="tExpLabel">Expected answer (JSON)</span><textarea id="tExp">{"value": 42}</textarea></label>
+        <label class="field">Answer shape (JSON Schema)<textarea id="tSchema"></textarea></label></div>
+        <div class="grid2"><label class="field">Input files (JSON: name to contents)<textarea id="tFix"></textarea></label>
+        <div><label class="field">Time budget, seconds<input id="tSecs" type="number" min="1"></label>
+        <label class="field">A failure here vetoes the suite<select id="tCat"><option value="0">No</option><option value="1">Yes</option></select></label></div></div>
+        <div class="row"><button class="btn primary" data-action="saveTask">Save task</button>
+        <button class="btn" data-action="closeSuite">Close</button></div>
+      </div>`;
+  },
+  async policy() {
+    const [p, g] = await Promise.all([api("/policy"), api("/grounding")]);
+    return `<h3>Reviewer policy</h3><p class="lede">What the reviewing model may approve on its own. Default is to
+      refuse. In effect from <code>${esc(p.effective_source)}</code>.</p>
+      <label class="field">Policy<textarea id="pBody" class="tall">${esc(p.body)}</textarea></label>
+      <button class="btn primary" data-action="savePolicy">Save policy</button>
+      <h4>Grounding notes</h4><p class="note">Reference text a person wrote, kept for skills to cite.</p>
+      <table>${g.documents.map(x => `<tr><td><button class="link" data-action="editGrounding" ${args(x.name)}>${esc(x.name)}</button></td>
+        <td>${x.bytes.toLocaleString()} bytes</td><td class="r"><button class="quiet" data-action="delGrounding" ${args(x.name)}>Delete</button></td></tr>`).join("")
+        || '<tr><td class="empty">No notes yet.</td></tr>'}</table>
+      <div class="grid2"><label class="field">Name<input id="gName"></label></div>
+      <label class="field">Contents<textarea id="gBody"></textarea></label>
+      <button class="btn" data-action="saveGrounding">Save note</button>`;
+  },
+  async integrity() {
+    const d = await api("/panels/integrity");
+    const crit = d.findings.filter(f => f.severity === "critical");
+    return `<h3>Integrity</h3><p class="lede">Every task's record is a hash chain, checkpointed to an anchor kept
+      outside the database. This re-verifies all ${d.tasks} of them now.</p>
+      ${crit.length ? `<div class="integrity"><strong>${crit.length} record${crit.length > 1 ? "s do" : " does"} not verify.</strong>
+        Do not approve anything until this is explained.</div>`
+        : `<p class="caveat good">Every chain verifies.</p>`}
+      <table><tr><th>Severity</th><th>Task</th><th>Finding</th></tr>
+      ${d.findings.map(f => `<tr class="${f.severity === "critical" ? "integrity-row" : ""}"><td>${esc(f.severity)}</td>
+        <td><code>${esc(f.task_id || "")}</code></td><td>${esc(f.detail)}</td></tr>`).join("")
+        || '<tr><td colspan="3" class="empty">No findings.</td></tr>'}</table>
+      <h4>Anchor</h4><dl class="kv"><dt>File</dt><dd><code>${esc(d.anchor.path)}</code></dd>
+      <dt>Checkpoints</dt><dd>${d.anchor.entries}</dd>
+      <dt>Last written</dt><dd>${d.anchor.last_written ? new Date(d.anchor.last_written * 1000).toLocaleString() : "never"}</dd></dl>`;
+  },
+  async measurement() {
+    const d = await api("/panels/measurement");
+    return `<h3>Measurement</h3><p class="lede">What produced the numbers: versions, the profile, the run records,
+      and which paths have ever run for real in this database.</p>
+      <dl class="kv"><dt>Harness version</dt><dd>${d.harness_version}</dd><dt>Toolset version</dt><dd>${d.toolset_version}</dd>
+      <dt>Profile</dt><dd>${esc(d.profile)}</dd></dl>
+      <h4>Has it ever run here?</h4>${d.inventory ? `<table><tr><th>Path</th><th>State</th><th class="r">Count</th></tr>
+        ${d.inventory.map(r => `<tr><td>${esc(r.row || r.name || "")}</td><td>${esc(r.state || "")}</td><td class="r">${esc(r.count ?? "")}</td></tr>`).join("")}</table>`
+        : '<p class="note">The inventory needs bench/ beside the source; an installed copy has none.</p>'}
+      <h4>Run records</h4><table>${d.runs.map(r => `<tr><td><code>${esc(r.name)}</code></td><td class="r">${ktok(r.bytes)}B</td>
+        <td>${ago(r.modified)}</td></tr>`).join("") || '<tr><td class="empty">None yet.</td></tr>'}</table>`;
+  },
+  async settings() {
+    const d = await api("/panels/settings");
+    return `<h3>Settings</h3><p class="lede">Read from the config this console was started with. Change them there;
+      the console does not rewrite your config.</p>
+      <h4>Appearance</h4><button class="btn" data-action="toggleTheme">Switch to ${document.documentElement.dataset.theme === "light" ? "dark" : "light"}</button>
+      <h4>Models</h4><table><tr><th>Name</th><th>Kind</th><th>Model</th><th>Trust</th><th class="r">Window</th></tr>
+      ${d.backends.map(b => `<tr><td>${esc(b.name)}</td><td>${esc(b.kind)}</td><td><code>${esc(b.model)}</code></td>
+        <td>${esc(b.tier)}</td><td class="r">${ktok(b.window)}</td></tr>`).join("")}</table>
+      <h4>Profile and limits</h4><dl class="kv"><dt>Profile</dt><dd>${esc(d.profile)}</dd>
+      ${Object.entries(d.limits).map(([k, v]) => `<dt>${esc(k.replace(/_/g, " "))}</dt><dd>${esc(v)}</dd>`).join("")}</dl>
+      <h4>Autonomy</h4><dl class="kv">${Object.entries(d.autonomy).map(([k, v]) => `<dt>${esc(k.replace(/_/g, " "))}</dt><dd>${esc(v)}</dd>`).join("")}</dl>
+      <h4>Where state lives</h4><dl class="kv"><dt>Project</dt><dd><code>${esc(d.root)}</code></dd>
+      <dt>Database and records</dt><dd><code>${esc(d.state_dir)}</code></dd></dl>`;
+  },
+  async logs() {
+    const d = await api("/panels/logs");
+    return `<h3>Logs</h3><p class="lede">The newest events on every task's record. The same events, in full, are
+      under each task.</p>
+      <table><tr><th>When</th><th>Task</th><th>Event</th></tr>
+      ${d.events.map(e => `<tr><td>${ago(e.at)}</td><td><code>${esc(String(e.task_id).slice(0, 14))}</code></td><td><code>${esc(e.type)}</code></td></tr>`).join("")}</table>`;
+  },
+};
+
+async function acceptMemory() {
+  try { const r = await post("/memory/accept"); toast(`Accepted (was ${r.before}).`); openPane("memory"); }
+  catch (e) { toast(e.message, true); }
+}
+
+// The suite editor, carried over from the workshop.
+let SUITE = null;
 async function loadSuites() {
   const d = await api("/suites");
   $("#minTrials").textContent = d.min_paired_trials;
   $("#suiteRows").innerHTML = d.suites.length ? d.suites.map(s => {
     const pct = Math.min(100, Math.round(100 * s.n_tasks / d.min_paired_trials));
-    return `<tr><td><button class="link" data-action="openSuite" data-args='${esc(JSON.stringify([s.id]))}'>${esc(s.name)}</button>
-        <div class="health">${esc(s.description)}</div></td>
+    return `<tr><td><button class="link" data-action="openSuite" ${args(s.id)}>${esc(s.name)}</button>
+        <div class="note">${esc(s.description)}</div></td>
       <td>${s.n_tasks}<div class="meter"><i data-pct="${pct}"></i></div></td>
       <td>${s.ready ? "Ready" : `${d.min_paired_trials - s.n_tasks} more to go`}</td>
-      <td class="r"><button class="quiet" data-action="delSuite" data-args='${esc(JSON.stringify([s.id, s.name]))}'>Delete</button></td></tr>`;
-  }).join("") : `<tr><td colspan="4" class="empty">No suites yet. Name one above to start.</td></tr>`;
+      <td class="r"><button class="quiet" data-action="delSuite" ${args(s.id, s.name)}>Delete</button></td></tr>`;
+  }).join("") : `<tr><td colspan="4" class="empty">No suites yet. Name one below to start.</td></tr>`;
 }
 async function createSuite() {
   const name = $("#sName").value.trim();
   if (!name) return toast("Give the suite a name first.", true);
-  try { const s = await api("/suites", {method:"POST", body:JSON.stringify({name, description:$("#sDesc").value})});
+  try { const s = await post("/suites", {name, description: $("#sDesc").value});
         $("#sName").value = ""; $("#sDesc").value = ""; toast("Suite created."); await loadSuites(); openSuite(s.id); }
   catch (e) { toast(e.message, true); }
 }
 async function delSuite(id, name) {
   if (!confirm(`Delete the suite "${name}" and all its tasks?`)) return;
-  await api("/suites/" + id, {method:"DELETE"});
+  await api("/suites/" + id, {method: "DELETE"});
   if (SUITE && SUITE.id === id) closeSuite();
   toast("Suite deleted."); loadSuites();
 }
@@ -339,7 +721,7 @@ function renderTasks() {
       : s["x-contains"] ? `<code>${esc(JSON.stringify(s["x-contains"]))}</code>` : "Shape only";
     return `<tr><td><code>${esc(t.key)}</code>${t.catastrophic ? " (veto)" : ""}</td>
       <td>${esc(t.goal).slice(0, 90)}</td><td><code>${esc(t.success_criterion)}</code></td><td>${right}</td>
-      <td class="r"><button class="quiet" data-action="delTask" data-args='${esc(JSON.stringify([t.id]))}'>Delete</button></td></tr>`;
+      <td class="r"><button class="quiet" data-action="delTask" ${args(t.id)}>Delete</button></td></tr>`;
   }).join("") : `<tr><td colspan="5" class="empty">No tasks yet.</td></tr>`;
 }
 function parseJSON(text, field) {
@@ -354,55 +736,31 @@ async function saveTask() {
     const expected = parseJSON($("#tExp").value, "Expected answer");
     if (crit === "expected_value") schema["x-expected"] = expected;
     if (crit === "contains_all") schema["x-contains"] = expected;
-    await api(`/suites/${SUITE.id}/tasks`, {method:"POST", body:JSON.stringify({
-      key:$("#tKey").value.trim(), goal:$("#tGoal").value.trim(), success_criterion:crit,
-      output_schema:schema, fixtures:parseJSON($("#tFix").value, "Input files"),
-      budget_seconds:Number($("#tSecs").value) || null, catastrophic:$("#tCat").value === "1"})});
+    await post(`/suites/${SUITE.id}/tasks`, {
+      key: $("#tKey").value.trim(), goal: $("#tGoal").value.trim(), success_criterion: crit,
+      output_schema: schema, fixtures: parseJSON($("#tFix").value, "Input files"),
+      budget_seconds: Number($("#tSecs").value) || null, catastrophic: $("#tCat").value === "1"});
     $("#tKey").value = ""; $("#tGoal").value = ""; toast("Task saved.");
     await openSuite(SUITE.id); loadSuites();
   } catch (e) { toast(e.message, true); }
 }
 async function delTask(id) {
-  await api(`/suites/${SUITE.id}/tasks/${id}`, {method:"DELETE"});
+  await api(`/suites/${SUITE.id}/tasks/${id}`, {method: "DELETE"});
   toast("Task deleted."); await openSuite(SUITE.id); loadSuites();
 }
-
-async function loadSkills() {
-  const d = await api("/skills");
-  $("#skillRows").innerHTML = d.skills.length ? d.skills.map(s => `<tr>
-      <td><code>${esc(s.name)}</code></td><td>${s.version}</td>
-      <td class="${s.status === "promoted" ? "st-done" : ""}">${esc(s.status)}</td>
-      <td class="r"><button class="quiet" data-action="checkGate" data-args='${esc(JSON.stringify([s.id]))}'>Check the gate</button></td>
-    </tr>`).join("") : `<tr><td colspan="4" class="empty">No skills yet.</td></tr>`;
-}
 async function addSkill() {
-  try { await api("/skills", {method:"POST", body:JSON.stringify({name:$("#kName").value.trim(),
-          body:$("#kBody").value, applies_when:$("#kWhen").value.trim()})});
-        toast("Added as a candidate."); $("#kName").value = ""; loadSkills(); }
+  try { await post("/skills", {name: $("#kName").value.trim(), body: $("#kBody").value, applies_when: $("#kWhen").value.trim()});
+        toast("Added as a candidate."); openPane("skills"); }
   catch (e) { toast(e.message, true); }
 }
 async function checkGate(id) {
   try { const d = await api("/gate/" + id); toast(`${d.verdict}: ${d.reason}`, d.verdict !== "promote"); }
   catch (e) { toast(e.message, true); }
 }
-
-async function loadPolicy() {
-  const d = await api("/policy");
-  $("#pBody").value = d.body; $("#pSrc").textContent = "In effect from " + d.effective_source;
-}
 async function savePolicy() {
-  try { await api("/policy", {method:"PUT", body:JSON.stringify({body:$("#pBody").value})});
-        toast("Policy saved. It applies from the next review."); loadPolicy(); }
+  try { await api("/policy", {method: "PUT", body: JSON.stringify({body: $("#pBody").value})});
+        toast("Policy saved. It applies from the next review."); openPane("policy"); }
   catch (e) { toast(e.message, true); }
-}
-
-async function loadGrounding() {
-  const d = await api("/grounding");
-  $("#gRows").innerHTML = d.documents.length ? d.documents.map(g => `<tr>
-      <td><button class="link" data-action="editGrounding" data-args='${esc(JSON.stringify([g.name]))}'>${esc(g.name)}</button></td>
-      <td>${g.bytes.toLocaleString()} bytes</td>
-      <td class="r"><button class="quiet" data-action="delGrounding" data-args='${esc(JSON.stringify([g.name]))}'>Delete</button></td></tr>`).join("")
-    : `<tr><td colspan="3" class="empty">No notes yet.</td></tr>`;
 }
 async function editGrounding(name) {
   const d = await api("/grounding/" + encodeURIComponent(name));
@@ -411,35 +769,73 @@ async function editGrounding(name) {
 async function saveGrounding() {
   const name = $("#gName").value.trim();
   if (!name) return toast("Give the note a name first.", true);
-  try { await api("/grounding/" + encodeURIComponent(name), {method:"PUT", body:JSON.stringify({body:$("#gBody").value})});
-        toast("Note saved."); loadGrounding(); }
+  try { await api("/grounding/" + encodeURIComponent(name), {method: "PUT", body: JSON.stringify({body: $("#gBody").value})});
+        toast("Note saved."); openPane("policy"); }
   catch (e) { toast(e.message, true); }
 }
 async function delGrounding(name) {
-  await api("/grounding/" + encodeURIComponent(name), {method:"DELETE"});
-  toast("Note deleted."); loadGrounding();
+  await api("/grounding/" + encodeURIComponent(name), {method: "DELETE"});
+  toast("Note deleted."); openPane("policy");
 }
 
-// ------------------------------------------------------------- start
-(async () => {
-  applyTheme();
-  if (!TOKEN) {
-    $("#health").textContent = "No session. Open the console from the desktop app, or the link alpha serve prints.";
-    return;
-  }
-  try {
-    const h = await api("/health");
-    $("#health").textContent = `Models: ${h.backends.join(", ")}`;
-  } catch { $("#health").textContent = "Can't reach the control plane"; }
-  loadAlerts(); loadQueue();
-  setInterval(() => { loadAlerts(); loadQueue(); }, 8000);
-})();
+// ------------------------------------------------------------- command palette
+// Existing actions only: each entry names a key of ACTIONS. The palette is a
+// faster way to click, never a new thing a click could not do.
+const COMMANDS = [
+  ["New conversation", "newConversation"], ["Search conversations", "focusSearch"],
+  ["Show or hide archived conversations", "toggleArchived"], ["Tasks started elsewhere", "openLooseList"],
+  ["Show or hide the file panel", "toggleFiles"], ["Switch light or dark", "toggleTheme"],
+  ["Open Control Center", "openControl"], ["Memory", "openPane", "memory"], ["Schedules", "openPane", "schedules"],
+  ["Channels", "openPane", "channels"], ["Skills", "openPane", "skills"], ["Eval suites", "openPane", "suites"],
+  ["Reviewer policy", "openPane", "policy"], ["Integrity", "openPane", "integrity"],
+  ["Measurement", "openPane", "measurement"], ["Settings", "openPane", "settings"], ["Logs", "openPane", "logs"],
+];
+let PAL = [], PAL_I = 0;
+function openPalette() {
+  $("#palette").hidden = false; $("#palInput").value = ""; renderPalette(); $("#palInput").focus();
+}
+function closePalette() { $("#palette").hidden = true; }
+function renderPalette() {
+  const q = $("#palInput").value.toLowerCase().trim();
+  PAL = COMMANDS.filter(c => !q || c[0].toLowerCase().includes(q));
+  PAL_I = Math.min(PAL_I, Math.max(0, PAL.length - 1));
+  $("#palList").innerHTML = PAL.map((c, i) => `<li role="option" id="pal-${i}" aria-selected="${i === PAL_I}"
+      data-pal="${i}">${esc(c[0])}</li>`).join("") || '<li class="empty">No command matches.</li>';
+  $("#palInput").setAttribute("aria-activedescendant", PAL.length ? "pal-" + PAL_I : "");
+}
+function runPalette(i) {
+  const c = PAL[i]; if (!c) return;
+  closePalette(); ACTIONS[c[1]](...c.slice(2));
+}
+$("#palInput").addEventListener("input", () => { PAL_I = 0; renderPalette(); });
+$("#palInput").addEventListener("keydown", e => {
+  if (e.key === "ArrowDown") { PAL_I = Math.min(PAL.length - 1, PAL_I + 1); renderPalette(); e.preventDefault(); }
+  else if (e.key === "ArrowUp") { PAL_I = Math.max(0, PAL_I - 1); renderPalette(); e.preventDefault(); }
+  else if (e.key === "Enter") { runPalette(PAL_I); e.preventDefault(); }
+});
+$("#palList").addEventListener("click", e => { const li = e.target.closest("[data-pal]"); if (li) runPalette(Number(li.dataset.pal)); });
+function focusSearch() { $("#app").classList.add("side-open"); $("#convSearch").focus(); }
 
+document.addEventListener("keydown", e => {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") { e.preventDefault(); openPalette(); }
+  else if (e.key === "Escape") {
+    if (!$("#palette").hidden) closePalette();
+    else if (!$("#control").hidden) closeControl();
+    else closeSideOnPhone();
+  }
+});
+for (const id of ["#palette", "#control"]) $(id).addEventListener("click", e => {
+  if (e.target === $(id)) { $(id).hidden = true; }
+});
+
+// ------------------------------------------------------------- dispatch
 // Every button names its action; this is the whole list (iteration 3, 1.5).
 // A map, not window[name]: nothing outside it can be dispatched.
-const ACTIONS = {createSuite, saveTask, closeSuite, addSkill, savePolicy, saveGrounding,
-                 draft, openTask, openSuite, delSuite, delTask, checkGate,
-                 editGrounding, delGrounding};
+const ACTIONS = {newConversation, selectConversation, renameConversation, archiveConversation,
+  toggleArchived, openLooseList, openTaskAlone, openTaskOf, draft, showSendBack, sign, sendBack, decide,
+  toggleFiles, toggleSide, openFile, openControl, closeControl, openPane, openPalette, focusSearch,
+  toggleTheme, acceptMemory, createSuite, saveTask, closeSuite, addSkill, savePolicy, saveGrounding,
+  openSuite, delSuite, delTask, checkGate, editGrounding, delGrounding};
 document.addEventListener("click", e => {
   const el = e.target.closest("[data-action]");
   if (!el || !ACTIONS[el.dataset.action]) return;
@@ -448,7 +844,36 @@ document.addEventListener("click", e => {
 document.addEventListener("change", e => {
   if (e.target.dataset.change === "critChanged") critChanged();
 });
-// Meter widths: set through the CSSOM, which the CSP allows, not a style attribute.
+// Widths through the CSSOM, which the CSP allows, never a style attribute.
 new MutationObserver(() => document.querySelectorAll("i[data-pct]").forEach(i => {
   i.style.width = i.dataset.pct + "%";
 })).observe(document.body, {childList: true, subtree: true});
+
+// ------------------------------------------------------------- start
+(async () => {
+  applyTheme(); renderWelcome();
+  if (window.innerWidth < 1100) $("#app").classList.add("files-closed");   // a drawer there
+  if (!TOKEN) {
+    $("#health").textContent = "No session. Open the console from the desktop app, or the link alpha serve prints.";
+    return;
+  }
+  try {
+    const [h, st] = await Promise.all([api("/health"), api("/panels/settings")]);
+    S.settings = st;
+    const exec = st.backends.find(b => b.name === "cloud") || st.backends[0];
+    $("#health").textContent = `Connected. ${h.backends.length} models configured.`;
+    $("#chipModel").textContent = exec ? `Model: ${exec.model}` : "Model";
+    $("#chipProfile").textContent = `Profile: ${st.profile}`;
+    if ($("#budUsd").value === "") $("#budUsd").placeholder = String(st.limits.default_task_budget_usd);
+  } catch { $("#health").textContent = "Can't reach the control plane"; }
+  loadAlerts(); await loadSide(); updateRing(null);
+  if (OPEN.theme === "light" || OPEN.theme === "dark") setTheme(OPEN.theme);
+  if (OPEN.task) openTaskOf(OPEN.task);
+  else if (OPEN.conv) selectConversation(OPEN.conv);
+  else if (OPEN.conv !== "") {
+    const first = $("#convList [data-action=selectConversation]");
+    if (first) selectConversation(JSON.parse(first.dataset.args)[0]);
+  }
+  if (OPEN.pane && PANES[OPEN.pane]) openPane(OPEN.pane);
+  setInterval(() => { loadAlerts(); loadSide(); if (S.conv && !S.streams.size && !S.drafting.size) refreshThread(); }, 6000);
+})();

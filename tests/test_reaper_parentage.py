@@ -185,6 +185,14 @@ def test_reap_kills_exactly_what_selection_returns(family, monkeypatch):
 
     killed: list[int] = []
     monkeypatch.setattr(proc, "kill_tree", lambda pid, **kw: killed.append(pid) or True)
+    # One frozen view of the machine for both calls. The live table changes
+    # between them under a parallel suite - other workers start and orphan
+    # python processes - and that race is not what this test is about
+    # (iteration 3, 2.2: failed once under load, passed alone).
+    table = proc.process_table()
+    starts = {pid: proc.process_start_time(pid) for pid, _pp, _n in table}
+    monkeypatch.setattr(proc, "process_table", lambda: table)
+    monkeypatch.setattr(proc, "process_start_time", lambda pid: starts.get(pid))
 
     expected = proc.orphan_pids(names=("python",))
     reaped = proc.reap_orphans(names=("python",))

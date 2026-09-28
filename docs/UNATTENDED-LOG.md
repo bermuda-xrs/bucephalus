@@ -76,3 +76,37 @@ done in Phase F; 3.2's <2 s target is open.
 - **Found on the way: D61 (HIGH), closed** - a junction led the gate, the
   sandbox and grep/glob out of the workspace to the graders. Fixed at the
   shared checks; `tests/test_junction_escape.py` red first.
+- **4.1-4.3 the console** - three panels (conversations and Needs you; the
+  thread with its composer; the workspace file browser), a Control Center
+  (Memory, Schedules, Channels, Skills, Eval suites, Reviewer policy,
+  Integrity, Measurement, Settings, Logs), Ctrl/Cmd+K palette over the
+  existing action map only, dark by default and light available, vanilla
+  JS under the Part 1 CSP. The plan card is the centre: objective, what to
+  settle first, numbered steps with the irreversible ones marked, the hash
+  in a seal, Sign and run / Send back. The context ring shows the window
+  AND the compaction ceiling. Streaming output with the prefill state, tool
+  cards with their receipts (tool.receipt streamed as tool.returned: name,
+  ok, ms - never content). Deep links in the fragment (conv, task, pane,
+  theme). Clicked through in a browser: message -> drafted plan -> signed
+  -> ran -> answer; a parked approval; a tampered chain in the reserved
+  colour.
+- **API** - conversations (a thread spanning tasks; D30 option 3's grouping
+  half - feeding earlier exchanges to the model changes prompt bytes, so
+  that half is PROPOSALS P3), /context, /memory (+ accept), /panels/*.
+  `tests/test_console_api_v2.py`.
+- **Found: the console never offered a real plan for signature.** It waited
+  for plan status "draft"; the planner writes "drafted". The console tests
+  seeded "draft" by hand, so they were green. Fixtures now draft through
+  `planner.store_plan`, and a static test holds every status the page
+  compares against to the set the planner writes (red first).
+- **Found: "It carries on" was false.** Deciding an approval only recorded
+  the decision; nothing resumed the parked run. Both surfaces now resume it.
+- **4.5 the TUI** - plan-first (it used to run a task on submit, no plan, no
+  signature: `tests/test_tui_two_touch.py`, red first), conversations and
+  Needs you down the side, the live plan panel, a tool-trail tree with
+  delegated children nested, streaming output, one status bar with model,
+  context meter against the ceiling, budget and integrity count; Ctrl+K is
+  Textual's palette. New Textual hooks recorded in KNOWN_INERT with reasons.
+- **Flake fixed** - `test_reap_kills_exactly_what_selection_returns` read the
+  live process table twice; under a parallel suite it changed in between.
+  It now reads one frozen view (the property is the plumbing, not the table).

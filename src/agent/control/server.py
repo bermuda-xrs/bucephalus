@@ -99,6 +99,22 @@ class DocIn(BaseModel):
     body: str
 
 
+class NewConversation(BaseModel):
+    title: str = ""
+
+
+class PatchConversation(BaseModel):
+    title: str | None = None
+    archived: bool | None = None
+
+
+class Message(BaseModel):
+    text: str
+    artifact_scope: list[str] = Field(default_factory=lambda: ["work"])
+    budget_usd: float | None = None
+    budget_seconds: int | None = None
+
+
 class Upload(BaseModel):
     path: str
     content_b64: str
@@ -157,6 +173,14 @@ def create_app(ctx: AgentContext) -> FastAPI:
             "SELECT COUNT(*) FROM events WHERE task_id=? AND type='model.called'",
             (task_id,),
         ).fetchone()[0]
+        from .conversations import conversation_of
+
+        answer = ctx.conn.execute(
+            "SELECT content FROM artifacts WHERE task_id=? AND kind='answer' "
+            "ORDER BY created_at DESC LIMIT 1", (task_id,)).fetchone()
+        tokens = ctx.conn.execute(
+            "SELECT COALESCE(SUM(input_tokens),0) + COALESCE(SUM(output_tokens),0) "
+            "FROM calls WHERE task_id=?", (task_id,)).fetchone()[0]
         return {
             "task_id": task.id,
             "status": task.status.value,
@@ -164,6 +188,9 @@ def create_app(ctx: AgentContext) -> FastAPI:
             "budget": json.loads(task.budget.model_dump_json()),
             "current_step": step,
             "plan_id": plan.id if plan else None,
+            "answer": answer[0] if answer else None,
+            "tokens": tokens,
+            "conversation_id": conversation_of(ctx.conn, task_id),
         }
 
     @app.get("/tasks/{task_id}/stream")
@@ -325,6 +352,80 @@ def create_app(ctx: AgentContext) -> FastAPI:
             raise HTTPException(409, "plan_id does not match the current draft")
         reject_plan(ctx, task, plan, body.comment)
         return {"plan_id": plan.id, "status": "rejected"}
+
+    # Conversations (iteration 3, 4.2): threads spanning tasks. A message is
+    # a new task in the thread; the console drafts its plan next.
+    @app.get("/conversations")
+    def get_conversations(q: str = "", archived: bool = False) -> dict:
+        from . import conversations as conv
+
+        return {"conversations": conv.listing(ctx.conn, q, archived)}
+
+    @app.post("/conversations")
+    def post_conversation(body: NewConversation) -> dict:
+        from . import conversations as conv
+
+        return conv.create(ctx.conn, body.title)
+
+    @app.patch("/conversations/{cid}")
+    def patch_conversation(cid: str, body: PatchConversation) -> dict:
+        from . import conversations as conv
+
+        try:
+            return conv.update(ctx.conn, cid, body.title, body.archived)
+        except KeyError:
+            raise HTTPException(404, "no such conversation") from None
+
+    @app.get("/conversations/{cid}")
+    def get_conversation(cid: str) -> dict:
+        from . import conversations as conv
+
+        try:
+            return conv.thread(ctx, cid)
+        except KeyError:
+            raise HTTPException(404, "no such conversation") from None
+
+    @app.post("/conversations/{cid}/messages")
+    def post_message(cid: str, body: Message) -> dict:
+        from . import conversations as conv
+
+        if not body.text.strip():
+            raise HTTPException(400, "an empty message asks for nothing")
+        try:
+            return conv.add_message(ctx, cid, body.text.strip(), body.artifact_scope,
+                                    body.budget_usd, body.budget_seconds)
+        except KeyError:
+            raise HTTPException(404, "no such conversation") from None
+
+    # The context ring and the Control Center's panes (iteration 3, 4.2-4.3).
+    @app.get("/context")
+    def get_context(task_id: str | None = None) -> dict:
+        from .panels import context_meter
+
+        return context_meter(ctx, task_id)
+
+    @app.get("/memory")
+    def get_memory() -> dict:
+        from .panels import memory
+
+        return memory(ctx)
+
+    @app.post("/memory/accept")
+    def post_memory_accept() -> dict:
+        from .panels import accept_memory
+
+        return accept_memory(ctx)
+
+    @app.get("/panels/{name}")
+    def get_panel(name: str) -> dict:
+        from . import panels
+
+        fn = {"schedules": panels.schedules, "channels": panels.channels,
+              "integrity": panels.integrity, "measurement": panels.measurement,
+              "settings": panels.settings, "logs": panels.logs}.get(name)
+        if fn is None:
+            raise HTTPException(404, "no such panel")
+        return fn(ctx)
 
     # The file browser and drag-and-drop (iteration 3, 4.4): a reader and a
     # writer, through the same scope and protected-path checks as every

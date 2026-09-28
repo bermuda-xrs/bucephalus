@@ -78,11 +78,14 @@ def plane(ctx, workspace):
 def _draft(ctx, task_id):
     from agent.plan.types import Plan, PlanStep
 
-    plan = Plan(objective="o", steps=[PlanStep(id="1", intent="read it")]).seal()
-    ctx.conn.execute("INSERT INTO plans(id, task_id, body_json, status, approved_hash, "
-                     "created_at) VALUES (?,?,?,?,?,?)",
-                     (plan.id, task_id, json.dumps(plan.body()), "draft", None, time.time()))
-    ctx.conn.commit()
+    from agent.kernel.tasks import load_task
+    from agent.plan.planner import store_plan
+
+    # Stored the way the planner stores a draft: a fixture that spelled the
+    # status by hand ("draft", where the planner writes "drafted") let the
+    # console test green while it never offered a real plan for signature.
+    plan = store_plan(ctx, load_task(ctx.conn, task_id),
+                      Plan(objective="o", steps=[PlanStep(id="1", intent="read it")]).seal())
     return plan
 
 
@@ -92,7 +95,7 @@ def test_the_queue_lists_tasks_with_their_plan_state(ctx, plane):
     assert row["plan_status"] is None and row["goal"] == "list the files"
     _draft(ctx, t["task_id"])
     row = next(x for x in plane("GET", "/tasks")["tasks"] if x["task_id"] == t["task_id"])
-    assert row["plan_status"] == "draft"
+    assert row["plan_status"] == "drafted"
 
 
 def test_a_plan_can_be_read_and_sent_back(ctx, plane):
@@ -102,7 +105,7 @@ def test_a_plan_can_be_read_and_sent_back(ctx, plane):
     assert e.value.code == 404
     plan = _draft(ctx, t["task_id"])
     got = plane("GET", f"/tasks/{t['task_id']}/plan")
-    assert got["plan_id"] == plan.id and got["status"] == "draft"
+    assert got["plan_id"] == plan.id and got["status"] == "drafted"
     plane("POST", f"/tasks/{t['task_id']}/plan/reject",
           {"plan_id": plan.id, "comment": "count reopened tickets as open"})
     assert plane("GET", f"/tasks/{t['task_id']}/plan")["status"] == "rejected"
@@ -120,3 +123,16 @@ def test_the_theme_route_serves_the_theme_files_colours_and_banner(plane):
     assert theme["colors"]["danger"] == load(pkg / "themes" / "default.toml", pkg)["colors"]["danger"]
     art = (pkg / "assets" / "banner.ans").read_text(encoding="utf-8").rstrip("\n")
     assert theme["banner"] == art, "the banner is not the theme's banner"
+
+
+def test_the_console_compares_plans_against_statuses_the_planner_writes():
+    """The console waited for "draft"; the planner writes "drafted". Every
+    plan status the page tests for must be one the planner can produce."""
+    planner = (Path(__file__).resolve().parents[1] / "src" / "agent" / "plan"
+               / "planner.py").read_text(encoding="utf-8")
+    written = set(re.findall(r"""status\s*(?:=|:\s*str\s*=)\s*['"](\w+)['"]""", planner))
+    written |= set(re.findall(r"""SET status='(\w+)'""", planner))
+    written |= {"approved"} if '"approved", plan.id' in planner else set()
+    compared = set(re.findall(r'\b(?:plan|p)\.status === "(\w+)"', JS.read_text(encoding="utf-8")))
+    assert compared, "the console no longer tests a plan's status at all"
+    assert compared <= written, f"the console waits for {compared - written}; the planner writes {written}"

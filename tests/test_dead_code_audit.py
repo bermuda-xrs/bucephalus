@@ -86,6 +86,15 @@ KNOWN_INERT = {
     "AlphaTUI.on_mount": "Textual lifecycle hook.",
     "AlphaTUI.on_unmount": "Textual lifecycle hook.",
     "AlphaTUI.on_button_pressed": "Textual event handler, dispatched by name.",
+    "AlphaTUI.on_input_submitted": "Textual event handler, dispatched by name.",
+    "AlphaTUI.on_list_view_selected": "Textual event handler, dispatched by name.",
+    # The TUI's two touches (iteration 3, 4.5): Textual resolves a binding's
+    # action "sign" to the method `action_sign`; nothing names it in full.
+    "AlphaTUI.action_sign": "Textual action, bound to `s` in BINDINGS.",
+    "AlphaTUI.action_send_back": "Textual action, bound to `b` in BINDINGS.",
+    "AlphaTUI.action_allow": "Textual action, bound to `a` in BINDINGS.",
+    "AlphaTUI.action_deny": "Textual action, bound to `d` in BINDINGS.",
+    "AlphaTUI.action_new": "Textual action, bound to `n` in BINDINGS.",
     "_Text.handle_data": "HTMLParser callback, invoked by the stdlib.",
     "_Text.handle_starttag": "HTMLParser callback, invoked by the stdlib.",
     "_Text.handle_endtag": "HTMLParser callback, invoked by the stdlib.",

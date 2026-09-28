@@ -17,6 +17,9 @@ CLIENT_EVENTS = {
     "step.started": "step.started",
     "step.completed": "step.completed",
     "tool.intent": "tool.called",
+    # The receipt: ok or not, how long, what a program touched. Never the
+    # result's content (iteration 3: the console's tool cards).
+    "tool.receipt": "tool.returned",
     "review.requested": "review.requested",
     "review.decided": "review.decided",
     "delegation.opened": "delegation.opened",

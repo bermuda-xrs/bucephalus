@@ -1,0 +1,127 @@
+"""Conversations: the console's threads, each spanning tasks (iteration 3, 4.2).
+
+DEFERRED D30 recommended a session that SPANS tasks, where the conversation is
+the sequence of (goal, answer) exchanges and each task's own trajectory stays
+untouched. This is the grouping half of that: a message sent into a
+conversation creates a new task in it, and the thread renders them in order.
+The other half - handing earlier exchanges to the next task's model - changes
+the prompt, so it is a proposal (docs/PROPOSALS.md P3), not built.
+"""
+
+from __future__ import annotations
+
+import json
+import time
+import uuid
+
+from ..kernel.tasks import create_task
+from ..kernel.types import Budget, TaskContract
+
+
+def create(conn, title: str = "") -> dict:
+    cid = "c_" + uuid.uuid4().hex[:12]
+    now = time.time()
+    conn.execute("INSERT INTO conversations(id, title, created_at, updated_at) VALUES (?,?,?,?)",
+                 (cid, (title or "New conversation").strip()[:120], now, now))
+    conn.commit()
+    return get_row(conn, cid)
+
+
+def get_row(conn, cid: str) -> dict:
+    r = conn.execute("SELECT id, title, created_at, updated_at, archived FROM conversations "
+                     "WHERE id=?", (cid,)).fetchone()
+    if r is None:
+        raise KeyError(cid)
+    return {"id": r[0], "title": r[1], "created_at": r[2], "updated_at": r[3],
+            "archived": bool(r[4])}
+
+
+def listing(conn, q: str = "", archived: bool = False) -> list[dict]:
+    """Newest activity first. `q` matches the title or any goal in the thread."""
+    like = f"%{q.strip()}%"
+    rows = conn.execute(
+        """SELECT c.id, c.title, c.updated_at, c.archived,
+                  (SELECT COUNT(*) FROM conversation_tasks x WHERE x.conversation_id=c.id),
+                  (SELECT COUNT(*) FROM conversation_tasks x
+                     JOIN approvals a ON a.task_id = x.task_id AND a.status = 'pending'
+                    WHERE x.conversation_id = c.id)
+                + (SELECT COUNT(*) FROM conversation_tasks x JOIN tasks t ON t.id = x.task_id
+                    WHERE x.conversation_id = c.id AND t.status = 'pending'
+                      AND (SELECT p.status FROM plans p WHERE p.task_id = t.id
+                           ORDER BY p.created_at DESC LIMIT 1) = 'drafted')
+             FROM conversations c
+            WHERE c.archived = ? AND (? = '' OR c.title LIKE ? OR EXISTS (
+                  SELECT 1 FROM conversation_tasks x JOIN tasks t ON t.id = x.task_id
+                   WHERE x.conversation_id = c.id AND t.contract_json LIKE ?))
+            ORDER BY c.updated_at DESC LIMIT 200""",
+        (1 if archived else 0, q.strip(), like, like)).fetchall()
+    return [{"id": r[0], "title": r[1], "updated_at": r[2], "archived": bool(r[3]),
+             "n_tasks": r[4], "needs_you": r[5]} for r in rows]
+
+
+def update(conn, cid: str, title: str | None = None, archived: bool | None = None) -> dict:
+    get_row(conn, cid)
+    if title is not None:
+        conn.execute("UPDATE conversations SET title=? WHERE id=?", (title.strip()[:120], cid))
+    if archived is not None:
+        conn.execute("UPDATE conversations SET archived=? WHERE id=?", (int(archived), cid))
+    conn.commit()
+    return get_row(conn, cid)
+
+
+def add_message(ctx, cid: str, text: str, scope: list[str], budget_usd: float | None,
+                budget_seconds: int | None) -> dict:
+    """A message is a new task in this conversation. It is not run: the
+    console drafts a plan next, and nothing happens until a human signs it."""
+    get_row(ctx.conn, cid)
+    contract = TaskContract(goal=text, artifact_scope=scope)
+    budget = Budget(usd=budget_usd if budget_usd is not None else ctx.config.limits.default_task_budget_usd,
+                    seconds=budget_seconds or ctx.config.limits.default_task_budget_seconds)
+    task = create_task(ctx.conn, ctx.log, contract, budget)
+    pos = ctx.conn.execute("SELECT COALESCE(MAX(position), -1) + 1 FROM conversation_tasks "
+                           "WHERE conversation_id=?", (cid,)).fetchone()[0]
+    ctx.conn.execute("INSERT INTO conversation_tasks(task_id, conversation_id, position) "
+                     "VALUES (?,?,?)", (task.id, cid, pos))
+    row = get_row(ctx.conn, cid)
+    title = row["title"]
+    if pos == 0 and title == "New conversation":
+        title = text.strip().splitlines()[0][:80] or title
+    ctx.conn.execute("UPDATE conversations SET title=?, updated_at=? WHERE id=?",
+                     (title, time.time(), cid))
+    ctx.conn.commit()
+    return {"task_id": task.id, "conversation_id": cid, "position": pos}
+
+
+def thread(ctx, cid: str) -> dict:
+    """Everything the thread renders, one request: each task with its plan,
+    its pending approvals and its answer, in the order they were asked."""
+    from ..plan.planner import load_plan
+
+    conv = get_row(ctx.conn, cid)
+    rows = ctx.conn.execute(
+        """SELECT t.id, t.contract_json, t.status, t.created_at, t.budget_json
+             FROM conversation_tasks x JOIN tasks t ON t.id = x.task_id
+            WHERE x.conversation_id = ? ORDER BY x.position""", (cid,)).fetchall()
+    items = []
+    for tid, contract, status, created, budget in rows:
+        plan = load_plan(ctx, tid)
+        pstatus = ctx.conn.execute("SELECT status FROM plans WHERE task_id=? "
+                                   "ORDER BY created_at DESC LIMIT 1", (tid,)).fetchone()
+        answer = ctx.conn.execute("SELECT content FROM artifacts WHERE task_id=? AND kind='answer' "
+                                  "ORDER BY created_at DESC LIMIT 1", (tid,)).fetchone()
+        items.append({
+            "task_id": tid, "goal": json.loads(contract).get("goal", ""),
+            "scope": json.loads(contract).get("artifact_scope", []),
+            "status": status, "created_at": created, "budget": json.loads(budget),
+            "plan": ({"plan_id": plan.id, "status": pstatus[0] if pstatus else None,
+                      "body": plan.body()} if plan else None),
+            "approvals": ctx.pending_approvals(tid),
+            "answer": answer[0] if answer else None,
+        })
+    return {"conversation": conv, "items": items}
+
+
+def conversation_of(conn, task_id: str) -> str | None:
+    r = conn.execute("SELECT conversation_id FROM conversation_tasks WHERE task_id=?",
+                     (task_id,)).fetchone()
+    return r[0] if r else None
