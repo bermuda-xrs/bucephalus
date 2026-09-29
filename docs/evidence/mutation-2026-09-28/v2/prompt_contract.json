@@ -1,0 +1,109 @@
+{
+ "module": "src\\agent\\ledger\\prefix.py",
+ "only": [
+  "PROMPT_VISIBLE_CONTRACT_FIELDS",
+  "prompt_contract"
+ ],
+ "tests": [
+  "tests/test_grader_is_not_in_the_prompt.py",
+  "tests/test_invariants.py",
+  "tests/test_m3_ledger.py",
+  "tests/test_max_taint_in_is_dead.py",
+  "tests/test_memory.py",
+  "tests/test_g1_ablation.py"
+ ],
+ "score": 0.9230769230769231,
+ "results": [
+  {
+   "node": 6,
+   "op": "drop0",
+   "line": 43,
+   "status": "killed",
+   "seconds": 2.5085933208465576
+  },
+  {
+   "node": 6,
+   "op": "drop1",
+   "line": 43,
+   "status": "killed",
+   "seconds": 2.1758713722229004
+  },
+  {
+   "node": 6,
+   "op": "drop2",
+   "line": 43,
+   "status": "killed",
+   "seconds": 2.2074759006500244
+  },
+  {
+   "node": 6,
+   "op": "drop3",
+   "line": 43,
+   "status": "killed",
+   "seconds": 2.031083345413208
+  },
+  {
+   "node": 19,
+   "op": "negate",
+   "line": 62,
+   "status": "killed",
+   "seconds": 2.006427764892578
+  },
+  {
+   "node": 27,
+   "op": "return_none",
+   "line": 63,
+   "status": "killed",
+   "seconds": 1.9603283405303955
+  },
+  {
+   "node": 48,
+   "op": "drop_not",
+   "line": 64,
+   "status": "killed",
+   "seconds": 2.0387017726898193
+  },
+  {
+   "node": 50,
+   "op": "boolop",
+   "line": 64,
+   "status": "killed",
+   "seconds": 2.069932222366333
+  },
+  {
+   "node": 65,
+   "op": "negate",
+   "line": 65,
+   "status": "killed",
+   "seconds": 2.163172483444214
+  },
+  {
+   "node": 73,
+   "op": "return_none",
+   "line": 66,
+   "status": "survived",
+   "seconds": 5.126546144485474
+  },
+  {
+   "node": 85,
+   "op": "return_none",
+   "line": 67,
+   "status": "killed",
+   "seconds": 1.969163417816162
+  },
+  {
+   "node": 88,
+   "op": "return_none",
+   "line": 69,
+   "status": "killed",
+   "seconds": 1.846243143081665
+  },
+  {
+   "node": 109,
+   "op": "cmp0",
+   "line": 70,
+   "status": "killed",
+   "seconds": 1.5989341735839844
+  }
+ ]
+}

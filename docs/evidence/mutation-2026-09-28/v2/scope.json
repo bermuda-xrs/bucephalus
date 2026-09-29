@@ -1,0 +1,117 @@
+{
+ "module": "src\\agent\\kernel\\scope.py",
+ "only": [],
+ "tests": [
+  "tests/test_cross_arm_retrieval_blocked.py",
+  "tests/test_search_history.py",
+  "tests/test_tool_exposure.py"
+ ],
+ "score": 0.7333333333333333,
+ "results": [
+  {
+   "node": 39,
+   "op": "int",
+   "line": 58,
+   "status": "killed",
+   "seconds": 2.2748398780822754
+  },
+  {
+   "node": 59,
+   "op": "return_none",
+   "line": 68,
+   "status": "killed",
+   "seconds": 2.356452465057373
+  },
+  {
+   "node": 65,
+   "op": "int",
+   "line": 68,
+   "status": "killed",
+   "seconds": 2.3261160850524902
+  },
+  {
+   "node": 87,
+   "op": "drop_not",
+   "line": 77,
+   "status": "killed",
+   "seconds": 2.6971113681793213
+  },
+  {
+   "node": 97,
+   "op": "bool",
+   "line": 77,
+   "status": "survived",
+   "seconds": 5.4523937702178955
+  },
+  {
+   "node": 101,
+   "op": "cmp0",
+   "line": 79,
+   "status": "killed",
+   "seconds": 2.35701847076416
+  },
+  {
+   "node": 106,
+   "op": "return_none",
+   "line": 83,
+   "status": "killed",
+   "seconds": 2.6826915740966797
+  },
+  {
+   "node": 110,
+   "op": "return_none",
+   "line": 84,
+   "status": "killed",
+   "seconds": 1.960400104522705
+  },
+  {
+   "node": 148,
+   "op": "bool",
+   "line": 89,
+   "status": "survived",
+   "seconds": 5.458821058273315
+  },
+  {
+   "node": 149,
+   "op": "return_none",
+   "line": 90,
+   "status": "killed",
+   "seconds": 2.786299228668213
+  },
+  {
+   "node": 198,
+   "op": "drop_not",
+   "line": 125,
+   "status": "killed",
+   "seconds": 2.9780333042144775
+  },
+  {
+   "node": 202,
+   "op": "return_none",
+   "line": 126,
+   "status": "survived",
+   "seconds": 5.265597105026245
+  },
+  {
+   "node": 203,
+   "op": "bool",
+   "line": 126,
+   "status": "survived",
+   "seconds": 5.251909971237183
+  },
+  {
+   "node": 247,
+   "op": "return_none",
+   "line": 136,
+   "status": "killed",
+   "seconds": 2.9155774116516113
+  },
+  {
+   "node": 248,
+   "op": "cmp0",
+   "line": 136,
+   "status": "killed",
+   "seconds": 2.0825109481811523
+  }
+ ]
+}

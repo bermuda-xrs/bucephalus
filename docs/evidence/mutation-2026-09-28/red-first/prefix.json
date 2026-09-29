@@ -1,0 +1,75 @@
+{
+ "module": "src\\agent\\ledger\\prefix.py",
+ "only": [
+  "prompt_contract"
+ ],
+ "tests": [
+  "tests/test_holdout_mutants.py"
+ ],
+ "score": 1.0,
+ "results": [
+  {
+   "node": 8,
+   "op": "negate",
+   "line": 62,
+   "status": "killed",
+   "seconds": 4.706433057785034
+  },
+  {
+   "node": 16,
+   "op": "return_none",
+   "line": 63,
+   "status": "killed",
+   "seconds": 4.706433057785034
+  },
+  {
+   "node": 37,
+   "op": "drop_not",
+   "line": 64,
+   "status": "killed",
+   "seconds": 4.685617685317993
+  },
+  {
+   "node": 39,
+   "op": "boolop",
+   "line": 64,
+   "status": "killed",
+   "seconds": 4.721745014190674
+  },
+  {
+   "node": 54,
+   "op": "negate",
+   "line": 65,
+   "status": "killed",
+   "seconds": 7.005089998245239
+  },
+  {
+   "node": 62,
+   "op": "return_none",
+   "line": 66,
+   "status": "killed",
+   "seconds": 6.767782688140869
+  },
+  {
+   "node": 74,
+   "op": "return_none",
+   "line": 67,
+   "status": "killed",
+   "seconds": 6.764599561691284
+  },
+  {
+   "node": 77,
+   "op": "return_none",
+   "line": 69,
+   "status": "killed",
+   "seconds": 6.769962310791016
+  },
+  {
+   "node": 98,
+   "op": "cmp0",
+   "line": 70,
+   "status": "killed",
+   "seconds": 3.418616533279419
+  }
+ ]
+}

@@ -37,7 +37,7 @@ Everything else on this page is marked in its own heading:
 | state | what it means | items |
 |---|---|---|
 | **open** | a real defect, nobody has fixed it | D2, D6, D16, D26, D27, D33; from Linux D54-D59; from the audit D46, D47, D48, D49, D52, each with its audit severity; from iteration 3 D63; from its audit D70, D72, D74-D77; from its mutation work D79 |
-| **closed** | fixed, with the change and its test named | D1, D3, D7, D9, D10, D11, D15, D17, D18, D19, D20, D21, D22, D23, D24, D28, D29, D30, D34, D35, D36, D37, D38, D39, D40, D41, D42, D43, D44, D51, D50, D53, D45, D61, D60, D62, D64, D65, D66, D67, D68, D69, D78, D71, D73 |
+| **closed** | fixed, with the change and its test named | D1, D3, D7, D9, D10, D11, D15, D17, D18, D19, D20, D21, D22, D23, D24, D28, D29, D30, D34, D35, D36, D37, D38, D39, D40, D41, D42, D43, D44, D51, D50, D53, D45, D61, D60, D62, D64, D65, D66, D67, D68, D69, D78, D71, D73, D80 |
 | **deleted** | never a defect, or about an instrument nobody runs | D4, D5, D8, D12, D14 |
 | **known and accepted** | a real limit, decided rather than deferred | D32 (the sandbox is advisory: Phase 6 withdrawn) |
 | **dormant** | its subject is retired; it wakes if that returns | D19 (M11). D13 CLOSED 2026-09-25 |
@@ -1518,6 +1518,13 @@ now (`PROJECT_STATE`). `tests/test_audit_iteration_3_fixes.py`, red first.
 poll on the 283-task record, ~10 s at 1,000 tasks. The previous console polled
 it every 8 s, so the shape predates iteration 3. Fix: verify only tasks whose
 head moved since the last sweep, or a short-TTL cache; full sweep on demand.
+**Partly fixed 2026-09-29 (3.5):** two thirds of a sweep was re-reading the
+anchor file twice per task, and one of the two reads was never used; the
+anchor is read once per sweep now (`test_I1_a_sweep_reads_the_anchor_once_not_per_task`,
+red first). What is left is the chain walk itself, O(events) per poll. Caching
+by head is NOT the fix: an in-place edit of an old row leaves the head alone.
+A gate on SQLite's `data_version` (changes only when another connection
+writes) plus the anchor's size and mtime would be.
 
 ## D73 - MEDIUM - the D61 per-file check rebuilt the protected set for every file (audit I2) (CLOSED 2026-09-29: a regression of this run's D61, fixed - DECISIONS U8)
 
@@ -1569,3 +1576,15 @@ answer returning an object whose `__eq__` is always true passes
 `fn(given) == want`, and in-process code can patch `json.dumps`. No recorded
 run shows either (the model never sees the harness or the grader). Not fixed
 unattended: every fix changes what counts as a pass, which is HARNESS_VERSION.
+
+## D80 - MEDIUM - the suite migrated the measurement record's schema on every run (CLOSED 2026-09-29: fixed in the change that recorded it)
+
+`test_the_live_database_has_an_empty_critical_channel` (since 2026-09-06)
+checked the checkout's `agent.local.db` - the 283-task record - through
+`open_db`, which migrates. So each schema addition since then reached the
+record on the next suite run; this run's `conversations` and
+`conversation_tasks` did on 2026-09-28 22:53. Tables only: no row was
+written, the last event is still 2026-09-06, the chain verifies. The check
+opens the record read-only now;
+`test_checking_the_live_record_does_not_change_it`, red first on a copy of
+an older record. The added tables stay (DECISIONS U11).

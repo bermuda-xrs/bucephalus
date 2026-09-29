@@ -1,0 +1,68 @@
+{
+ "module": "src\\agent\\security\\capabilities.py",
+ "only": [
+  "_effective_args"
+ ],
+ "tests": [
+  "tests/test_gate_mutants.py"
+ ],
+ "score": 0.125,
+ "results": [
+  {
+   "node": 25,
+   "op": "cmp0",
+   "line": 203,
+   "status": "survived",
+   "seconds": 9.18257474899292
+  },
+  {
+   "node": 30,
+   "op": "return_none",
+   "line": 204,
+   "status": "survived",
+   "seconds": 9.22741985321045
+  },
+  {
+   "node": 53,
+   "op": "return_none",
+   "line": 208,
+   "status": "killed",
+   "seconds": 10.530516386032104
+  },
+  {
+   "node": 68,
+   "op": "negate",
+   "line": 210,
+   "status": "survived",
+   "seconds": 9.207982540130615
+  },
+  {
+   "node": 69,
+   "op": "boolop",
+   "line": 210,
+   "status": "survived",
+   "seconds": 9.045986652374268
+  },
+  {
+   "node": 71,
+   "op": "cmp0",
+   "line": 210,
+   "status": "survived",
+   "seconds": 8.821457386016846
+  },
+  {
+   "node": 77,
+   "op": "cmp0",
+   "line": 210,
+   "status": "survived",
+   "seconds": 9.432320594787598
+  },
+  {
+   "node": 103,
+   "op": "return_none",
+   "line": 212,
+   "status": "survived",
+   "seconds": 8.781710624694824
+  }
+ ]
+}

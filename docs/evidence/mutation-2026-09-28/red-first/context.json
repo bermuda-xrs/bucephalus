@@ -1,0 +1,54 @@
+{
+ "module": "src\\agent\\context.py",
+ "only": [
+  "AgentContext.compact_transcript"
+ ],
+ "tests": [
+  "tests/test_holdout_mutants.py"
+ ],
+ "score": 0.5,
+ "results": [
+  {
+   "node": 9,
+   "op": "int",
+   "line": 586,
+   "status": "survived",
+   "seconds": 4.054788827896118
+  },
+  {
+   "node": 44,
+   "op": "bool",
+   "line": 600,
+   "status": "survived",
+   "seconds": 4.051772832870483
+  },
+  {
+   "node": 72,
+   "op": "negate",
+   "line": 604,
+   "status": "killed",
+   "seconds": 4.223811388015747
+  },
+  {
+   "node": 87,
+   "op": "negate",
+   "line": 612,
+   "status": "killed",
+   "seconds": 4.2568159103393555
+  },
+  {
+   "node": 119,
+   "op": "int",
+   "line": 614,
+   "status": "survived",
+   "seconds": 3.2848470211029053
+  },
+  {
+   "node": 121,
+   "op": "return_none",
+   "line": 615,
+   "status": "killed",
+   "seconds": 3.3820958137512207
+  }
+ ]
+}

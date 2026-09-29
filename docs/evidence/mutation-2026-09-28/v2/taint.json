@@ -1,0 +1,161 @@
+{
+ "module": "src\\agent\\security\\taint.py",
+ "only": [],
+ "tests": [
+  "tests/test_taint_mutants.py",
+  "tests/test_invariants.py",
+  "tests/test_m8_security.py",
+  "tests/test_memory.py",
+  "tests/test_tui.py"
+ ],
+ "score": 0.7619047619047619,
+ "results": [
+  {
+   "node": 17,
+   "op": "int",
+   "line": 35,
+   "status": "killed",
+   "seconds": 2.510563611984253
+  },
+  {
+   "node": 90,
+   "op": "negate",
+   "line": 50,
+   "status": "killed",
+   "seconds": 2.205312728881836
+  },
+  {
+   "node": 91,
+   "op": "boolop",
+   "line": 50,
+   "status": "killed",
+   "seconds": 2.11539626121521
+  },
+  {
+   "node": 93,
+   "op": "cmp0",
+   "line": 50,
+   "status": "killed",
+   "seconds": 2.1723179817199707
+  },
+  {
+   "node": 142,
+   "op": "negate",
+   "line": 56,
+   "status": "killed",
+   "seconds": 2.1790359020233154
+  },
+  {
+   "node": 154,
+   "op": "return_none",
+   "line": 57,
+   "status": "killed",
+   "seconds": 2.103865623474121
+  },
+  {
+   "node": 180,
+   "op": "negate",
+   "line": 58,
+   "status": "killed",
+   "seconds": 2.1780126094818115
+  },
+  {
+   "node": 207,
+   "op": "return_none",
+   "line": 60,
+   "status": "killed",
+   "seconds": 2.1125779151916504
+  },
+  {
+   "node": 231,
+   "op": "cmp0",
+   "line": 62,
+   "status": "killed",
+   "seconds": 2.1607506275177
+  },
+  {
+   "node": 240,
+   "op": "return_none",
+   "line": 63,
+   "status": "killed",
+   "seconds": 2.9231607913970947
+  },
+  {
+   "node": 254,
+   "op": "cmp0",
+   "line": 65,
+   "status": "killed",
+   "seconds": 2.1195430755615234
+  },
+  {
+   "node": 262,
+   "op": "return_none",
+   "line": 66,
+   "status": "killed",
+   "seconds": 2.00443696975708
+  },
+  {
+   "node": 275,
+   "op": "cmp0",
+   "line": 68,
+   "status": "killed",
+   "seconds": 2.3420445919036865
+  },
+  {
+   "node": 281,
+   "op": "return_none",
+   "line": 69,
+   "status": "killed",
+   "seconds": 3.7162468433380127
+  },
+  {
+   "node": 286,
+   "op": "return_none",
+   "line": 71,
+   "status": "killed",
+   "seconds": 2.1866350173950195
+  },
+  {
+   "node": 318,
+   "op": "return_none",
+   "line": 75,
+   "status": "killed",
+   "seconds": 2.056378126144409
+  },
+  {
+   "node": 358,
+   "op": "boolop",
+   "line": 88,
+   "status": "survived",
+   "seconds": 5.210756540298462
+  },
+  {
+   "node": 371,
+   "op": "boolop",
+   "line": 89,
+   "status": "survived",
+   "seconds": 5.210817098617554
+  },
+  {
+   "node": 398,
+   "op": "cmp0",
+   "line": 91,
+   "status": "survived",
+   "seconds": 5.034472703933716
+  },
+  {
+   "node": 426,
+   "op": "int",
+   "line": 95,
+   "status": "survived",
+   "seconds": 4.862698793411255
+  },
+  {
+   "node": 429,
+   "op": "return_none",
+   "line": 98,
+   "status": "survived",
+   "seconds": 4.312431335449219
+  }
+ ]
+}

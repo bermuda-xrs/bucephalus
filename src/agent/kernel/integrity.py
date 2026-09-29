@@ -82,15 +82,17 @@ class Anchor:
         fix a log that is append-only by design is worse than a reader that
         knows what a chain head looks like: 64 hex characters.
         """
-        latest = None
+        return self.chain_heads().get(task_id)
+
+    def chain_heads(self) -> dict[str, str]:
+        """`latest_chain` for every task, in one read of the file. A sweep
+        asked per task and read it twice per task (D72)."""
+        heads = {}
         for line in self.path.read_text(encoding="utf-8").splitlines():
-            parts = line.split("	")
-            if len(parts) != 3:
-                continue
-            _, tid, value = parts
-            if tid == task_id and _is_chain_hash(value):
-                latest = value
-        return latest
+            parts = line.split("\t")
+            if len(parts) == 3 and _is_chain_hash(parts[2]):
+                heads[parts[1]] = parts[2]
+        return heads
 
     def all_tasks(self) -> set[str]:
         out: set[str] = set()
@@ -130,7 +132,11 @@ ANCHOR_REWRITTEN = "anchor_rewritten"
 def classify_anchor(conn: sqlite3.Connection, log: EventLog, anchor: Anchor,
                     task_id: str) -> str | None:
     """None when the anchor agrees with the head, or there is no anchor."""
-    anchored = anchor.latest_chain(task_id)
+    return _classify(conn, log, task_id, anchor.latest_chain(task_id))
+
+
+def _classify(conn: sqlite3.Connection, log: EventLog, task_id: str,
+              anchored: str | None) -> str | None:
     if not anchored:
         return None
     if log.head(task_id) == anchored:
@@ -231,16 +237,15 @@ def verify_all(conn: sqlite3.Connection, log: EventLog, anchor: Anchor,
                              "detail": "the anchor has a checkpoint for this task and the "
                                        "database has no record of it - deleted after it "
                                        "was checkpointed"})
+    heads = anchor.chain_heads()
     for task_id in sorted(known):
         ok, bad = log.verify(task_id)
-        anchored = anchor.latest(task_id)
-        head = log.head(task_id)
         if not ok:
             findings.append(
                 {"task_id": task_id, "severity": "critical", "detail": f"chain break at seq {bad}"}
             )
             continue
-        state = classify_anchor(conn, log, anchor, task_id)
+        state = _classify(conn, log, task_id, heads.get(task_id))
         if state == ANCHOR_REWRITTEN:
             findings.append(
                 {

@@ -109,3 +109,40 @@ test holds. Not built. `docs/PROPOSALS.md` P4 says what it would take.
   were fixed for a different reason: they corrupt numbers this report states.
 - **Reverse.** Revert the S4 line in `PROJECT_STATE` and the I2 caching in
   `security/capabilities.py` / `control/files.py` / `execute/tools.py`.
+
+## U9 - D79, a graded program that prints its own verdict: WAITING FOR USER, as proposal P5
+
+- **Found** killing the verifier survivors of 2.3: `verify_program` reads the
+  first verdict marker on stdout, and the grader runs the graded code in its
+  own interpreter, so that code can print a pass. Shown by a strict xfail.
+- **Not fixed.** Every fix (the last marker, a private channel, a child
+  process for the answer, exact-type comparison in graders) changes what
+  counts as a pass - HARNESS_VERSION, which this run may not bump - and the
+  last two change the graders, which are part of the measurement. No
+  recorded run shows it: the model sees neither the harness nor the grader.
+- **Reverse.** Nothing to reverse; P5 lays out the three options.
+
+## U10 - The suite's wall time is recorded as machine state, not a regression (2.2)
+
+- **Measured.** 2.2 recorded 47 s parallel on 2026-09-28. On 2026-09-29 the
+  suite took 180 s at HEAD with 6, 10 or 14 workers alike, and the 2.2-era
+  commit (5d4b0b9) took 155 s in the same hour - so the machine, not the
+  code: 4.7 GB of 15.5 GB free with 14.5 GB committed by processes that are
+  not this project's, on AC power. The same test takes 1.2 s alone and 27 s
+  in the loaded suite.
+- **Chosen.** Report both numbers with their conditions; change nothing. A
+  timing claim holds only against a run on the same machine state, which is
+  why Part 3 times before and after back to back.
+
+## U11 - The measurement record keeps the empty tables the suite added (D80)
+
+- **What happened.** A pre-existing test opened `agent.local.db` read-write,
+  so this run's schema reached the record: two empty tables and an index.
+  No row changed; the chain verifies.
+- **Options.** (a) drop them; (b) leave them.
+- **Chosen: (b).** Dropping is another write to the record, the pre-change
+  bytes are not recoverable from anything this run kept, and any reader
+  that opens the record through `open_db` adds them back. Earlier schema
+  additions since 2026-09-06 reached it the same way and were never noticed.
+- **Reverse.** `DROP TABLE conversation_tasks; DROP TABLE conversations;`
+  on the record, if the user wants the schema as of the last measurement.

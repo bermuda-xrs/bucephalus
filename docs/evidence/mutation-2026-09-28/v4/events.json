@@ -1,0 +1,729 @@
+{
+ "module": "src\\agent\\kernel\\events.py",
+ "only": [],
+ "tests": [
+  "tests/test_m1_kernel.py",
+  "tests/test_anchor_behind_is_not_tampering.py",
+  "tests/test_decisions_take_effect.py",
+  "tests/test_m4_loop.py",
+  "tests/test_memory_tampering.py",
+  "tests/test_resume_is_verified.py",
+  "tests/test_search_history.py",
+  "tests/test_sessions.py",
+  "tests/test_storage_layer.py",
+  "tests/test_run_code_record.py"
+ ],
+ "score": 0.8444444444444444,
+ "results": [
+  {
+   "node": 20,
+   "op": "int",
+   "line": 13,
+   "status": "killed-by-suite",
+   "seconds": 83.92339301109314,
+   "killed_by": [
+    "tests/test_cli_subcommands.py::test_verify",
+    "tests/test_cli_subcommands.py::test_alerts"
+   ]
+  },
+  {
+   "node": 26,
+   "op": "return_none",
+   "line": 21,
+   "status": "killed",
+   "seconds": 25.583165407180786
+  },
+  {
+   "node": 35,
+   "op": "bool",
+   "line": 23,
+   "status": "killed",
+   "seconds": 24.424813508987427
+  },
+  {
+   "node": 37,
+   "op": "drop0",
+   "line": 24,
+   "status": "killed",
+   "seconds": 24.66746163368225
+  },
+  {
+   "node": 37,
+   "op": "drop1",
+   "line": 24,
+   "status": "killed",
+   "seconds": 21.37904119491577
+  },
+  {
+   "node": 42,
+   "op": "bool",
+   "line": 25,
+   "status": "survived",
+   "seconds": 58.471394777297974
+  },
+  {
+   "node": 53,
+   "op": "return_none",
+   "line": 31,
+   "status": "killed",
+   "seconds": 20.01798939704895
+  },
+  {
+   "node": 76,
+   "op": "drop0",
+   "line": 36,
+   "status": "killed",
+   "seconds": 16.577239274978638
+  },
+  {
+   "node": 76,
+   "op": "drop1",
+   "line": 36,
+   "status": "killed",
+   "seconds": 17.521645069122314
+  },
+  {
+   "node": 76,
+   "op": "drop2",
+   "line": 36,
+   "status": "killed",
+   "seconds": 13.494334697723389
+  },
+  {
+   "node": 76,
+   "op": "drop3",
+   "line": 36,
+   "status": "killed",
+   "seconds": 13.915550470352173
+  },
+  {
+   "node": 76,
+   "op": "drop4",
+   "line": 36,
+   "status": "killed",
+   "seconds": 10.656934976577759
+  },
+  {
+   "node": 76,
+   "op": "drop5",
+   "line": 36,
+   "status": "killed",
+   "seconds": 9.322426795959473
+  },
+  {
+   "node": 76,
+   "op": "drop6",
+   "line": 36,
+   "status": "killed",
+   "seconds": 12.686073064804077
+  },
+  {
+   "node": 76,
+   "op": "drop7",
+   "line": 36,
+   "status": "killed",
+   "seconds": 12.361777305603027
+  },
+  {
+   "node": 76,
+   "op": "drop8",
+   "line": 36,
+   "status": "survived",
+   "seconds": 29.438838243484497
+  },
+  {
+   "node": 76,
+   "op": "drop9",
+   "line": 36,
+   "status": "killed-by-suite",
+   "seconds": 30.54185938835144,
+   "killed_by": [
+    "tests/test_g1_ablation.py::test_compaction_off_crosses_the_ceiling_and_drops_nothing",
+    "tests/test_g1_ablation.py::test_the_probe_forces_a_boundary_the_fill_would_not",
+    "tests/test_g1_ablation.py::test_the_probe_and_the_ablation_arm_agree"
+   ]
+  },
+  {
+   "node": 76,
+   "op": "drop10",
+   "line": 36,
+   "status": "killed-by-suite",
+   "seconds": 31.72711181640625,
+   "killed_by": [
+    "tests/test_final_sweep.py::test_correct_work_without_a_final_still_passes",
+    "tests/test_lifetime.py::test_a_skill_arm_testing_a_candidate_keeps_it_after_a_restart"
+   ]
+  },
+  {
+   "node": 76,
+   "op": "drop11",
+   "line": 36,
+   "status": "survived",
+   "seconds": 29.872180223464966
+  },
+  {
+   "node": 76,
+   "op": "drop12",
+   "line": 36,
+   "status": "survived",
+   "seconds": 51.78301239013672
+  },
+  {
+   "node": 76,
+   "op": "drop13",
+   "line": 36,
+   "status": "killed-by-suite",
+   "seconds": 59.69186592102051,
+   "killed_by": [
+    "tests/test_m10_delegate.py::test_delegation_is_logged_on_both_sides",
+    "tests/test_m10_delegate.py::test_parent_context_bounded"
+   ]
+  },
+  {
+   "node": 76,
+   "op": "drop14",
+   "line": 36,
+   "status": "killed-by-suite",
+   "seconds": 73.54504942893982,
+   "killed_by": [
+    "tests/test_m10_delegate.py::test_delegation_is_logged_on_both_sides",
+    "tests/test_m10_delegate.py::test_parent_context_bounded"
+   ]
+  },
+  {
+   "node": 76,
+   "op": "drop15",
+   "line": 36,
+   "status": "killed",
+   "seconds": 17.88145160675049
+  },
+  {
+   "node": 76,
+   "op": "drop16",
+   "line": 36,
+   "status": "killed",
+   "seconds": 20.14417552947998
+  },
+  {
+   "node": 76,
+   "op": "drop17",
+   "line": 36,
+   "status": "killed",
+   "seconds": 33.86288142204285
+  },
+  {
+   "node": 76,
+   "op": "drop18",
+   "line": 36,
+   "status": "killed-by-suite",
+   "seconds": 73.11240744590759,
+   "killed_by": [
+    "tests/test_every_verifier_can_fail.py::test_the_sweep_still_grades_the_workspace",
+    "tests/test_final_sweep.py::test_sweep_fires_on_an_unhandled_exception",
+    "tests/test_final_sweep.py::test_the_unannounced_pass_is_labelled_not_disguised"
+   ]
+  },
+  {
+   "node": 76,
+   "op": "drop19",
+   "line": 36,
+   "status": "killed-by-suite",
+   "seconds": 68.92303776741028,
+   "killed_by": [
+    "tests/test_final_sweep.py::test_sweep_fires_on_an_unhandled_exception"
+   ]
+  },
+  {
+   "node": 76,
+   "op": "drop20",
+   "line": 36,
+   "status": "killed-by-suite",
+   "seconds": 56.70345139503479,
+   "killed_by": [
+    "tests/test_calls_record.py::test_a_stalled_call_keeps_its_row_and_its_time"
+   ]
+  },
+  {
+   "node": 76,
+   "op": "drop21",
+   "line": 36,
+   "status": "killed",
+   "seconds": 33.87347364425659
+  },
+  {
+   "node": 76,
+   "op": "drop22",
+   "line": 36,
+   "status": "killed",
+   "seconds": 20.751662015914917
+  },
+  {
+   "node": 76,
+   "op": "drop23",
+   "line": 36,
+   "status": "killed",
+   "seconds": 16.89848303794861
+  },
+  {
+   "node": 76,
+   "op": "drop24",
+   "line": 36,
+   "status": "killed-by-suite",
+   "seconds": 32.54326772689819,
+   "killed_by": [
+    "tests/test_web_tools.py::test_a_failed_search_comes_back_as_data_carrying_its_kind"
+   ]
+  },
+  {
+   "node": 76,
+   "op": "drop25",
+   "line": 36,
+   "status": "killed-by-suite",
+   "seconds": 27.755268335342407,
+   "killed_by": [
+    "tests/test_parallel_tools.py::test_a_denied_call_refuses_the_whole_batch_and_nothing_runs"
+   ]
+  },
+  {
+   "node": 76,
+   "op": "drop26",
+   "line": 36,
+   "status": "killed",
+   "seconds": 8.757103204727173
+  },
+  {
+   "node": 76,
+   "op": "drop27",
+   "line": 36,
+   "status": "killed",
+   "seconds": 8.729455471038818
+  },
+  {
+   "node": 76,
+   "op": "drop28",
+   "line": 36,
+   "status": "survived",
+   "seconds": 23.65047311782837
+  },
+  {
+   "node": 76,
+   "op": "drop29",
+   "line": 36,
+   "status": "killed",
+   "seconds": 15.415227174758911
+  },
+  {
+   "node": 76,
+   "op": "drop30",
+   "line": 36,
+   "status": "killed-by-suite",
+   "seconds": 18.460092067718506,
+   "killed_by": [
+    "tests/test_calls_record.py::test_the_deputy_is_on_the_record"
+   ]
+  },
+  {
+   "node": 76,
+   "op": "drop31",
+   "line": 36,
+   "status": "killed-by-suite",
+   "seconds": 18.15341854095459,
+   "killed_by": [
+    "tests/test_calls_record.py::test_the_deputy_is_on_the_record"
+   ]
+  },
+  {
+   "node": 76,
+   "op": "drop32",
+   "line": 36,
+   "status": "killed-by-suite",
+   "seconds": 17.953542470932007,
+   "killed_by": [
+    "tests/test_console.py::test_a_plan_can_be_read_and_sent_back"
+   ]
+  },
+  {
+   "node": 76,
+   "op": "drop33",
+   "line": 36,
+   "status": "survived",
+   "seconds": 18.719093084335327
+  },
+  {
+   "node": 76,
+   "op": "drop34",
+   "line": 36,
+   "status": "killed-by-suite",
+   "seconds": 18.95786714553833,
+   "killed_by": [
+    "tests/test_reaper_parentage.py::test_reap_kills_exactly_what_selection_returns"
+   ]
+  },
+  {
+   "node": 76,
+   "op": "drop35",
+   "line": 36,
+   "status": "killed",
+   "seconds": 6.565775394439697
+  },
+  {
+   "node": 76,
+   "op": "drop36",
+   "line": 36,
+   "status": "killed",
+   "seconds": 6.550132513046265
+  },
+  {
+   "node": 76,
+   "op": "drop37",
+   "line": 36,
+   "status": "killed-by-suite",
+   "seconds": 18.421916484832764,
+   "killed_by": [
+    "tests/test_m13_autonomy.py::test_deviation_bands"
+   ]
+  },
+  {
+   "node": 76,
+   "op": "drop38",
+   "line": 36,
+   "status": "killed-by-suite",
+   "seconds": 18.152488946914673,
+   "killed_by": [
+    "tests/test_channel.py::test_the_park_reaches_the_channel_with_buttons",
+    "tests/test_channel.py::test_a_stale_button_cannot_re_decide",
+    "tests/test_channel.py::test_the_sender_is_re_verified_at_approval_time"
+   ]
+  },
+  {
+   "node": 76,
+   "op": "drop39",
+   "line": 36,
+   "status": "killed-by-suite",
+   "seconds": 18.580113410949707,
+   "killed_by": [
+    "tests/test_audit_2026_09.py::test_F1_a_channel_task_is_decided_only_from_its_own_chat",
+    "tests/test_channel.py::test_a_stale_button_cannot_re_decide",
+    "tests/test_channel.py::test_who_approved_is_on_the_chain"
+   ]
+  },
+  {
+   "node": 76,
+   "op": "drop40",
+   "line": 36,
+   "status": "killed-by-suite",
+   "seconds": 19.681446075439453,
+   "killed_by": [
+    "tests/test_audit_2026_09.py::test_F1_a_channel_task_is_decided_only_from_its_own_chat",
+    "tests/test_audit_2026_09.py::test_F1_a_channel_cannot_decide_a_local_tasks_approval"
+   ]
+  },
+  {
+   "node": 76,
+   "op": "drop41",
+   "line": 36,
+   "status": "killed",
+   "seconds": 4.660109043121338
+  },
+  {
+   "node": 76,
+   "op": "drop42",
+   "line": 36,
+   "status": "killed",
+   "seconds": 4.4317786693573
+  },
+  {
+   "node": 76,
+   "op": "drop43",
+   "line": 36,
+   "status": "killed",
+   "seconds": 4.402018785476685
+  },
+  {
+   "node": 76,
+   "op": "drop44",
+   "line": 36,
+   "status": "killed",
+   "seconds": 5.9064249992370605
+  },
+  {
+   "node": 76,
+   "op": "drop45",
+   "line": 36,
+   "status": "killed",
+   "seconds": 14.774526834487915
+  },
+  {
+   "node": 76,
+   "op": "drop46",
+   "line": 36,
+   "status": "killed-by-suite",
+   "seconds": 27.189433574676514,
+   "killed_by": [
+    "tests/test_measurement_signal.py::test_the_supervisor_will_not_fire_during_a_measurement"
+   ]
+  },
+  {
+   "node": 76,
+   "op": "drop47",
+   "line": 36,
+   "status": "killed-by-suite",
+   "seconds": 30.447863578796387,
+   "killed_by": [
+    "tests/test_schedule.py::test_a_boundary_parks_notifies_and_the_approval_is_actionable",
+    "tests/test_schedule.py::test_the_deputy_never_sees_a_scheduled_task"
+   ]
+  },
+  {
+   "node": 76,
+   "op": "drop48",
+   "line": 36,
+   "status": "killed",
+   "seconds": 7.24370265007019
+  },
+  {
+   "node": 76,
+   "op": "drop49",
+   "line": 36,
+   "status": "killed",
+   "seconds": 8.859242916107178
+  },
+  {
+   "node": 76,
+   "op": "drop50",
+   "line": 36,
+   "status": "killed",
+   "seconds": 8.379456281661987
+  },
+  {
+   "node": 76,
+   "op": "drop51",
+   "line": 36,
+   "status": "killed-by-suite",
+   "seconds": 36.13463735580444,
+   "killed_by": [
+    "tests/test_calls_record.py::test_the_deputy_is_on_the_record"
+   ]
+  },
+  {
+   "node": 158,
+   "op": "cmp0",
+   "line": 173,
+   "status": "killed",
+   "seconds": 5.110337495803833
+  },
+  {
+   "node": 164,
+   "op": "raise_pass",
+   "line": 174,
+   "status": "killed",
+   "seconds": 7.124810457229614
+  },
+  {
+   "node": 217,
+   "op": "addsub",
+   "line": 182,
+   "status": "killed",
+   "seconds": 7.096627473831177
+  },
+  {
+   "node": 221,
+   "op": "int",
+   "line": 182,
+   "status": "killed",
+   "seconds": 7.210617303848267
+  },
+  {
+   "node": 224,
+   "op": "int",
+   "line": 182,
+   "status": "killed",
+   "seconds": 6.280633926391602
+  },
+  {
+   "node": 225,
+   "op": "int",
+   "line": 182,
+   "status": "killed",
+   "seconds": 6.499421119689941
+  },
+  {
+   "node": 235,
+   "op": "int",
+   "line": 183,
+   "status": "killed",
+   "seconds": 7.126846075057983
+  },
+  {
+   "node": 264,
+   "op": "addsub",
+   "line": 193,
+   "status": "killed",
+   "seconds": 7.026080369949341
+  },
+  {
+   "node": 307,
+   "op": "return_none",
+   "line": 202,
+   "status": "survived",
+   "seconds": 36.00031042098999
+  },
+  {
+   "node": 347,
+   "op": "int",
+   "line": 213,
+   "status": "killed",
+   "seconds": 6.441982746124268
+  },
+  {
+   "node": 367,
+   "op": "cmp0",
+   "line": 215,
+   "status": "killed",
+   "seconds": 6.804007291793823
+  },
+  {
+   "node": 373,
+   "op": "return_none",
+   "line": 216,
+   "status": "killed",
+   "seconds": 8.106817483901978
+  },
+  {
+   "node": 375,
+   "op": "bool",
+   "line": 216,
+   "status": "killed",
+   "seconds": 7.640061616897583
+  },
+  {
+   "node": 380,
+   "op": "cmp0",
+   "line": 217,
+   "status": "killed",
+   "seconds": 7.344552993774414
+  },
+  {
+   "node": 386,
+   "op": "return_none",
+   "line": 218,
+   "status": "survived",
+   "seconds": 29.53446865081787
+  },
+  {
+   "node": 388,
+   "op": "bool",
+   "line": 218,
+   "status": "survived",
+   "seconds": 28.54200530052185
+  },
+  {
+   "node": 417,
+   "op": "cmp0",
+   "line": 227,
+   "status": "killed",
+   "seconds": 6.304458141326904
+  },
+  {
+   "node": 421,
+   "op": "addsub",
+   "line": 227,
+   "status": "killed",
+   "seconds": 4.61980414390564
+  },
+  {
+   "node": 430,
+   "op": "return_none",
+   "line": 228,
+   "status": "killed",
+   "seconds": 4.421414136886597
+  },
+  {
+   "node": 432,
+   "op": "bool",
+   "line": 228,
+   "status": "killed",
+   "seconds": 4.822268486022949
+  },
+  {
+   "node": 445,
+   "op": "int",
+   "line": 230,
+   "status": "killed",
+   "seconds": 3.7240285873413086
+  },
+  {
+   "node": 446,
+   "op": "return_none",
+   "line": 231,
+   "status": "killed",
+   "seconds": 3.687225341796875
+  },
+  {
+   "node": 448,
+   "op": "bool",
+   "line": 231,
+   "status": "killed",
+   "seconds": 3.5735557079315186
+  },
+  {
+   "node": 488,
+   "op": "return_none",
+   "line": 238,
+   "status": "killed",
+   "seconds": 3.6190197467803955
+  },
+  {
+   "node": 495,
+   "op": "int",
+   "line": 238,
+   "status": "killed",
+   "seconds": 3.289830207824707
+  },
+  {
+   "node": 514,
+   "op": "int",
+   "line": 240,
+   "status": "survived",
+   "seconds": 20.277613162994385
+  },
+  {
+   "node": 535,
+   "op": "return_none",
+   "line": 246,
+   "status": "killed-by-suite",
+   "seconds": 20.37808609008789,
+   "killed_by": [
+    "tests/test_m13_autonomy.py::test_client_stream_maps_and_filters"
+   ]
+  },
+  {
+   "node": 604,
+   "op": "drop_not",
+   "line": 262,
+   "status": "survived",
+   "seconds": 19.72348666191101
+  },
+  {
+   "node": 610,
+   "op": "return_none",
+   "line": 264,
+   "status": "survived",
+   "seconds": 19.715742349624634
+  },
+  {
+   "node": 617,
+   "op": "int",
+   "line": 264,
+   "status": "survived",
+   "seconds": 14.507871389389038
+  },
+  {
+   "node": 627,
+   "op": "int",
+   "line": 264,
+   "status": "survived",
+   "seconds": 14.184555292129517
+  }
+ ]
+}

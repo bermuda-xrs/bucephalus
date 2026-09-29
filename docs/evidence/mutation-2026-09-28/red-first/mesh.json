@@ -1,0 +1,89 @@
+{
+ "module": "src\\agent\\assure\\mesh.py",
+ "only": [
+  "VerificationMesh.verify"
+ ],
+ "tests": [
+  "tests/test_holdout_mutants.py"
+ ],
+ "score": 0.45454545454545453,
+ "results": [
+  {
+   "node": 48,
+   "op": "cmp0",
+   "line": 48,
+   "status": "killed",
+   "seconds": 11.91296648979187
+  },
+  {
+   "node": 60,
+   "op": "bool",
+   "line": 50,
+   "status": "killed",
+   "seconds": 4.9879090785980225
+  },
+  {
+   "node": 71,
+   "op": "negate",
+   "line": 54,
+   "status": "killed",
+   "seconds": 4.729140520095825
+  },
+  {
+   "node": 72,
+   "op": "boolop",
+   "line": 54,
+   "status": "survived",
+   "seconds": 4.845105171203613
+  },
+  {
+   "node": 74,
+   "op": "cmp0",
+   "line": 54,
+   "status": "survived",
+   "seconds": 17.09927988052368
+  },
+  {
+   "node": 92,
+   "op": "bool",
+   "line": 55,
+   "status": "survived",
+   "seconds": 6.822738409042358
+  },
+  {
+   "node": 100,
+   "op": "bool",
+   "line": 60,
+   "status": "survived",
+   "seconds": 6.779462575912476
+  },
+  {
+   "node": 127,
+   "op": "cmp0",
+   "line": 70,
+   "status": "survived",
+   "seconds": 10.524463653564453
+  },
+  {
+   "node": 176,
+   "op": "bool",
+   "line": 75,
+   "status": "killed",
+   "seconds": 10.698710441589355
+  },
+  {
+   "node": 237,
+   "op": "int",
+   "line": 87,
+   "status": "survived",
+   "seconds": 10.475256443023682
+  },
+  {
+   "node": 242,
+   "op": "return_none",
+   "line": 90,
+   "status": "killed",
+   "seconds": 5.371387958526611
+  }
+ ]
+}

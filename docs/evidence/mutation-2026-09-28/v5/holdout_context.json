@@ -1,0 +1,57 @@
+{
+ "module": "src\\agent\\context.py",
+ "only": [
+  "AgentContext.compact_transcript"
+ ],
+ "tests": [
+  "tests/test_holdout_mutants.py",
+  "tests/test_every_verifier_can_fail.py",
+  "tests/test_m13_autonomy.py",
+  "tests/test_grader_is_not_in_the_prompt.py"
+ ],
+ "score": 0.5,
+ "results": [
+  {
+   "node": 9,
+   "op": "int",
+   "line": 586,
+   "status": "survived",
+   "seconds": 25.65388798713684
+  },
+  {
+   "node": 44,
+   "op": "bool",
+   "line": 600,
+   "status": "survived",
+   "seconds": 25.659409999847412
+  },
+  {
+   "node": 72,
+   "op": "negate",
+   "line": 604,
+   "status": "killed",
+   "seconds": 11.986538887023926
+  },
+  {
+   "node": 87,
+   "op": "negate",
+   "line": 612,
+   "status": "killed",
+   "seconds": 9.286313772201538
+  },
+  {
+   "node": 119,
+   "op": "int",
+   "line": 614,
+   "status": "survived",
+   "seconds": 25.551522731781006
+  },
+  {
+   "node": 121,
+   "op": "return_none",
+   "line": 615,
+   "status": "killed",
+   "seconds": 4.98856258392334
+  }
+ ]
+}

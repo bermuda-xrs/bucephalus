@@ -1,0 +1,1365 @@
+{
+ "module": "src\\agent\\assure\\verifiers.py",
+ "only": [],
+ "tests": [
+  "tests/test_m7_assure.py",
+  "tests/test_every_verifier_can_fail.py",
+  "tests/test_grader_is_not_in_the_prompt.py",
+  "tests/test_no_second_copy_of_a_fixed_bug.py",
+  "tests/test_verification_evidence.py",
+  "tests/test_final_sweep.py",
+  "tests/test_monitor_and_net.py"
+ ],
+ "score": 0.6157894736842106,
+ "results": [
+  {
+   "node": 51,
+   "op": "return_none",
+   "line": 49,
+   "status": "killed",
+   "seconds": 3.47588849067688
+  },
+  {
+   "node": 69,
+   "op": "return_none",
+   "line": 53,
+   "status": "killed",
+   "seconds": 2.9322471618652344
+  },
+  {
+   "node": 74,
+   "op": "bool",
+   "line": 53,
+   "status": "killed",
+   "seconds": 3.44500994682312
+  },
+  {
+   "node": 112,
+   "op": "return_none",
+   "line": 61,
+   "status": "killed",
+   "seconds": 3.8555867671966553
+  },
+  {
+   "node": 118,
+   "op": "boolop",
+   "line": 61,
+   "status": "survived",
+   "seconds": 21.25296139717102
+  },
+  {
+   "node": 127,
+   "op": "int",
+   "line": 61,
+   "status": "killed",
+   "seconds": 3.8144614696502686
+  },
+  {
+   "node": 156,
+   "op": "return_none",
+   "line": 74,
+   "status": "killed",
+   "seconds": 12.908666372299194
+  },
+  {
+   "node": 161,
+   "op": "bool",
+   "line": 75,
+   "status": "killed",
+   "seconds": 12.545106887817383
+  },
+  {
+   "node": 211,
+   "op": "drop_not",
+   "line": 103,
+   "status": "survived",
+   "seconds": 13.929535388946533
+  },
+  {
+   "node": 218,
+   "op": "return_none",
+   "line": 104,
+   "status": "survived",
+   "seconds": 21.286907196044922
+  },
+  {
+   "node": 259,
+   "op": "int",
+   "line": 113,
+   "status": "survived",
+   "seconds": 21.326066970825195
+  },
+  {
+   "node": 264,
+   "op": "addsub",
+   "line": 114,
+   "status": "killed",
+   "seconds": 5.233533143997192
+  },
+  {
+   "node": 279,
+   "op": "int",
+   "line": 114,
+   "status": "survived",
+   "seconds": 21.83250904083252
+  },
+  {
+   "node": 284,
+   "op": "cmp0",
+   "line": 115,
+   "status": "killed",
+   "seconds": 4.354828834533691
+  },
+  {
+   "node": 291,
+   "op": "int",
+   "line": 115,
+   "status": "survived",
+   "seconds": 22.614886045455933
+  },
+  {
+   "node": 292,
+   "op": "return_none",
+   "line": 116,
+   "status": "killed",
+   "seconds": 5.619653224945068
+  },
+  {
+   "node": 310,
+   "op": "boolop",
+   "line": 118,
+   "status": "survived",
+   "seconds": 21.736196756362915
+  },
+  {
+   "node": 370,
+   "op": "int",
+   "line": 125,
+   "status": "survived",
+   "seconds": 21.804795503616333
+  },
+  {
+   "node": 371,
+   "op": "int",
+   "line": 125,
+   "status": "survived",
+   "seconds": 21.23705220222473
+  },
+  {
+   "node": 386,
+   "op": "int",
+   "line": 126,
+   "status": "survived",
+   "seconds": 20.645056009292603
+  },
+  {
+   "node": 387,
+   "op": "int",
+   "line": 126,
+   "status": "survived",
+   "seconds": 21.70941162109375
+  },
+  {
+   "node": 388,
+   "op": "return_none",
+   "line": 127,
+   "status": "killed",
+   "seconds": 5.03999662399292
+  },
+  {
+   "node": 390,
+   "op": "addsub",
+   "line": 127,
+   "status": "survived",
+   "seconds": 21.44494652748108
+  },
+  {
+   "node": 400,
+   "op": "addsub",
+   "line": 127,
+   "status": "survived",
+   "seconds": 21.094467163085938
+  },
+  {
+   "node": 435,
+   "op": "cmp0",
+   "line": 146,
+   "status": "survived",
+   "seconds": 21.39640498161316
+  },
+  {
+   "node": 444,
+   "op": "return_none",
+   "line": 147,
+   "status": "killed",
+   "seconds": 11.693095445632935
+  },
+  {
+   "node": 463,
+   "op": "negate",
+   "line": 150,
+   "status": "killed",
+   "seconds": 14.46907925605774
+  },
+  {
+   "node": 464,
+   "op": "boolop",
+   "line": 150,
+   "status": "killed",
+   "seconds": 14.277528285980225
+  },
+  {
+   "node": 466,
+   "op": "drop_not",
+   "line": 150,
+   "status": "survived",
+   "seconds": 24.314285278320312
+  },
+  {
+   "node": 473,
+   "op": "drop_not",
+   "line": 150,
+   "status": "killed",
+   "seconds": 16.136836767196655
+  },
+  {
+   "node": 484,
+   "op": "return_none",
+   "line": 151,
+   "status": "killed",
+   "seconds": 17.903668642044067
+  },
+  {
+   "node": 519,
+   "op": "bool",
+   "line": 155,
+   "status": "survived",
+   "seconds": 28.36964988708496
+  },
+  {
+   "node": 521,
+   "op": "bool",
+   "line": 155,
+   "status": "survived",
+   "seconds": 29.35531997680664
+  },
+  {
+   "node": 523,
+   "op": "int",
+   "line": 155,
+   "status": "survived",
+   "seconds": 30.614999294281006
+  },
+  {
+   "node": 528,
+   "op": "addsub",
+   "line": 157,
+   "status": "survived",
+   "seconds": 31.68058204650879
+  },
+  {
+   "node": 541,
+   "op": "int",
+   "line": 157,
+   "status": "survived",
+   "seconds": 39.36726117134094
+  },
+  {
+   "node": 543,
+   "op": "return_none",
+   "line": 158,
+   "status": "killed-by-suite",
+   "seconds": 43.554163217544556,
+   "killed_by": [
+    "tests/test_web_tools.py::test_a_longer_crawl_delay_wins_but_a_shorter_one_does_not"
+   ]
+  },
+  {
+   "node": 548,
+   "op": "cmp0",
+   "line": 159,
+   "status": "survived",
+   "seconds": 46.98062443733215
+  },
+  {
+   "node": 554,
+   "op": "int",
+   "line": 159,
+   "status": "survived",
+   "seconds": 49.23821473121643
+  },
+  {
+   "node": 557,
+   "op": "cmp0",
+   "line": 160,
+   "status": "survived",
+   "seconds": 40.86139488220215
+  },
+  {
+   "node": 563,
+   "op": "int",
+   "line": 160,
+   "status": "survived",
+   "seconds": 34.60134768486023
+  },
+  {
+   "node": 567,
+   "op": "boolop",
+   "line": 161,
+   "status": "survived",
+   "seconds": 30.175512075424194
+  },
+  {
+   "node": 603,
+   "op": "boolop",
+   "line": 171,
+   "status": "killed",
+   "seconds": 4.45426607131958
+  },
+  {
+   "node": 611,
+   "op": "drop_not",
+   "line": 175,
+   "status": "killed",
+   "seconds": 3.351618528366089
+  },
+  {
+   "node": 619,
+   "op": "return_none",
+   "line": 176,
+   "status": "killed",
+   "seconds": 4.000435829162598
+  },
+  {
+   "node": 644,
+   "op": "return_none",
+   "line": 182,
+   "status": "killed",
+   "seconds": 4.862471342086792
+  },
+  {
+   "node": 649,
+   "op": "bool",
+   "line": 183,
+   "status": "killed",
+   "seconds": 4.417031764984131
+  },
+  {
+   "node": 673,
+   "op": "return_none",
+   "line": 187,
+   "status": "killed",
+   "seconds": 3.7127223014831543
+  },
+  {
+   "node": 678,
+   "op": "drop_not",
+   "line": 188,
+   "status": "killed",
+   "seconds": 3.813979387283325
+  },
+  {
+   "node": 684,
+   "op": "drop_not",
+   "line": 189,
+   "status": "survived",
+   "seconds": 22.035444259643555
+  },
+  {
+   "node": 693,
+   "op": "addsub",
+   "line": 189,
+   "status": "survived",
+   "seconds": 21.63563299179077
+  },
+  {
+   "node": 705,
+   "op": "boolop",
+   "line": 190,
+   "status": "killed",
+   "seconds": 2.928375720977783
+  },
+  {
+   "node": 743,
+   "op": "drop_not",
+   "line": 198,
+   "status": "killed",
+   "seconds": 2.680366277694702
+  },
+  {
+   "node": 747,
+   "op": "return_none",
+   "line": 199,
+   "status": "survived",
+   "seconds": 21.24420714378357
+  },
+  {
+   "node": 785,
+   "op": "negate",
+   "line": 205,
+   "status": "killed",
+   "seconds": 2.5509963035583496
+  },
+  {
+   "node": 786,
+   "op": "boolop",
+   "line": 205,
+   "status": "killed",
+   "seconds": 2.6582677364349365
+  },
+  {
+   "node": 790,
+   "op": "cmp0",
+   "line": 205,
+   "status": "survived",
+   "seconds": 20.353572607040405
+  },
+  {
+   "node": 796,
+   "op": "drop_not",
+   "line": 205,
+   "status": "killed",
+   "seconds": 2.621009588241577
+  },
+  {
+   "node": 809,
+   "op": "return_none",
+   "line": 206,
+   "status": "killed-by-suite",
+   "seconds": 21.776336431503296,
+   "killed_by": [
+    "tests/test_parallel_tools.py::test_a_slow_batch_is_faster_in_parallel_than_in_sequence"
+   ]
+  },
+  {
+   "node": 830,
+   "op": "cmp0",
+   "line": 207,
+   "status": "killed",
+   "seconds": 2.3098132610321045
+  },
+  {
+   "node": 847,
+   "op": "cmp0",
+   "line": 209,
+   "status": "killed",
+   "seconds": 3.1957051753997803
+  },
+  {
+   "node": 876,
+   "op": "boolop",
+   "line": 211,
+   "status": "killed",
+   "seconds": 3.454249858856201
+  },
+  {
+   "node": 887,
+   "op": "cmp0",
+   "line": 212,
+   "status": "killed",
+   "seconds": 2.4745442867279053
+  },
+  {
+   "node": 918,
+   "op": "negate",
+   "line": 214,
+   "status": "killed",
+   "seconds": 2.3915743827819824
+  },
+  {
+   "node": 919,
+   "op": "boolop",
+   "line": 214,
+   "status": "survived",
+   "seconds": 20.77350354194641
+  },
+  {
+   "node": 921,
+   "op": "cmp0",
+   "line": 214,
+   "status": "survived",
+   "seconds": 21.099698066711426
+  },
+  {
+   "node": 926,
+   "op": "cmp0",
+   "line": 214,
+   "status": "survived",
+   "seconds": 21.354454278945923
+  },
+  {
+   "node": 968,
+   "op": "negate",
+   "line": 217,
+   "status": "killed",
+   "seconds": 2.676162004470825
+  },
+  {
+   "node": 969,
+   "op": "boolop",
+   "line": 217,
+   "status": "killed",
+   "seconds": 2.3230695724487305
+  },
+  {
+   "node": 971,
+   "op": "cmp0",
+   "line": 217,
+   "status": "killed",
+   "seconds": 2.737842559814453
+  },
+  {
+   "node": 976,
+   "op": "cmp0",
+   "line": 217,
+   "status": "survived",
+   "seconds": 21.435871601104736
+  },
+  {
+   "node": 1000,
+   "op": "return_none",
+   "line": 219,
+   "status": "killed",
+   "seconds": 3.024320602416992
+  },
+  {
+   "node": 1060,
+   "op": "drop_not",
+   "line": 244,
+   "status": "killed",
+   "seconds": 2.9496333599090576
+  },
+  {
+   "node": 1066,
+   "op": "return_none",
+   "line": 245,
+   "status": "killed",
+   "seconds": 2.7748160362243652
+  },
+  {
+   "node": 1104,
+   "op": "int",
+   "line": 249,
+   "status": "killed-by-suite",
+   "seconds": 21.21082353591919,
+   "killed_by": [
+    "tests/test_reaper_parentage.py::test_reap_kills_exactly_what_selection_returns"
+   ]
+  },
+  {
+   "node": 1108,
+   "op": "cmp0",
+   "line": 250,
+   "status": "survived",
+   "seconds": 21.47752547264099
+  },
+  {
+   "node": 1115,
+   "op": "int",
+   "line": 250,
+   "status": "survived",
+   "seconds": 21.39545202255249
+  },
+  {
+   "node": 1116,
+   "op": "return_none",
+   "line": 251,
+   "status": "killed-by-suite",
+   "seconds": 22.35254716873169,
+   "killed_by": [
+    "tests/test_reaper_parentage.py::test_reap_kills_exactly_what_selection_returns"
+   ]
+  },
+  {
+   "node": 1187,
+   "op": "boolop",
+   "line": 268,
+   "status": "survived",
+   "seconds": 24.429563760757446
+  },
+  {
+   "node": 1220,
+   "op": "drop_not",
+   "line": 273,
+   "status": "killed",
+   "seconds": 3.705382823944092
+  },
+  {
+   "node": 1224,
+   "op": "return_none",
+   "line": 274,
+   "status": "killed",
+   "seconds": 2.711540937423706
+  },
+  {
+   "node": 1229,
+   "op": "bool",
+   "line": 275,
+   "status": "killed",
+   "seconds": 2.8484175205230713
+  },
+  {
+   "node": 1253,
+   "op": "int",
+   "line": 280,
+   "status": "survived",
+   "seconds": 25.978509187698364
+  },
+  {
+   "node": 1262,
+   "op": "boolop",
+   "line": 282,
+   "status": "survived",
+   "seconds": 26.70991086959839
+  },
+  {
+   "node": 1267,
+   "op": "int",
+   "line": 282,
+   "status": "survived",
+   "seconds": 30.533225059509277
+  },
+  {
+   "node": 1272,
+   "op": "int",
+   "line": 282,
+   "status": "survived",
+   "seconds": 32.09648847579956
+  },
+  {
+   "node": 1277,
+   "op": "boolop",
+   "line": 283,
+   "status": "survived",
+   "seconds": 33.67130398750305
+  },
+  {
+   "node": 1282,
+   "op": "int",
+   "line": 283,
+   "status": "survived",
+   "seconds": 35.57473707199097
+  },
+  {
+   "node": 1287,
+   "op": "int",
+   "line": 283,
+   "status": "survived",
+   "seconds": 46.05144238471985
+  },
+  {
+   "node": 1302,
+   "op": "cmp0",
+   "line": 285,
+   "status": "survived",
+   "seconds": 48.14054727554321
+  },
+  {
+   "node": 1323,
+   "op": "int",
+   "line": 288,
+   "status": "survived",
+   "seconds": 47.77610540390015
+  },
+  {
+   "node": 1325,
+   "op": "drop_not",
+   "line": 289,
+   "status": "survived",
+   "seconds": 47.93098211288452
+  },
+  {
+   "node": 1350,
+   "op": "int",
+   "line": 290,
+   "status": "survived",
+   "seconds": 35.99782848358154
+  },
+  {
+   "node": 1356,
+   "op": "drop_not",
+   "line": 291,
+   "status": "survived",
+   "seconds": 31.468189001083374
+  },
+  {
+   "node": 1362,
+   "op": "addsub",
+   "line": 291,
+   "status": "survived",
+   "seconds": 28.50838303565979
+  },
+  {
+   "node": 1374,
+   "op": "return_none",
+   "line": 292,
+   "status": "killed-by-suite",
+   "seconds": 26.336384057998657,
+   "killed_by": [
+    "tests/test_reaper_parentage.py::test_reap_kills_exactly_what_selection_returns"
+   ]
+  },
+  {
+   "node": 1379,
+   "op": "drop_not",
+   "line": 293,
+   "status": "survived",
+   "seconds": 22.90713667869568
+  },
+  {
+   "node": 1391,
+   "op": "boolop",
+   "line": 295,
+   "status": "survived",
+   "seconds": 22.135229349136353
+  },
+  {
+   "node": 1444,
+   "op": "drop_not",
+   "line": 302,
+   "status": "survived",
+   "seconds": 21.727548837661743
+  },
+  {
+   "node": 1448,
+   "op": "return_none",
+   "line": 303,
+   "status": "survived",
+   "seconds": 21.54586887359619
+  },
+  {
+   "node": 1449,
+   "op": "bool",
+   "line": 303,
+   "status": "survived",
+   "seconds": 21.7675838470459
+  },
+  {
+   "node": 1470,
+   "op": "return_none",
+   "line": 305,
+   "status": "survived",
+   "seconds": 21.63185453414917
+  },
+  {
+   "node": 1471,
+   "op": "cmp0",
+   "line": 305,
+   "status": "survived",
+   "seconds": 21.845240116119385
+  },
+  {
+   "node": 1505,
+   "op": "int",
+   "line": 317,
+   "status": "survived",
+   "seconds": 22.21467399597168
+  },
+  {
+   "node": 1542,
+   "op": "drop_not",
+   "line": 325,
+   "status": "survived",
+   "seconds": 21.629250049591064
+  },
+  {
+   "node": 1549,
+   "op": "return_none",
+   "line": 326,
+   "status": "killed",
+   "seconds": 12.516772031784058
+  },
+  {
+   "node": 1568,
+   "op": "boolop",
+   "line": 327,
+   "status": "killed",
+   "seconds": 13.100417375564575
+  },
+  {
+   "node": 1602,
+   "op": "cmp0",
+   "line": 334,
+   "status": "survived",
+   "seconds": 26.516812324523926
+  },
+  {
+   "node": 1621,
+   "op": "int",
+   "line": 336,
+   "status": "survived",
+   "seconds": 27.365301370620728
+  },
+  {
+   "node": 1651,
+   "op": "cmp0",
+   "line": 343,
+   "status": "killed",
+   "seconds": 16.401557683944702
+  },
+  {
+   "node": 1670,
+   "op": "return_none",
+   "line": 348,
+   "status": "killed",
+   "seconds": 16.90607714653015
+  },
+  {
+   "node": 1675,
+   "op": "cmp0",
+   "line": 349,
+   "status": "killed",
+   "seconds": 17.664488315582275
+  },
+  {
+   "node": 1729,
+   "op": "boolop",
+   "line": 393,
+   "status": "killed",
+   "seconds": 20.63470196723938
+  },
+  {
+   "node": 1745,
+   "op": "negate",
+   "line": 395,
+   "status": "killed",
+   "seconds": 5.012442111968994
+  },
+  {
+   "node": 1746,
+   "op": "boolop",
+   "line": 395,
+   "status": "killed",
+   "seconds": 5.381291389465332
+  },
+  {
+   "node": 1748,
+   "op": "cmp0",
+   "line": 395,
+   "status": "killed",
+   "seconds": 21.551278352737427
+  },
+  {
+   "node": 1753,
+   "op": "drop_not",
+   "line": 395,
+   "status": "killed",
+   "seconds": 4.968801736831665
+  },
+  {
+   "node": 1760,
+   "op": "return_none",
+   "line": 396,
+   "status": "killed",
+   "seconds": 6.027407884597778
+  },
+  {
+   "node": 1765,
+   "op": "bool",
+   "line": 397,
+   "status": "killed",
+   "seconds": 5.210038900375366
+  },
+  {
+   "node": 1791,
+   "op": "return_none",
+   "line": 405,
+   "status": "killed",
+   "seconds": 5.804801940917969
+  },
+  {
+   "node": 1796,
+   "op": "bool",
+   "line": 405,
+   "status": "killed",
+   "seconds": 6.162609338760376
+  },
+  {
+   "node": 1820,
+   "op": "negate",
+   "line": 411,
+   "status": "killed",
+   "seconds": 29.908321380615234
+  },
+  {
+   "node": 1823,
+   "op": "return_none",
+   "line": 412,
+   "status": "killed",
+   "seconds": 6.267480850219727
+  },
+  {
+   "node": 1828,
+   "op": "bool",
+   "line": 413,
+   "status": "killed",
+   "seconds": 5.58119535446167
+  },
+  {
+   "node": 1858,
+   "op": "bool",
+   "line": 419,
+   "status": "killed",
+   "seconds": 47.67840933799744
+  },
+  {
+   "node": 1875,
+   "op": "return_none",
+   "line": 421,
+   "status": "killed",
+   "seconds": 36.02702045440674
+  },
+  {
+   "node": 1880,
+   "op": "drop_not",
+   "line": 422,
+   "status": "killed",
+   "seconds": 35.180861949920654
+  },
+  {
+   "node": 1886,
+   "op": "drop_not",
+   "line": 423,
+   "status": "killed",
+   "seconds": 41.726568937301636
+  },
+  {
+   "node": 1893,
+   "op": "boolop",
+   "line": 424,
+   "status": "killed",
+   "seconds": 32.98671746253967
+  },
+  {
+   "node": 1912,
+   "op": "negate",
+   "line": 432,
+   "status": "killed",
+   "seconds": 7.790938377380371
+  },
+  {
+   "node": 1920,
+   "op": "return_none",
+   "line": 433,
+   "status": "killed",
+   "seconds": 20.986985683441162
+  },
+  {
+   "node": 1938,
+   "op": "return_none",
+   "line": 434,
+   "status": "killed",
+   "seconds": 20.72586154937744
+  },
+  {
+   "node": 1939,
+   "op": "bool",
+   "line": 434,
+   "status": "killed",
+   "seconds": 16.26198101043701
+  },
+  {
+   "node": 1947,
+   "op": "return_none",
+   "line": 438,
+   "status": "killed",
+   "seconds": 23.081814765930176
+  },
+  {
+   "node": 1978,
+   "op": "negate",
+   "line": 443,
+   "status": "killed",
+   "seconds": 23.643718481063843
+  },
+  {
+   "node": 1987,
+   "op": "drop_not",
+   "line": 444,
+   "status": "killed",
+   "seconds": 14.795977115631104
+  },
+  {
+   "node": 2025,
+   "op": "cmp0",
+   "line": 448,
+   "status": "killed",
+   "seconds": 14.546436786651611
+  },
+  {
+   "node": 2066,
+   "op": "negate",
+   "line": 453,
+   "status": "killed",
+   "seconds": 14.568308591842651
+  },
+  {
+   "node": 2074,
+   "op": "negate",
+   "line": 454,
+   "status": "survived",
+   "seconds": 23.576133251190186
+  },
+  {
+   "node": 2075,
+   "op": "boolop",
+   "line": 454,
+   "status": "survived",
+   "seconds": 22.389256238937378
+  },
+  {
+   "node": 2077,
+   "op": "drop_not",
+   "line": 454,
+   "status": "survived",
+   "seconds": 23.26334547996521
+  },
+  {
+   "node": 2086,
+   "op": "cmp0",
+   "line": 454,
+   "status": "survived",
+   "seconds": 21.51691961288452
+  },
+  {
+   "node": 2171,
+   "op": "negate",
+   "line": 461,
+   "status": "killed",
+   "seconds": 21.803890705108643
+  },
+  {
+   "node": 2172,
+   "op": "boolop",
+   "line": 461,
+   "status": "survived",
+   "seconds": 21.299299478530884
+  },
+  {
+   "node": 2181,
+   "op": "cmp0",
+   "line": 461,
+   "status": "killed",
+   "seconds": 22.53804922103882
+  },
+  {
+   "node": 2187,
+   "op": "cmp0",
+   "line": 462,
+   "status": "survived",
+   "seconds": 21.952716827392578
+  },
+  {
+   "node": 2208,
+   "op": "negate",
+   "line": 465,
+   "status": "killed",
+   "seconds": 23.34975838661194
+  },
+  {
+   "node": 2270,
+   "op": "cmp0",
+   "line": 472,
+   "status": "killed",
+   "seconds": 14.475852012634277
+  },
+  {
+   "node": 2274,
+   "op": "addsub",
+   "line": 472,
+   "status": "killed",
+   "seconds": 16.16183352470398
+  },
+  {
+   "node": 2336,
+   "op": "cmp0",
+   "line": 476,
+   "status": "killed",
+   "seconds": 26.338849306106567
+  },
+  {
+   "node": 2380,
+   "op": "boolop",
+   "line": 491,
+   "status": "killed",
+   "seconds": 28.974624395370483
+  },
+  {
+   "node": 2384,
+   "op": "boolop",
+   "line": 491,
+   "status": "killed",
+   "seconds": 30.556421518325806
+  },
+  {
+   "node": 2395,
+   "op": "negate",
+   "line": 493,
+   "status": "killed",
+   "seconds": 5.230056047439575
+  },
+  {
+   "node": 2396,
+   "op": "boolop",
+   "line": 493,
+   "status": "killed",
+   "seconds": 3.7724716663360596
+  },
+  {
+   "node": 2398,
+   "op": "drop_not",
+   "line": 493,
+   "status": "killed",
+   "seconds": 33.09017586708069
+  },
+  {
+   "node": 2406,
+   "op": "drop_not",
+   "line": 493,
+   "status": "killed",
+   "seconds": 4.815995454788208
+  },
+  {
+   "node": 2418,
+   "op": "return_none",
+   "line": 494,
+   "status": "killed",
+   "seconds": 5.328802585601807
+  },
+  {
+   "node": 2446,
+   "op": "cmp0",
+   "line": 497,
+   "status": "killed",
+   "seconds": 4.1056623458862305
+  },
+  {
+   "node": 2455,
+   "op": "return_none",
+   "line": 498,
+   "status": "killed",
+   "seconds": 4.892314910888672
+  },
+  {
+   "node": 2460,
+   "op": "drop_not",
+   "line": 499,
+   "status": "killed",
+   "seconds": 5.794945478439331
+  },
+  {
+   "node": 2466,
+   "op": "addsub",
+   "line": 500,
+   "status": "killed",
+   "seconds": 46.21515226364136
+  },
+  {
+   "node": 2488,
+   "op": "addsub",
+   "line": 501,
+   "status": "killed",
+   "seconds": 4.920368909835815
+  },
+  {
+   "node": 2568,
+   "op": "boolop",
+   "line": 540,
+   "status": "killed",
+   "seconds": 29.12684178352356
+  },
+  {
+   "node": 2587,
+   "op": "int",
+   "line": 541,
+   "status": "killed",
+   "seconds": 27.04274845123291
+  },
+  {
+   "node": 2593,
+   "op": "negate",
+   "line": 554,
+   "status": "killed",
+   "seconds": 32.81694459915161
+  },
+  {
+   "node": 2615,
+   "op": "negate",
+   "line": 556,
+   "status": "killed",
+   "seconds": 31.070574045181274
+  },
+  {
+   "node": 2627,
+   "op": "cmp0",
+   "line": 558,
+   "status": "killed-by-suite",
+   "seconds": 42.88373351097107,
+   "killed_by": [
+    "tests/test_paired_trial_isolation.py::test_the_old_behaviour_really_did_fabricate_a_pass",
+    "tests/test_paired_trial_isolation.py::test_the_reset_does_not_make_passing_impossible"
+   ]
+  },
+  {
+   "node": 2652,
+   "op": "negate",
+   "line": 563,
+   "status": "killed",
+   "seconds": 24.346749782562256
+  },
+  {
+   "node": 2677,
+   "op": "cmp0",
+   "line": 566,
+   "status": "killed",
+   "seconds": 23.20048713684082
+  },
+  {
+   "node": 2682,
+   "op": "return_none",
+   "line": 567,
+   "status": "killed",
+   "seconds": 17.14689612388611
+  },
+  {
+   "node": 2687,
+   "op": "bool",
+   "line": 568,
+   "status": "killed",
+   "seconds": 15.524656057357788
+  },
+  {
+   "node": 2720,
+   "op": "addsub",
+   "line": 579,
+   "status": "killed",
+   "seconds": 16.501433610916138
+  },
+  {
+   "node": 2721,
+   "op": "addsub",
+   "line": 579,
+   "status": "killed",
+   "seconds": 16.307350873947144
+  },
+  {
+   "node": 2757,
+   "op": "int",
+   "line": 590,
+   "status": "survived",
+   "seconds": 24.94968605041504
+  },
+  {
+   "node": 2773,
+   "op": "cmp0",
+   "line": 594,
+   "status": "killed",
+   "seconds": 15.047479391098022
+  },
+  {
+   "node": 2779,
+   "op": "return_none",
+   "line": 595,
+   "status": "killed",
+   "seconds": 14.481890439987183
+  },
+  {
+   "node": 2784,
+   "op": "bool",
+   "line": 596,
+   "status": "killed",
+   "seconds": 15.249928712844849
+  },
+  {
+   "node": 2802,
+   "op": "int",
+   "line": 598,
+   "status": "survived",
+   "seconds": 25.98809266090393
+  },
+  {
+   "node": 2817,
+   "op": "int",
+   "line": 598,
+   "status": "survived",
+   "seconds": 26.022457122802734
+  },
+  {
+   "node": 2846,
+   "op": "int",
+   "line": 602,
+   "status": "survived",
+   "seconds": 28.10988426208496
+  },
+  {
+   "node": 2847,
+   "op": "int",
+   "line": 602,
+   "status": "killed",
+   "seconds": 17.20830988883972
+  },
+  {
+   "node": 2851,
+   "op": "int",
+   "line": 602,
+   "status": "killed",
+   "seconds": 21.631297826766968
+  },
+  {
+   "node": 2862,
+   "op": "return_none",
+   "line": 604,
+   "status": "survived",
+   "seconds": 32.69339418411255
+  },
+  {
+   "node": 2867,
+   "op": "bool",
+   "line": 604,
+   "status": "survived",
+   "seconds": 34.35546374320984
+  },
+  {
+   "node": 2891,
+   "op": "return_none",
+   "line": 609,
+   "status": "killed",
+   "seconds": 22.632009506225586
+  },
+  {
+   "node": 2917,
+   "op": "addsub",
+   "line": 612,
+   "status": "killed",
+   "seconds": 28.65612244606018
+  },
+  {
+   "node": 2918,
+   "op": "addsub",
+   "line": 612,
+   "status": "killed",
+   "seconds": 28.680437326431274
+  },
+  {
+   "node": 2973,
+   "op": "int",
+   "line": 615,
+   "status": "survived",
+   "seconds": 31.841766119003296
+  },
+  {
+   "node": 3038,
+   "op": "cmp0",
+   "line": 632,
+   "status": "killed",
+   "seconds": 8.136176347732544
+  },
+  {
+   "node": 3054,
+   "op": "return_none",
+   "line": 634,
+   "status": "killed",
+   "seconds": 4.975215196609497
+  }
+ ]
+}

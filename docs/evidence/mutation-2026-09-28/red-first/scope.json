@@ -1,0 +1,47 @@
+{
+ "module": "src\\agent\\kernel\\scope.py",
+ "only": [
+  "wrote_artifact"
+ ],
+ "tests": [
+  "tests/test_holdout_mutants.py"
+ ],
+ "score": 0.4,
+ "results": [
+  {
+   "node": 18,
+   "op": "drop_not",
+   "line": 125,
+   "status": "survived",
+   "seconds": 3.274066209793091
+  },
+  {
+   "node": 22,
+   "op": "return_none",
+   "line": 126,
+   "status": "killed",
+   "seconds": 3.7217445373535156
+  },
+  {
+   "node": 23,
+   "op": "bool",
+   "line": 126,
+   "status": "killed",
+   "seconds": 3.5007877349853516
+  },
+  {
+   "node": 67,
+   "op": "return_none",
+   "line": 136,
+   "status": "survived",
+   "seconds": 3.281653881072998
+  },
+  {
+   "node": 68,
+   "op": "cmp0",
+   "line": 136,
+   "status": "survived",
+   "seconds": 2.7198712825775146
+  }
+ ]
+}

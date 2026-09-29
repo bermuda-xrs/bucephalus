@@ -174,7 +174,8 @@ def within_scope(args: dict, artifact_scope: list[str], root: str = ".") -> tupl
         # Where it really leads, too: a junction in the workspace is a door
         # out of it (iteration 3; tests/test_junction_escape.py).
         real = _resolved(p)
-        if not any(_is_within(p, r) for r in roots) or                 not any(_is_within(real, r) for r in real_roots):
+        if (not any(_is_within(p, r) for r in roots)
+                or not any(_is_within(real, r) for r in real_roots)):
             return False, f"{key}={value!r} resolves outside artifact_scope"
     return True, ""
 

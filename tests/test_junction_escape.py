@@ -89,3 +89,50 @@ def test_S1_sweep_sandboxed_code_cannot_plant_a_protected_file_through_a_stream(
                       protected_paths=(str(target),))
     assert not target.exists(), "sandboxed code planted a protected file"
     assert r["returncode"] != 0
+
+
+# Mutation testing (2.3) found each of these checks unpinned: the tests above
+# all point a junction at the graders, which are PROTECTED - so the scope
+# check's real-path half and the protected check's real-path half each hid
+# behind the other.
+def test_a_junction_to_an_unprotected_place_outside_scope_is_refused(ctx, task, workspace):
+    import _winapi
+
+    root = Path(ctx.config.root)
+    (root / "notes").mkdir()
+    (root / "notes" / "x.txt").write_text("not yours", encoding="utf-8")
+    _winapi.CreateJunction(str(root / "notes"), str(workspace / "out"))
+    d = gate_tool_call(ctx, task, ctx.tools.get("read_file"), {"path": "work/out/x.txt"})
+    assert d.verdict == "deny" and "outside artifact_scope" in d.reason, d.reason
+
+
+def test_a_junction_to_protected_state_inside_scope_is_refused(ctx, task, workspace):
+    import _winapi
+
+    (workspace / "skills_store").mkdir()
+    (workspace / "skills_store" / "s.md").write_text("a skill", encoding="utf-8")
+    _winapi.CreateJunction(str(workspace / "skills_store"), str(workspace / "alias"))
+    d = gate_tool_call(ctx, task, ctx.tools.get("read_file"), {"path": "work/alias/s.md"})
+    assert d.verdict == "deny", d.reason
+
+
+def test_a_swapped_link_is_seen_once_the_two_second_bucket_turns(workspace, monkeypatch):
+    """The resolution cache promises a swapped link is seen within 2 s. A
+    bucket that never turns - or turns every 3 s - breaks that promise."""
+    import _winapi
+
+    from agent.security import capabilities as cap
+
+    clock = [3.0]
+    monkeypatch.setattr(cap.time, "monotonic", lambda: clock[0])
+    (workspace / "skills_store").mkdir()
+    (workspace / "skills_store" / "s.md").write_text("a skill", encoding="utf-8")
+    (workspace / "alias").mkdir()
+    (workspace / "alias" / "s.md").write_text("plain", encoding="utf-8")
+    root = str(workspace.parent)
+    assert not cap.is_protected("work/alias/s.md", root)
+    (workspace / "alias" / "s.md").unlink()
+    (workspace / "alias").rmdir()
+    _winapi.CreateJunction(str(workspace / "skills_store"), str(workspace / "alias"))
+    clock[0] = 5.0                                   # 2 s later: a new bucket
+    assert cap.is_protected("work/alias/s.md", root)

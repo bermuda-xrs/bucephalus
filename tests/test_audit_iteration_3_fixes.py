@@ -132,3 +132,25 @@ def test_I2_a_walk_computes_the_protected_set_once(ctx, workspace, monkeypatch):
     monkeypatch.setattr(files, "task_state_paths", lambda *a: calls.append(1) or real(*a))
     assert len(files.browse(ctx, task, "work")["entries"]) == 30
     assert len(calls) <= 2, f"task_state_paths ran {len(calls)} times for one listing"
+
+
+def test_I1_a_sweep_reads_the_anchor_once_not_per_task(ctx, workspace, monkeypatch):
+    """D72 (audit I1): the console's poll runs `verify_all` every few seconds,
+    and the sweep re-read the anchor file twice per task - two thirds of a
+    2.2 s sweep over the 283-task record (profiled). Once per sweep."""
+    from agent.kernel.integrity import checkpoint, verify_all
+
+    for _ in range(5):
+        t = create_task(ctx.conn, ctx.log, TaskContract(goal="g", artifact_scope=["work"]),
+                        Budget(usd=1.0, seconds=60))
+        checkpoint(ctx.log, ctx.anchor, t.id)
+    reads = []
+    real = Path.read_text
+
+    def counting(self, *a, **k):
+        if self == ctx.anchor.path:
+            reads.append(1)
+        return real(self, *a, **k)
+    monkeypatch.setattr(Path, "read_text", counting)
+    assert verify_all(ctx.conn, ctx.log, ctx.anchor) == []
+    assert len(reads) <= 2, f"{len(reads)} reads of the anchor for one sweep of 5 tasks"

@@ -1,0 +1,350 @@
+{
+ "module": "src\\agent\\kernel\\integrity.py",
+ "only": [],
+ "tests": [
+  "tests/test_chain_mutants.py",
+  "tests/test_anchor_behind_is_not_tampering.py",
+  "tests/test_m1_kernel.py",
+  "tests/test_memory_integrity_claim.py",
+  "tests/test_memory_tampering.py",
+  "tests/test_park_seed.py",
+  "tests/test_plan_pin_is_enforced.py",
+  "tests/test_resume_is_verified.py",
+  "tests/test_storage_layer.py",
+  "tests/test_verification_evidence.py",
+  "tests/test_final_sweep.py",
+  "tests/test_m13_autonomy.py"
+ ],
+ "score": 0.9361702127659575,
+ "results": [
+  {
+   "node": 20,
+   "op": "return_none",
+   "line": 27,
+   "status": "killed",
+   "seconds": 6.655728578567505
+  },
+  {
+   "node": 21,
+   "op": "boolop",
+   "line": 27,
+   "status": "killed",
+   "seconds": 13.202945709228516
+  },
+  {
+   "node": 23,
+   "op": "cmp0",
+   "line": 27,
+   "status": "killed",
+   "seconds": 6.545312404632568
+  },
+  {
+   "node": 30,
+   "op": "int",
+   "line": 27,
+   "status": "killed",
+   "seconds": 7.091691255569458
+  },
+  {
+   "node": 35,
+   "op": "cmp0",
+   "line": 27,
+   "status": "killed",
+   "seconds": 13.221376419067383
+  },
+  {
+   "node": 79,
+   "op": "bool",
+   "line": 39,
+   "status": "killed",
+   "seconds": 6.555049419403076
+  },
+  {
+   "node": 81,
+   "op": "bool",
+   "line": 39,
+   "status": "killed",
+   "seconds": 8.6073899269104
+  },
+  {
+   "node": 83,
+   "op": "drop_not",
+   "line": 40,
+   "status": "killed",
+   "seconds": 9.874663591384888
+  },
+  {
+   "node": 192,
+   "op": "drop_not",
+   "line": 52,
+   "status": "killed",
+   "seconds": 7.279744386672974
+  },
+  {
+   "node": 210,
+   "op": "cmp0",
+   "line": 55,
+   "status": "killed",
+   "seconds": 7.827223300933838
+  },
+  {
+   "node": 217,
+   "op": "int",
+   "line": 55,
+   "status": "killed",
+   "seconds": 6.383843898773193
+  },
+  {
+   "node": 231,
+   "op": "cmp0",
+   "line": 58,
+   "status": "killed",
+   "seconds": 6.36594295501709
+  },
+  {
+   "node": 242,
+   "op": "return_none",
+   "line": 60,
+   "status": "killed",
+   "seconds": 6.311548471450806
+  },
+  {
+   "node": 285,
+   "op": "cmp0",
+   "line": 88,
+   "status": "killed",
+   "seconds": 5.919011354446411
+  },
+  {
+   "node": 292,
+   "op": "int",
+   "line": 88,
+   "status": "killed",
+   "seconds": 5.837737798690796
+  },
+  {
+   "node": 305,
+   "op": "negate",
+   "line": 91,
+   "status": "killed",
+   "seconds": 5.877506971359253
+  },
+  {
+   "node": 306,
+   "op": "boolop",
+   "line": 91,
+   "status": "killed",
+   "seconds": 6.941793441772461
+  },
+  {
+   "node": 308,
+   "op": "cmp0",
+   "line": 91,
+   "status": "killed",
+   "seconds": 6.9631969928741455
+  },
+  {
+   "node": 324,
+   "op": "return_none",
+   "line": 93,
+   "status": "killed",
+   "seconds": 9.029929161071777
+  },
+  {
+   "node": 372,
+   "op": "cmp0",
+   "line": 99,
+   "status": "killed",
+   "seconds": 8.410081386566162
+  },
+  {
+   "node": 379,
+   "op": "int",
+   "line": 99,
+   "status": "killed",
+   "seconds": 9.81376028060913
+  },
+  {
+   "node": 389,
+   "op": "int",
+   "line": 100,
+   "status": "killed",
+   "seconds": 11.213133096694946
+  },
+  {
+   "node": 391,
+   "op": "return_none",
+   "line": 101,
+   "status": "killed",
+   "seconds": 13.995677947998047
+  },
+  {
+   "node": 435,
+   "op": "drop_not",
+   "line": 134,
+   "status": "killed",
+   "seconds": 17.069671392440796
+  },
+  {
+   "node": 442,
+   "op": "cmp0",
+   "line": 136,
+   "status": "killed",
+   "seconds": 12.91445779800415
+  },
+  {
+   "node": 473,
+   "op": "return_none",
+   "line": 142,
+   "status": "killed",
+   "seconds": 15.53362512588501
+  },
+  {
+   "node": 517,
+   "op": "drop_not",
+   "line": 150,
+   "status": "killed",
+   "seconds": 14.808778047561646
+  },
+  {
+   "node": 541,
+   "op": "raise_pass",
+   "line": 159,
+   "status": "killed",
+   "seconds": 27.780797243118286
+  },
+  {
+   "node": 571,
+   "op": "cmp0",
+   "line": 163,
+   "status": "killed",
+   "seconds": 15.67927074432373
+  },
+  {
+   "node": 586,
+   "op": "raise_pass",
+   "line": 164,
+   "status": "killed",
+   "seconds": 14.745857954025269
+  },
+  {
+   "node": 600,
+   "op": "int",
+   "line": 167,
+   "status": "survived",
+   "seconds": 64.72802209854126
+  },
+  {
+   "node": 611,
+   "op": "int",
+   "line": 167,
+   "status": "survived",
+   "seconds": 66.63836550712585
+  },
+  {
+   "node": 636,
+   "op": "negate",
+   "line": 180,
+   "status": "killed",
+   "seconds": 13.148301839828491
+  },
+  {
+   "node": 666,
+   "op": "cmp0",
+   "line": 196,
+   "status": "killed",
+   "seconds": 23.05347204208374
+  },
+  {
+   "node": 678,
+   "op": "cmp0",
+   "line": 205,
+   "status": "survived",
+   "seconds": 62.38330149650574
+  },
+  {
+   "node": 686,
+   "op": "return_none",
+   "line": 212,
+   "status": "killed",
+   "seconds": 25.99683904647827
+  },
+  {
+   "node": 721,
+   "op": "cmp0",
+   "line": 219,
+   "status": "killed",
+   "seconds": 17.120208740234375
+  },
+  {
+   "node": 734,
+   "op": "negate",
+   "line": 221,
+   "status": "killed",
+   "seconds": 25.483148336410522
+  },
+  {
+   "node": 752,
+   "op": "int",
+   "line": 223,
+   "status": "killed",
+   "seconds": 16.162859678268433
+  },
+  {
+   "node": 772,
+   "op": "addsub",
+   "line": 228,
+   "status": "killed",
+   "seconds": 15.44620966911316
+  },
+  {
+   "node": 782,
+   "op": "drop_not",
+   "line": 229,
+   "status": "killed",
+   "seconds": 15.283236026763916
+  },
+  {
+   "node": 847,
+   "op": "drop_not",
+   "line": 238,
+   "status": "killed",
+   "seconds": 14.034778833389282
+  },
+  {
+   "node": 885,
+   "op": "cmp0",
+   "line": 244,
+   "status": "killed",
+   "seconds": 11.331894159317017
+  },
+  {
+   "node": 906,
+   "op": "cmp0",
+   "line": 253,
+   "status": "killed",
+   "seconds": 9.17746376991272
+  },
+  {
+   "node": 926,
+   "op": "return_none",
+   "line": 264,
+   "status": "killed",
+   "seconds": 7.885210275650024
+  },
+  {
+   "node": 944,
+   "op": "return_none",
+   "line": 270,
+   "status": "killed",
+   "seconds": 9.228453636169434
+  },
+  {
+   "node": 953,
+   "op": "cmp0",
+   "line": 270,
+   "status": "killed",
+   "seconds": 7.6855552196502686
+  }
+ ]
+}

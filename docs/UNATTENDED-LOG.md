@@ -153,15 +153,43 @@ this run and were fixed (DECISIONS U8); S3 hard links and I1 poll cost are in
 DEFERRED with the lows (D70, D72, D74-D77). B1/B2, the audit's findings on my
 mutation runner, were fixed because they corrupt numbers this report states.
 
-## RESUME (2026-09-29)
+## Part 2.3 - mutation, the authoritative pass (2026-09-29)
 
-Branch `iteration-3` at fc17455, clean. Main untouched. Running in the
-background: the authoritative mutation recheck (`queue4.sh`, survivors of
-the v2 run re-checked against the whole suite with the fixed runner, in the
-snapshot worktree `~/.alpha-mut-snap`). Next, in order, once it finishes and
-the machine is idle: Part 3 timed measurements (3.2 shutdown, 3.3 startup,
-3.5 /alerts cost, 3.6 memory), 4.8 frozen rebuild + gate (add the junction
-and stream tests to packaging/probe_entry.py's GATE) + window + a scripted
-task + no orphans, Part 6 report, HANDOVER, cleanup (remove the snapshot
-worktree; stop the scratch planes on 8766/8767 with kill_tree), then the
+The fixed runner's recheck (queue4, survivors of v2 against the whole suite)
+left real gaps in the hold-out and the graders. Killed red-first (02554fc,
+f67897f): a missing or raising verifier could pass; the reviewer transcript's
+held-out branch; retrieval with no task ids; a rehashed gap in the chain; the
+anchor's hash filter and directory; and the verifiers' list, boolean, schema,
+citation, pytest, ruff and execution checks. **Found killing them: D79**, a
+graded program can print its own verdict (strict xfail; P5, U9). Final scores
+come from queue5 (a fresh run at f67897f with the new tests targeted).
+
+## Found while waiting (2026-09-29)
+
+- **D80**: a 2026-09-06 test opened the 283-task measurement record
+  read-write, so every schema addition since reached it; this run's two
+  conversation tables did. No rows. Read-only now, red first (U11).
+- **D72, partly**: the /alerts sweep read the anchor file twice per task, one
+  read unused - two thirds of the sweep. Once per sweep now, red first.
+- **3.2**: pywebview's private-mode close waits up to 3 s for WebView2 to exit
+  on its own; the tree is now stopped on the window's `closed` event, and the
+  private profile removed if pywebview skipped it. Red-first test; NOT yet
+  checked frozen - uncommitted until 4.8 shows it.
+- The suite took 180 s where 2.2 measured 47 s: the same old commit took 155 s
+  in the same hour, so it is the machine (U10).
+- The reaper test's taskkill timed out under load; os.kill is TerminateProcess.
+
+## RESUME (2026-09-29, 12:45)
+
+Branch `iteration-3` at f67897f; UNCOMMITTED: D80, D72 partial, U9-U11 docs,
+the 3.2 desktop change, docs/UNATTENDED-REPORT.md (draft, TBDs). Running:
+queue5 (final mutation, snapshot worktree `~/.alpha-mut-snap` at f67897f).
+Also created: worktree `~/.alpha-before` at 1d911cc (Part 3's "before"), and
+`~/.alpha-build/dist-before-alpha` (the old frozen app). Do NOT load the
+machine during queue5's rechecks (a timing test can fail and read as a kill -
+audit killed_by for timing tests). Then, in order: full suite -> commit D80/D72
+(stash the desktop change for that run); part3.py 5 rounds idle; rebuild
+frozen app + probe gate; frozen_e2e.py before/after (3 trials each); commit
+3.2 if it holds; mutation README from v2/v4/v5; report; HANDOVER; cleanup
+(worktrees, dist-before-alpha, temp alpha-* dirs, verify 11434 and AppData);
 fast-forward decision.

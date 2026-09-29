@@ -159,12 +159,32 @@ def test_the_live_database_has_an_empty_critical_channel():
     db = ROOT / "agent.local.db"
     if not db.exists():
         pytest.skip("no local database in this checkout")
-    conn = open_db(db)
+    findings = _live_findings(db, ROOT / "anchor" / "chain.local.anchor")
+    assert critical(findings) == [], (
+        f"the critical channel must be empty: {critical(findings)[:3]}")
+
+
+def _live_findings(db, anchor_path):
+    # Read-only: open_db migrates, and this is the record, not a scratch copy.
+    import sqlite3
+
+    conn = sqlite3.connect(Path(db).resolve().as_uri() + "?mode=ro", uri=True)
     try:
-        log = EventLog(conn)
-        anchor = Anchor(ROOT / "anchor" / "chain.local.anchor")
-        findings = verify_all(conn, log, anchor)
-        assert critical(findings) == [], (
-            f"the critical channel must be empty: {critical(findings)[:3]}")
+        return verify_all(conn, EventLog(conn), Anchor(anchor_path))
     finally:
         conn.close()
+
+
+def test_checking_the_live_record_does_not_change_it(tmp_path):
+    """Iteration 3. The check above opened the 283-task measurement record
+    READ-WRITE, so every schema change this project made was migrated into
+    the record by the next suite run (it gained two empty conversation
+    tables on 2026-09-28). A copy of an older record stands in for it."""
+    import hashlib
+    import shutil
+
+    old = tmp_path / "record.db"
+    shutil.copyfile(ROOT / "docs" / "evidence" / "g1-ablation-2026-09-17.db", old)
+    before = hashlib.sha256(old.read_bytes()).hexdigest()
+    _live_findings(old, tmp_path / "chain.anchor")
+    assert hashlib.sha256(old.read_bytes()).hexdigest() == before

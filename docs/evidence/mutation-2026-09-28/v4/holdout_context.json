@@ -1,0 +1,59 @@
+{
+ "module": "src\\agent\\context.py",
+ "only": [
+  "AgentContext.compact_transcript"
+ ],
+ "tests": [
+  "tests/test_every_verifier_can_fail.py",
+  "tests/test_m13_autonomy.py",
+  "tests/test_grader_is_not_in_the_prompt.py"
+ ],
+ "score": 0.3333333333333333,
+ "results": [
+  {
+   "node": 9,
+   "op": "int",
+   "line": 586,
+   "status": "survived",
+   "seconds": 15.097198486328125
+  },
+  {
+   "node": 44,
+   "op": "bool",
+   "line": 600,
+   "status": "survived",
+   "seconds": 15.418071031570435
+  },
+  {
+   "node": 72,
+   "op": "negate",
+   "line": 604,
+   "status": "killed-by-suite",
+   "seconds": 15.360604047775269,
+   "killed_by": [
+    "tests/test_grader_never_reaches_the_model.py::test_p1_the_grader_s_secret_appears_in_no_prompt"
+   ]
+  },
+  {
+   "node": 87,
+   "op": "negate",
+   "line": 612,
+   "status": "survived",
+   "seconds": 15.49579644203186
+  },
+  {
+   "node": 119,
+   "op": "int",
+   "line": 614,
+   "status": "survived",
+   "seconds": 11.403555870056152
+  },
+  {
+   "node": 121,
+   "op": "return_none",
+   "line": 615,
+   "status": "killed",
+   "seconds": 11.011197805404663
+  }
+ ]
+}

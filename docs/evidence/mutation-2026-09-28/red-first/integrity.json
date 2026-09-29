@@ -1,0 +1,69 @@
+{
+ "module": "src\\agent\\kernel\\integrity.py",
+ "only": [
+  "Anchor.__init__",
+  "_is_chain_hash"
+ ],
+ "tests": [
+  "tests/test_chain_mutants.py"
+ ],
+ "score": 0.75,
+ "results": [
+  {
+   "node": 5,
+   "op": "return_none",
+   "line": 27,
+   "status": "killed",
+   "seconds": 11.805217742919922
+  },
+  {
+   "node": 6,
+   "op": "boolop",
+   "line": 27,
+   "status": "killed",
+   "seconds": 11.685163736343384
+  },
+  {
+   "node": 8,
+   "op": "cmp0",
+   "line": 27,
+   "status": "killed",
+   "seconds": 12.053954839706421
+  },
+  {
+   "node": 15,
+   "op": "int",
+   "line": 27,
+   "status": "killed",
+   "seconds": 11.497950315475464
+  },
+  {
+   "node": 20,
+   "op": "cmp0",
+   "line": 27,
+   "status": "killed",
+   "seconds": 11.271469116210938
+  },
+  {
+   "node": 63,
+   "op": "bool",
+   "line": 39,
+   "status": "killed",
+   "seconds": 11.247969388961792
+  },
+  {
+   "node": 65,
+   "op": "bool",
+   "line": 39,
+   "status": "survived",
+   "seconds": 10.188117027282715
+  },
+  {
+   "node": 67,
+   "op": "drop_not",
+   "line": 40,
+   "status": "survived",
+   "seconds": 10.25576901435852
+  }
+ ]
+}

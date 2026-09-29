@@ -1,0 +1,136 @@
+{
+ "module": "src\\agent\\assure\\mesh.py",
+ "only": [
+  "VerificationMesh"
+ ],
+ "tests": [
+  "tests/test_every_verifier_can_fail.py",
+  "tests/test_m7_assure.py",
+  "tests/test_final_sweep.py",
+  "tests/test_grader_is_not_in_the_prompt.py",
+  "tests/test_verification_evidence.py"
+ ],
+ "score": 0.6875,
+ "results": [
+  {
+   "node": 42,
+   "op": "boolop",
+   "line": 39,
+   "status": "killed",
+   "seconds": 12.577548742294312
+  },
+  {
+   "node": 120,
+   "op": "cmp0",
+   "line": 48,
+   "status": "killed",
+   "seconds": 12.51949429512024
+  },
+  {
+   "node": 132,
+   "op": "bool",
+   "line": 50,
+   "status": "survived",
+   "seconds": 23.4636812210083
+  },
+  {
+   "node": 143,
+   "op": "negate",
+   "line": 54,
+   "status": "killed",
+   "seconds": 12.15598440170288
+  },
+  {
+   "node": 144,
+   "op": "boolop",
+   "line": 54,
+   "status": "killed",
+   "seconds": 16.096750497817993
+  },
+  {
+   "node": 146,
+   "op": "cmp0",
+   "line": 54,
+   "status": "killed",
+   "seconds": 16.15832018852234
+  },
+  {
+   "node": 164,
+   "op": "bool",
+   "line": 55,
+   "status": "survived",
+   "seconds": 24.11776614189148
+  },
+  {
+   "node": 172,
+   "op": "bool",
+   "line": 60,
+   "status": "killed",
+   "seconds": 13.667325496673584
+  },
+  {
+   "node": 199,
+   "op": "cmp0",
+   "line": 70,
+   "status": "killed",
+   "seconds": 13.663907289505005
+  },
+  {
+   "node": 248,
+   "op": "bool",
+   "line": 75,
+   "status": "survived",
+   "seconds": 20.842829942703247
+  },
+  {
+   "node": 309,
+   "op": "int",
+   "line": 87,
+   "status": "survived",
+   "seconds": 20.727524518966675
+  },
+  {
+   "node": 314,
+   "op": "return_none",
+   "line": 90,
+   "status": "killed",
+   "seconds": 12.389674663543701
+  },
+  {
+   "node": 325,
+   "op": "negate",
+   "line": 107,
+   "status": "killed-by-suite",
+   "seconds": 20.890029668807983,
+   "killed_by": [
+    "tests/test_grader_never_reaches_the_model.py::test_p1_the_grader_s_secret_appears_in_no_prompt",
+    "tests/test_grader_never_reaches_the_model.py::test_p3_outside_measurement_the_detailed_feedback_still_arrives",
+    "tests/test_grader_never_reaches_the_model.py::test_p2_the_executor_sees_the_same_bytes_whatever_the_secret"
+   ]
+  },
+  {
+   "node": 336,
+   "op": "bool",
+   "line": 107,
+   "status": "survived",
+   "seconds": 19.60049319267273
+  },
+  {
+   "node": 337,
+   "op": "return_none",
+   "line": 108,
+   "status": "killed-by-suite",
+   "seconds": 19.73122811317444,
+   "killed_by": [
+    "tests/test_grader_never_reaches_the_model.py::test_p1_the_model_is_told_only_that_it_failed"
+   ]
+  },
+  {
+   "node": 339,
+   "op": "return_none",
+   "line": 112,
+   "status": "killed",
+   "seconds": 12.466411113739014
+  }
+ ]
+}

@@ -1,0 +1,118 @@
+{
+ "module": "src\\agent\\kernel\\scope.py",
+ "only": [],
+ "tests": [
+  "tests/test_cross_arm_retrieval_blocked.py",
+  "tests/test_search_history.py",
+  "tests/test_tool_exposure.py",
+  "tests/test_holdout_mutants.py"
+ ],
+ "score": 0.8666666666666667,
+ "results": [
+  {
+   "node": 39,
+   "op": "int",
+   "line": 58,
+   "status": "killed",
+   "seconds": 4.0279693603515625
+  },
+  {
+   "node": 59,
+   "op": "return_none",
+   "line": 68,
+   "status": "killed",
+   "seconds": 19.403953552246094
+  },
+  {
+   "node": 65,
+   "op": "int",
+   "line": 68,
+   "status": "killed",
+   "seconds": 7.589103937149048
+  },
+  {
+   "node": 87,
+   "op": "drop_not",
+   "line": 77,
+   "status": "killed",
+   "seconds": 3.864410400390625
+  },
+  {
+   "node": 97,
+   "op": "bool",
+   "line": 77,
+   "status": "survived",
+   "seconds": 9.146234035491943
+  },
+  {
+   "node": 101,
+   "op": "cmp0",
+   "line": 79,
+   "status": "killed",
+   "seconds": 4.063951015472412
+  },
+  {
+   "node": 106,
+   "op": "return_none",
+   "line": 83,
+   "status": "killed",
+   "seconds": 17.453741788864136
+  },
+  {
+   "node": 110,
+   "op": "return_none",
+   "line": 84,
+   "status": "killed",
+   "seconds": 4.4936299324035645
+  },
+  {
+   "node": 148,
+   "op": "bool",
+   "line": 89,
+   "status": "survived",
+   "seconds": 17.492761850357056
+  },
+  {
+   "node": 149,
+   "op": "return_none",
+   "line": 90,
+   "status": "killed",
+   "seconds": 16.322598457336426
+  },
+  {
+   "node": 198,
+   "op": "drop_not",
+   "line": 125,
+   "status": "killed",
+   "seconds": 13.523157835006714
+  },
+  {
+   "node": 202,
+   "op": "return_none",
+   "line": 126,
+   "status": "killed",
+   "seconds": 21.982449531555176
+  },
+  {
+   "node": 203,
+   "op": "bool",
+   "line": 126,
+   "status": "killed",
+   "seconds": 15.73539423942566
+  },
+  {
+   "node": 247,
+   "op": "return_none",
+   "line": 136,
+   "status": "killed",
+   "seconds": 9.647721767425537
+  },
+  {
+   "node": 248,
+   "op": "cmp0",
+   "line": 136,
+   "status": "killed",
+   "seconds": 8.118752241134644
+  }
+ ]
+}
