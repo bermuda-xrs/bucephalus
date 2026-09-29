@@ -99,9 +99,9 @@ chain verifies: True (first bad seq: None) - paid 9,091 tok - $0.0353 - cache hi
 
 It planned, executed, **refused an instruction embedded in a web page it read**, and the
 chain verifies. **Verification scope, narrower than it looks.** Every command here was run on **Windows, on
-one machine, against a local Ollama**, on the date in section D. **POSIX has run once, in
-WSL2** (2026-09-25, `docs/evidence/wsl-2026-09-25/`): the seven real-kernel sandbox properties
-held and the run found D54-D59. Bare-metal Linux has not run it, and macOS (`src/agent/platform/darwin.py`) has
+one machine, against a local Ollama**, on the date in section D. **POSIX has run twice, in
+WSL2** (`docs/evidence/wsl-2026-09-25/`, `docs/evidence/wsl-2026-09-30/`): the first found
+D54-D59, the second ran the whole suite green with them fixed. Bare-metal Linux has not run it, and macOS (`src/agent/platform/darwin.py`) has
 never executed anywhere; the checklist in `docs/PLATFORMS.md` section 5 is for both.
 
 ## B3. What each command costs

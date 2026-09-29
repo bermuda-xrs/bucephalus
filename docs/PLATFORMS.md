@@ -1,11 +1,12 @@
 # Platforms: what runs where, and how to verify a new machine
 
-**Windows 11 is where this project runs; Linux has run once, in WSL2.** Every
+**Windows 11 is where this project runs; Linux has run twice, in WSL2.** Every
 line below marked "never run" is code that exists and has not executed once.
 The WSL2 run (2026-09-25, `docs/evidence/wsl-2026-09-25/`) is a real Linux
 kernel but not a bare-metal desktop, on Python 3.13 rather than the pinned
-3.11; it found D54-D59. macOS has never run anything. Written 2026-09-25,
-updated 2026-09-26.
+3.11; it found D54-D59. The second (2026-09-30, `docs/evidence/wsl-2026-09-30/`)
+ran the whole suite with them fixed: 1236 passed, none failed. macOS has never
+run anything. Written 2026-09-25, updated 2026-09-30.
 
 ## 1. Inventory (4A)
 
@@ -17,10 +18,10 @@ the section 5 checklist runs on a real machine.
 
 | concern | Windows | Linux | macOS |
 |---|---|---|---|
-| **Sandbox resource limits** | Job Object, child created suspended then assigned: 512 MB per process, CPU = the timeout, 32 processes. No file-size limit exists on Windows. **Ran**: `test_sandbox_limits.py`, and the frozen gate 3 of 3 | rlimits AS / CPU / FSIZE, set by a trampoline that then `exec`s the child in its own session. Process count by watchdog over the run's group, reactive. **Ran in WSL2** (2026-09-25, `docs/evidence/wsl-2026-09-25/`, Python 3.13; not bare metal): memory, CPU, file size, process count, grandchildren on timeout, threaded caller - 7 of 7 real-kernel tests. CPU limit races the timeout (D57) | CPU / FSIZE by trampoline. Memory and process count by a `phys_footprint` watchdog, **reactive, not kernel-enforced** (section 3). **Never run** |
-| **Sandbox fences** (write/read audit hook, SQLite authorizer, protected paths) | **Ran**, unfrozen and frozen | Pure Python, but path semantics differ (case sensitivity, `/proc`, symlinked temp dirs). **Ran in WSL2** (2026-09-25, `docs/evidence/wsl-2026-09-25/`, Python 3.13; not bare metal): sandbox property suites 148 passed, 4 failed (D54, D55, D57) | As Linux, plus `/tmp` → `/private/tmp` symlinks. **Never run** |
-| **Process-tree kill** (`kill_tree`) | `taskkill /T /F`. **Ran**, including both trampoline incidents | `killpg` of the child's OWN group; a pid in the caller's group is killed by parentage. **Ran in WSL2** (2026-09-25, `docs/evidence/wsl-2026-09-25/`, Python 3.13; not bare metal): the caller survived. A zombie counts as alive (D54) | Same. **Never run** |
-| **Process table**, parentage, start time (reaper, desktop shutdown) | Toolhelp32, `GetProcessTimes`. **Ran** | `/proc`. **Ran in WSL2** (2026-09-25, `docs/evidence/wsl-2026-09-25/`, Python 3.13; not bare metal): 18 rows. The reaper is inert on Linux (D55) | `ps -axo`, `ps -o lstart` (`darwin.py`). **Never run** |
+| **Sandbox resource limits** | Job Object, child created suspended then assigned: 512 MB per process, CPU = the timeout, 32 processes. No file-size limit exists on Windows. **Ran**: `test_sandbox_limits.py`, and the frozen gate 3 of 3 | rlimits AS / CPU / FSIZE, set by a trampoline that then `exec`s the child in its own session. Process count by watchdog over the run's group, reactive. **Ran in WSL2** (2026-09-25, `docs/evidence/wsl-2026-09-25/`, Python 3.13; not bare metal): memory, CPU, file size, process count, grandchildren on timeout, threaded caller - 7 of 7 real-kernel tests. CPU limit raced the timeout (D57; fixed 2026-09-30: a second past it) | CPU / FSIZE by trampoline. Memory and process count by a `phys_footprint` watchdog, **reactive, not kernel-enforced** (section 3). **Never run** |
+| **Sandbox fences** (write/read audit hook, SQLite authorizer, protected paths) | **Ran**, unfrozen and frozen | Pure Python, but path semantics differ (case sensitivity, `/proc`, symlinked temp dirs). **Ran in WSL2** (2026-09-25, `docs/evidence/wsl-2026-09-25/`, Python 3.13; not bare metal): sandbox property suites 148 passed, 4 failed (D54, D55, D57); all fixed and the whole suite green, 2026-09-30 | As Linux, plus `/tmp` → `/private/tmp` symlinks. **Never run** |
+| **Process-tree kill** (`kill_tree`) | `taskkill /T /F`. **Ran**, including both trampoline incidents | `killpg` of the child's OWN group; a pid in the caller's group is killed by parentage. **Ran in WSL2** (2026-09-25, `docs/evidence/wsl-2026-09-25/`, Python 3.13; not bare metal): the caller survived. A zombie counted as alive (D54; fixed 2026-09-30) | Same. **Never run** |
+| **Process table**, parentage, start time (reaper, desktop shutdown) | Toolhelp32, `GetProcessTimes`. **Ran** | `/proc`. **Ran in WSL2** (2026-09-25, `docs/evidence/wsl-2026-09-25/`, Python 3.13; not bare metal): 18 rows. The reaper was inert on Linux (D55; fixed 2026-09-30: an orphan still in this session, never a daemon) | `ps -axo`, `ps -o lstart` (`darwin.py`). **Never run** |
 | **Memory metrics** (preflight, commit ratio, worker RSS) | ctypes. **Ran** | `/proc/meminfo`, `statm`. **Never run** | `sysctl hw.memsize`, `vm_stat`, libproc `phys_footprint`. No commit ratio exists on Darwin (None = unmeasured). **Never run** |
 | **The venv trampoline** | A venv `python.exe` is a launcher that starts the real interpreter as a child. Handled by the suspended-into-job spawn. **Ran** | Not applicable: a venv python is a symlink | Not applicable |
 | **Multiprocessing start method** | Not used by the product. `freeze_support()` is called in the frozen dispatcher for libraries. **Ran**, frozen | fork by default (3.14: forkserver). Unused | spawn. Unused |
