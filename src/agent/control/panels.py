@@ -58,12 +58,39 @@ def channels(ctx) -> dict:
             "drops": recent_drops(ctx.conn, limit=50)}
 
 
-def integrity(ctx) -> dict:
-    from ..kernel.integrity import verify_all
+def integrity_findings(ctx) -> list[dict]:
+    """The console's integrity sweep, polled every few seconds (D72, audit I1).
 
+    `verify_all` walks every event of every task, and the poll re-walked an
+    unchanged database each time - 0.3 s a poll on the 283-task record, and
+    growing with it. The walk runs again when the database has a commit from
+    ANOTHER connection (`PRAGMA data_version`: an out-of-band edit, another
+    process) or the anchor file changed. This connection's own commits are
+    the appends the chain is built from, and a task's run ends in a
+    checkpoint, which changes the anchor. Keyed on the chain HEADS it would
+    not be safe: an edit of an old row leaves every head alone. Memory is not
+    in the database and is checked on every poll. `alpha verify` always walks.
+    """
+    from ..kernel.integrity import verify_all, verify_memory
+
+    try:
+        st = Path(ctx.anchor.path).stat()
+        stamp = (st.st_size, st.st_mtime_ns)
+    except OSError:
+        stamp = None
+    key = (ctx.conn.execute("PRAGMA data_version").fetchone()[0], stamp)
+    cached = getattr(ctx, "_integrity_sweep", None)
+    if cached is None or cached[0] != key:
+        cached = (key, verify_all(ctx.conn, ctx.log, ctx.anchor))
+        ctx._integrity_sweep = cached
+    mem = verify_memory(ctx.memory) if ctx.memory is not None else None
+    return ([mem] if mem else []) + list(cached[1])
+
+
+def integrity(ctx) -> dict:
     anchor = Path(ctx.anchor.path)
     lines = anchor.read_text(encoding="utf-8").splitlines() if anchor.exists() else []
-    return {"findings": verify_all(ctx.conn, ctx.log, ctx.anchor, ctx.memory),
+    return {"findings": integrity_findings(ctx),
             "anchor": {"path": str(anchor), "entries": len(lines),
                        "last_written": anchor.stat().st_mtime if anchor.exists() else None},
             "tasks": ctx.conn.execute("SELECT COUNT(*) FROM tasks").fetchone()[0]}

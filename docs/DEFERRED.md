@@ -38,8 +38,8 @@ Everything else on this page is marked in its own heading:
 
 | state | what it means | items |
 |---|---|---|
-| **open** | a real defect, nobody has fixed it | D2, D6, D16, D26, D27, D33; from the audit D52; from iteration 3's audit D72 (partly fixed); from its mutation work D79 |
-| **closed** | fixed, with the change and its test named | D1, D3, D7, D9, D10, D11, D15, D17, D18, D19, D20, D21, D22, D23, D24, D28, D29, D30, D34, D35, D36, D37, D38, D39, D40, D41, D42, D43, D44, D51, D50, D53, D45, D61, D60, D62, D64, D65, D66, D67, D68, D69, D78, D71, D73, D80, D81, D82, D46, D47, D48, D49, D59, D63, D70, D74, D75, D76, D77, D54, D55, D56, D57, D58 |
+| **open** | a real defect, nobody has fixed it | D2, D6, D16, D26, D27, D33; from the audit D52; from iteration 3's mutation work D79 |
+| **closed** | fixed, with the change and its test named | D1, D3, D7, D9, D10, D11, D15, D17, D18, D19, D20, D21, D22, D23, D24, D28, D29, D30, D34, D35, D36, D37, D38, D39, D40, D41, D42, D43, D44, D51, D50, D53, D45, D61, D60, D62, D64, D65, D66, D67, D68, D69, D78, D71, D73, D80, D81, D82, D46, D47, D48, D49, D59, D63, D70, D74, D75, D76, D77, D54, D55, D56, D57, D58, D72 |
 | **deleted** | never a defect, or about an instrument nobody runs | D4, D5, D8, D12, D14 |
 | **known and accepted** | a real limit, decided rather than deferred | D32 (the sandbox is advisory: Phase 6 withdrawn) |
 | **dormant** | its subject is retired; it wakes if that returns | D19 (M11). D13 CLOSED 2026-09-25 |
@@ -1514,7 +1514,7 @@ user data dir is the installed mode's root: a root-scoped desktop task could
 read another checkout's whole database. `checkouts` is protected state by name
 now (`PROJECT_STATE`). `tests/test_audit_iteration_3_fixes.py`, red first.
 
-## D72 - MEDIUM - the console's poll re-verifies every chain (audit I1) (open)
+## D72 - MEDIUM - the console's poll re-verifies every chain (audit I1) (CLOSED 2026-09-30: re-walked only when another connection committed or the anchor changed; an unchanged poll 0.2 s -> 0.3 ms on the record; tests/test_audit_iteration_3_fixes.py)
 
 `/alerts` runs `verify_all`, O(every event of every task), every 6 s; ~2 s per
 poll on the 283-task record, ~10 s at 1,000 tasks. The previous console polled

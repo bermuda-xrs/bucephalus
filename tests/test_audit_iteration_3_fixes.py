@@ -154,3 +154,63 @@ def test_I1_a_sweep_reads_the_anchor_once_not_per_task(ctx, workspace, monkeypat
     monkeypatch.setattr(Path, "read_text", counting)
     assert verify_all(ctx.conn, ctx.log, ctx.anchor) == []
     assert len(reads) <= 2, f"{len(reads)} reads of the anchor for one sweep of 5 tasks"
+
+
+# D72 (audit I1), the rest: the console polls /alerts every few seconds, and
+# each poll walked every event of every task. An unchanged database is not
+# re-walked; what the walk exists to catch still is, on the next poll.
+def _alerts(ctx):
+    return _client(ctx).get("/alerts").json()["integrity"]
+
+
+def _walks(monkeypatch):
+    from agent.kernel.events import EventLog
+
+    n = [0]
+    real = EventLog.verify
+
+    def counting(self, task_id):
+        n[0] += 1
+        return real(self, task_id)
+    monkeypatch.setattr(EventLog, "verify", counting)
+    return n
+
+
+def _a_task_with_events(ctx):
+    t = create_task(ctx.conn, ctx.log, TaskContract(goal="g", artifact_scope=["work"]),
+                    Budget(usd=1.0, seconds=60))
+    for i in range(3):
+        ctx.log.append(t.id, "tool.receipt", {"tool": "read_file", "key": f"k{i}", "ok": True})
+    return t
+
+
+def test_D72_an_unchanged_database_is_not_rewalked(ctx, workspace, monkeypatch):
+    _a_task_with_events(ctx)
+    walks = _walks(monkeypatch)
+    assert _alerts(ctx) == []
+    first = walks[0]
+    assert first > 0
+    assert _alerts(ctx) == [] and _alerts(ctx) == []
+    assert walks[0] == first, f"{walks[0] - first} chain walks for two unchanged polls"
+
+
+def test_D72_an_edit_by_another_connection_is_seen_on_the_next_poll(ctx, workspace):
+    import sqlite3
+
+    t = _a_task_with_events(ctx)
+    assert _alerts(ctx) == []
+    other = sqlite3.connect(ctx.config.resolve_state(ctx.config.db_path))
+    other.execute("UPDATE events SET payload_json=? WHERE task_id=? AND seq=1",
+                  ('{"tool": "write_file", "key": "k0", "ok": true}', t.id))
+    other.commit()
+    other.close()
+    found = [f for f in _alerts(ctx) if f.get("task_id") == t.id]
+    assert found and found[0]["severity"] == "critical", found
+
+
+def test_D72_an_anchor_change_is_seen_on_the_next_poll(ctx, workspace):
+    t = _a_task_with_events(ctx)
+    assert _alerts(ctx) == []
+    ctx.anchor.record(t.id, "f" * 64)              # a head this chain never had
+    found = [f for f in _alerts(ctx) if f.get("task_id") == t.id]
+    assert found and found[0]["severity"] == "critical", found

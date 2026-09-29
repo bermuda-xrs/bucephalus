@@ -33,7 +33,6 @@ from ..assure.monitor import flags as monitor_flags
 from ..context import AgentContext
 from ..execute.loop import run_task
 from ..instrument.report import run_report
-from ..kernel.integrity import verify_all
 from ..kernel.tasks import create_task, load_task, set_status
 from ..kernel.types import Budget, TaskContract, TaskStatus
 from ..plan.planner import approve_plan, draft_plan, load_plan, reject_plan
@@ -305,9 +304,10 @@ def create_app(ctx: AgentContext) -> FastAPI:
         correctly — which is how they end up rendered alike.
         """
         from ..channel.telegram import recent_drops
+        from .panels import integrity_findings
 
         return {
-            "integrity": verify_all(ctx.conn, ctx.log, ctx.anchor, ctx.memory),
+            "integrity": integrity_findings(ctx),     # re-walked only on a change (D72)
             "monitor": monitor_flags(ctx.conn),
             "channel_drops": recent_drops(ctx.conn, limit=25),
         }
