@@ -92,3 +92,20 @@ def test_the_preview_stops_at_exactly_300_characters():
     tool = types.SimpleNamespace(name="t")
     pv = render_preview(tool, {f"a{i:02d}": "v" * 30 for i in range(40)})
     assert len(pv) == 300
+
+
+def test_a_tool_without_a_readable_signature_keeps_its_arguments():
+    """Kills `_effective_args` returning None when the signature cannot be
+    read: the gate would then check nothing it was given."""
+    from agent.security.capabilities import _effective_args
+
+    class NoSig:
+        @property
+        def __signature__(self):
+            raise ValueError("no signature")
+
+        def __call__(self, **kw):
+            return kw
+
+    tool = types.SimpleNamespace(name="t", fn=NoSig())
+    assert _effective_args(tool, {"path": "../x"}) == {"path": "../x"}

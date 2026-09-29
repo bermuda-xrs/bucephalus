@@ -104,3 +104,19 @@ rests on the tray's Quit and on the OS logoff path, both of which need their
 own tests (a logoff kill is not a window close). **Decide:** whether a
 long-running agent should keep running with no window, which is what a tray
 icon is for.
+
+## P5 - Grade a program from outside the process it runs in (D79)
+
+`verify_program` runs the grader's `check()` and the graded code in one
+interpreter and reads the first verdict marker on stdout, so the graded code
+can print a verdict, patch the serializer, or return an always-equal object.
+Built, it is: the harness writes the verdict to a file descriptor the grader
+opens before importing anything and the graded code is not told about, read
+LAST not first; graders compare `type(got) is type(want) and got == want`;
+and, for a real boundary, the answer runs in a child process whose results
+the grader compares. The first two are small; the third changes every
+grader. Each changes what counts as a pass, so it is a HARNESS_VERSION bump
+and a re-baseline. **Decide:** whether the held-out measurement must hold
+against a graded program that attacks its grader, and if so which of the
+three.
+

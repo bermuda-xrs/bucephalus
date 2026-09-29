@@ -74,3 +74,18 @@ def test_a_walk_does_not_descend_through_a_junction(ctx, task, workspace):
     assert files == {"mine.txt"}, files
     hits = ctx.tools.get("glob").fn(ctx, task, pattern="**/*.py", path="work")["matches"]
     assert not any("verify.py" in h for h in hits), hits
+
+
+# AUDIT-ITERATION-3 S1, swept into the sandbox: an NTFS stream name.
+def test_S1_sweep_sandboxed_code_cannot_plant_a_protected_file_through_a_stream(tmp_path):
+    """DR5: the sandbox's own write fence judged realpath against the protected
+    paths too, and `.env::$DATA` is not `.env` to realpath while it does not
+    exist."""
+    from agent.execute.sandbox import run_sandboxed
+
+    target = tmp_path / ".env"
+    code = f"open({str(target) + '::$DATA'!r}, 'w').write('ALPHA_TOKEN=x')\n"
+    r = run_sandboxed(code, allowed_paths=[str(tmp_path)], timeout_s=15,
+                      protected_paths=(str(target),))
+    assert not target.exists(), "sandboxed code planted a protected file"
+    assert r["returncode"] != 0

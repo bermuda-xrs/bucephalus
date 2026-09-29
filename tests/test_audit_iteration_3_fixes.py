@@ -95,20 +95,6 @@ def test_S2_resuming_from_the_tui_needs_a_signed_plan_when_plans_are_required(ct
         "a task with no signed plan ran from the TUI"
 
 
-@windows
-def test_S1_sweep_sandboxed_code_cannot_plant_a_protected_file_through_a_stream(tmp_path):
-    """DR5: the sandbox's own write fence judged realpath against the protected
-    paths too, and `.env::$DATA` is not `.env` to realpath while it does not
-    exist."""
-    from agent.execute.sandbox import run_sandboxed
-
-    target = tmp_path / ".env"
-    code = f"open({str(target) + '::$DATA'!r}, 'w').write('ALPHA_TOKEN=x')\n"
-    r = run_sandboxed(code, allowed_paths=[str(tmp_path)], timeout_s=15,
-                      protected_paths=(str(target),))
-    assert not target.exists(), "sandboxed code planted a protected file"
-    assert r["returncode"] != 0
-
 
 def test_S4_a_checkouts_moved_state_is_protected_under_the_data_root(ctx, workspace):
     """1.1 moved a synced checkout's database to <user data>/checkouts/...,

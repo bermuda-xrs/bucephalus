@@ -8,6 +8,7 @@ chain's whole test set green.
 from __future__ import annotations
 
 import ast
+import json
 import re
 from pathlib import Path
 
@@ -117,3 +118,52 @@ def test_a_plan_pin_is_not_mistaken_for_a_deleted_task(ctx):
     ctx.anchor.record("plan:t_whatever", "a" * 64)
     assert not [f for f in verify_all(ctx.conn, ctx.log, ctx.anchor)
                 if "plan:" in str(f.get("task_id", ""))]
+
+
+def test_append_returns_the_new_head(ctx):
+    """Kills append's `return h` -> None: callers checkpoint what it returns."""
+    t = _task(ctx)
+    h = ctx.log.append(t.id, "tool.receipt", {"tool": "read_file", "key": "k", "ok": True})
+    assert h == ctx.log.head(t.id) and len(h) == 64
+
+
+def test_a_gap_is_caught_even_when_the_rest_is_rehashed(ctx):
+    """Kills the sequence check returning None or True. A forger who deletes
+    a row and re-hashes everything after it leaves every link and every hash
+    self-consistent; the missing sequence number is all that is left."""
+    t = _task(ctx)
+    for i in range(3):
+        ctx.log.append(t.id, "tool.receipt", {"tool": "read_file", "key": f"k{i}", "ok": True})
+    ctx.conn.execute("DELETE FROM events WHERE task_id=? AND seq=1", (t.id,))
+    rows = ctx.conn.execute("SELECT seq, type, payload_json FROM events WHERE task_id=? "
+                            "ORDER BY seq", (t.id,)).fetchall()
+    prev = ctx.conn.execute("SELECT hash FROM events WHERE task_id=? AND seq=0",
+                            (t.id,)).fetchone()[0]
+    for seq, etype, pj in rows[1:]:
+        body = canonical({"task_id": t.id, "seq": seq, "type": etype, "payload": json.loads(pj)})
+        h = sha256_hex(prev + body)
+        ctx.conn.execute("UPDATE events SET prev_hash=?, hash=? WHERE task_id=? AND seq=?",
+                         (prev, h, t.id, seq))
+        prev = h
+    ctx.conn.commit()
+    assert ctx.log.verify(t.id) == (False, 2)
+
+
+def test_only_a_chain_head_counts_as_one(ctx):
+    """Kills `_is_chain_hash`'s `and` -> `or`: a short hex string or a
+    64-character non-hex value is not a chain head, whichever test it passes."""
+    t = _task(ctx)
+    ctx.anchor.record(t.id, "a" * 64)
+    ctx.anchor.record(t.id, "deadbeef")
+    ctx.anchor.record(t.id, "plan:" + "b" * 59)
+    assert ctx.anchor.latest_chain(t.id) == "a" * 64
+
+
+def test_the_anchor_creates_its_own_directory(tmp_path):
+    """Kills mkdir(parents=True -> False): the anchor's default home is a
+    nested directory under the user data dir that may not exist yet."""
+    from agent.kernel.integrity import Anchor
+
+    a = Anchor(tmp_path / "a" / "b" / "chain.anchor")
+    a.record("t", "c" * 64)
+    assert a.latest_chain("t") == "c" * 64

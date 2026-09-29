@@ -65,13 +65,11 @@ def _kill_single(pid):
     """Kill ONE process, leaving its children alive - the opposite of kill_tree.
 
     `kill_tree` passes taskkill /T, which takes the whole tree. To create a
-    genuine orphan the parent has to die on its own.
+    genuine orphan the parent has to die on its own. On Windows `os.kill` is
+    TerminateProcess on that one process; `taskkill /F` did the same through
+    a subprocess that timed out under the parallel suite's load.
     """
-    if sys.platform == "win32":
-        subprocess.run(["taskkill", "/F", "/PID", str(pid)],
-                       capture_output=True, timeout=15)
-    else:
-        os.kill(pid, 9)
+    os.kill(pid, 9)
 
 
 def _wait_gone(pid, timeout=15.0):
@@ -189,8 +187,11 @@ def test_reap_kills_exactly_what_selection_returns(family, monkeypatch):
     # between them under a parallel suite - other workers start and orphan
     # python processes - and that race is not what this test is about
     # (iteration 3, 2.2: failed once under load, passed alone).
-    table = proc.process_table()
-    starts = {pid: proc.process_start_time(pid) for pid, _pp, _n in table}
+    # A process that exits between the two reads has no start time; it is
+    # dropped from the view, or selection would count it and reaping, which
+    # cannot pin it, would not (failed once more under load).
+    starts = {pid: proc.process_start_time(pid) for pid, _pp, _n in proc.process_table()}
+    table = [row for row in proc.process_table() if starts.get(row[0]) is not None]
     monkeypatch.setattr(proc, "process_table", lambda: table)
     monkeypatch.setattr(proc, "process_start_time", lambda pid: starts.get(pid))
 
