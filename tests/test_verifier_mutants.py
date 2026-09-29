@@ -45,6 +45,7 @@ def test_the_schema_checker_checks_types_items_and_enums():
     assert V._validate([1, "x"], {"type": "array", "items": {"type": "integer"}}) == [
         "$[1]: expected integer, got str"]
     assert V._validate([1, 2], {"type": "array", "items": {"type": "integer"}}) == []
+    assert V._validate([1], {"type": "array"}) == []                  # no items schema
     assert V._validate("b", {"enum": ["a"]}) and V._validate("a", {"enum": ["a"]}) == []
     assert V._validate({"k": 1}, {"type": "object", "properties": {"k": {}}}) == []
 
@@ -61,7 +62,8 @@ def test_each_schema_error_costs_a_quarter():
 
 
 @pytest.mark.parametrize("out,want", [("3 passed, 1 failed in 0.1s", 0.75),
-                                      ("2 failed", 0.0), ("4 passed", 1.0), ("", 0.0)])
+                                      ("1 passed, 1 failed", 0.5), ("2 failed", 0.0),
+                                      ("4 passed", 1.0), ("", 0.0)])
 def test_the_pytest_score_is_the_passing_share(out, want):
     """Kills each constant and operator in `_pytest_score`."""
     assert V._pytest_score(out) == want
@@ -165,6 +167,18 @@ def test_self_consistency_refuses_an_empty_answer():
     v = V.SelfConsistencyVerifier(ctx)
     assert v.check("  ", TaskContract(goal="g")).passed is False
     assert v.check("42", TaskContract(goal="g")).passed is True
+
+
+def test_self_consistency_samples_on_the_task_record():
+    """Kills `task if task is not None` flipped: a verifier's model calls go
+    on the task's record (D36), not on "unattributed"."""
+    seen = []
+    ctx = types.SimpleNamespace(backends={"cloud": None}, active_local_tier=lambda: None,
+                                call_model=lambda who, *a, **k: seen.append(who)
+                                or types.SimpleNamespace(text="42"))
+    task = object()
+    V.SelfConsistencyVerifier(ctx).check("42", TaskContract(goal="g"), task=task)
+    assert seen and all(w is task for w in seen)
 
 
 def _program(tmp_path, check_body):
