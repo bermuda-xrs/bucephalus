@@ -1,0 +1,83 @@
+[
+ {
+  "trial": 0,
+  "health_s": 2.22,
+  "first_paint_s": 4.44,
+  "processes": 7,
+  "idle_ws_mb": 510,
+  "idle_private_mb": 283,
+  "plan_drafted_s": 0.22,
+  "task_ws_mb": 532,
+  "task_private_mb": 305,
+  "answer": "{\n  \"answer\": \"mock\"\n}",
+  "task_s": 0.97,
+  "windows_closed": 1,
+  "app_exit_s": 3.43,
+  "tree_gone_s": 3.43,
+  "exits": {
+   "27832 msedgewebview2.exe[browser] ppid=17796": 3.43,
+   "2976 msedgewebview2.exe[crashpad-handler] ppid=27832": 3.43,
+   "3092 msedgewebview2.exe[gpu-process] ppid=27832": 3.43,
+   "8392 msedgewebview2.exe[utility] ppid=27832": 3.43,
+   "27144 msedgewebview2.exe[utility] ppid=27832": 3.43,
+   "10012 msedgewebview2.exe[renderer] ppid=27832": 3.43
+  },
+  "orphans": [],
+  "tree_at_close": 7,
+  "exit_code": 0
+ },
+ {
+  "trial": 1,
+  "health_s": 2.19,
+  "first_paint_s": 4.32,
+  "processes": 7,
+  "idle_ws_mb": 509,
+  "idle_private_mb": 283,
+  "plan_drafted_s": 0.22,
+  "task_ws_mb": 524,
+  "task_private_mb": 297,
+  "answer": "{\n  \"answer\": \"mock\"\n}",
+  "task_s": 0.97,
+  "windows_closed": 1,
+  "app_exit_s": 3.37,
+  "tree_gone_s": 3.37,
+  "exits": {
+   "26316 msedgewebview2.exe[browser] ppid=12696": 3.37,
+   "3220 msedgewebview2.exe[crashpad-handler] ppid=26316": 3.37,
+   "2172 msedgewebview2.exe[gpu-process] ppid=26316": 3.37,
+   "17236 msedgewebview2.exe[utility] ppid=26316": 3.37,
+   "9784 msedgewebview2.exe[utility] ppid=26316": 3.37,
+   "1836 msedgewebview2.exe[renderer] ppid=26316": 3.37
+  },
+  "orphans": [],
+  "tree_at_close": 7,
+  "exit_code": 0
+ },
+ {
+  "trial": 2,
+  "health_s": 2.41,
+  "first_paint_s": 4.64,
+  "processes": 7,
+  "idle_ws_mb": 509,
+  "idle_private_mb": 285,
+  "plan_drafted_s": 0.22,
+  "task_ws_mb": 524,
+  "task_private_mb": 300,
+  "answer": "{\n  \"answer\": \"mock\"\n}",
+  "task_s": 0.97,
+  "windows_closed": 1,
+  "app_exit_s": 3.41,
+  "tree_gone_s": 3.41,
+  "exits": {
+   "12956 msedgewebview2.exe[browser] ppid=17928": 3.41,
+   "30852 msedgewebview2.exe[crashpad-handler] ppid=12956": 3.41,
+   "29136 msedgewebview2.exe[gpu-process] ppid=12956": 3.41,
+   "32676 msedgewebview2.exe[utility] ppid=12956": 3.41,
+   "26104 msedgewebview2.exe[utility] ppid=12956": 3.41,
+   "6700 msedgewebview2.exe[renderer] ppid=12956": 3.41
+  },
+  "orphans": [],
+  "tree_at_close": 7,
+  "exit_code": 0
+ }
+]

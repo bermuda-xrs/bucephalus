@@ -54,13 +54,14 @@ class AlphaTUI(App):
     #side Label.head { color: $text-muted; padding: 1 1 0 1; }
     #needs { height: auto; max-height: 12; }
     #main { width: 1fr; }
+    #main TabbedContent { height: 1fr; }
     #thread { height: auto; padding: 0 1; }
     #plan { height: auto; padding: 0 1; border: round $accent; margin: 0 1; }
     #output { height: 12; border: round $panel-lighten-2; margin: 0 1; }
     #trail { height: auto; max-height: 14; margin: 0 1; }
     #ask { height: 3; }
     #goal { width: 1fr; }
-    #budget { height: 1; dock: bottom; background: $panel; }
+    #budget { height: 1; background: $panel; }
     #alerts { color: red; text-style: bold; }
     """
 

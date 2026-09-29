@@ -1,0 +1,68 @@
+[
+ {
+  "trial": 0,
+  "health_s": 2.46,
+  "first_paint_s": 4.68,
+  "processes": 7,
+  "idle_ws_mb": 510,
+  "idle_private_mb": 284,
+  "windows_closed": 1,
+  "app_exit_s": 2.56,
+  "tree_gone_s": 2.56,
+  "exits": {
+   "26080 msedgewebview2.exe[browser] ppid=28324": 2.56,
+   "7412 msedgewebview2.exe[crashpad-handler] ppid=26080": 2.56,
+   "28624 msedgewebview2.exe[gpu-process] ppid=26080": 2.56,
+   "11408 msedgewebview2.exe[utility] ppid=26080": 2.56,
+   "32412 msedgewebview2.exe[utility] ppid=26080": 2.56,
+   "32384 msedgewebview2.exe[renderer] ppid=26080": 2.56
+  },
+  "orphans": [],
+  "tree_at_close": 7,
+  "exit_code": 0
+ },
+ {
+  "trial": 1,
+  "health_s": 2.11,
+  "first_paint_s": 4.32,
+  "processes": 7,
+  "idle_ws_mb": 510,
+  "idle_private_mb": 284,
+  "windows_closed": 1,
+  "app_exit_s": 2.53,
+  "tree_gone_s": 2.53,
+  "exits": {
+   "852 msedgewebview2.exe[browser] ppid=18376": 2.53,
+   "24236 msedgewebview2.exe[crashpad-handler] ppid=852": 2.53,
+   "26120 msedgewebview2.exe[gpu-process] ppid=852": 2.53,
+   "32744 msedgewebview2.exe[utility] ppid=852": 2.53,
+   "11296 msedgewebview2.exe[utility] ppid=852": 2.53,
+   "9088 msedgewebview2.exe[renderer] ppid=852": 2.53
+  },
+  "orphans": [],
+  "tree_at_close": 7,
+  "exit_code": 0
+ },
+ {
+  "trial": 2,
+  "health_s": 2.21,
+  "first_paint_s": 4.41,
+  "processes": 7,
+  "idle_ws_mb": 510,
+  "idle_private_mb": 284,
+  "windows_closed": 1,
+  "app_exit_s": 2.59,
+  "tree_gone_s": 2.59,
+  "exits": {
+   "30560 msedgewebview2.exe[browser] ppid=8780": 2.59,
+   "20824 msedgewebview2.exe[crashpad-handler] ppid=30560": 2.59,
+   "15264 msedgewebview2.exe[gpu-process] ppid=30560": 2.59,
+   "9192 msedgewebview2.exe[utility] ppid=30560": 2.59,
+   "28408 msedgewebview2.exe[utility] ppid=30560": 2.59,
+   "13212 msedgewebview2.exe[renderer] ppid=30560": 2.59
+  },
+  "orphans": [],
+  "tree_at_close": 7,
+  "exit_code": 0
+ }
+]

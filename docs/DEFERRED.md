@@ -37,7 +37,7 @@ Everything else on this page is marked in its own heading:
 | state | what it means | items |
 |---|---|---|
 | **open** | a real defect, nobody has fixed it | D2, D6, D16, D26, D27, D33; from Linux D54-D59; from the audit D46, D47, D48, D49, D52, each with its audit severity; from iteration 3 D63; from its audit D70, D72, D74-D77; from its mutation work D79 |
-| **closed** | fixed, with the change and its test named | D1, D3, D7, D9, D10, D11, D15, D17, D18, D19, D20, D21, D22, D23, D24, D28, D29, D30, D34, D35, D36, D37, D38, D39, D40, D41, D42, D43, D44, D51, D50, D53, D45, D61, D60, D62, D64, D65, D66, D67, D68, D69, D78, D71, D73, D80, D81 |
+| **closed** | fixed, with the change and its test named | D1, D3, D7, D9, D10, D11, D15, D17, D18, D19, D20, D21, D22, D23, D24, D28, D29, D30, D34, D35, D36, D37, D38, D39, D40, D41, D42, D43, D44, D51, D50, D53, D45, D61, D60, D62, D64, D65, D66, D67, D68, D69, D78, D71, D73, D80, D81, D82 |
 | **deleted** | never a defect, or about an instrument nobody runs | D4, D5, D8, D12, D14 |
 | **known and accepted** | a real limit, decided rather than deferred | D32 (the sandbox is advisory: Phase 6 withdrawn) |
 | **dormant** | its subject is retired; it wakes if that returns | D19 (M11). D13 CLOSED 2026-09-25 |
@@ -1601,3 +1601,12 @@ the ASGI module, the desktop app) now bounds the wait at 1 s:
 `test_an_open_console_stream_does_not_hold_the_close` and
 `test_every_server_bounds_its_shutdown`, both red first. Close after a task,
 frozen: 22.3 s -> 3.4 s.
+
+## D82 - MEDIUM - the TUI's input row and status bar were off screen (CLOSED 2026-09-29: fixed in the change that recorded it)
+
+Found by the 4.7 screenshots, not by a test: the tabbed pane took every row
+of the main column, laying the input out below the screen, and the status bar
+(model, context meter, ceiling, budget, integrity count) was docked to the
+same edge as the key bar, which covered it. Every TUI test passed - they set
+the input's value and read the bar's text. A regression of this run's TUI
+(4.5). `test_the_input_and_the_status_bar_are_on_screen`, red first.

@@ -1,0 +1,122 @@
+{
+ "rows": [
+  {
+   "round": 0,
+   "tree": "before",
+   "cli_help_s": 1.422,
+   "serve_health_s": 3.099,
+   "serve_idle_ws_mb": 62,
+   "serve_idle_private_mb": 45,
+   "step_ms": 33.3,
+   "alerts_s": 0.962
+  },
+  {
+   "round": 0,
+   "tree": "after",
+   "cli_help_s": 1.437,
+   "serve_health_s": 3.094,
+   "serve_idle_ws_mb": 62,
+   "serve_idle_private_mb": 46,
+   "step_ms": 35.4,
+   "alerts_s": 0.29
+  },
+  {
+   "round": 1,
+   "tree": "before",
+   "cli_help_s": 1.498,
+   "serve_health_s": 3.106,
+   "serve_idle_ws_mb": 62,
+   "serve_idle_private_mb": 45,
+   "step_ms": 34.5,
+   "alerts_s": 0.918
+  },
+  {
+   "round": 1,
+   "tree": "after",
+   "cli_help_s": 1.483,
+   "serve_health_s": 3.088,
+   "serve_idle_ws_mb": 62,
+   "serve_idle_private_mb": 45,
+   "step_ms": 37.5,
+   "alerts_s": 0.315
+  },
+  {
+   "round": 2,
+   "tree": "before",
+   "cli_help_s": 1.599,
+   "serve_health_s": 3.076,
+   "serve_idle_ws_mb": 62,
+   "serve_idle_private_mb": 45,
+   "step_ms": 36.9,
+   "alerts_s": 0.867
+  },
+  {
+   "round": 2,
+   "tree": "after",
+   "cli_help_s": 1.409,
+   "serve_health_s": 3.074,
+   "serve_idle_ws_mb": 62,
+   "serve_idle_private_mb": 46,
+   "step_ms": 31.5,
+   "alerts_s": 0.294
+  },
+  {
+   "round": 3,
+   "tree": "before",
+   "cli_help_s": 1.389,
+   "serve_health_s": 3.088,
+   "serve_idle_ws_mb": 63,
+   "serve_idle_private_mb": 46,
+   "step_ms": 31.7,
+   "alerts_s": 0.932
+  },
+  {
+   "round": 3,
+   "tree": "after",
+   "cli_help_s": 1.46,
+   "serve_health_s": 3.081,
+   "serve_idle_ws_mb": 62,
+   "serve_idle_private_mb": 45,
+   "step_ms": 31.4,
+   "alerts_s": 0.278
+  },
+  {
+   "round": 4,
+   "tree": "before",
+   "cli_help_s": 1.464,
+   "serve_health_s": 3.078,
+   "serve_idle_ws_mb": 62,
+   "serve_idle_private_mb": 45,
+   "step_ms": 31.3,
+   "alerts_s": 0.9
+  },
+  {
+   "round": 4,
+   "tree": "after",
+   "cli_help_s": 1.357,
+   "serve_health_s": 3.078,
+   "serve_idle_ws_mb": 62,
+   "serve_idle_private_mb": 46,
+   "step_ms": 31.9,
+   "alerts_s": 0.28
+  }
+ ],
+ "medians": {
+  "before": {
+   "cli_help_s": 1.464,
+   "serve_health_s": 3.088,
+   "serve_idle_ws_mb": 62,
+   "serve_idle_private_mb": 45,
+   "step_ms": 33.3,
+   "alerts_s": 0.918
+  },
+  "after": {
+   "cli_help_s": 1.437,
+   "serve_health_s": 3.081,
+   "serve_idle_ws_mb": 62,
+   "serve_idle_private_mb": 46,
+   "step_ms": 31.9,
+   "alerts_s": 0.29
+  }
+ }
+}

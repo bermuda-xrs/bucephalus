@@ -81,3 +81,23 @@ def test_the_status_bar_carries_the_model_and_the_context_meter(ctx, workspace):
             bar = str(app.query_one("#budget").render())
             assert "mock-cloud" in bar and "ctx" in bar and "ceiling" in bar
     asyncio.run(go())
+
+
+def test_the_input_and_the_status_bar_are_on_screen(ctx, workspace):
+    """Found in the 4.7 screenshots, 2026-09-29: the tabs took every row, so
+    the input was laid out below the screen, and the status bar was docked to
+    the same edge as the key bar, which covered it. The tests above set the
+    input's value and read the bar's text, so neither could see it."""
+    from textual.widgets import Footer
+
+    async def go():
+        app = AlphaTUI(ctx)
+        async with app.run_test(size=(140, 44)) as pilot:
+            await pilot.pause(0.3)
+            screen = app.screen.region
+            footer = app.query_one(Footer).region
+            for wid in ("#goal", "#budget"):
+                r = app.query_one(wid).region
+                assert r.height > 0 and screen.contains_region(r), (wid, r, screen)
+                assert r.bottom <= footer.y, (wid, "under the key bar", r, footer)
+    asyncio.run(go())

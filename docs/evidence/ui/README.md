@@ -55,3 +55,16 @@ was; Ctrl+Enter sends from the composer; a skip link leads to the composer.
   desktop shot shows the card from the top.
 - Screen-reader use was not tested with an actual screen reader, only by the
   accessibility tree (every control has a name).
+
+## Added 2026-09-29: the frozen app and the TUI
+
+- `frozen-app-task-done.png` - the rebuilt desktop app's own window (4.8),
+  after a task typed into its composer, drafted, signed through the plan
+  card and answered; captured over DevTools from the WebView2. Mock models.
+- `tui-plan-drafted.png`, `tui-signed-and-done.png` - the terminal UI through
+  Textual's pilot at 140x44: the plan awaiting `s`, then signed and done.
+  **These found D82:** the first pair showed neither the input row nor the
+  status bar - the tabs took every row and the bar was docked under the key
+  bar - while every TUI test passed, because the tests set the input's value
+  and read the bar's text without looking. Fixed, and
+  `test_the_input_and_the_status_bar_are_on_screen` checks the regions.
