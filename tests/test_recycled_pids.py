@@ -67,6 +67,7 @@ def test_the_shutdown_sweep_pins_each_pid_to_its_start_time(monkeypatch):
 
 def test_windows_terminates_exactly_the_validated_tree(monkeypatch):
     """taskkill /T follows parent ids blindly; the tree is now ours."""
+    pytest.importorskip("msvcrt")       # the Windows module; failed to import on Linux
     import agent.platform.windows as win
 
     _fake_os(monkeypatch)

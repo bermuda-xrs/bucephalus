@@ -245,9 +245,11 @@ def _is_protected(path):
     # Workspace files only: an installer may hard-link the interpreter's own.
     if any(_under(real, r) for r in _ROOTS) or _under(real, _WORKDIR):
         try:
-            return _os.stat(real).st_nlink > 1
+            st = _os.stat(real)
         except OSError:
             return False
+        # Regular files: a POSIX directory always has several links.
+        return (st.st_mode & 0o170000) == 0o100000 and st.st_nlink > 1
     return False
 
 

@@ -16,6 +16,7 @@ import functools
 import inspect
 import os
 import re
+import stat
 import time
 from pathlib import Path
 
@@ -255,9 +256,13 @@ def _protected_elsewhere(p: str, state: tuple, _b: int) -> bool:
     from ..platform import current
 
     try:
-        if os.stat(p).st_nlink < 2:
-            return False
+        st = os.stat(p)
     except OSError:
+        return False
+    # Regular files only: on POSIX every directory has two or more links
+    # (its `.` and `..`), which read as "several names" refused every
+    # directory there - found in WSL2 the day it was written.
+    if not stat.S_ISREG(st.st_mode) or st.st_nlink < 2:
         return False
     names = current.link_names(p)
     if names is None:
