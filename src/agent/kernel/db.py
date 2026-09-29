@@ -528,8 +528,12 @@ def connect(db_path: str | Path) -> sqlite3.Connection:
     # on a threadpool; without it every endpoint raises ProgrammingError. The
     # safety this drops is replaced by chain_lock() around the critical
     # sections, plus SQLite's own locking for everything else.
+    # cached_statements=0 (D56): the statement cache is per connection, so
+    # two threads running the same SQL shared ONE prepared statement - "bad
+    # parameter or other API misuse" on Linux + 3.13 under concurrent reads.
     conn = sqlite3.connect(
-        str(path), timeout=30.0, isolation_level=None, check_same_thread=False
+        str(path), timeout=30.0, isolation_level=None, check_same_thread=False,
+        cached_statements=0,
     )
     conn.execute("PRAGMA journal_mode = WAL")
     conn.execute("PRAGMA foreign_keys = ON")

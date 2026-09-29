@@ -73,14 +73,18 @@ def browse(ctx, task, raw: str) -> dict:
     state = task_state_paths(ctx, task)            # once per listing (audit I2)
     p = _allowed(ctx, task, raw, state)
     rel = os.path.relpath(p, ctx.config.root).replace(os.sep, "/")
-    if p.is_dir():
+    try:
+        is_dir, is_file = p.is_dir(), p.is_file()
+    except OSError:                    # a name the filesystem cannot hold (3.13 raises)
+        raise Missing(rel) from None
+    if is_dir:
         entries = []
         for c in sorted(p.iterdir(), key=lambda c: (not c.is_dir(), c.name.lower())):
             if _visible(ctx, task, c, state):
                 entries.append({"name": c.name, "dir": c.is_dir(),
                                 "bytes": None if c.is_dir() else c.stat().st_size})
         return {"path": rel, "kind": "dir", "entries": entries}
-    if not p.is_file():
+    if not is_file:
         raise Missing(rel)
     n = p.stat().st_size
     if n > MAX_PREVIEW_BYTES:
@@ -100,9 +104,11 @@ def drop(ctx, task, raw: str, content_b64: str) -> dict:
     if len(data) > MAX_UPLOAD_BYTES:
         raise Refused(f"larger than {MAX_UPLOAD_BYTES // 2**20} MB")
     p = _allowed(ctx, task, raw)
-    if p.exists():
-        raise Exists("a drop never overwrites; rename it")
     try:
+        # Inside: on Python 3.13 exists() RAISES for a name too long for the
+        # filesystem, where 3.11 answered False (found in WSL2).
+        if p.exists():
+            raise Exists("a drop never overwrites; rename it")
         p.parent.mkdir(parents=True, exist_ok=True)
         with open(p, "xb") as fh:      # exclusive: a race cannot overwrite either
             fh.write(data)

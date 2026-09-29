@@ -61,7 +61,7 @@ inference, so wall-clock figures do not transfer. **Five traps, each costing som
    same reason `.cmd` launchers fail silently, since `cmd.exe` reads batch files in the OEM
    codepage. Use the `.ps1` scripts and set `PYTHONUTF8=1`; pytest gets
    `pythonpath = ["src"]` from `pyproject.toml`. Non-editable wheel installs are fine.
-4. **`python -m build` fails here.** The repository's own `build/` directory shadows the
+4. **`python -m build` fails here.** A `build` directory at the root, left by a wheel build, shadows the
    `build` module, and "No module named `build.__main__`" reads like a missing dependency.
    Use `pip wheel . --no-deps -w dist`.
 5. **Two directories named `alpha-test-1` exist on this machine.** Only the one under

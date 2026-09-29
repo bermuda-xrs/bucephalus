@@ -165,7 +165,7 @@ def orphan_pids(names: tuple[str, ...] = ORPHAN_NAMES,
     for pid, ppid, image in table:
         if pid in protect_pids or not _name_matches(image, names):
             continue
-        if ppid > 0 and ppid in live:
+        if ppid > 0 and ppid in live and not _platform.adopted(pid, ppid):
             p_start, c_start = process_start_time(ppid), process_start_time(pid)
             if p_start is None or c_start is None:
                 continue                       # cannot disprove -> leave alive

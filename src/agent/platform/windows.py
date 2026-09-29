@@ -241,6 +241,12 @@ def exit_note(proc, timeout_s: int) -> str:
             if proc.returncode == CPU_LIMIT_EXIT else "")
 
 
+def adopted(pid: int, ppid: int) -> bool:
+    """Windows never re-parents: an orphan's parent pid is simply gone (or
+    recycled, which the start-time rule catches)."""
+    return False
+
+
 def spawn_denied_processes() -> int:
     """The interpreter's own processes: the venv launcher and the interpreter
     it starts, or the one frozen executable. Agent code gets exactly these in

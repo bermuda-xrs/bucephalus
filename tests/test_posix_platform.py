@@ -88,7 +88,8 @@ def test_limits_are_set_by_a_trampoline_in_a_new_session(monkeypatch, mod, cappe
     i = argv.index("-c")
     assert argv[i + 1] == posix.LIMITER and argv[-2:] == ["child", "arg"]
     limits = json.loads(argv[i + 2])
-    assert limits["cpu"] == 7 and limits["fsize"] == 64 * 2**20
+    # D57: a second past the 7 s timeout - a backstop, not a race with it.
+    assert limits["cpu"] == 8 and limits["fsize"] == 64 * 2**20
     assert ("as" in limits) is capped, "darwin must not set RLIMIT_AS; linux must"
     assert "nproc" not in limits, "RLIMIT_NPROC counts every process the USER owns"
 

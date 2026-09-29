@@ -245,3 +245,34 @@ def test_a_real_parent_shields_its_child(monkeypatch):
                         lambda pid: {4242: 500, 99: 100}[pid])
 
     assert proc.orphan_pids(names=("llama-server",)) == []
+
+
+DAEMON_PARENT = """
+import os, subprocess, sys, time
+open(sys.argv[1], "w").write(str(os.getpid()))
+subprocess.Popen([sys.executable, "-c", sys.argv[3], sys.argv[2]], start_new_session=True)
+time.sleep(120)
+"""
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX re-parenting")
+def test_a_daemon_in_its_own_session_is_never_selected(tmp_path):
+    """D55's other half. On POSIX an orphan is re-parented to init, and so is
+    every daemon: "its parent is init" would have the reaper kill a model
+    server started as a service. A daemon starts its own session; an orphan
+    of ours is still in ours. Its parent killed, it must not be selected."""
+    ppath, cpath = tmp_path / "parent.pid", tmp_path / "child.pid"
+    proc = subprocess.Popen([sys.executable, "-c", DAEMON_PARENT, str(ppath), str(cpath), CHILD])
+    parent_pid = child_pid = 0
+    try:
+        parent_pid = _read_pid(ppath)
+        child_pid = _read_pid(cpath)
+        assert _wait_visible(child_pid)
+        _kill_single(parent_pid)
+        proc.wait(10)
+        assert _wait_gone(parent_pid), "parent did not die"
+        assert child_pid not in orphan_pids(names=("python",))
+    finally:
+        for pid in (child_pid, parent_pid, proc.pid):
+            if pid:
+                kill_tree(pid)

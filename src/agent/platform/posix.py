@@ -149,15 +149,32 @@ def has_data_streams() -> bool:
     return False
 
 
+def _stat_fields(pid: int) -> list[str] | None:
+    """/proc/<pid>/stat after the name: state, ppid, pgrp, session, ...
+    None where there is no /proc (macOS) or the process is gone."""
+    try:
+        with open(f"/proc/{pid}/stat", encoding="utf-8") as fh:
+            raw = fh.read()
+        return raw[raw.rindex(")") + 2:].split()
+    except (OSError, ValueError):
+        return None
+
+
 def alive(pid: int) -> bool:
     try:
         os.kill(pid, 0)
-        return True
     except OSError:
         return False
+    # D54. A zombie has exited and only waits to be reaped, and kill(pid, 0)
+    # still succeeds on it: kill_tree waited its whole timeout on its own
+    # killed child and reported failure.
+    f = _stat_fields(pid)
+    return not (f and f[0] == "Z")
 
 
 def process_table() -> list[tuple[int, int, str]]:
+    """Running processes. A zombie is not one (D54): it holds no memory and
+    runs nothing, and listed it made a killed parent look alive."""
     rows = []
     for entry in os.listdir("/proc"):
         if not entry.isdigit():
@@ -167,10 +184,26 @@ def process_table() -> list[tuple[int, int, str]]:
                 raw = fh.read()
             name = raw[raw.index("(") + 1:raw.rindex(")")]
             after = raw[raw.rindex(")") + 2:].split()
+            if after[0] == "Z":
+                continue
             rows.append((int(entry), int(after[1]), name))
         except (OSError, ValueError, IndexError):
             continue
     return rows
+
+
+def adopted(pid: int, ppid: int) -> bool:
+    """D55. Linux re-parents an orphan to init or a subreaper, so "its parent
+    is gone" - the Windows rule - never held here and the reaper was inert.
+    Nor is "its parent is init" the rule: a daemon's parent is init too, and
+    the reaper would kill a model server started as a service. An orphan of
+    OURS is still in this session, and the process that adopted it is not.
+    A daemon starts its own session, so it is never one."""
+    mine = os.getsid(0)
+    own, parent = _stat_fields(pid), _stat_fields(ppid)
+    if not own or not parent:
+        return False
+    return own[3] == str(mine) and parent[3] != str(mine)
 
 
 def group_members(pgid: int) -> list[int]:
@@ -281,7 +314,9 @@ def spawn_limited(argv: list[str], *, timeout_s: int, memory_bytes: int,
     `memory_by_rlimit=False` (darwin) caps memory by watchdog instead."""
     from ..frozen import interpreter_argv
 
-    limits = {"cpu": int(timeout_s), "fsize": int(fsize_bytes)}
+    # D57. A second above the timeout: equal, SIGXCPU raced the wall-clock
+    # timeout on Linux and a timeout reported as a CPU kill. A backstop now.
+    limits = {"cpu": int(timeout_s) + 1, "fsize": int(fsize_bytes)}
     if memory_by_rlimit:
         limits["as"] = int(memory_bytes)
     wrapped = [*interpreter_argv(), "-c", LIMITER, json.dumps(limits), *argv]

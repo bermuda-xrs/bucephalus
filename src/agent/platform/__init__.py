@@ -25,6 +25,8 @@ INTERFACE = {
     "alive": "is pid running",
     "process_table": "[(pid, ppid, image name)] for every visible process",
     "process_start_time": "a creation stamp for pid, comparable only with itself",
+    "adopted": "whether pid, whose parent is ppid, is an orphan the OS re-parented "
+               "(POSIX: to init or a subreaper) rather than a child of a live parent",
     "process_memory_bytes": "resident (or private, by field) bytes of pid, or None",
     "memory_status": "{available_gb, committed_gb, physical_gb, commit_ratio}",
     "free_memory_gb": "physical memory available, GB",

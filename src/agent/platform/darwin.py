@@ -31,7 +31,7 @@ import time
 
 from . import posix
 from .posix import (  # noqa: F401 - the rest of the contract, shared
-    WATCH_INTERVAL_S, alive, exit_note, has_data_streams, kill_tree_signal,
+    WATCH_INTERVAL_S, adopted, alive, exit_note, has_data_streams, kill_tree_signal,
     link_names, lock_file, over_limits, spawn_denied_processes, unlock_file)
 
 RUSAGE_INFO_V4 = 4
