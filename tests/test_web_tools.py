@@ -296,22 +296,50 @@ def test_a_longer_crawl_delay_wins_but_a_shorter_one_does_not(monkeypatch):
         def can_fetch(self, ua, url):
             return True
 
-    slept = []
-    monkeypatch.setattr(pol.time, "sleep", lambda s: slept.append(s))
+    # A clock that moves only when the code sleeps. On the real clock the
+    # time between the two calls was subtracted from the wait - 4.99996 s on
+    # Linux (D59), far less on a loaded machine, where this test failed and,
+    # under the mutation runner, "killed" mutants it had nothing to do with.
+    clock, slept = [1000.0], []
+
+    def sleep(s):
+        slept.append(s)
+        clock[0] += s
+    monkeypatch.setattr(pol.time, "monotonic", lambda: clock[0])
+    monkeypatch.setattr(pol.time, "sleep", sleep)
 
     pol.reset()
     monkeypatch.setattr(pol, "_robots_for", lambda url, timeout_s=5.0: RP(5))
     pol.wait_for_turn("https://slow.example/a", min_interval_s=0.5)
     pol.wait_for_turn("https://slow.example/b", min_interval_s=0.5)
-    assert slept[0] >= 5, f"a declared crawl-delay of 5 must be honoured: {slept}"
+    assert slept == [5.0], f"a declared crawl-delay of 5 must be honoured: {slept}"
 
     slept.clear()
     pol.reset()
     monkeypatch.setattr(pol, "_robots_for", lambda url, timeout_s=5.0: RP(0.01))
     pol.wait_for_turn("https://fast.example/a", min_interval_s=0.5)
     pol.wait_for_turn("https://fast.example/b", min_interval_s=0.5)
-    assert slept[0] >= 0.4, "a shorter declared delay must not lower our floor"
+    assert slept == [0.5], "a shorter declared delay must not lower our floor"
     pol.reset()
+
+
+def test_D59_the_spacing_does_not_follow_the_wall_clock(monkeypatch):
+    """The spacing was measured on the wall clock: set back an hour between
+    two calls (a clock correction), the second call waited an hour; set
+    forward, not at all. On a monotonic clock it waits the delay."""
+    import agent.net.politeness as pol
+
+    wall = iter([1000.0, 1000.0 - 3600])
+    slept = []
+    monkeypatch.setattr(pol.time, "time", lambda: next(wall))
+    monkeypatch.setattr(pol.time, "monotonic", lambda: 500.0)
+    monkeypatch.setattr(pol.time, "sleep", slept.append)
+    monkeypatch.setattr(pol, "_robots_for", lambda url, timeout_s=5.0: None)
+    pol.reset()
+    pol.wait_for_turn("https://a.example/1", min_interval_s=5.0)
+    pol.wait_for_turn("https://a.example/2", min_interval_s=5.0)
+    pol.reset()
+    assert slept == [5.0], slept
 
 
 def test_search_reports_a_parse_failure_rather_than_no_results(monkeypatch):

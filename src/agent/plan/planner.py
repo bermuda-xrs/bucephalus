@@ -121,6 +121,20 @@ def parse_plan(text: str, fallback_objective: str = "") -> Plan:
             steps=[],
             unknowns=["planner did not return parseable JSON"],
         ).seal()
+    try:
+        return _plan_from(raw, fallback_objective)
+    except (ValueError, TypeError, AttributeError) as e:
+        # D46 (audit F8): JSON of the wrong shape - "about 500" tokens, an
+        # unknown action mode, a step that is a sentence - raised a 500 with
+        # the model's text in the server log. It degrades like no JSON at all.
+        return Plan(
+            objective=fallback_objective,
+            steps=[],
+            unknowns=[f"planner returned JSON that is not a plan ({type(e).__name__})"],
+        ).seal()
+
+
+def _plan_from(raw: dict, fallback_objective: str) -> Plan:
     steps = []
     for i, s in enumerate(raw.get("steps", []), start=1):
         steps.append(

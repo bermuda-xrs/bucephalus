@@ -13,6 +13,7 @@ Two halves, each shown red first:
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
@@ -136,3 +137,57 @@ def test_a_swapped_link_is_seen_once_the_two_second_bucket_turns(workspace, monk
     _winapi.CreateJunction(str(workspace / "skills_store"), str(workspace / "alias"))
     clock[0] = 5.0                                   # 2 s later: a new bucket
     assert cap.is_protected("work/alias/s.md", root)
+
+
+# D70 (audit S3). A hard link is the same file under another name, and
+# realpath shows only the name it was asked about: a hard link in the
+# workspace to a grader read as an ordinary in-scope file to every check.
+def _grader_and_link(ctx, workspace, name="innocent.txt"):
+    root = Path(ctx.config.root)
+    (root / "grading" / "t1").mkdir(parents=True)
+    grader = root / "grading" / "t1" / "verify.py"
+    grader.write_text("EXPECTED = 4825\n", encoding="utf-8")
+    link = workspace / name
+    os.link(grader, link)
+    return grader, link
+
+
+def test_D70_the_gate_refuses_a_hard_link_to_protected_state(ctx, task, workspace):
+    _grader_and_link(ctx, workspace)
+    root = Path(ctx.config.root)
+    (root / "policy.md").write_text("# policy\n", encoding="utf-8")
+    os.link(root / "policy.md", workspace / "notes.md")
+    for path in ("work/innocent.txt", "work/notes.md"):
+        d = gate_tool_call(ctx, task, ctx.tools.get("read_file"), {"path": path})
+        assert d.verdict == "deny", (path, d.verdict, d.reason)
+
+
+def test_D70_a_hard_link_between_workspace_files_is_fine(ctx, task, workspace):
+    (workspace / "a.txt").write_text("mine", encoding="utf-8")
+    os.link(workspace / "a.txt", workspace / "b.txt")
+    d = gate_tool_call(ctx, task, ctx.tools.get("read_file"), {"path": "work/b.txt"})
+    assert d.verdict != "deny", d.reason
+
+
+def test_D70_the_file_browser_hides_it(ctx, task, workspace):
+    from agent.control import files
+
+    _grader_and_link(ctx, workspace)
+    listed = {e["name"] for e in files.browse(ctx, task, "work")["entries"]}
+    assert "innocent.txt" not in listed, listed
+    with pytest.raises(files.Refused):
+        files.browse(ctx, task, "work/innocent.txt")
+
+
+@pytest.mark.parametrize("copy_mode", [False, True])
+def test_D70_sandboxed_code_cannot_read_it(ctx, workspace, monkeypatch, copy_mode):
+    import agent.execute.sandbox as sb
+
+    grader, _ = _grader_and_link(ctx, workspace)
+    if copy_mode:              # where symlinks are not allowed, entries are copied
+        monkeypatch.setattr(sb.os, "symlink", lambda *a, **k: (_ for _ in ()).throw(OSError("no")))
+    code = ("try:\n    print(open('work/innocent.txt').read())\n"
+            "except OSError as e:\n    print('REFUSED', type(e).__name__)\n")
+    r = run_sandboxed(code, allowed_paths=[(str(workspace), "work")], timeout_s=30,
+                      protected_paths=[str(grader.parent.parent)])
+    assert "4825" not in r["stdout"] and "REFUSED" in r["stdout"], r

@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import sys
 import threading
-import time
 from pathlib import Path
 
 import pytest
@@ -92,38 +91,30 @@ def test_results_stay_in_the_order_they_were_requested(tmp_path):
     ctx.close()
 
 
-def test_a_slow_batch_is_faster_in_parallel_than_in_sequence(tmp_path):
-    """The acceptance claim, measured rather than asserted. Uses a scripted
-    slow tool because real file reads are too fast to time reliably — the
-    property under test is the SCHEDULING, not the filesystem."""
+def test_a_batch_really_runs_at_once(tmp_path):
+    """The acceptance claim, proven rather than timed. Each call waits at a
+    barrier for all five: only five calls in flight at the same moment get
+    past it. It used to compare wall clocks (concurrent < sequential / 2),
+    which a loaded machine failed - and whose failures, under the mutation
+    runner, read as kills of mutants it had nothing to do with (U13)."""
     ctx = make_ctx(tmp_path, width=5)
     t = new_task(ctx)
 
     from agent.execute.tools import ToolSpec
 
-    def slow(c, task, **kw):
-        time.sleep(0.20)
+    barrier = threading.Barrier(5, timeout=60)
+
+    def meet(c, task, **kw):
+        barrier.wait()                  # BrokenBarrierError unless all five run at once
         return {"ok": True}
 
-    ctx.tools.register(ToolSpec("slow", slow, {"type": "object", "properties": {}},
+    ctx.tools.register(ToolSpec("meet", meet, {"type": "object", "properties": {}},
                                 side_effecting=False,
                                 max_arg_taint=Taint.UNTRUSTED,
                                 output_taint=Taint.UNTRUSTED,
-                                description="sleeps"))
-    calls = [{"tool": "slow", "args": {}} for _ in range(5)]
-
-    t0 = time.time()
-    tool_parallel(ctx, t, calls)
-    concurrent = time.time() - t0
-
-    ctx.config.limits.max_parallel_tools = 1
-    t0 = time.time()
-    tool_parallel(ctx, t, calls)
-    sequential = time.time() - t0
-
-    assert concurrent < sequential / 2, (
-        f"5 x 0.2s took {concurrent:.2f}s concurrent against {sequential:.2f}s "
-        "sequential; the pool is not running them at once")
+                                description="waits for the others"))
+    out = tool_parallel(ctx, t, [{"tool": "meet", "args": {}} for _ in range(5)])
+    assert out["ok"] and all(r["result"]["ok"] for r in out["results"]), out
     ctx.close()
 
 

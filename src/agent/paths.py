@@ -76,12 +76,19 @@ def state_root(config_path: str | Path | None = None) -> Path:
     return root if root is not None else user_data_dir()
 
 
-# Folders a sync client uploads. Matched by directory NAME, because the client
-# is not always running and its settings are not always readable; the
-# environment variables are Windows' own record of where OneDrive lives.
+# Folders a sync client uploads. Matched by directory NAME and by the marker a
+# client leaves in the root it syncs, because the client is not always running
+# and its settings are not always readable; the environment variables are
+# Windows' own record of where OneDrive lives. Generous on purpose: a false
+# match only moves state to the user data dir, a miss uploads every goal and
+# answer (audit S7, D76).
 _SYNC_ENV = ("OneDrive", "OneDriveConsumer", "OneDriveCommercial")
 _SYNC_NAMES = ("dropbox", "iclouddrive", "icloud drive", "google drive", "my drive",
-               "mobile documents", "cloudstorage", "box sync", "pcloud drive")
+               "mobile documents", "cloudstorage", "box", "box sync", "pcloud drive",
+               "nextcloud", "owncloud", "mega", "megasync", "proton drive", "sync",
+               "synologydrive", "tresorit", "seadrive", "yandex.disk")
+_SYNC_MARKERS = (".dropbox", ".nextcloudsync.log", ".owncloudsync.log",
+                 ".SynologyWorkingDirectory", ".debris", ".sync", ".tresorit")
 
 
 def sync_root(path: str | Path) -> Path | None:
@@ -97,6 +104,12 @@ def sync_root(path: str | Path) -> Path | None:
         n = cand.name.lower()
         if n.startswith("onedrive") or n in _SYNC_NAMES:
             return cand
+        try:
+            if (any((cand / m).exists() for m in _SYNC_MARKERS)
+                    or any(cand.glob(".sync_*.db"))):          # Nextcloud/ownCloud journal
+                return cand
+        except OSError:
+            continue
     return None
 
 

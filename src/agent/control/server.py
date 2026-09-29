@@ -170,10 +170,7 @@ def create_app(ctx: AgentContext) -> FastAPI:
 
     @app.get("/tasks/{task_id}")
     def get_task(task_id: str) -> dict:
-        try:
-            task = load_task(ctx.conn, task_id)
-        except KeyError:
-            raise HTTPException(404, "no such task") from None
+        task = _task(task_id)
         plan = load_plan(ctx, task_id)
         step = ctx.conn.execute(
             "SELECT COUNT(*) FROM events WHERE task_id=? AND type='model.called'",
@@ -201,6 +198,7 @@ def create_app(ctx: AgentContext) -> FastAPI:
 
     @app.get("/tasks/{task_id}/stream")
     def stream(task_id: str, last_event_id: str | None = Header(default=None)) -> StreamingResponse:
+        _task(task_id)          # an unknown id answered 200 and tailed forever
         since = int(last_event_id) if last_event_id and last_event_id.isdigit() else -1
         # live=True HERE and nowhere else: an SSE client wants the tail, and
         # every in-process caller wants the history and an end.
@@ -211,13 +209,13 @@ def create_app(ctx: AgentContext) -> FastAPI:
 
     @app.post("/tasks/{task_id}/plan")
     def post_plan(task_id: str) -> dict:
-        task = load_task(ctx.conn, task_id)
+        task = _task(task_id)
         plan = draft_plan(ctx, task)
         return {"plan_id": plan.id, "plan": plan.body(), "rendered": plan.render()}
 
     @app.post("/tasks/{task_id}/plan/approve")
     def post_approve(task_id: str, body: ApprovePlan) -> dict:
-        task = load_task(ctx.conn, task_id)
+        task = _task(task_id)
         plan = load_plan(ctx, task_id)
         if plan is None or plan.id != body.plan_id:
             raise HTTPException(409, "plan_id does not match the current draft")
@@ -235,7 +233,7 @@ def create_app(ctx: AgentContext) -> FastAPI:
         `?background=false` keeps the blocking behaviour for scripts that
         want the answer in the response.
         """
-        task = load_task(ctx.conn, task_id)
+        task = _task(task_id)
         if ctx.config.autonomy.plan_required and ctx.approved_plan(task) is None:
             raise HTTPException(409, "autonomy.plan_required: approve a plan first")
 
@@ -266,7 +264,7 @@ def create_app(ctx: AgentContext) -> FastAPI:
     @app.post("/tasks/{task_id}/steer")
     def post_steer(task_id: str, body: Steer) -> dict:
         """M12.3 — never mutate a running task. Fork it."""
-        parent = load_task(ctx.conn, task_id)
+        parent = _task(task_id)
         ctx.log.append(task_id, "human.steered", {"correction": body.correction})
         child_contract = parent.contract.model_copy(
             update={"goal": parent.contract.goal + f"\n\n[steered] {body.correction}"}
@@ -279,7 +277,7 @@ def create_app(ctx: AgentContext) -> FastAPI:
 
     @app.post("/tasks/{task_id}/pause")
     def post_pause(task_id: str) -> dict:
-        task = load_task(ctx.conn, task_id)
+        task = _task(task_id)
         set_status(ctx.conn, ctx.log, task, TaskStatus.PAUSED, "human requested")
         return {"task_id": task_id, "status": "paused"}
 
@@ -339,6 +337,7 @@ def create_app(ctx: AgentContext) -> FastAPI:
 
     @app.get("/tasks/{task_id}/plan")
     def get_plan(task_id: str) -> dict:
+        _task(task_id)
         row = ctx.conn.execute(
             "SELECT status FROM plans WHERE task_id=? ORDER BY created_at DESC LIMIT 1",
             (task_id,)).fetchone()
@@ -352,7 +351,7 @@ def create_app(ctx: AgentContext) -> FastAPI:
     def post_reject(task_id: str, body: RejectPlan) -> dict:
         """Send a plan back. The comment goes on the chain beside the plan it
         answers; draft again to get a new one."""
-        task = load_task(ctx.conn, task_id)
+        task = _task(task_id)
         plan = load_plan(ctx, task_id)
         if plan is None or plan.id != body.plan_id:
             raise HTTPException(409, "plan_id does not match the current draft")
@@ -459,6 +458,8 @@ def create_app(ctx: AgentContext) -> FastAPI:
             raise HTTPException(403, str(e)) from None
         except files.Exists as e:
             raise HTTPException(409, str(e)) from None
+        except files.Unwritable as e:
+            raise HTTPException(400, str(e)) from None
 
     @app.get("/theme")
     def get_theme() -> dict:

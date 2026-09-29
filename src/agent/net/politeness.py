@@ -64,7 +64,7 @@ def _root(url: str) -> str:
 def _robots_for(url: str, timeout_s: float = 5.0):
     """The parsed robots.txt for this host, or None if there isn't a usable one."""
     root = _root(url)
-    now = time.time()
+    now = time.monotonic()
     with _lock:
         cached = _robots.get(root)
         if cached and now - cached[0] < ROBOTS_TTL_S:
@@ -131,7 +131,7 @@ def wait_for_turn(url: str, min_interval_s: float = MIN_INTERVAL_S) -> float:
     host = urlparse(url).netloc
     with _lock:
         last = _last_request.get(host)
-        now = time.time()
+        now = time.monotonic()
         wait = 0.0 if last is None else max(0.0, delay - (now - last))
         # Reserve the slot BEFORE sleeping, so two callers cannot both see an
         # old timestamp, both compute a short wait, and both fire at once.

@@ -42,7 +42,6 @@ EVENT_TYPES = frozenset(
         "tool.intent",
         "tool.receipt",
         "artifact.written",
-        "artifact.tombstoned",
         # G1's compaction arm crossed the ceiling and dropped nothing. On the
         # CHAIN and not merely in a log, because "nothing to compact" and
         # "compaction is off" are different facts (DR4), and a run that
@@ -50,8 +49,6 @@ EVENT_TYPES = frozenset(
         # that never reached it. See config.MechanismsConfig.
         "compaction.skipped",
         "skill.loaded",
-        "skill.promoted",
-        "skill.demoted",
         "delegation.opened",
         "delegation.closed",
         "verify.attempted",
@@ -102,8 +99,6 @@ EVENT_TYPES = frozenset(
         "plan.drafted",
         "plan.approved",
         "plan.rejected",
-        "step.started",
-        "step.completed",
         "review.requested",
         "review.decided",
         "deviation.detected",

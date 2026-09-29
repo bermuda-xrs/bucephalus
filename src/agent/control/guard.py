@@ -23,6 +23,7 @@ because the difference between 127.0.0.1 and 0.0.0.0 is the difference between
 
 from __future__ import annotations
 
+import logging
 import os
 import secrets
 from pathlib import Path
@@ -126,7 +127,15 @@ class AccessGuard(BaseHTTPMiddleware):
         self.allow_remote = allow_remote
 
     async def dispatch(self, request, call_next):
-        response = await self._dispatch(request, call_next)
+        try:
+            response = await self._dispatch(request, call_next)
+        except Exception:  # noqa: BLE001 - every response carries the headers (D74)
+            # A route's exception went past this middleware to Starlette's
+            # outer handler, whose 500 carried none of the headers below. The
+            # traceback goes to the log, never to the client.
+            logging.getLogger("uvicorn.error").exception("unhandled error in %s", request.url.path)
+            response = JSONResponse({"detail": "Internal error; see the server log."},
+                                    status_code=500)
         for k, v in SECURITY_HEADERS.items():
             response.headers[k] = v
         return response
@@ -177,8 +186,15 @@ class AccessGuard(BaseHTTPMiddleware):
     def _authorised(self, request) -> bool:
         header = request.headers.get("authorization", "")
         if header.lower().startswith("bearer "):
-            if secrets.compare_digest(header[7:].strip(), self.token):
+            if _same(header[7:].strip(), self.token):
                 return True
         supplied = request.headers.get("x-alpha-token") or \
             request.query_params.get("token", "")
-        return bool(supplied) and secrets.compare_digest(supplied, self.token)
+        return bool(supplied) and _same(supplied, self.token)
+
+
+def _same(supplied: str, token: str) -> bool:
+    """Constant-time, as bytes: `compare_digest` raises on a non-ASCII str,
+    so a credential like "café" was a 500, not a 401 (D47)."""
+    return secrets.compare_digest(supplied.encode("utf-8", "surrogateescape"),
+                                  token.encode("utf-8"))

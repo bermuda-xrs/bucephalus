@@ -14,8 +14,6 @@ from typing import Iterator
 CLIENT_EVENTS = {
     "plan.drafted": "plan.drafted",
     "plan.approved": "plan.approved",
-    "step.started": "step.started",
-    "step.completed": "step.completed",
     "tool.intent": "tool.called",
     # The receipt: ok or not, how long, what a program touched. Never the
     # result's content (iteration 3: the console's tool cards).

@@ -2,7 +2,7 @@
 actually writes (iteration 3, found by the mutation run on kernel/events.py).
 
 Three rows counted events nothing ever records - `skill.promoted`,
-`skill.demoted`, `artifact.tombstoned` are registered and never appended - so
+`skill.demoted`, `artifact.tombstoned` were registered and never appended - so
 they read "never" whatever happened: a check that could not pass (DR7, the
 mirror of one that cannot fail). Promotion is recorded as the skill's status,
 and a tombstone as the count in the boundary's `session.opened`.

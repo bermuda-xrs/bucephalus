@@ -38,8 +38,8 @@ Everything else on this page is marked in its own heading:
 
 | state | what it means | items |
 |---|---|---|
-| **open** | a real defect, nobody has fixed it | D2, D6, D16, D26, D27, D33; from Linux D54-D59; from the audit D46, D47, D48, D49, D52, each with its audit severity; from iteration 3 D63; from its audit D70, D72, D74-D77; from its mutation work D79 |
-| **closed** | fixed, with the change and its test named | D1, D3, D7, D9, D10, D11, D15, D17, D18, D19, D20, D21, D22, D23, D24, D28, D29, D30, D34, D35, D36, D37, D38, D39, D40, D41, D42, D43, D44, D51, D50, D53, D45, D61, D60, D62, D64, D65, D66, D67, D68, D69, D78, D71, D73, D80, D81, D82 |
+| **open** | a real defect, nobody has fixed it | D2, D6, D16, D26, D27, D33; from Linux D54-D58; from the audit D52; from iteration 3's audit D72 (partly fixed); from its mutation work D79 |
+| **closed** | fixed, with the change and its test named | D1, D3, D7, D9, D10, D11, D15, D17, D18, D19, D20, D21, D22, D23, D24, D28, D29, D30, D34, D35, D36, D37, D38, D39, D40, D41, D42, D43, D44, D51, D50, D53, D45, D61, D60, D62, D64, D65, D66, D67, D68, D69, D78, D71, D73, D80, D81, D82, D46, D47, D48, D49, D59, D63, D70, D74, D75, D76, D77 |
 | **deleted** | never a defect, or about an instrument nobody runs | D4, D5, D8, D12, D14 |
 | **known and accepted** | a real limit, decided rather than deferred | D32 (the sandbox is advisory: Phase 6 withdrawn) |
 | **dormant** | its subject is retired; it wakes if that returns | D19 (M11). D13 CLOSED 2026-09-25 |
@@ -1300,7 +1300,7 @@ the token is only ever in the URL fragment the launcher passes, and an
 attacker framing the page does not have it. The headers are still absent;
 add them as defence in depth.
 
-## D46 - LOW - plausible planner JSON crashes `parse_plan` with a 500 (audit F8)
+## D46 - LOW - plausible planner JSON crashes `parse_plan` with a 500 (audit F8) (CLOSED 2026-09-30: a wrong-shaped plan degrades to a stepless one; tests/test_deferred_fixes.py)
 
 `"est_tokens": "about 500"`, an unknown `action_mode`, a bare-string step:
 each raises out of `draft_plan`, and the traceback with the model's text goes
@@ -1308,20 +1308,20 @@ to the server log. Fix: validation failure degrades to the "unparseable" plan
 the no-JSON path already produces.
 Evidence: `test_audit_phase.py::test_F_plausible_planner_output_crashes_parse_plan`.
 
-## D47 - LOW - a non-ASCII credential is a 500, not a 401 (audit F9)
+## D47 - LOW - a non-ASCII credential is a 500, not a 401 (audit F9) (CLOSED 2026-09-30: the token is compared as bytes; tests/test_control_plane_errors.py)
 
 `secrets.compare_digest` raises on non-ASCII `str`; the guard does not catch
 it. Fix: compare bytes, or catch and refuse.
 Evidence: `test_audit_control.py::test_F_non_ascii_token_header_is_a_500_not_a_401`.
 
-## D48 - HYPOTHESIS - `esc()` inside a JS string inside an HTML attribute (audit H1)
+## D48 - HYPOTHESIS - `esc()` inside a JS string inside an HTML attribute (audit H1) (CLOSED 2026-09-30: moot since iteration 3's 1.5 - no inline handler remains, and the CSP refuses one)
 
 `onclick="delSuite('${esc(...)}')"`: the attribute is HTML-decoded before the
 JS parser sees it, so an escaped quote comes back. Unranked: not shown that a
 stored name reaches that sink unvalidated. Fix either way: event listeners
 with `data-` attributes instead of inline `onclick` strings.
 
-## D49 - HYPOTHESIS - spawn denial misses `_winapi.CreateProcess` (audit H2)
+## D49 - HYPOTHESIS - spawn denial misses `_winapi.CreateProcess` (audit H2) (CLOSED 2026-09-30: agent code's Job Object holds only the interpreter's own processes; tests/test_sandbox_limits.py)
 
 The sandbox's spawn list names `subprocess`/`os` entry points, not the Windows
 primitive underneath. The child is still born in the Job Object, so the kernel
@@ -1397,7 +1397,7 @@ suite and in the frozen gate.
 `test_every_path_the_handover_names_exists` fails on any fresh checkout: the
 directory exists only after a build. Fix the wording, not the test.
 
-## D59 - LOW - a crawl delay of 5 s is honoured as 4.99996 s on Linux
+## D59 - LOW - a crawl delay of 5 s is honoured as 4.99996 s on Linux (CLOSED 2026-09-30: a monotonic clock; the test's clock moves only when the code sleeps)
 
 Sleep precision against a strict `>=` in the test; the courtesy is kept to
 within 40 microseconds. Fix: wait on a monotonic deadline.
@@ -1446,7 +1446,7 @@ kernel/events.py (dropping those types from the registry changed nothing).
 Now counted from what is written; `tests/test_inventory_counts_what_is_recorded.py`
 was red first. The real record still reads never for all three - correctly.
 
-## D63 - LOW - `step.started` and `step.completed` are client events nothing emits (open)
+## D63 - LOW - `step.started` and `step.completed` are client events nothing emits (CLOSED 2026-09-30: the five registered types nothing records are removed, and a reverse test holds the registry to the code)
 
 `control/events.CLIENT_EVENTS` maps them and the registry allows them; no code
 appends either. The console and the TUI draw progress from `live.step` instead,
@@ -1499,7 +1499,7 @@ pending approval of ANY task and ran it, with no plan signed. The TUI now
 decides only the attached task's approvals, and resumes a task only under the
 server's rule (with plans required, a signed plan). Red first.
 
-## D70 - MEDIUM - hard links are invisible to the realpath-based gate (audit S3) (open)
+## D70 - MEDIUM - hard links are invisible to the realpath-based gate (audit S3) (CLOSED 2026-09-30: a file's other names are checked, refused where they cannot be listed; tests/test_junction_escape.py)
 
 A hard link in a workspace to a grader or `policy.md` reads as an ordinary
 in-scope file to every reader and writer that judges realpath. The sandbox
@@ -1538,25 +1538,25 @@ one path resolution per entry (~3 ms on Windows); a further step (resolving a
 plain entry through its parent) measured no gain and was not kept.
 `test_I2_a_walk_computes_the_protected_set_once`, red first.
 
-## D74 - LOW - a 500 carries none of the security headers (audit S5) (open)
+## D74 - LOW - a 500 carries none of the security headers (audit S5) (CLOSED 2026-09-30: the guard answers a route's exception itself, with the headers; tests/test_control_plane_errors.py)
 
 An exception in a route reaches Starlette's outer error middleware and returns
 without the CSP or X-Frame-Options, contradicting "every response". The still-
 open non-ASCII-token crash (F9) is one such 500. Fix: add the headers in an
 outermost middleware, or catch in the guard.
 
-## D75 - LOW - most task routes answer 500, not 404, for an unknown id (audit S6) (open)
+## D75 - LOW - most task routes answer 500, not 404, for an unknown id (audit S6) (CLOSED 2026-09-30: every task route looks the task up through the 404 helper; tests/test_control_plane_errors.py)
 
 The new `_task` helper is used by the file routes only; plan, approve, reject,
 run and pause still raise on an unknown id.
 
-## D76 - LOW - sync detection misses Box, Nextcloud, MEGA, Proton Drive, Sync.com, Synology Drive (audit S7) (open)
+## D76 - LOW - sync detection misses Box, Nextcloud, MEGA, Proton Drive, Sync.com, Synology Drive (audit S7) (CLOSED 2026-09-30: more folder names, and the markers sync clients leave; tests/test_sync_folder_state.py)
 
 `paths.sync_root` matches OneDrive (by env and name), Dropbox, iCloud, Google
 Drive and a few others by folder name. Add the rest, or detect a sync client's
 marker files.
 
-## D77 - LOW - an over-long drop path is an unhandled 500 (audit B3) (open)
+## D77 - LOW - an over-long drop path is an unhandled 500 (audit B3) (CLOSED 2026-09-30: a 400; tests/test_control_plane_errors.py)
 
 ## D78 - MEDIUM - the mutation runner's recheck counted a timeout as a kill and recorded no killer (audit B1, B2) (CLOSED 2026-09-29: fixed in the change that recorded it)
 

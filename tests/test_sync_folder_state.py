@@ -87,3 +87,41 @@ def test_an_ordinary_checkout_is_unchanged(tmp_path, appdata):
         assert not (appdata / "checkouts").exists()
     finally:
         ctx.close()
+
+
+# D76 (audit S7): Box, Nextcloud, MEGA, Proton Drive, Sync.com and Synology
+# Drive checkouts kept syncing their database. A false match only moves state
+# into the user data dir; a miss uploads every goal and answer - so by name
+# AND by the marker a client leaves in the folder it syncs.
+@pytest.mark.parametrize("name", ["Box", "Nextcloud", "ownCloud", "MEGA", "MEGAsync",
+                                  "Proton Drive", "Sync", "SynologyDrive", "Tresorit"])
+def test_D76_more_sync_clients_by_folder_name(tmp_path, monkeypatch, name):
+    from agent.paths import sync_root
+
+    for var in ("OneDrive", "OneDriveConsumer", "OneDriveCommercial"):
+        monkeypatch.delenv(var, raising=False)
+    checkout = tmp_path / name / "projects" / "alpha"
+    checkout.mkdir(parents=True)
+    assert sync_root(checkout) == (tmp_path / name).resolve()
+
+
+@pytest.mark.parametrize("marker", [".dropbox", ".nextcloudsync.log", ".owncloudsync.log",
+                                    ".sync_a1b2c3.db", ".SynologyWorkingDirectory", ".debris"])
+def test_D76_sync_clients_by_the_marker_they_leave(tmp_path, monkeypatch, marker):
+    from agent.paths import sync_root
+
+    for var in ("OneDrive", "OneDriveConsumer", "OneDriveCommercial"):
+        monkeypatch.delenv(var, raising=False)
+    synced = tmp_path / "Documents"
+    (synced / "alpha").mkdir(parents=True)
+    (synced / marker).write_text("", encoding="utf-8")
+    assert sync_root(synced / "alpha") == synced.resolve()
+
+
+def test_D76_an_ordinary_folder_is_not_synced(tmp_path, monkeypatch):
+    from agent.paths import sync_root
+
+    for var in ("OneDrive", "OneDriveConsumer", "OneDriveCommercial"):
+        monkeypatch.delenv(var, raising=False)
+    (tmp_path / "work" / "alpha").mkdir(parents=True)
+    assert sync_root(tmp_path / "work" / "alpha") is None

@@ -241,7 +241,60 @@ def exit_note(proc, timeout_s: int) -> str:
             if proc.returncode == CPU_LIMIT_EXIT else "")
 
 
+def spawn_denied_processes() -> int:
+    """The interpreter's own processes: the venv launcher and the interpreter
+    it starts, or the one frozen executable. Agent code gets exactly these in
+    its Job Object, so a spawn by any route is refused by the kernel -
+    `_winapi.CreateProcess` raises no audit event, and ctypes none at all
+    (D49)."""
+    import os
+    import sys
+
+    from ..frozen import is_frozen
+
+    if is_frozen():
+        return 1
+    base = getattr(sys, "_base_executable", sys.executable)
+    same = (os.path.normcase(os.path.realpath(base))
+            == os.path.normcase(os.path.realpath(sys.executable)))
+    return 1 if same else 2
+
+
 # ---------------------------------------------------------------- paths
+
+def link_names(path: str) -> list[str] | None:
+    """Every name of the file, through FindFirstFileNameW: a hard link is the
+    same file under another name, and realpath reports only the name it was
+    asked about (D70, audit S3). None if the names cannot be listed."""
+    import os
+
+    k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    first = k32.FindFirstFileNameW
+    first.argtypes = [wintypes.LPCWSTR, wintypes.DWORD, ctypes.POINTER(wintypes.DWORD),
+                      wintypes.LPWSTR]
+    first.restype = wintypes.HANDLE
+    nxt = k32.FindNextFileNameW
+    nxt.argtypes = [wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD), wintypes.LPWSTR]
+    nxt.restype = wintypes.BOOL
+    k32.FindClose.argtypes = [wintypes.HANDLE]
+    # The names come back relative to the volume root: "\\Users\\...".
+    volume = os.path.splitdrive(os.path.abspath(path))[0]
+    buf = ctypes.create_unicode_buffer(32768)
+    size = wintypes.DWORD(len(buf))
+    h = first(path, 0, ctypes.byref(size), buf)
+    if h in (None, wintypes.HANDLE(-1).value):
+        return None
+    names = []
+    try:
+        while True:
+            names.append(volume + buf.value)
+            size = wintypes.DWORD(len(buf))
+            if not nxt(h, ctypes.byref(size), buf):
+                break
+    finally:
+        k32.FindClose(h)
+    return names
+
 
 def has_data_streams() -> bool:
     """NTFS: `.env::$DATA` IS `.env`, and `name:hidden` is a second stream on

@@ -39,6 +39,11 @@ class Exists(Exception):
     """409: a drop never overwrites."""
 
 
+class Unwritable(Exception):
+    """400: allowed, but the filesystem cannot hold this path (too long, a
+    reserved name)."""
+
+
 def _allowed(ctx, task, raw: str, state=None) -> Path:
     root = ctx.config.root
     if not raw or "\x00" in raw:
@@ -97,9 +102,14 @@ def drop(ctx, task, raw: str, content_b64: str) -> dict:
     p = _allowed(ctx, task, raw)
     if p.exists():
         raise Exists("a drop never overwrites; rename it")
-    p.parent.mkdir(parents=True, exist_ok=True)
-    with open(p, "xb") as fh:          # exclusive: a race cannot overwrite either
-        fh.write(data)
+    try:
+        p.parent.mkdir(parents=True, exist_ok=True)
+        with open(p, "xb") as fh:      # exclusive: a race cannot overwrite either
+            fh.write(data)
+    except FileExistsError:
+        raise Exists("a drop never overwrites; rename it") from None
+    except OSError as e:               # audit B3: this was an unhandled 500
+        raise Unwritable(f"cannot create {raw!r}: {e.strerror or e}") from None
     rel = os.path.relpath(p, ctx.config.root).replace(os.sep, "/")
     ctx.log.append(task.id, "human.uploaded", {
         "path": rel, "bytes": len(data), "sha256": hashlib.sha256(data).hexdigest(),

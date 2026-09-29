@@ -167,3 +167,13 @@ def test_the_anchor_creates_its_own_directory(tmp_path):
     a = Anchor(tmp_path / "a" / "b" / "chain.anchor")
     a.record("t", "c" * 64)
     assert a.latest_chain("t") == "c" * 64
+
+
+def test_every_registered_event_is_recorded_by_some_code():
+    """The reverse (D63, and the five EVENT_TYPES drops mutation testing
+    found equivalent): a registered type nothing records is vocabulary a
+    client waits on forever - `step.started` and `step.completed` were in the
+    console's documented events and never arrived. No record, the 283-task
+    one included, contains any of the five removed."""
+    unrecorded = EVENT_TYPES - _appended_types()
+    assert not unrecorded, f"registered, recorded by nothing: {sorted(unrecorded)}"

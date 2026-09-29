@@ -80,9 +80,9 @@ ROWS: list[tuple[str, str, str, str]] = [
 
     # -- context management: G1's mechanisms ------------------------------
     # Counted from what the code WRITES. These three rows used to count
-    # `artifact.tombstoned`, `skill.promoted` and `skill.demoted` - registered
-    # event types nothing ever appends - so they could only ever read "never"
-    # (iteration 3; tests/test_inventory_counts_what_is_recorded.py).
+    # `artifact.tombstoned`, `skill.promoted` and `skill.demoted` - event types
+    # nothing ever appended, since removed from the registry (D63) - so they
+    # could only ever read "never" (tests/test_inventory_counts_what_is_recorded.py).
     ("compaction tombstones an artifact", "session.opened", "tombstoned", ""),
     ("a session BOUNDARY is crossed", "session.opened", "rotate", ""),
     ("a session is opened at all", "session.opened", "event", ""),

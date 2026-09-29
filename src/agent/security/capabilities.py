@@ -240,7 +240,31 @@ def is_protected(path_value: str, root: str = ".",
     # And where the path really leads: through a junction or symlink, a name
     # inside the workspace can be the grader itself (tests/test_junction_escape.py).
     real = _resolved(p)
-    return real != p and _protected_at(real, _real_state(tuple(state), _bucket()))
+    if real != p and _protected_at(real, _real_state(tuple(state), _bucket())):
+        return True
+    return _protected_elsewhere(str(p), tuple(state), _bucket())
+
+
+@functools.lru_cache(maxsize=8192)
+def _protected_elsewhere(p: str, state: tuple, _b: int) -> bool:
+    """D70 (audit S3). A hard link is the same file under another name, and
+    realpath shows only the name it was asked about: a link in the workspace
+    to a grader was an ordinary in-scope file. A file with several names is
+    protected if any of its names is; where the names cannot be listed, it is
+    refused. Only multiply-linked files pay for this (one stat, cached)."""
+    from ..platform import current
+
+    try:
+        if os.stat(p).st_nlink < 2:
+            return False
+    except OSError:
+        return False
+    names = current.link_names(p)
+    if names is None:
+        return True
+    real_state = _real_state(state, _b)
+    return any(_protected_at(Path(n), state) or _protected_at(Path(n), real_state)
+               for n in names)
 
 
 def _bucket() -> int:

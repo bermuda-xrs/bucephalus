@@ -11,6 +11,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[1]
 NOISE = (ROOT / "bench" / "noise.py").read_text(encoding="utf-8")
 
@@ -265,3 +267,22 @@ def test_d24_an_existing_database_migrates_to_the_two_column_key(tmp_path):
     init_schema(conn)                       # idempotent: a second open is a no-op
     assert conn.execute("SELECT COUNT(*) FROM plans").fetchone()[0] == 1
     conn.close()
+
+
+# D46 (audit F8). JSON a small model plausibly emits raised out of
+# `parse_plan` - a 500 from POST /tasks/{id}/plan, with the model's text in the
+# server log. It degrades like no JSON at all: a plan with no steps, saying why.
+@pytest.mark.parametrize("text", [
+    '{"objective":"o","steps":[{"est_tokens":"about 500"}]}',
+    '{"objective":"o","steps":[{"action_mode":"python"}]}',
+    '{"objective":"o","steps":[{"max_taint_out":"low"}]}',
+    '{"objective":"o","steps":["read the file"]}',
+    '{"objective":"o","steps":[{"tools":5}]}',
+    '{"objective":"o","steps":"first read, then write"}',
+])
+def test_D46_a_plan_of_the_wrong_shape_degrades_instead_of_raising(text):
+    from agent.plan.planner import parse_plan
+
+    plan = parse_plan(text, fallback_objective="the goal")
+    assert plan.steps == [] and plan.objective == "the goal"
+    assert any("not a plan" in u for u in plan.unknowns), plan.unknowns

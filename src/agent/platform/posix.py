@@ -132,6 +132,18 @@ def kill_tree_signal(pid: int, timeout_s: float, expect_start: int | None = None
     _sigkill(pid, expect_start)
 
 
+def spawn_denied_processes() -> None:
+    """No exact limit here: the process cap is a polled watchdog over the
+    session, so a spawn is refused by the audit hook alone (fork included)."""
+    return None
+
+
+def link_names(path: str) -> None:
+    """POSIX has no call that lists a file's other names; a caller that
+    needs them treats a file with several links as unknown (D70)."""
+    return None
+
+
 def has_data_streams() -> bool:
     """No alternate data streams: a colon is an ordinary filename character."""
     return False

@@ -160,3 +160,32 @@ def test_a_job_that_cannot_be_applied_refuses_the_run(monkeypatch):
     r = run_sandboxed("print('ran')", timeout_s=30)
     assert "ran" not in r["stdout"] and r["returncode"] == -1, r
     assert "limits could not be applied" in r["stderr"], r
+
+
+def test_agent_code_cannot_start_a_process_below_the_audit_hook(tmp_path):
+    """D49 (audit H2). Spawning is refused to agent code by the audit hook,
+    and `_winapi.CreateProcess` - the primitive under `subprocess` - raises
+    no audit event: agent code started cmd.exe with it (confirmed 2026-09-30).
+    For agent code the Job Object holds exactly the interpreter's own
+    processes, so the kernel refuses a spawn by any route, ctypes included."""
+    code = ("import _winapi\n"
+            "try:\n"
+            "    h = _winapi.CreateProcess(None, 'cmd.exe /c exit 7', None, None,"
+            " False, 0, None, None, None)\n"
+            "    print('SPAWNED')\n"
+            "except OSError as e:\n"
+            "    print('REFUSED', e.winerror)\n")
+    guarded = tmp_path / "graders"
+    guarded.mkdir()
+    r = run_sandboxed(code, allowed_paths=[], timeout_s=30, protected_paths=[str(guarded)])
+    assert "SPAWNED" not in r["stdout"] and "REFUSED" in r["stdout"], r
+
+
+def test_harness_code_can_still_start_processes(tmp_path):
+    """The other half: a harness run (a grader running pytest) spawns, and
+    the tight limit is for agent code only."""
+    code = ("import subprocess, sys\n"
+            "print(subprocess.run([sys.executable, '-c', 'print(42)'],"
+            " capture_output=True, text=True).stdout.strip())\n")
+    r = run_sandboxed(code, allowed_paths=[], timeout_s=60)
+    assert r["stdout"].strip().endswith("42"), r

@@ -83,7 +83,8 @@ def _mirror_sidecars(sandbox_main: Path, original_main: Path,
             changed.append(str(b))
 
 
-def link_into(workdir: str, path: str, rel: str | None = None) -> dict | None:
+def link_into(workdir: str, path: str, rel: str | None = None,
+              skip_multilinked: bool = False) -> dict | None:
     """Expose one allowed path inside the sandbox workdir.
 
     `rel` preserves the path the agent was told to use. Flattening
@@ -103,8 +104,16 @@ def link_into(workdir: str, path: str, rel: str | None = None) -> dict | None:
         os.symlink(src, dest, target_is_directory=src.is_dir())
         return {"mode": "symlink", "src": str(src), "dest": str(dest)}
     except (OSError, NotImplementedError, AttributeError):
+        # A copy of a hard link is a one-name file, which the fence inside
+        # cannot tell from any other: for agent code a file with several
+        # names is not carried in (D70).
+        def several_names(d, names):
+            return [n for n in names if skip_multilinked and os.path.isfile(os.path.join(d, n))
+                    and os.stat(os.path.join(d, n)).st_nlink > 1]
         if src.is_dir():
-            shutil.copytree(src, dest, dirs_exist_ok=True)
+            shutil.copytree(src, dest, dirs_exist_ok=True, ignore=several_names)
+        elif several_names(str(src.parent), [src.name]):
+            return None
         else:
             shutil.copy2(src, dest)
             for s in CARRIED_SIDECARS:
@@ -186,7 +195,7 @@ if {touch_path!r}:
 # A new process is a process this hook is not in: starting one bypasses every
 # rule here in a single call. Refused for agent code; harness runs keep it.
 _SPAWN = ("subprocess.Popen", "os.system", "os.exec", "os.posix_spawn",
-          "os.spawn", "os.startfile")
+          "os.spawn", "os.startfile", "os.fork", "os.forkpty")
 # AUDIT-2026-09 F3. The sandbox promises NO NETWORK (execute/libraries.py) and
 # nothing enforced it: code connected anywhere, loopback included - where the
 # control plane listens, which is how F2 was exploitable. Every run, not only
@@ -229,7 +238,17 @@ def _is_protected(path):
     # (AUDIT-ITERATION-3 S1, swept into the sandbox).
     if _STREAMS and ":" in real[2:]:
         return True
-    return any(_under(real, p) for p in _PROTECTED)
+    if any(_under(real, p) for p in _PROTECTED):
+        return True
+    # D70: a hard link in the workspace is the protected file under another
+    # name. Agent code has no need of a file with several names; refused.
+    # Workspace files only: an installer may hard-link the interpreter's own.
+    if any(_under(real, r) for r in _ROOTS) or _under(real, _WORKDIR):
+        try:
+            return _os.stat(real).st_nlink > 1
+        except OSError:
+            return False
+    return False
 
 
 def _check_protected(path):
@@ -581,7 +600,7 @@ def run_sandboxed(
             # Accept either a bare path or (absolute, relative-name) so the
             # caller can preserve the layout the agent was told to expect.
             src, rel = p if isinstance(p, (tuple, list)) else (p, None)
-            entry = link_into(workdir, src, rel)
+            entry = link_into(workdir, src, rel, skip_multilinked=bool(protected_paths))
             if entry:
                 links.append(entry)
 
@@ -608,10 +627,16 @@ def run_sandboxed(
         # which in a frozen build is the application itself.
         argv = [*interpreter_argv(), str(script)]
 
+        # Agent code may not spawn: where the platform can make that the
+        # kernel's rule, its process limit is the interpreter's own (D49).
+        limits = dict(_LIMITS)
+        if protected_paths:
+            limits["max_processes"] = (_platform.spawn_denied_processes()
+                                       or MAX_PROCESSES)
         if tool_handler is None:
-            result = _run_batch(argv, workdir, env, timeout_s)
+            result = _run_batch(argv, workdir, env, timeout_s, limits)
         else:
-            result = _run_with_bridge(argv, workdir, env, timeout_s, tool_handler)
+            result = _run_with_bridge(argv, workdir, env, timeout_s, tool_handler, limits)
 
         result["changed_files"] = _copy_back(links)
         result["notes"] = notes
@@ -625,7 +650,8 @@ def run_sandboxed(
         return result
 
 
-def _run_batch(argv: list[str], workdir: str, env: dict, timeout_s: int) -> dict:
+def _run_batch(argv: list[str], workdir: str, env: dict, timeout_s: int,
+               limits: dict = _LIMITS) -> dict:
     """D37 - one run with the platform's kernel-enforced limits.
 
     On a timeout the whole JOB is closed (Windows), not only the process Popen
@@ -634,7 +660,7 @@ def _run_batch(argv: list[str], workdir: str, env: dict, timeout_s: int) -> dict
     """
     try:
         proc, close = _platform.spawn_limited(
-            argv, timeout_s=timeout_s, **_LIMITS, cwd=workdir, env=env,
+            argv, timeout_s=timeout_s, **limits, cwd=workdir, env=env,
             # Never the app's stdin. Inherited, it is a handle the child has
             # no business reading - and in a frozen or windowed build it is
             # not a valid handle at all, so every run failed to start (D13).
@@ -661,7 +687,8 @@ def _run_batch(argv: list[str], workdir: str, env: dict, timeout_s: int) -> dict
 
 
 def _run_with_bridge(
-    argv: list[str], workdir: str, env: dict, timeout_s: int, handler: ToolHandler
+    argv: list[str], workdir: str, env: dict, timeout_s: int, handler: ToolHandler,
+    limits: dict = _LIMITS,
 ) -> dict:
     """Pump the child's stdout, servicing tool requests as they arrive.
 
@@ -672,7 +699,7 @@ def _run_with_bridge(
                  stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace",
                  bufsize=1)
     try:
-        proc, close = _platform.spawn_limited(argv, timeout_s=timeout_s, **_LIMITS, **popen)
+        proc, close = _platform.spawn_limited(argv, timeout_s=timeout_s, **limits, **popen)
     except LimitsRefused as e:
         return {**_limits_refused(e), "tool_calls": 0}
 
