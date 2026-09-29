@@ -5,7 +5,10 @@ Iteration 3, 2026-09-28 to 2026-09-29, on branch `iteration-3` (from `main` at
 the running record in `docs/UNATTENDED-LOG.md`. This page is the five-minute
 version.
 
-**Main: MAIN_STATE**
+**Main was fast-forwarded to `iteration-3`** at the end, because the three
+conditions held: the full suite green (twice, at the final commit), the
+frozen gate passing on a build of the final commit, and the audit's critical
+and high findings fixed. Nothing was pushed; there is no remote.
 
 ## What needs you
 
@@ -188,6 +191,4 @@ And in my own instruments, each caught before it reached a number here:
   one test that `--lf` then passed, and every full run since was green. The
   load-sensitive timing tests above are the likely source; the other flakes
   seen today were diagnosed and fixed (the two reaper tests).
-- **The frozen binaries** were built from `6dfdab5`; the commits after it
-  change the TUI and documents, which the desktop app does not run.
 - Screen-reader use was checked through the accessibility tree only.

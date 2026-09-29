@@ -214,8 +214,18 @@ screenshots found **D82**: its input and status bar were off screen.
 docs/UNATTENDED-REPORT.md; HANDOVER section D, B3, E2, E3; DEFERRED's
 summary; DECISIONS U12-U13.
 
-## RESUME (2026-09-29, final)
+## Close (2026-09-29)
 
-All parts done or reported as not done (the report's last section). Left:
-cleanup (worktrees ~/.alpha-mut-snap and ~/.alpha-before, dist-before-alpha,
-temp alpha-* dirs), a final rebuild + gate + suite, the fast-forward.
+Cleanup: both scratch worktrees removed (`git worktree remove`), the old
+build's copy and 148 temp folders of this run deleted; no process of this run
+running; 11434 is the same Ollama process (pid 10660) it has been since the
+2026-09-28 20:39 logon; real AppData identical to the run-start snapshot
+except the parent folder's mtime from removing my own empty folders on
+2026-09-28 15:08. Final: suite green twice (1215 passed), frozen gate 55
+passed on a build of the final code, a scripted task through its window.
+Main fast-forwarded to iteration-3 (`git fetch . iteration-3:main`, which
+refuses anything but a fast-forward). Nothing pushed.
+
+## RESUME
+
+Nothing in flight. Start from docs/UNATTENDED-REPORT.md, "What needs you".
