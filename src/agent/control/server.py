@@ -42,6 +42,12 @@ from ..userdata.store import SuiteTask, ValidationError
 from .events import stream_events
 from .guard import ALLOW_REMOTE_ENV, AccessGuard, resolve_token
 
+# The console holds a task's event stream open for as long as it shows the
+# task, and uvicorn's shutdown waits for open connections with no limit: the
+# desktop app took 22 s to close after a task had run, and a stop with the
+# console open never finished. Every server here passes this (3.2 / 4.8).
+GRACEFUL_SHUTDOWN_S = 1
+
 
 class CreateTask(BaseModel):
     goal: str
@@ -674,4 +680,5 @@ def serve(config_path: str = "config.yaml", host: str = "127.0.0.1", port: int =
     import uvicorn
 
     ctx = AgentContext.open(config_path)
-    uvicorn.run(create_app(ctx), host=host, port=port)
+    uvicorn.run(create_app(ctx), host=host, port=port,
+                timeout_graceful_shutdown=GRACEFUL_SHUTDOWN_S)

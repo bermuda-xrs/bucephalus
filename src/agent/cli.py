@@ -592,12 +592,13 @@ def cmd_serve(ctx, args, console) -> int:
     import uvicorn
 
     from .control.guard import resolve_token
-    from .control.server import console_url, create_app
+    from .control.server import GRACEFUL_SHUTDOWN_S, console_url, create_app
 
     # The token is in the fragment; this line is the only place it is shown,
     # on the terminal of the user who started the server (AUDIT F2).
     console.print(f"control plane: {console_url(args.port, resolve_token(ctx.config.root), args.host)}")
-    uvicorn.run(create_app(ctx), host=args.host, port=args.port, log_level="warning")
+    uvicorn.run(create_app(ctx), host=args.host, port=args.port, log_level="warning",
+                timeout_graceful_shutdown=GRACEFUL_SHUTDOWN_S)
     return 0
 
 

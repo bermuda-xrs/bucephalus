@@ -37,7 +37,7 @@ Everything else on this page is marked in its own heading:
 | state | what it means | items |
 |---|---|---|
 | **open** | a real defect, nobody has fixed it | D2, D6, D16, D26, D27, D33; from Linux D54-D59; from the audit D46, D47, D48, D49, D52, each with its audit severity; from iteration 3 D63; from its audit D70, D72, D74-D77; from its mutation work D79 |
-| **closed** | fixed, with the change and its test named | D1, D3, D7, D9, D10, D11, D15, D17, D18, D19, D20, D21, D22, D23, D24, D28, D29, D30, D34, D35, D36, D37, D38, D39, D40, D41, D42, D43, D44, D51, D50, D53, D45, D61, D60, D62, D64, D65, D66, D67, D68, D69, D78, D71, D73, D80 |
+| **closed** | fixed, with the change and its test named | D1, D3, D7, D9, D10, D11, D15, D17, D18, D19, D20, D21, D22, D23, D24, D28, D29, D30, D34, D35, D36, D37, D38, D39, D40, D41, D42, D43, D44, D51, D50, D53, D45, D61, D60, D62, D64, D65, D66, D67, D68, D69, D78, D71, D73, D80, D81 |
 | **deleted** | never a defect, or about an instrument nobody runs | D4, D5, D8, D12, D14 |
 | **known and accepted** | a real limit, decided rather than deferred | D32 (the sandbox is advisory: Phase 6 withdrawn) |
 | **dormant** | its subject is retired; it wakes if that returns | D19 (M11). D13 CLOSED 2026-09-25 |
@@ -1588,3 +1588,16 @@ written, the last event is still 2026-09-06, the chain verifies. The check
 opens the record read-only now;
 `test_checking_the_live_record_does_not_change_it`, red first on a copy of
 an older record. The added tables stay (DECISIONS U11).
+
+## D81 - MEDIUM - after a task, the desktop app took 22 s to close, and a stop with the console open never finished (CLOSED 2026-09-29: fixed in the change that recorded it)
+
+Found by 4.8's scripted task through the frozen window: an idle close took
+2.6 s, a close after a task 22.3 s, three of three. The new console holds the
+task's event stream open; uvicorn's shutdown waits for open connections with
+no limit; `desktop.shutdown` joined the server for its 10 s timeout and gave
+up with the server still running - twice, early stop and final stop. A
+regression of this run's streaming console. Every server here (`alpha serve`,
+the ASGI module, the desktop app) now bounds the wait at 1 s:
+`test_an_open_console_stream_does_not_hold_the_close` and
+`test_every_server_bounds_its_shutdown`, both red first. Close after a task,
+frozen: 22.3 s -> 3.4 s.

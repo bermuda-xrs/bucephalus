@@ -85,12 +85,13 @@ def start_server(ctx, host: str):
 
     import uvicorn
 
-    from .control.server import create_app
+    from .control.server import GRACEFUL_SHUTDOWN_S, create_app
 
     sock = socket.socket(socket.AF_INET6 if ":" in host else socket.AF_INET)
     sock.bind((host, 0))
     port = sock.getsockname()[1]
-    server = uvicorn.Server(uvicorn.Config(create_app(ctx), log_level="warning"))
+    server = uvicorn.Server(uvicorn.Config(create_app(ctx), log_level="warning",
+                                           timeout_graceful_shutdown=GRACEFUL_SHUTDOWN_S))
     thread = threading.Thread(target=server.run, kwargs={"sockets": [sock]},
                               daemon=True, name="alpha-control-plane")
     thread.start()
@@ -106,9 +107,21 @@ def descendants(root: int | None = None) -> list[int]:
     return proc.descendants(os.getpid() if root is None else root)
 
 
+_STOPPING = threading.Lock()
+
+
 def shutdown(server, thread, timeout_s: float = 10.0) -> list[int]:
     """Stop the server, then kill every process this one started. Returns the
-    pids that were still running and had to be killed."""
+    pids that were still running and had to be killed.
+
+    One at a time: the window's `closed` event starts a stop on pywebview's
+    thread, and the final stop in main() must not return - and let the app
+    exit - while that one is still killing what only it can still see."""
+    with _STOPPING:
+        return _shutdown(server, thread, timeout_s)
+
+
+def _shutdown(server, thread, timeout_s: float) -> list[int]:
     from . import proc
 
     server.should_exit = True
@@ -148,13 +161,37 @@ def main(argv: list[str] | None = None) -> int:
 
         from .control.server import console_url
 
-        webview.create_window("alpha", console_url(port, server.config.app.state.token),
-                              width=1280, height=860, min_size=(900, 600))
+        window = webview.create_window("alpha", console_url(port, server.config.app.state.token),
+                                       width=1280, height=860, min_size=(900, 600))
+        # pywebview's close, in private mode, waits up to 3 s for WebView2's
+        # browser process to exit on its own before start() returns: 2.2 s
+        # of a 3.6 s close (F1). Stopping the tree when the window closes
+        # ends that wait in the kill it would end in anyway (iteration 3, 3.2).
+        # It returns None: pywebview puts handlers' return values in a set.
+        def stop_now() -> None:
+            shutdown(server, thread)
+
+        window.events.closed += stop_now
         webview.start()
     finally:
         shutdown(server, thread)
+        _drop_private_profile()
         ctx.close()
     return 0
+
+
+def _drop_private_profile() -> None:
+    """pywebview deletes its private-mode profile once WebView2 has exited;
+    when the early stop above wins that race it logs and skips the delete,
+    so the profile goes here. Only in private mode - otherwise that folder
+    is the user's persistent storage."""
+    import shutil
+
+    webview = sys.modules.get("webview")
+    winforms = sys.modules.get("webview.platforms.winforms")
+    path = getattr(winforms, "cache_dir", None)
+    if path and getattr(webview, "_state", {}).get("private_mode"):
+        shutil.rmtree(path, ignore_errors=True)
 
 
 if __name__ == "__main__":
