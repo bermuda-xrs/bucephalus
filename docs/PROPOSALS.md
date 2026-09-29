@@ -120,3 +120,23 @@ and a re-baseline. **Decide:** whether the held-out measurement must hold
 against a graded program that attacks its grader, and if so which of the
 three.
 
+## P6 - Calibrate the in-loop token estimator per backend (D6)
+
+**Measured** (DEFERRED D6, 2026-09-30, from the two G1 ablation records):
+the estimator undercounts granite4.1:3b's prompts - server = 1.108 x estimate
++ 193 tokens, residual sd 23.5. `enforce_ceiling` budgets against the
+estimate, so the context ceiling fires ~15% late at this profile's settings,
+which is the long-context degradation invariant 11 exists to prevent.
+
+Built, it is: each backend's `(slope, intercept)` fitted from its own `calls`
+rows against the `est_input_tokens` beside them (step calls with no cache
+reads), stored with the backend, applied inside `count_tokens`; a backend with
+fewer than ~30 such calls keeps the uncalibrated estimate and says so in the
+run record. The fit is re-checked by `bench/inventory.py`.
+
+**Why not done unattended:** it changes when compaction fires, and so the
+prompt bytes a long task sends - a HARNESS_VERSION matter under this project's
+rules, and a re-baseline of every number that depends on compaction.
+**Decide:** whether to calibrate (and bump), or to lower
+`context_fill_ratio` by the measured factor as the cheaper, coarser fix.
+

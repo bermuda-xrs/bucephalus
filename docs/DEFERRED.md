@@ -178,6 +178,18 @@ nobody has run one and read it yet. That is all this entry is still waiting for.
 where the server evaluated the whole prompt (no prefix-cache hit), and fit the
 ratio. No key needed.
 
+**Measured 2026-09-30** - no new run was needed: both G1 ablation records
+(`docs/evidence/g1-ablation-2026-09-17.db`, `...-v5-2026-09-23.db`) carry
+`est_input_tokens` on every step call, one to one with `calls`: 180 calls,
+granite4.1:3b through Ollama, no prefix-cache reads. **The estimator
+undercounts.** The server counted 1.30x the estimate on each task's first
+call (n=45; p10 1.28, p90 1.35) and 1.26x over all 180. A line fits closely:
+server = 1.108 x estimate + 193 (residual sd 23.5 tokens; estimates 861-1,916)
+- the constant is overhead the estimator never sees, the chat template among
+it. So the ceiling fires LATE; extrapolated to the 0.28 x 16,384 ceiling, a
+prompt is ~15% past it. Still open: correcting it moves when compaction fires,
+which is what the model sees - PROPOSALS P6, with this measurement.
+
 ---
 
 ## D7 — `bench/report.py` has no `machine_fault` / `excluded` column (CLOSED 2026-09-16: the run sheet renders both)
