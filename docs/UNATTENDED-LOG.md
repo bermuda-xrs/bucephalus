@@ -179,17 +179,43 @@ come from queue5 (a fresh run at f67897f with the new tests targeted).
   in the same hour, so it is the machine (U10).
 - The reaper test's taskkill timed out under load; os.kill is TerminateProcess.
 
-## RESUME (2026-09-29, 12:45)
+## Part 2.3 - final (5c9c9f6)
 
-Branch `iteration-3` at f67897f; UNCOMMITTED: D80, D72 partial, U9-U11 docs,
-the 3.2 desktop change, docs/UNATTENDED-REPORT.md (draft, TBDs). Running:
-queue5 (final mutation, snapshot worktree `~/.alpha-mut-snap` at f67897f).
-Also created: worktree `~/.alpha-before` at 1d911cc (Part 3's "before"), and
-`~/.alpha-build/dist-before-alpha` (the old frozen app). Do NOT load the
-machine during queue5's rechecks (a timing test can fail and read as a kill -
-audit killed_by for timing tests). Then, in order: full suite -> commit D80/D72
-(stash the desktop change for that run); part3.py 5 rounds idle; rebuild
-frozen app + probe gate; frozen_e2e.py before/after (3 trials each); commit
-3.2 if it holds; mutation README from v2/v4/v5; report; HANDOVER; cleanup
-(worktrees, dist-before-alpha, temp alpha-* dirs, verify 11434 and AppData);
-fast-forward decision.
+queue5 (fresh run at f67897f, new tests targeted, whole-suite recheck).
+Kills made only by load-sensitive timing tests counted as survivors (U13).
+Final: gate 90.8% (with three junction tests that pinned the real-path halves
+of the scope and protected checks, each hidden behind the other), taint 76.2%,
+scope 86.7%, chain 89.0%, anchor 93.6%, prompt allowlist 100%, mesh 81.2%,
+transcript 50.0%, verifiers 91.1%. docs/evidence/mutation-2026-09-28/.
+
+## Part 3 - efficiency (5c9c9f6..1f9143e)
+
+Interleaved before/after, idle machine (docs/evidence/iteration-3-efficiency/):
+sweep 0.92 -> 0.29 s; per step 33.3 -> 31.9 ms; serve to /health 2.63 ->
+2.58 s (the first figure, 3.08 s both, was the probe's own connect timeout);
+serve idle 62 MB. Startup is half FastAPI's import; left. DB: WAL, indexes,
+FTS5 already; every new console query indexed. Build 63 -> 62 MB, not trimmed
+(U12).
+
+## 4.8 - the frozen app (6dfdab5, 1f9143e)
+
+Rebuilt; the frozen gate passes (55 passed, 1 skipped by design). A scripted
+task ran through the window's own controls over DevTools. Found: **D81**, a
+close after a task took 22.3 s (uvicorn waited for the console's stream with
+no limit) - 3.4 s now, every server bounded; the early stop's handler
+returned a list into pywebview's set (desktop.log); idle close 2.99 -> 2.63 s.
+The 2 s target is not met (U12): our work ends 0.3-0.4 s after WM_CLOSE, the
+rest is the OS tearing down the WebView2 host. No orphans, by exit code - my
+first harness counted exited-but-referenced processes as orphans. The TUI
+screenshots found **D82**: its input and status bar were off screen.
+
+## Part 6 - report
+
+docs/UNATTENDED-REPORT.md; HANDOVER section D, B3, E2, E3; DEFERRED's
+summary; DECISIONS U12-U13.
+
+## RESUME (2026-09-29, final)
+
+All parts done or reported as not done (the report's last section). Left:
+cleanup (worktrees ~/.alpha-mut-snap and ~/.alpha-before, dist-before-alpha,
+temp alpha-* dirs), a final rebuild + gate + suite, the fast-forward.

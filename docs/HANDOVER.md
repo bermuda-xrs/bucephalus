@@ -109,8 +109,8 @@ never executed anywhere; the checklist in `docs/PLATFORMS.md` section 5 is for b
 | Command | Cost |
 |---|---|
 | `demo.py` | ~30 s, scripted model, no network |
-| `python -m pytest tests -q` | ~10 min, offline |
-| `packaging/build.py` | ~5 min: the desktop app, windowed onedir, 188 MB. `--probe` builds the frozen sandbox gate |
+| `python -m pytest tests -q` | ~1 min, in parallel by default, offline; `-n 0` for serial, ~4 min |
+| `packaging/build.py` | ~4 min: the desktop app, windowed onedir, 62 MB. `--probe` builds the frozen sandbox gate |
 | `bench/report.py`, `bench/coverage.py`, `bench/nextstep.py` | instant, read-only |
 | `bench/ladder.py` | ~15 min for six rungs at 5 samples; `--rungs R0,R1` is ~4 min and answers "does the tax reproduce" on its own |
 | `bench/noise.py --runs 1` | **~2.5 hours.** Loads a model, holds ~3.3 GB, takes the machine |
@@ -280,12 +280,12 @@ measurement wins, and the contradiction is written down beside the code defects.
 # D — STATE
 
 **Everything volatile is here and nowhere else in this file**, each row with the command that
-regenerates it. Verified 2026-09-26, against commit `500a798`.
+regenerates it. Verified 2026-09-29, against commit `1f9143e`.
 
 | Fact | Value | Regenerate with |
 |---|---|---|
-| Branch | `main`, the line of record, fast-forwarded to `desktop-app` after the 2026-09 audit; tag `g1-closed-2026-09-25` marks the measurement branch's tip; no remote | `git branch --show-current` |
-| Written against | `500a798`; the test asserts this is an ancestor of HEAD | `git log --oneline -1` |
+| Branch | `main`, the line of record, fast-forwarded to `iteration-3` (the unattended run of 2026-09-28/29, `docs/UNATTENDED-REPORT.md`) once its suite, frozen gate and audit passed; tag `g1-closed-2026-09-25` marks the measurement branch's tip; no remote | `git branch --show-current` |
+| Written against | `1f9143e`; the test asserts this is an ancestor of HEAD | `git log --oneline -1` |
 | Harness version | **6**, bumped 2026-09-25: a check must be able to fail (DR7) - the final sweep graded "{}" and `execution` passed it; five more verifiers could not fail (FINDINGS 1.34). 5 held the grader out under measurement. Pass rates before 5 are too high | `grep HARNESS_VERSION src/agent/__init__.py` |
 | Toolset version | **6** | `grep TOOLSET_VERSION src/agent/__init__.py` |
 | Test count | *deliberately not stated* | `python -m pytest tests -q`, and read the tail line. The skips are the live-credential tests, until D26's credentials exist |
@@ -336,15 +336,15 @@ Each owns its subject; nothing here is reproduced above.
 | **D27** — one task at a time, and the bot has no queue | Not a queue: the single-writer chain lock serialises anyway, so the honest fix is the claim-then-execute receipt protocol |
 | **D33** — tier 1 sits before the tool schemas on this template | A `HARNESS_VERSION` bump, which is a stop. Its criterion — a boundary rebuild more than once per task — is **measured at zero** as of 2026-09-17 (`bench/inventory.py`): no session has ever rotated. Re-refused, not unexamined |
 
-Also open: the audit's D45-D49 and D52; the WSL2 run's D54-D59; **D60**, a task deleted from the
-database is invisible to `alpha verify`. **D26** is the user's (credentials). D32's acceptance is in C4.
+Also open: the audit's D46-D49 and D52; the WSL2 run's D54-D59; iteration 3's D63, D70, D72, D74-D77
+and **D79**, a graded program can print its own verdict (P5). **D26** is the user's. D32's acceptance is in C4.
 
 ## E3. Next steps, in order
 
 **Estimates are mine, from my own reading of the code. Every prior estimate here ran
 optimistic, so where I am guessing I say so.** They stand as written with what has since been
 done marked beside them: a prediction edited afterwards is not one.
-**(a)-(e) are done. Next, 2026-09-26:** `docs/PLATFORMS.md` section 5 on a Mac and on bare-metal Linux; then D60; then D54-D57.
+**(a)-(e) are done. Next, 2026-09-29:** what waits for the user, top of `docs/UNATTENDED-REPORT.md`; then `docs/PLATFORMS.md` section 5; then D54-D57.
 
 **(a) Feature-flag the efficiency mechanisms, then run G1.** First, because it closes the
 headline goal — and *the reason it was never testable is a spec error, not an implementation

@@ -26,11 +26,13 @@ instrument). Everything below waits.
 ## Where this stands, 2026-09-29
 
 **Six open from before the audit, five from the audit, six from the first
-Linux run and one from iteration 3.** D2, D6, D16, D26, D27, D33; the audit's
-D46-D49 and D52 (`docs/AUDIT-2026-09.md`; its HIGH findings F1 and F2 were
-fixed in the change that recorded them, and D40-D45, D50, D51 and D53 are
-closed); D54-D59 (WSL2, `docs/evidence/wsl-2026-09-25/`); D63. D60-D62 and
-D64-D67 closed in iteration 3. See each heading.
+Linux run and eight from iteration 3.** D2, D6, D16, D26, D27, D33; the
+audit's D46-D49 and D52 (`docs/AUDIT-2026-09.md`; its HIGH findings F1 and F2
+were fixed in the change that recorded them, and D40-D45, D50, D51 and D53
+are closed); D54-D59 (WSL2, `docs/evidence/wsl-2026-09-25/`); from iteration
+3, D63, its audit's D70, D72 (partly fixed), D74-D77, and D79 from its
+mutation work. D60-D62, D64-D69, D71, D73, D78 and D80-D82 closed in
+iteration 3. See each heading.
 
 Everything else on this page is marked in its own heading:
 

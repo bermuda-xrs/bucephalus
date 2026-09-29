@@ -146,3 +146,29 @@ test holds. Not built. `docs/PROPOSALS.md` P4 says what it would take.
   additions since 2026-09-06 reached it the same way and were never noticed.
 - **Reverse.** `DROP TABLE conversation_tasks; DROP TABLE conversations;`
   on the record, if the user wants the schema as of the last measurement.
+
+## U12 - Two efficiency targets reported as they stand (3.1, 3.2)
+
+- **3.2, "shutdown under 2 s": not met, not chased further.** Measured by
+  stage, the app's own work ends 0.3-0.4 s after WM_CLOSE (window hidden,
+  children killed, database closed); the process object disappears at about
+  2.5 s. Terminating self instead of `os._exit` measured no faster, so what is
+  left is the OS tearing down the WebView2/CLR host. What was ours was cut
+  (2.99 -> 2.63 s idle; 22.3 -> 3.4 s after a task, D81).
+- **3.1, build size: measured, not cut.** 62 MB, dominated by sympy, which the
+  sandbox offers model code; the TUI (textual) and pygments are ~7 MB of
+  source the desktop app never runs, perhaps 2 MB compressed. Excluding them
+  saves little and adds a build rule to keep true.
+- **Reverse.** `packaging/build.py`: `--exclude-module textual`, and re-run
+  the frozen gate and `frozen_e2e`-style checks.
+
+## U13 - Mutation kills made only by load-sensitive tests count as survivors (2.3)
+
+- **Measured.** The whole-suite recheck names the test behind each kill
+  (D78). Some kills were made only by tests that fail under load whatever
+  the code: the parallel-batch timing test, the crawl-delay test, and the two
+  reaper tests (fixed 2026-09-29).
+- **Chosen.** Such a kill is counted as a survivor, and the raw result files
+  keep the runner's own status. The alternative - a clean re-run of each -
+  would have cost hours of machine time for a handful of mutants whose
+  classification is already clear (equivalent or dead, in the README).
