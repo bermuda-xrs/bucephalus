@@ -53,6 +53,12 @@ def wheel(tmp_path_factory) -> zipfile.ZipFile:
         capture_output=True, text=True, encoding="utf-8", errors="replace",
         timeout=600)
     built = list(out.glob("*.whl"))
+    offline = any(sig in r.stderr for sig in ("NameResolutionError", "No matching distribution",
+                                              "Temporary failure in name resolution"))
+    if r.returncode != 0 and offline:
+        # Build isolation fetches setuptools. No network is not a packaging
+        # defect; any OTHER build failure still fails below.
+        pytest.skip("no network for the wheel build's isolated environment")
     assert r.returncode == 0 and built, (
         f"could not build a wheel (exit {r.returncode}):\n"
         f"{r.stdout[-1500:]}\n{r.stderr[-1500:]}")

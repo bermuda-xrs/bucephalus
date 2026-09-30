@@ -149,7 +149,7 @@ def test_web_output_is_always_untrusted():
         assert spec.max_arg_taint is Taint.UNTRUSTED, name
 
 
-def test_provenance_is_recorded_on_the_artifact(tmp_path):
+def test_provenance_is_recorded_on_the_artifact(tmp_path, monkeypatch):
     """4.3. URL, fetch time, content hash — G4's skill provenance needs
     exactly this, because a skill generated from a page is only checkable if
     the page can be named and re-fetched."""
@@ -174,6 +174,10 @@ def test_provenance_is_recorded_on_the_artifact(tmp_path):
             return False
 
     import agent.net.fetch as fetch_mod
+
+    # The property is provenance, not DNS: `_is_public` resolved example.com
+    # for real, so the test failed offline (found in WSL2 with no network).
+    monkeypatch.setattr(fetch_mod, "_is_public", lambda host: True)
 
     class FakeClient:
         def __init__(self, *a, **k):
