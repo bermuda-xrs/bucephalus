@@ -1,0 +1,139 @@
+{
+ "module": "src\\agent\\platform\\windows.py",
+ "only": [
+  "link_names",
+  "spawn_denied_processes"
+ ],
+ "tests": [
+  "tests/test_new_code_mutants.py"
+ ],
+ "score": 0.8333333333333334,
+ "results": [
+  {
+   "node": 8,
+   "op": "negate",
+   "line": 261,
+   "status": "killed",
+   "seconds": 6.680216550827026
+  },
+  {
+   "node": 12,
+   "op": "return_none",
+   "line": 262,
+   "status": "killed",
+   "seconds": 6.6605212688446045
+  },
+  {
+   "node": 13,
+   "op": "int",
+   "line": 262,
+   "status": "killed",
+   "seconds": 6.694575548171997
+  },
+  {
+   "node": 30,
+   "op": "cmp0",
+   "line": 264,
+   "status": "killed",
+   "seconds": 6.6374406814575195
+  },
+  {
+   "node": 66,
+   "op": "return_none",
+   "line": 266,
+   "status": "killed",
+   "seconds": 6.636056423187256
+  },
+  {
+   "node": 70,
+   "op": "int",
+   "line": 266,
+   "status": "survived",
+   "seconds": 6.0434250831604
+  },
+  {
+   "node": 71,
+   "op": "int",
+   "line": 266,
+   "status": "killed",
+   "seconds": 6.493897199630737
+  },
+  {
+   "node": 91,
+   "op": "bool",
+   "line": 277,
+   "status": "survived",
+   "seconds": 5.771279811859131
+  },
+  {
+   "node": 209,
+   "op": "int",
+   "line": 287,
+   "status": "killed",
+   "seconds": 6.510427951812744
+  },
+  {
+   "node": 219,
+   "op": "int",
+   "line": 288,
+   "status": "survived",
+   "seconds": 5.795518159866333
+  },
+  {
+   "node": 241,
+   "op": "int",
+   "line": 290,
+   "status": "killed",
+   "seconds": 6.516866683959961
+  },
+  {
+   "node": 252,
+   "op": "cmp0",
+   "line": 291,
+   "status": "killed",
+   "seconds": 6.492976903915405
+  },
+  {
+   "node": 266,
+   "op": "int",
+   "line": 291,
+   "status": "killed",
+   "seconds": 6.379263162612915
+  },
+  {
+   "node": 277,
+   "op": "negate",
+   "line": 295,
+   "status": "killed",
+   "seconds": 6.359637260437012
+  },
+  {
+   "node": 278,
+   "op": "bool",
+   "line": 295,
+   "status": "killed",
+   "seconds": 6.349435091018677
+  },
+  {
+   "node": 285,
+   "op": "addsub",
+   "line": 296,
+   "status": "killed",
+   "seconds": 6.297666072845459
+  },
+  {
+   "node": 307,
+   "op": "drop_not",
+   "line": 298,
+   "status": "killed",
+   "seconds": 6.336302042007446
+  },
+  {
+   "node": 332,
+   "op": "return_none",
+   "line": 302,
+   "status": "killed",
+   "seconds": 6.2913665771484375
+  }
+ ]
+}

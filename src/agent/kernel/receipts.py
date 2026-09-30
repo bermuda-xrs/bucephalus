@@ -25,7 +25,9 @@ def idempotency_key(task_id: str, step_seq: int, tool: str, args: dict) -> str:
 
 # A receipt row whose result is this was CLAIMED - the effect was about to
 # start - and never filled in: whoever claimed it stopped somewhere inside.
-_CLAIM = canonical({"claimed": True})
+# Not JSON: every real result is stored through `canonical`, so no tool result
+# can ever equal it (a JSON sentinel could be forged by a tool returning it).
+_CLAIM = "CLAIMED"
 _inflight: dict[str, threading.Event] = {}      # keys being run by THIS process
 WAIT_S = 900.0        # the longest a same-key caller waits for the thread running it
 log = logging.getLogger("agent.receipts")

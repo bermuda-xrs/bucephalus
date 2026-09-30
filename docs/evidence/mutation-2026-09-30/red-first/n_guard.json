@@ -1,0 +1,245 @@
+{
+ "module": "src\\agent\\control\\guard.py",
+ "only": [
+  "AccessGuard",
+  "_same"
+ ],
+ "tests": [
+  "tests/test_new_code_mutants.py",
+  "tests/test_control_plane_errors.py"
+ ],
+ "score": 0.9090909090909091,
+ "results": [
+  {
+   "node": 13,
+   "op": "bool",
+   "line": 124,
+   "status": "killed",
+   "seconds": 6.5063207149505615
+  },
+  {
+   "node": 86,
+   "op": "int",
+   "line": 138,
+   "status": "killed",
+   "seconds": 7.219995021820068
+  },
+  {
+   "node": 110,
+   "op": "return_none",
+   "line": 141,
+   "status": "killed",
+   "seconds": 6.520544767379761
+  },
+  {
+   "node": 139,
+   "op": "negate",
+   "line": 151,
+   "status": "killed",
+   "seconds": 6.186084032058716
+  },
+  {
+   "node": 140,
+   "op": "boolop",
+   "line": 151,
+   "status": "killed",
+   "seconds": 6.109521389007568
+  },
+  {
+   "node": 142,
+   "op": "drop_not",
+   "line": 151,
+   "status": "killed",
+   "seconds": 6.472783088684082
+  },
+  {
+   "node": 148,
+   "op": "drop_not",
+   "line": 151,
+   "status": "killed",
+   "seconds": 5.998462677001953
+  },
+  {
+   "node": 155,
+   "op": "return_none",
+   "line": 152,
+   "status": "killed",
+   "seconds": 6.98413872718811
+  },
+  {
+   "node": 172,
+   "op": "int",
+   "line": 155,
+   "status": "killed",
+   "seconds": 6.49393892288208
+  },
+  {
+   "node": 184,
+   "op": "negate",
+   "line": 160,
+   "status": "killed",
+   "seconds": 5.849887847900391
+  },
+  {
+   "node": 202,
+   "op": "cmp0",
+   "line": 162,
+   "status": "killed",
+   "seconds": 6.095654726028442
+  },
+  {
+   "node": 208,
+   "op": "return_none",
+   "line": 163,
+   "status": "killed",
+   "seconds": 6.140812397003174
+  },
+  {
+   "node": 216,
+   "op": "int",
+   "line": 164,
+   "status": "killed",
+   "seconds": 6.0881476402282715
+  },
+  {
+   "node": 218,
+   "op": "cmp0",
+   "line": 167,
+   "status": "killed",
+   "seconds": 6.287509918212891
+  },
+  {
+   "node": 224,
+   "op": "return_none",
+   "line": 168,
+   "status": "survived",
+   "seconds": 13.012229442596436
+  },
+  {
+   "node": 231,
+   "op": "negate",
+   "line": 174,
+   "status": "killed",
+   "seconds": 6.392420530319214
+  },
+  {
+   "node": 232,
+   "op": "boolop",
+   "line": 174,
+   "status": "killed",
+   "seconds": 6.340413331985474
+  },
+  {
+   "node": 234,
+   "op": "cmp0",
+   "line": 174,
+   "status": "killed",
+   "seconds": 6.326581716537476
+  },
+  {
+   "node": 240,
+   "op": "cmp0",
+   "line": 174,
+   "status": "survived",
+   "seconds": 13.239092826843262
+  },
+  {
+   "node": 252,
+   "op": "return_none",
+   "line": 175,
+   "status": "survived",
+   "seconds": 13.339145421981812
+  },
+  {
+   "node": 260,
+   "op": "drop_not",
+   "line": 177,
+   "status": "killed",
+   "seconds": 5.806782960891724
+  },
+  {
+   "node": 269,
+   "op": "return_none",
+   "line": 178,
+   "status": "killed",
+   "seconds": 6.418863296508789
+  },
+  {
+   "node": 277,
+   "op": "int",
+   "line": 182,
+   "status": "killed",
+   "seconds": 6.301268815994263
+  },
+  {
+   "node": 278,
+   "op": "return_none",
+   "line": 184,
+   "status": "killed",
+   "seconds": 6.099038362503052
+  },
+  {
+   "node": 301,
+   "op": "negate",
+   "line": 188,
+   "status": "killed",
+   "seconds": 5.679184198379517
+  },
+  {
+   "node": 311,
+   "op": "negate",
+   "line": 189,
+   "status": "killed",
+   "seconds": 5.757010459899902
+  },
+  {
+   "node": 321,
+   "op": "int",
+   "line": 189,
+   "status": "killed",
+   "seconds": 5.73345947265625
+  },
+  {
+   "node": 328,
+   "op": "return_none",
+   "line": 190,
+   "status": "killed",
+   "seconds": 6.004236459732056
+  },
+  {
+   "node": 329,
+   "op": "bool",
+   "line": 190,
+   "status": "killed",
+   "seconds": 5.950352668762207
+  },
+  {
+   "node": 333,
+   "op": "boolop",
+   "line": 191,
+   "status": "killed",
+   "seconds": 6.368165731430054
+  },
+  {
+   "node": 352,
+   "op": "return_none",
+   "line": 193,
+   "status": "killed",
+   "seconds": 6.400324106216431
+  },
+  {
+   "node": 353,
+   "op": "boolop",
+   "line": 193,
+   "status": "killed",
+   "seconds": 6.366987943649292
+  },
+  {
+   "node": 379,
+   "op": "return_none",
+   "line": 199,
+   "status": "killed",
+   "seconds": 5.849927663803101
+  }
+ ]
+}

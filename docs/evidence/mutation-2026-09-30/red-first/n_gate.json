@@ -1,0 +1,117 @@
+{
+ "module": "src\\agent\\security\\capabilities.py",
+ "only": [
+  "_protected_elsewhere"
+ ],
+ "tests": [
+  "tests/test_new_code_mutants.py"
+ ],
+ "score": 0.8,
+ "results": [
+  {
+   "node": 31,
+   "op": "return_none",
+   "line": 264,
+   "status": "killed",
+   "seconds": 5.667113304138184
+  },
+  {
+   "node": 32,
+   "op": "bool",
+   "line": 264,
+   "status": "killed",
+   "seconds": 5.640171527862549
+  },
+  {
+   "node": 33,
+   "op": "negate",
+   "line": 268,
+   "status": "killed",
+   "seconds": 5.662155628204346
+  },
+  {
+   "node": 34,
+   "op": "boolop",
+   "line": 268,
+   "status": "killed",
+   "seconds": 5.576240539550781
+  },
+  {
+   "node": 36,
+   "op": "drop_not",
+   "line": 268,
+   "status": "killed",
+   "seconds": 5.541083335876465
+  },
+  {
+   "node": 47,
+   "op": "cmp0",
+   "line": 268,
+   "status": "killed",
+   "seconds": 5.5594871044158936
+  },
+  {
+   "node": 53,
+   "op": "int",
+   "line": 268,
+   "status": "killed",
+   "seconds": 5.70600438117981
+  },
+  {
+   "node": 54,
+   "op": "return_none",
+   "line": 269,
+   "status": "killed",
+   "seconds": 5.650195360183716
+  },
+  {
+   "node": 55,
+   "op": "bool",
+   "line": 269,
+   "status": "killed",
+   "seconds": 5.6343653202056885
+  },
+  {
+   "node": 67,
+   "op": "cmp0",
+   "line": 271,
+   "status": "killed",
+   "seconds": 5.625821113586426
+  },
+  {
+   "node": 72,
+   "op": "return_none",
+   "line": 272,
+   "status": "killed",
+   "seconds": 5.582038164138794
+  },
+  {
+   "node": 73,
+   "op": "bool",
+   "line": 272,
+   "status": "killed",
+   "seconds": 5.600428342819214
+  },
+  {
+   "node": 84,
+   "op": "return_none",
+   "line": 274,
+   "status": "survived",
+   "seconds": 5.707611799240112
+  },
+  {
+   "node": 89,
+   "op": "boolop",
+   "line": 274,
+   "status": "survived",
+   "seconds": 5.6965203285217285
+  },
+  {
+   "node": 122,
+   "op": "int",
+   "line": 249,
+   "status": "survived",
+   "seconds": 5.692418336868286
+  }
+ ]
+}

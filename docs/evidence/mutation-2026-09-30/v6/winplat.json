@@ -1,0 +1,145 @@
+{
+ "module": "src\\agent\\platform\\windows.py",
+ "only": [
+  "link_names",
+  "spawn_denied_processes"
+ ],
+ "tests": [
+  "tests/test_junction_escape.py",
+  "tests/test_sandbox_limits.py",
+  "tests/test_platform_layer.py"
+ ],
+ "score": 0.7222222222222222,
+ "results": [
+  {
+   "node": 8,
+   "op": "negate",
+   "line": 261,
+   "status": "killed",
+   "seconds": 13.461698532104492
+  },
+  {
+   "node": 12,
+   "op": "return_none",
+   "line": 262,
+   "status": "survived",
+   "seconds": 16.6371910572052
+  },
+  {
+   "node": 13,
+   "op": "int",
+   "line": 262,
+   "status": "survived",
+   "seconds": 16.644903898239136
+  },
+  {
+   "node": 30,
+   "op": "cmp0",
+   "line": 264,
+   "status": "killed",
+   "seconds": 13.409310817718506
+  },
+  {
+   "node": 66,
+   "op": "return_none",
+   "line": 266,
+   "status": "killed",
+   "seconds": 16.23431134223938
+  },
+  {
+   "node": 70,
+   "op": "int",
+   "line": 266,
+   "status": "killed-by-suite",
+   "seconds": 16.590363264083862,
+   "killed_by": [
+    "tests/test_tui_two_touch.py::test_submitting_drafts_a_plan_and_runs_nothing_until_it_is_signed",
+    "tests/test_tui_two_touch.py::test_sending_a_plan_back_records_why_and_runs_nothing"
+   ]
+  },
+  {
+   "node": 71,
+   "op": "int",
+   "line": 266,
+   "status": "killed",
+   "seconds": 16.618377685546875
+  },
+  {
+   "node": 91,
+   "op": "bool",
+   "line": 277,
+   "status": "survived",
+   "seconds": 17.280648946762085
+  },
+  {
+   "node": 209,
+   "op": "int",
+   "line": 287,
+   "status": "killed",
+   "seconds": 5.142682313919067
+  },
+  {
+   "node": 219,
+   "op": "int",
+   "line": 288,
+   "status": "survived",
+   "seconds": 14.064592838287354
+  },
+  {
+   "node": 241,
+   "op": "int",
+   "line": 290,
+   "status": "killed",
+   "seconds": 4.923261404037476
+  },
+  {
+   "node": 252,
+   "op": "cmp0",
+   "line": 291,
+   "status": "killed",
+   "seconds": 4.84292459487915
+  },
+  {
+   "node": 266,
+   "op": "int",
+   "line": 291,
+   "status": "survived",
+   "seconds": 16.07119369506836
+  },
+  {
+   "node": 277,
+   "op": "negate",
+   "line": 295,
+   "status": "killed",
+   "seconds": 4.600281000137329
+  },
+  {
+   "node": 278,
+   "op": "bool",
+   "line": 295,
+   "status": "killed",
+   "seconds": 4.5002617835998535
+  },
+  {
+   "node": 285,
+   "op": "addsub",
+   "line": 296,
+   "status": "killed",
+   "seconds": 4.820815324783325
+  },
+  {
+   "node": 307,
+   "op": "drop_not",
+   "line": 298,
+   "status": "killed",
+   "seconds": 4.813917636871338
+  },
+  {
+   "node": 332,
+   "op": "return_none",
+   "line": 302,
+   "status": "killed",
+   "seconds": 4.920208692550659
+  }
+ ]
+}

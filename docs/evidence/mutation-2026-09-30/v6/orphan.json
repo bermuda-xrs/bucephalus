@@ -1,0 +1,143 @@
+{
+ "module": "src\\agent\\proc.py",
+ "only": [
+  "orphan_pids"
+ ],
+ "tests": [
+  "tests/test_reaper_parentage.py",
+  "tests/test_recycled_pids.py"
+ ],
+ "score": 0.9444444444444444,
+ "results": [
+  {
+   "node": 33,
+   "op": "drop_not",
+   "line": 161,
+   "status": "killed",
+   "seconds": 8.809247970581055
+  },
+  {
+   "node": 37,
+   "op": "return_none",
+   "line": 162,
+   "status": "killed",
+   "seconds": 5.818356037139893
+  },
+  {
+   "node": 75,
+   "op": "negate",
+   "line": 166,
+   "status": "killed",
+   "seconds": 4.886905670166016
+  },
+  {
+   "node": 76,
+   "op": "boolop",
+   "line": 166,
+   "status": "killed",
+   "seconds": 9.566230773925781
+  },
+  {
+   "node": 78,
+   "op": "cmp0",
+   "line": 166,
+   "status": "killed",
+   "seconds": 4.950446367263794
+  },
+  {
+   "node": 84,
+   "op": "drop_not",
+   "line": 166,
+   "status": "killed",
+   "seconds": 5.779892921447754
+  },
+  {
+   "node": 94,
+   "op": "negate",
+   "line": 168,
+   "status": "killed",
+   "seconds": 6.41074013710022
+  },
+  {
+   "node": 95,
+   "op": "boolop",
+   "line": 168,
+   "status": "killed",
+   "seconds": 4.788926362991333
+  },
+  {
+   "node": 97,
+   "op": "cmp0",
+   "line": 168,
+   "status": "killed",
+   "seconds": 7.111397981643677
+  },
+  {
+   "node": 101,
+   "op": "int",
+   "line": 168,
+   "status": "survived",
+   "seconds": 7.921036958694458
+  },
+  {
+   "node": 102,
+   "op": "cmp0",
+   "line": 168,
+   "status": "killed",
+   "seconds": 4.849258661270142
+  },
+  {
+   "node": 108,
+   "op": "drop_not",
+   "line": 168,
+   "status": "killed",
+   "seconds": 4.252446413040161
+  },
+  {
+   "node": 138,
+   "op": "negate",
+   "line": 170,
+   "status": "killed",
+   "seconds": 5.057991027832031
+  },
+  {
+   "node": 139,
+   "op": "boolop",
+   "line": 170,
+   "status": "killed-by-suite",
+   "seconds": 5.411806344985962,
+   "killed_by": [
+    "tests/test_reaper_parentage.py::test_a_genuine_orphan_is_selected",
+    "tests/test_reaper_parentage.py::test_a_healthy_child_is_not_selected"
+   ]
+  },
+  {
+   "node": 141,
+   "op": "cmp0",
+   "line": 170,
+   "status": "killed",
+   "seconds": 5.621195316314697
+  },
+  {
+   "node": 146,
+   "op": "cmp0",
+   "line": 170,
+   "status": "killed",
+   "seconds": 4.926598310470581
+  },
+  {
+   "node": 153,
+   "op": "cmp0",
+   "line": 172,
+   "status": "killed",
+   "seconds": 3.8693790435791016
+  },
+  {
+   "node": 168,
+   "op": "return_none",
+   "line": 177,
+   "status": "killed",
+   "seconds": 3.7868287563323975
+  }
+ ]
+}

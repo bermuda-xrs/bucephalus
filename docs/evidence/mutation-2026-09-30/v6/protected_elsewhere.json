@@ -1,0 +1,221 @@
+{
+ "module": "src\\agent\\security\\capabilities.py",
+ "only": [
+  "_names_a_stream",
+  "_protected_elsewhere",
+  "is_protected"
+ ],
+ "tests": [
+  "tests/test_junction_escape.py",
+  "tests/test_gate_mutants.py",
+  "tests/test_file_browser.py",
+  "tests/test_audit_iteration_3_fixes.py",
+  "tests/test_control_plane_errors.py"
+ ],
+ "score": 0.7586206896551724,
+ "results": [
+  {
+   "node": 7,
+   "op": "return_none",
+   "line": 148,
+   "status": "killed",
+   "seconds": 18.60365867614746
+  },
+  {
+   "node": 8,
+   "op": "boolop",
+   "line": 148,
+   "status": "killed",
+   "seconds": 7.011778831481934
+  },
+  {
+   "node": 19,
+   "op": "cmp0",
+   "line": 148,
+   "status": "killed",
+   "seconds": 14.8206148147583
+  },
+  {
+   "node": 33,
+   "op": "int",
+   "line": 148,
+   "status": "survived",
+   "seconds": 35.80641555786133
+  },
+  {
+   "node": 82,
+   "op": "negate",
+   "line": 239,
+   "status": "killed",
+   "seconds": 8.117014408111572
+  },
+  {
+   "node": 83,
+   "op": "boolop",
+   "line": 239,
+   "status": "killed",
+   "seconds": 15.040886878967285
+  },
+  {
+   "node": 97,
+   "op": "return_none",
+   "line": 240,
+   "status": "killed",
+   "seconds": 8.211976289749146
+  },
+  {
+   "node": 98,
+   "op": "bool",
+   "line": 240,
+   "status": "killed",
+   "seconds": 8.059757709503174
+  },
+  {
+   "node": 107,
+   "op": "negate",
+   "line": 244,
+   "status": "killed",
+   "seconds": 6.095624685287476
+  },
+  {
+   "node": 108,
+   "op": "boolop",
+   "line": 244,
+   "status": "killed",
+   "seconds": 5.757845163345337
+  },
+  {
+   "node": 110,
+   "op": "cmp0",
+   "line": 244,
+   "status": "killed",
+   "seconds": 6.258562326431274
+  },
+  {
+   "node": 132,
+   "op": "return_none",
+   "line": 245,
+   "status": "killed",
+   "seconds": 6.177698135375977
+  },
+  {
+   "node": 133,
+   "op": "bool",
+   "line": 245,
+   "status": "killed",
+   "seconds": 6.3170506954193115
+  },
+  {
+   "node": 134,
+   "op": "return_none",
+   "line": 246,
+   "status": "killed",
+   "seconds": 6.697702646255493
+  },
+  {
+   "node": 184,
+   "op": "return_none",
+   "line": 264,
+   "status": "killed",
+   "seconds": 31.30066418647766
+  },
+  {
+   "node": 185,
+   "op": "bool",
+   "line": 264,
+   "status": "killed",
+   "seconds": 14.21300745010376
+  },
+  {
+   "node": 186,
+   "op": "negate",
+   "line": 268,
+   "status": "killed",
+   "seconds": 6.436708450317383
+  },
+  {
+   "node": 187,
+   "op": "boolop",
+   "line": 268,
+   "status": "survived",
+   "seconds": 35.471593618392944
+  },
+  {
+   "node": 189,
+   "op": "drop_not",
+   "line": 268,
+   "status": "killed",
+   "seconds": 6.478942155838013
+  },
+  {
+   "node": 200,
+   "op": "cmp0",
+   "line": 268,
+   "status": "killed",
+   "seconds": 7.935960054397583
+  },
+  {
+   "node": 206,
+   "op": "int",
+   "line": 268,
+   "status": "killed",
+   "seconds": 6.566298961639404
+  },
+  {
+   "node": 207,
+   "op": "return_none",
+   "line": 269,
+   "status": "survived",
+   "seconds": 35.35886359214783
+  },
+  {
+   "node": 208,
+   "op": "bool",
+   "line": 269,
+   "status": "killed",
+   "seconds": 5.516194105148315
+  },
+  {
+   "node": 220,
+   "op": "cmp0",
+   "line": 271,
+   "status": "killed",
+   "seconds": 6.3917412757873535
+  },
+  {
+   "node": 225,
+   "op": "return_none",
+   "line": 272,
+   "status": "survived",
+   "seconds": 34.89080739021301
+  },
+  {
+   "node": 226,
+   "op": "bool",
+   "line": 272,
+   "status": "survived",
+   "seconds": 34.50417900085449
+  },
+  {
+   "node": 237,
+   "op": "return_none",
+   "line": 274,
+   "status": "killed",
+   "seconds": 6.432610034942627
+  },
+  {
+   "node": 242,
+   "op": "boolop",
+   "line": 274,
+   "status": "survived",
+   "seconds": 35.20341110229492
+  },
+  {
+   "node": 275,
+   "op": "int",
+   "line": 249,
+   "status": "survived",
+   "seconds": 33.876405477523804
+  }
+ ]
+}

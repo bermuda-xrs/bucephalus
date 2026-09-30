@@ -1,0 +1,105 @@
+{
+ "module": "src\\agent\\control\\panels.py",
+ "only": [
+  "integrity_findings"
+ ],
+ "tests": [
+  "tests/test_audit_iteration_3_fixes.py",
+  "tests/test_console.py",
+  "tests/test_console_api_v2.py"
+ ],
+ "score": 0.9230769230769231,
+ "results": [
+  {
+   "node": 55,
+   "op": "int",
+   "line": 93,
+   "status": "killed",
+   "seconds": 14.266979217529297
+  },
+  {
+   "node": 84,
+   "op": "negate",
+   "line": 97,
+   "status": "killed",
+   "seconds": 14.199255228042603
+  },
+  {
+   "node": 85,
+   "op": "boolop",
+   "line": 97,
+   "status": "killed",
+   "seconds": 22.683837175369263
+  },
+  {
+   "node": 87,
+   "op": "cmp0",
+   "line": 97,
+   "status": "killed",
+   "seconds": 14.1753408908844
+  },
+  {
+   "node": 92,
+   "op": "cmp0",
+   "line": 97,
+   "status": "killed",
+   "seconds": 14.272054195404053
+  },
+  {
+   "node": 96,
+   "op": "int",
+   "line": 97,
+   "status": "killed",
+   "seconds": 22.6790931224823
+  },
+  {
+   "node": 101,
+   "op": "cmp0",
+   "line": 97,
+   "status": "killed",
+   "seconds": 13.604109764099121
+  },
+  {
+   "node": 102,
+   "op": "addsub",
+   "line": 97,
+   "status": "killed",
+   "seconds": 13.57922887802124
+  },
+  {
+   "node": 109,
+   "op": "int",
+   "line": 97,
+   "status": "killed",
+   "seconds": 13.645069360733032
+  },
+  {
+   "node": 149,
+   "op": "cmp0",
+   "line": 100,
+   "status": "survived",
+   "seconds": 21.87336492538452
+  },
+  {
+   "node": 164,
+   "op": "return_none",
+   "line": 101,
+   "status": "killed",
+   "seconds": 12.805136919021606
+  },
+  {
+   "node": 165,
+   "op": "addsub",
+   "line": 101,
+   "status": "killed",
+   "seconds": 12.748181104660034
+  },
+  {
+   "node": 182,
+   "op": "int",
+   "line": 101,
+   "status": "killed",
+   "seconds": 12.27763819694519
+  }
+ ]
+}
