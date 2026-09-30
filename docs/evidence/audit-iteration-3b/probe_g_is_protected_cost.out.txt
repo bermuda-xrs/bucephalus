@@ -1,0 +1,4 @@
+source alpha-test-1/src: grep 2000 files (100 matches) cold 0.14s, same bucket 0.07s; is_protected cold 563 us/path
+source old/src: grep 2000 files (100 matches) cold 0.13s, same bucket 0.08s; is_protected cold 527 us/path
+source alpha-test-1/src: grep 2000 files (100 matches) cold 0.13s, same bucket 0.07s; is_protected cold 546 us/path
+source old/src: grep 2000 files (100 matches) cold 0.13s, same bucket 0.08s; is_protected cold 533 us/path

@@ -1,0 +1,6 @@
+source: C:\Users\char1\OneDrive\Desktop\Βουκεφάλας\alpha-test-1\src
+gate read_file: RAISED ValueError: stat: path too long for Windows
+gate write_file: RAISED ValueError: stat: path too long for Windows
+source: C:\Users\char1\AppData\Local\Temp\claude\C--Users-char1-Desktop-----------\856a03f0-dff5-4da1-9382-bfda261b999a\scratchpad\audit3b\old\src
+gate read_file: allow - 
+gate write_file: needs_approval - write_file with user arguments

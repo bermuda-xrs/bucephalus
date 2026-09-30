@@ -1,0 +1,4 @@
+ tasks  first sweep  idle poll (hit)  poll after 1 append
+   100        0.07s           0.15ms                0.07s
+   300        0.59s           0.46ms                0.52s
+  1000        0.80s           0.25ms                0.82s
