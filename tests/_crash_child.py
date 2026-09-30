@@ -6,6 +6,9 @@ side effect and the receipt being useful to anyone.
 
 Run again with "resume": it verifies the chain and tries the identical call,
 which must NOT re-run the side effect.
+
+Run with "die-mid-effect": the process dies INSIDE the side effect, after it
+happened and before its receipt could record the outcome (D27).
 """
 
 from __future__ import annotations
@@ -50,6 +53,9 @@ def main() -> int:
         ran["value"] = True
         with open(marker_path, "a", encoding="utf-8") as f:
             f.write("sent\n")
+        if mode == "die-mid-effect":
+            import os
+            os._exit(3)               # after the effect, before its receipt is filled in
         return {"ok": True}
 
     result = execute_once(conn, key, TOOL, ARGS, side_effect)

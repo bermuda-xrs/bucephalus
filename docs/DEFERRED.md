@@ -38,7 +38,7 @@ Everything else on this page is marked in its own heading:
 
 | state | what it means | items |
 |---|---|---|
-| **open** | a real defect, nobody has fixed it | D2, D6, D16, D26, D27, D33; from the audit D52; from iteration 3's mutation work D79 |
+| **open** | a real defect, nobody has fixed it | D2, D6 (measured; P6), D16, D26, D27 (the bot's loop, with D26), D33; from the audit D52; from iteration 3's mutation work D79 |
 | **closed** | fixed, with the change and its test named | D1, D3, D7, D9, D10, D11, D15, D17, D18, D19, D20, D21, D22, D23, D24, D28, D29, D30, D34, D35, D36, D37, D38, D39, D40, D41, D42, D43, D44, D51, D50, D53, D45, D61, D60, D62, D64, D65, D66, D67, D68, D69, D78, D71, D73, D80, D81, D82, D46, D47, D48, D49, D59, D63, D70, D74, D75, D76, D77, D54, D55, D56, D57, D58, D72 |
 | **deleted** | never a defect, or about an instrument nobody runs | D4, D5, D8, D12, D14 |
 | **known and accepted** | a real limit, decided rather than deferred | D32 (the sandbox is advisory: Phase 6 withdrawn) |
@@ -821,24 +821,29 @@ where this expects it, and that a pressed button delivers `callback_query.data`
 unchanged. Those two are the only places a wrong guess is silent rather than
 loud.
 
-## D27 — one task at a time, and the bot has no queue
+## D27 - one task at a time, and the bot has no queue (the receipt half CLOSED 2026-09-30; the bot's loop stays open)
 
 **Found:** 2026-09-08, building A4.1.
 
 `serve_forever` runs a task inline before polling again, so a second message
-arriving during a run waits for the poll rather than being queued. The chain
-lock is process-wide and single-writer by design (`kernel/db.py`), so
-concurrent runs are not available anyway.
+arriving during a run waits for the poll rather than being queued, with no
+acknowledgement that it is waiting.
 
-**Consequence:** two allowlisted people using the bot at once get serialised,
-with no acknowledgement that they are waiting. Acceptable for a personal bot
-with a short allowlist; not acceptable for anything wider.
+**The constraint under it is gone (2026-09-30).** The chain lock was held
+across every side effect, so concurrent runs could not exist. `execute_once`
+now claims its receipt row before the effect and fills it in after (the
+protocol `kernel/db.py` had described as the honest fix): the lock is held for
+row writes only; a run that died inside an effect leaves a claim that a replay
+reports as `outcome_unknown` rather than repeating (a crash between a send and
+its receipt used to send twice); two threads with one key run it once. Tests,
+red first: `tests/test_m1_kernel.py` (`test_a_run_that_died_mid_effect_does_not_repeat_it`,
+`test_a_slow_effect_does_not_hold_the_chain`, `test_a_failed_effect_can_be_retried`).
 
-**Why deferred:** a queue is not the fix — the single-writer chain lock is the
-real constraint, and the honest version of this is the claim-then-execute
-receipt protocol already described in `kernel/db.py`. Building a queue in
-front of a lock that serialises anyway would look like concurrency and deliver
-none.
+**Still open, and why it is not built:** the Telegram loop itself - an
+acknowledgement ("queued, one ahead") and a real queue in front of it. It is
+the D26 transport, which has never made a live call, so changing it without
+one would be untested code on the one path that talks to strangers. It waits
+with D26 for a token; the lock no longer stands in its way.
 
 **D26 now holds TWO unexercised live paths, 2026-09-13**, by instruction: the
 Telegram transport, and the Anthropic adapter's streaming path (D25, closed as

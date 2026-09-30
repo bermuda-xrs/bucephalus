@@ -25,13 +25,14 @@ from pathlib import Path
 # uvicorn worker, or a CLI run against the same database while the server is
 # up, can still fork the chain.
 #
-# Doing better needs more than a longer transaction. `BEGIN IMMEDIATE` around
-# execute_once would hold SQLite's write lock across an arbitrary side effect
-# — a 30-second tool call would stall every other writer — so the correct
-# shape is claim-then-execute: insert the receipt row first and let the
-# PRIMARY KEY on idempotency_key reject the loser of a race, then fill in the
-# result. That is a real change to the receipt protocol and is deliberately
-# not smuggled in here; the single-worker constraint is documented instead.
+# execute_once is claim-then-execute (D27, 2026-09-30): the receipt row is
+# inserted and committed BEFORE the effect runs and filled in after, so this
+# lock is held for the row writes and never across an effect - a 30-second
+# push no longer stalls every other writer - and a crash inside the effect
+# leaves a claim, which a replay reports as an unknown outcome instead of
+# repeating. Across PROCESSES the PRIMARY KEY on idempotency_key still rejects
+# the loser of a claim race, but the event chain's read-then-append is not
+# process-safe, so one writer process at a time stays the rule.
 _CHAIN_LOCK = threading.RLock()
 
 

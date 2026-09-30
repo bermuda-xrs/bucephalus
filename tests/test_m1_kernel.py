@@ -196,3 +196,69 @@ def test_kill_and_resume(tmp_path: Path):
     assert marker.read_text(encoding="utf-8").count("\n") == 1, (
         "the side effect ran twice across a crash"
     )
+
+
+# D27: claim-then-execute. The receipt is CLAIMED before the side effect runs
+# and filled in after, and the chain lock is not held in between.
+def test_a_run_that_died_mid_effect_does_not_repeat_it(tmp_path: Path):
+    """Killed inside the effect - after it happened, before its receipt - a
+    replay repeated it: a second send. Now the claim says it was started, and
+    the replay reports the outcome as unknown instead of sending again."""
+    child = Path(__file__).parent / "_crash_child.py"
+    marker, db = tmp_path / "marker.txt", tmp_path / "crash.db"
+    first = subprocess.run([sys.executable, str(child), str(db), str(marker), "die-mid-effect"],
+                           capture_output=True, text=True, timeout=60)
+    assert first.returncode == 3, first.stderr
+    assert marker.read_text(encoding="utf-8").count("\n") == 1
+    out = subprocess.run([sys.executable, str(child), str(db), str(marker), "resume"],
+                         capture_output=True, text=True, timeout=60)
+    assert out.returncode == 0, out.stderr
+    payload = json.loads(out.stdout.strip().splitlines()[-1])
+    assert marker.read_text(encoding="utf-8").count("\n") == 1, "the effect ran twice across a crash"
+    assert payload["replayed"] is True and payload["result"].get("outcome_unknown") is True, payload
+
+
+def test_a_slow_effect_does_not_hold_the_chain(ctx, task):
+    """The chain lock was held for the whole side effect, so a slow one - a
+    push, a send - froze every event append in the process: the console's
+    approvals, other tasks' steps."""
+    import threading
+
+    started, release = threading.Event(), threading.Event()
+    key = idempotency_key(task.id, 0, "git_push", {"remote": "origin"})
+
+    def slow() -> dict:
+        started.set()
+        release.wait(30)
+        return {"ok": True}
+
+    effect = threading.Thread(target=execute_once,
+                              args=(ctx.conn, key, "git_push", {"remote": "origin"}, slow))
+    effect.start()
+    try:
+        assert started.wait(10)
+        appended = threading.Event()
+        threading.Thread(target=lambda: (ctx.log.append(task.id, "human.steered",
+                                                        {"correction": "x"}), appended.set())).start()
+        assert appended.wait(5), "an event append waited for another task's side effect"
+    finally:
+        release.set()
+        effect.join(30)
+
+
+def test_a_failed_effect_can_be_retried(ctx, task):
+    """An effect that raised left no receipt and could be tried again; the
+    claim must not change that."""
+    key = idempotency_key(task.id, 0, "send_message", {"to": "a@b.c"})
+    calls = []
+
+    def flaky() -> dict:
+        calls.append(1)
+        if len(calls) == 1:
+            raise ConnectionError("the network blinked")
+        return {"ok": True}
+
+    with pytest.raises(ConnectionError):
+        execute_once(ctx.conn, key, "send_message", {"to": "a@b.c"}, flaky)
+    assert execute_once(ctx.conn, key, "send_message", {"to": "a@b.c"}, flaky) == {"ok": True}
+    assert len(calls) == 2
