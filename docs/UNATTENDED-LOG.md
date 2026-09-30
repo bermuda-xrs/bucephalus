@@ -242,6 +242,20 @@ a second independent audit, `docs/AUDIT-ITERATION-3B.md` (0 critical, 0 high,
 rebuilt, gate 63 passed, a task through its window. Mutation of the new code:
 queue6 (results below when it finishes).
 
+## Close of the continuation (2026-10-01)
+
+Mutation of the new code (queue6, then the fixes): receipts 64 -> 83%, the
+console cache 92 -> 100%, guard 82 -> 91%, Windows platform 72 -> 83%; found a
+forgeable claim sentinel and an untested memory check in the console poll
+(docs/evidence/mutation-2026-09-30). At the final commit: Windows suite 1293
+passed twice, Linux (WSL2) 1267 passed, the frozen gate 63 passed on a build of
+it, a task through its window, no orphans. Cleanup: the mutation worktree and
+36 temp folders removed; real AppData identical to the run-start snapshot save
+the parent folder's mtime; 11434 is the user's own Ollama app, relaunched by
+itself on 2026-09-30 21:19 - never touched. Main fast-forwarded to the final
+commit (`git fetch . iteration-3:main`, which refuses anything else). Nothing
+pushed.
+
 ## RESUME
 
 Nothing in flight. Start from docs/UNATTENDED-REPORT.md, "What needs you".
