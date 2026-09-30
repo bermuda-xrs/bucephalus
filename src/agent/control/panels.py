@@ -58,30 +58,44 @@ def channels(ctx) -> dict:
             "drops": recent_drops(ctx.conn, limit=50)}
 
 
+SWEEP_MAX_AGE_S = 30.0       # the longest an integrity finding can be stale
+
+
 def integrity_findings(ctx) -> list[dict]:
     """The console's integrity sweep, polled every few seconds (D72, audit I1).
 
     `verify_all` walks every event of every task, and the poll re-walked an
     unchanged database each time - 0.3 s a poll on the 283-task record, and
-    growing with it. The walk runs again when the database has a commit from
-    ANOTHER connection (`PRAGMA data_version`: an out-of-band edit, another
-    process) or the anchor file changed. This connection's own commits are
-    the appends the chain is built from, and a task's run ends in a
-    checkpoint, which changes the anchor. Keyed on the chain HEADS it would
-    not be safe: an edit of an old row leaves every head alone. Memory is not
-    in the database and is checked on every poll. `alpha verify` always walks.
+    growing with it. A cached sweep is reused only while ALL of these hold:
+
+      * no other connection has committed (`PRAGMA data_version`: an
+        out-of-band edit, another process);
+      * this connection has written nothing (`total_changes`: data_version
+        never moves for a connection's own writes - a review of the first
+        version found an in-process UPDATE went unseen);
+      * the anchor file's CONTENT hash is unchanged - not size and mtime,
+        which an in-place edit can preserve (same review);
+      * the sweep is younger than SWEEP_MAX_AGE_S, so anything none of the
+        above sees is still seen within that bound.
+
+    Keyed on the chain HEADS it would not be safe: an edit of an old row
+    leaves every head alone. Memory is not in the database and is checked on
+    every poll. `alpha verify` always walks.
     """
+    import hashlib
+
     from ..kernel.integrity import verify_all, verify_memory
 
     try:
-        st = Path(ctx.anchor.path).stat()
-        stamp = (st.st_size, st.st_mtime_ns)
+        anchor_id = hashlib.sha256(Path(ctx.anchor.path).read_bytes()).hexdigest()
     except OSError:
-        stamp = None
-    key = (ctx.conn.execute("PRAGMA data_version").fetchone()[0], stamp)
+        anchor_id = None
+    key = (ctx.conn.execute("PRAGMA data_version").fetchone()[0],
+           ctx.conn.total_changes, anchor_id)
     cached = getattr(ctx, "_integrity_sweep", None)
-    if cached is None or cached[0] != key:
-        cached = (key, verify_all(ctx.conn, ctx.log, ctx.anchor))
+    now = time.monotonic()
+    if cached is None or cached[0] != key or now - cached[2] > SWEEP_MAX_AGE_S:
+        cached = (key, verify_all(ctx.conn, ctx.log, ctx.anchor), now)
         ctx._integrity_sweep = cached
     mem = verify_memory(ctx.memory) if ctx.memory is not None else None
     return ([mem] if mem else []) + list(cached[1])

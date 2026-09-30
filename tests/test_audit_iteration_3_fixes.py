@@ -214,3 +214,48 @@ def test_D72_an_anchor_change_is_seen_on_the_next_poll(ctx, workspace):
     ctx.anchor.record(t.id, "f" * 64)              # a head this chain never had
     found = [f for f in _alerts(ctx) if f.get("task_id") == t.id]
     assert found and found[0]["severity"] == "critical", found
+
+
+# The security review of the D72 cache (2026-09-30) found its key too weak:
+# an anchor edited in place keeps its size and can keep its mtime; a write
+# through the server's OWN connection never changes data_version; and nothing
+# bounded how stale a hit could be. Each is seen on the next poll now.
+def test_D72_an_anchor_edited_in_place_with_its_mtime_restored_is_seen(ctx, workspace):
+    import os
+
+    from agent.kernel.integrity import checkpoint
+
+    t = _a_task_with_events(ctx)
+    checkpoint(ctx.log, ctx.anchor, t.id)
+    assert _alerts(ctx) == []
+    path = ctx.anchor.path
+    st = os.stat(path)
+    raw = path.read_bytes()
+    head = ctx.log.head(t.id).encode()
+    assert head in raw
+    path.write_bytes(raw.replace(head, b"f" * len(head)))        # same size
+    os.utime(path, ns=(st.st_atime_ns, st.st_mtime_ns))          # same mtime
+    found = [f for f in _alerts(ctx) if f.get("task_id") == t.id]
+    assert found and found[0]["severity"] == "critical", found
+
+
+def test_D72_a_write_through_the_servers_own_connection_is_seen(ctx, workspace):
+    t = _a_task_with_events(ctx)
+    assert _alerts(ctx) == []
+    ctx.conn.execute("UPDATE events SET payload_json=? WHERE task_id=? AND seq=1",
+                     ('{"tool": "write_file", "key": "k0", "ok": true}', t.id))
+    found = [f for f in _alerts(ctx) if f.get("task_id") == t.id]
+    assert found and found[0]["severity"] == "critical", found
+
+
+def test_D72_a_cached_sweep_expires(ctx, workspace, monkeypatch):
+    from agent.control import panels
+
+    _a_task_with_events(ctx)
+    walks = _walks(monkeypatch)
+    _alerts(ctx)
+    first = walks[0]
+    real = panels.time.monotonic
+    monkeypatch.setattr(panels.time, "monotonic", lambda: real() + panels.SWEEP_MAX_AGE_S + 1)
+    _alerts(ctx)
+    assert walks[0] > first, "a cached sweep outlived its maximum age"
