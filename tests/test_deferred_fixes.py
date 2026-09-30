@@ -286,3 +286,17 @@ def test_D46_a_plan_of_the_wrong_shape_degrades_instead_of_raising(text):
     plan = parse_plan(text, fallback_objective="the goal")
     assert plan.steps == [] and plan.objective == "the goal"
     assert any("not a plan" in u for u in plan.unknowns), plan.unknowns
+
+
+# AUDIT-ITERATION-3B, L2: D46's handler missed OverflowError (1e400 parses to
+# inf and int(inf) overflows) and a nesting json.loads cannot hold.
+@pytest.mark.parametrize("text", [
+    '{"objective":"o","steps":[{"est_tokens": 1e400}]}',
+    '{"objective":"o","steps":[{"est_seconds": 1e999}]}',
+    '{"objective":"o","steps":' + '[' * 5000 + ']' * 5000 + '}',
+])
+def test_3B_L2_more_wrong_shapes_degrade(text):
+    from agent.plan.planner import parse_plan
+
+    plan = parse_plan(text, fallback_objective="the goal")
+    assert plan.steps == [] and plan.objective == "the goal"

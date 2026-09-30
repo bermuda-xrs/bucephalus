@@ -39,7 +39,7 @@ Everything else on this page is marked in its own heading:
 | state | what it means | items |
 |---|---|---|
 | **open** | a real defect, nobody has fixed it | D2, D6 (measured; P6), D16, D26, D27 (the bot's loop, with D26), D33; from the audit D52; from iteration 3's mutation work D79 |
-| **closed** | fixed, with the change and its test named | D1, D3, D7, D9, D10, D11, D15, D17, D18, D19, D20, D21, D22, D23, D24, D28, D29, D30, D34, D35, D36, D37, D38, D39, D40, D41, D42, D43, D44, D51, D50, D53, D45, D61, D60, D62, D64, D65, D66, D67, D68, D69, D78, D71, D73, D80, D81, D82, D46, D47, D48, D49, D59, D63, D70, D74, D75, D76, D77, D54, D55, D56, D57, D58, D72 |
+| **closed** | fixed, with the change and its test named | D1, D3, D7, D9, D10, D11, D15, D17, D18, D19, D20, D21, D22, D23, D24, D28, D29, D30, D34, D35, D36, D37, D38, D39, D40, D41, D42, D43, D44, D51, D50, D53, D45, D61, D60, D62, D64, D65, D66, D67, D68, D69, D78, D71, D73, D80, D81, D82, D46, D47, D48, D49, D59, D63, D70, D74, D75, D76, D77, D54, D55, D56, D57, D58, D72, D83, D84, D85 |
 | **deleted** | never a defect, or about an instrument nobody runs | D4, D5, D8, D12, D14 |
 | **known and accepted** | a real limit, decided rather than deferred | D32 (the sandbox is advisory: Phase 6 withdrawn) |
 | **dormant** | its subject is retired; it wakes if that returns | D19 (M11). D13 CLOSED 2026-09-25 |
@@ -1629,3 +1629,31 @@ of the main column, laying the input out below the screen, and the status bar
 same edge as the key bar, which covered it. Every TUI test passed - they set
 the input's value and read the bar's text. A regression of this run's TUI
 (4.5). `test_the_input_and_the_status_bar_are_on_screen`, red first.
+
+## D83 - MEDIUM - D70's `os.stat` raised `ValueError` on an over-long path (audit 3B M1) (CLOSED 2026-09-30: fixed in the change that recorded it)
+
+On Windows a path past 32,767 characters raises `ValueError`, not `OSError`, so
+the gate crashed a run instead of deciding, and the file browser and the drop
+route answered 500 (D77 was half true). A regression of the same day's D70.
+The check, the drop and the browse now treat it as a path nothing can hold
+(400 on a drop, 404 on a browse). `tests/test_control_plane_errors.py`, red first.
+
+## D84 - MEDIUM - D27's fill-in step was not exception-safe: a stranded claim hung a retry forever (audit 3B M2) (CLOSED 2026-09-30: fixed in the change that recorded it)
+
+A commit that failed after the effect (another writer past `busy_timeout`) left
+the claim, a stale in-flight Event, and a same-key retry - a resumed task's
+first action - waiting on it with no timeout; the effect had happened and the
+caller was told it failed. Now the caller gets the result, the row stays
+claimed (honestly "outcome unknown"), the waiters are released in a `finally`,
+and no wait is unbounded (900 s, then `outcome_unknown`). `tests/test_m1_kernel.py`, red first.
+The audit's side note stands as accepted: `_release_decided` labels an approval
+consumed as "executed" whatever the receipt says - it records that the approval
+was acted on once, not the effect's outcome.
+
+## D85 - LOW - three smaller findings of the same audit (3B L1, L2, L3) (CLOSED 2026-09-30: fixed in the change that recorded them)
+
+L1: a run's receipt named the constant 32 processes where agent code was capped
+at 2 - the note is built from the limit applied. L2: `parse_plan` degraded on
+most wrong shapes but not `1e400` (infinity is not an estimate) or a nesting
+`json` cannot hold. L3: `/metrics/{id}`, `/reviews/{id}` and the suite deletes
+answered 200 for an id that does not exist; they 404. Each red first.

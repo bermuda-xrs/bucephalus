@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import sqlite3
 import subprocess
 import sys
 import time
@@ -262,3 +263,64 @@ def test_a_failed_effect_can_be_retried(ctx, task):
         execute_once(ctx.conn, key, "send_message", {"to": "a@b.c"}, flaky)
     assert execute_once(ctx.conn, key, "send_message", {"to": "a@b.c"}, flaky) == {"ok": True}
     assert len(calls) == 2
+
+
+# AUDIT-ITERATION-3B, M2: the fill-in after the effect was not exception-safe.
+# A commit that failed (another writer past busy_timeout) left the claim, a
+# stale in-flight Event nothing would ever set, and a same-key retry that
+# waited on it forever - while the effect HAD happened.
+class _FillInFails:
+    """A connection whose post-effect UPDATE of the receipt fails."""
+
+    def __init__(self, conn):
+        self._c = conn
+
+    def execute(self, sql, *a):
+        if sql.lstrip().upper().startswith("UPDATE RECEIPTS"):
+            raise sqlite3.OperationalError("database is locked")
+        return self._c.execute(sql, *a)
+
+    def __getattr__(self, name):
+        return getattr(self._c, name)
+
+
+def test_3B_M2_a_failed_fill_in_keeps_the_result_and_releases_the_waiters(ctx, task):
+    import threading
+
+    from agent.kernel import receipts
+
+    key = idempotency_key(task.id, 0, "send_message", {"to": "a@b.c"})
+    ran = []
+    flaky = _FillInFails(ctx.conn)
+    result = execute_once(flaky, key, "send_message", {"to": "a@b.c"},
+                          lambda: (ran.append(1), {"ok": True})[1])
+    assert result == {"ok": True}, "the effect happened; the caller is told so"
+    assert key not in receipts._inflight, "a stale in-flight entry outlived the call"
+    # The row still says CLAIMED - honest: its outcome was never recorded - and
+    # a replay must answer at once, not wait on an Event nothing will set.
+    out = []
+    t = threading.Thread(target=lambda: out.append(
+        execute_once(ctx.conn, key, "send_message", {"to": "a@b.c"}, lambda: ran.append(2))))
+    t.start()
+    t.join(10)
+    assert not t.is_alive(), "a same-key retry hung on a stranded claim"
+    assert out and out[0].get("outcome_unknown") is True and ran == [1], (out, ran)
+
+
+def test_3B_M2_a_waiter_gives_up_on_an_owner_that_never_finishes(ctx, task, monkeypatch):
+    import threading
+
+    from agent.kernel import receipts
+
+    key = idempotency_key(task.id, 0, "send_message", {"to": "z@b.c"})
+    ctx.conn.execute("INSERT INTO receipts(idempotency_key, tool_name, args_hash, result_json, "
+                     "created_at) VALUES (?,?,?,?,?)", (key, "send_message", "h", receipts._CLAIM, 0.0))
+    ctx.conn.commit()
+    monkeypatch.setitem(receipts._inflight, key, threading.Event())     # never set
+    monkeypatch.setattr(receipts, "WAIT_S", 0.5)
+    out = []
+    t = threading.Thread(target=lambda: out.append(
+        execute_once(ctx.conn, key, "send_message", {"to": "z@b.c"}, lambda: {"ok": True})))
+    t.start()
+    t.join(10)
+    assert not t.is_alive() and out and out[0].get("outcome_unknown") is True, out

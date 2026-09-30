@@ -272,11 +272,12 @@ class UserStore:
         t.id = tid
         return t
 
-    def delete_task(self, suite_id: str, task_id: str) -> None:
-        self.conn.execute(
+    def delete_task(self, suite_id: str, task_id: str) -> bool:
+        cur = self.conn.execute(
             "DELETE FROM suite_tasks WHERE suite_id=? AND id=?", (suite_id, task_id)
         )
         self.conn.commit()
+        return cur.rowcount > 0
 
     def import_suite_from_dir(self, name: str, folder: str | Path) -> Suite:
         """Bring a folder of task JSON in, so existing suites are not stranded."""

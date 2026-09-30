@@ -189,3 +189,17 @@ def test_harness_code_can_still_start_processes(tmp_path):
             " capture_output=True, text=True).stdout.strip())\n")
     r = run_sandboxed(code, allowed_paths=[], timeout_s=60)
     assert r["stdout"].strip().endswith("42"), r
+
+
+def test_3B_L1_the_run_record_names_the_limit_that_was_applied(tmp_path):
+    """Agent code's process cap is the interpreter's own count (D49); the note
+    on the run's receipt said 32, the constant, whatever was applied."""
+    from agent.platform import current
+
+    guarded = tmp_path / "graders"
+    guarded.mkdir()
+    n = current.spawn_denied_processes()
+    r = run_sandboxed("print(1)", allowed_paths=[], timeout_s=30, protected_paths=[str(guarded)])
+    assert any(f"{n} processes" in note for note in r["notes"]), r["notes"]
+    r = run_sandboxed("print(1)", allowed_paths=[], timeout_s=30)
+    assert any("32 processes" in note for note in r["notes"]), r["notes"]

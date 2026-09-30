@@ -314,10 +314,12 @@ def create_app(ctx: AgentContext) -> FastAPI:
 
     @app.get("/metrics/{task_id}")
     def get_metrics(task_id: str) -> dict:
+        _task(task_id)
         return run_report(ctx.conn, ctx.telemetry, task_id)
 
     @app.get("/reviews/{task_id}")
     def get_reviews(task_id: str) -> dict:
+        _task(task_id)
         return {"decisions": review_decisions(ctx.conn, task_id)}
 
     @app.get("/tasks")
@@ -446,6 +448,8 @@ def create_app(ctx: AgentContext) -> FastAPI:
             raise HTTPException(403, str(e)) from None
         except files.Missing:
             raise HTTPException(404, "no such file in this task's scope") from None
+        except files.Unwritable as e:
+            raise HTTPException(400, str(e)) from None
 
     @app.post("/tasks/{task_id}/files")
     def post_files(task_id: str, body: Upload) -> dict:
@@ -529,6 +533,8 @@ def create_app(ctx: AgentContext) -> FastAPI:
 
     @app.delete("/suites/{suite_id}")
     def delete_suite(suite_id: str) -> dict:
+        if ctx.userdata.get_suite(suite_id) is None:
+            raise HTTPException(404, "no such suite")
         ctx.userdata.delete_suite(suite_id)
         return {"deleted": suite_id}
 
@@ -549,7 +555,8 @@ def create_app(ctx: AgentContext) -> FastAPI:
 
     @app.delete("/suites/{suite_id}/tasks/{task_id}")
     def delete_task(suite_id: str, task_id: str) -> dict:
-        ctx.userdata.delete_task(suite_id, task_id)
+        if not ctx.userdata.delete_task(suite_id, task_id):
+            raise HTTPException(404, "no such task in this suite")
         return {"deleted": task_id}
 
     @app.post("/suites/{suite_id}/import")

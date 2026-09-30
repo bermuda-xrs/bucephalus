@@ -592,7 +592,13 @@ def run_sandboxed(
     """
     allowed_paths = allowed_paths or []
     notes: list[str] = []
-    note = _platform.limits_note(timeout_s, MEM_LIMIT_BYTES, MAX_PROCESSES)
+    # Agent code may not spawn: where the platform can make that the kernel's
+    # rule, its process limit is the interpreter's own (D49). The note below
+    # names the limit APPLIED - it said 32 for a cap of 2 (audit 3B L1).
+    limits = dict(_LIMITS)
+    if protected_paths:
+        limits["max_processes"] = _platform.spawn_denied_processes() or MAX_PROCESSES
+    note = _platform.limits_note(timeout_s, MEM_LIMIT_BYTES, limits["max_processes"])
     if note:
         notes.append(note)
 
@@ -629,12 +635,6 @@ def run_sandboxed(
         # which in a frozen build is the application itself.
         argv = [*interpreter_argv(), str(script)]
 
-        # Agent code may not spawn: where the platform can make that the
-        # kernel's rule, its process limit is the interpreter's own (D49).
-        limits = dict(_LIMITS)
-        if protected_paths:
-            limits["max_processes"] = (_platform.spawn_denied_processes()
-                                       or MAX_PROCESSES)
         if tool_handler is None:
             result = _run_batch(argv, workdir, env, timeout_s, limits)
         else:

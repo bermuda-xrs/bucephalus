@@ -123,7 +123,7 @@ def parse_plan(text: str, fallback_objective: str = "") -> Plan:
         ).seal()
     try:
         return _plan_from(raw, fallback_objective)
-    except (ValueError, TypeError, AttributeError) as e:
+    except (ValueError, TypeError, AttributeError, ArithmeticError) as e:
         # D46 (audit F8): JSON of the wrong shape - "about 500" tokens, an
         # unknown action mode, a step that is a sentence - raised a 500 with
         # the model's text in the server log. It degrades like no JSON at all.
@@ -132,6 +132,16 @@ def parse_plan(text: str, fallback_objective: str = "") -> Plan:
             steps=[],
             unknowns=[f"planner returned JSON that is not a plan ({type(e).__name__})"],
         ).seal()
+
+
+def _finite(x):
+    """An estimate is a finite number: 1e999 parses to inf, which int() cannot
+    hold and JSON cannot carry (audit 3B L2)."""
+    import math
+
+    if isinstance(x, (int, float)) and not math.isfinite(x):
+        raise ValueError("not a finite number")
+    return x
 
 
 def _plan_from(raw: dict, fallback_objective: str) -> Plan:
@@ -145,9 +155,9 @@ def _plan_from(raw: dict, fallback_objective: str) -> Plan:
                 tools=list(s.get("tools", [])),
                 artifact_scope=list(s.get("artifact_scope", [])),
                 max_taint_out=Taint(s.get("max_taint_out", "user")),
-                est_tokens=int(s.get("est_tokens", 0) or 0),
-                est_seconds=float(s.get("est_seconds", 0) or 0),
-                est_cost_usd=float(s.get("est_cost_usd", 0) or 0),
+                est_tokens=int(_finite(s.get("est_tokens", 0) or 0)),
+                est_seconds=_finite(float(s.get("est_seconds", 0) or 0)),
+                est_cost_usd=_finite(float(s.get("est_cost_usd", 0) or 0)),
                 success_criterion=s.get("success_criterion", "always_pass"),
                 reversible=bool(s.get("reversible", True)),
                 depends_on=[str(d) for d in s.get("depends_on", [])],
@@ -173,7 +183,7 @@ def _extract_json(text: str) -> dict | None:
         return None
     try:
         return json.loads(candidate)
-    except json.JSONDecodeError:
+    except (json.JSONDecodeError, RecursionError):      # a nesting json cannot hold (3B L2)
         return None
 
 

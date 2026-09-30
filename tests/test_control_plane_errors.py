@@ -75,3 +75,62 @@ def test_D77_a_path_the_filesystem_cannot_create_is_a_400(ctx, workspace):
     r = c.post(f"/tasks/{t.id}/files", json={"path": long_name,
                                               "content_b64": base64.b64encode(b"x").decode()})
     assert r.status_code == 400, (r.status_code, r.text[:200])
+
+
+# AUDIT-ITERATION-3B, M1: D70's os.stat raised ValueError (not OSError) on an
+# over-long path on Windows, so the gate crashed instead of deciding, and the
+# browser and the drop route answered 500. A path the filesystem cannot hold
+# is a 400 at the routes and an ordinary decision at the gate.
+LONG = "work/" + "a/" * 20000                       # ~40 KB, past Windows' 32,767
+
+
+def test_3B_M1_the_gate_decides_on_an_overlong_path(ctx, task, workspace):
+    from agent.security.capabilities import gate_tool_call, is_protected
+
+    assert isinstance(is_protected(LONG, str(ctx.config.root)), bool)
+    for tool, args in (("read_file", {"path": LONG}),
+                       ("write_file", {"path": LONG, "content": "x"})):
+        d = gate_tool_call(ctx, task, ctx.tools.get(tool), args)
+        assert d.verdict in ("allow", "deny", "needs_approval"), d
+
+
+def test_3B_M1_the_routes_answer_400_for_an_overlong_path(ctx, workspace):
+    t = create_task(ctx.conn, ctx.log, TaskContract(goal="g", artifact_scope=["work"]),
+                    Budget(usd=1.0, seconds=60))
+    c = _client(ctx, raise_server_exceptions=False)
+    r = c.post(f"/tasks/{t.id}/files", json={"path": LONG,
+                                              "content_b64": base64.b64encode(b"x").decode()})
+    assert r.status_code == 400, (r.status_code, r.text[:200])
+    # The browse route takes the path in the query string, which the client
+    # library refuses at this length; the function is what the route calls.
+    from agent.control import files
+
+    with pytest.raises(files.Missing):        # nothing can exist at that path: a 404
+        files.browse(ctx, ctx_task(ctx, t.id), LONG)
+
+
+# AUDIT-ITERATION-3B, L3: D75 swept /tasks/{id}/* and missed the routes that
+# take a task id elsewhere.
+@pytest.mark.parametrize("method,path", [
+    ("get", "/metrics/t_nope"),
+    ("get", "/reviews/t_nope"),
+    ("delete", "/suites/s_nope/tasks/t_nope"),
+    ("delete", "/suites/s_nope"),
+])
+def test_3B_L3_an_unknown_id_is_a_404_outside_tasks_too(ctx, method, path):
+    r = getattr(_client(ctx, raise_server_exceptions=False), method)(path)
+    assert r.status_code == 404, (path, r.status_code, r.text[:200])
+
+
+def test_3B_L3_deleting_what_exists_still_works(ctx):
+    c = _client(ctx)
+    sid = c.post("/suites", json={"name": "s", "description": ""}).json()
+    sid = sid.get("suite_id") or sid.get("id")
+    r = c.delete(f"/suites/{sid}")
+    assert r.status_code == 200, r.text
+
+
+def ctx_task(ctx, task_id):
+    from agent.kernel.tasks import load_task
+
+    return load_task(ctx.conn, task_id)

@@ -7,6 +7,7 @@ side-effecting tool routes through execute_once or the guarantee is void.
 from __future__ import annotations
 
 import json
+import logging
 import sqlite3
 import threading
 import time
@@ -26,6 +27,8 @@ def idempotency_key(task_id: str, step_seq: int, tool: str, args: dict) -> str:
 # start - and never filled in: whoever claimed it stopped somewhere inside.
 _CLAIM = canonical({"claimed": True})
 _inflight: dict[str, threading.Event] = {}      # keys being run by THIS process
+WAIT_S = 900.0        # the longest a same-key caller waits for the thread running it
+log = logging.getLogger("agent.receipts")
 
 
 def outcome_unknown(key: str) -> dict:
@@ -77,7 +80,8 @@ def execute_once(
     if not mine:
         if done is None:
             return outcome_unknown(key)                   # claimed by a run that is gone
-        done.wait()                                       # another thread is running it
+        if not done.wait(WAIT_S):                         # never wait forever
+            return outcome_unknown(key)
         return execute_once(conn, key, tool_name, args, fn)
 
     try:
@@ -94,12 +98,21 @@ def execute_once(
         _inflight.pop(key, None)                          # cut off: the claim stays
         done.set()
         raise
-    with chain_lock(conn):
-        conn.execute("UPDATE receipts SET result_json=? WHERE idempotency_key=?",
-                     (canonical(result), key))
-        conn.commit()
+    try:
+        with chain_lock(conn):
+            conn.execute("UPDATE receipts SET result_json=? WHERE idempotency_key=?",
+                         (canonical(result), key))
+            conn.commit()
+    except Exception:  # noqa: BLE001 - the effect HAPPENED; nothing here may hide that
+        # AUDIT-ITERATION-3B M2. Another writer past busy_timeout: the row
+        # stays CLAIMED - honestly "outcome unknown" on disk - but the caller
+        # is told what happened, and the waiters are released in the finally
+        # below. It used to raise here, leaving a stale Event that a same-key
+        # retry (a resumed task's first action) waited on forever.
+        log.exception("receipt %s: the effect ran but its result could not be recorded", key[:12])
+    finally:
         _inflight.pop(key, None)
-    done.set()
+        done.set()
     return result
 
 

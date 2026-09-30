@@ -209,7 +209,9 @@ def test_the_run_record_names_how_the_limits_held(ctx, task, workspace, scripted
         "SELECT payload_json FROM events WHERE task_id=? AND type='tool.receipt'", (task.id,))]
     code = [r for r in receipts if r.get("tool") == "run_code"]
     assert code, "no run_code receipt"
-    expected = current.limits_note(30, 512 * 2**20, 32)
+    # The limit APPLIED to agent code: the interpreter's own processes where the
+    # platform can make a spawn the kernel's refusal (D49; audit 3B L1), else 32.
+    expected = current.limits_note(30, 512 * 2**20, current.spawn_denied_processes() or 32)
     assert expected and code[0].get("limits") == [expected]
 
 

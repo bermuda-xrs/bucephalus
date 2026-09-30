@@ -55,9 +55,12 @@ def _allowed(ctx, task, raw: str, state=None) -> Path:
     # Both checks judge the path as given AND where it really leads (D61),
     # so one call each covers a link; checking the resolved spelling again
     # doubled the cost of every listing (audit I2).
-    ok, _why = within_scope({"path": str(given)}, scope, root)
-    if not ok or is_protected(str(given), root, state):
-        raise Refused("outside this task's scope, or protected")
+    try:
+        ok, _why = within_scope({"path": str(given)}, scope, root)
+        if not ok or is_protected(str(given), root, state):
+            raise Refused("outside this task's scope, or protected")
+    except ValueError:                 # an OS-unusable path (audit 3B M1)
+        raise Unwritable("that path is too long or not usable here") from None
     return given
 
 
@@ -75,8 +78,8 @@ def browse(ctx, task, raw: str) -> dict:
     rel = os.path.relpath(p, ctx.config.root).replace(os.sep, "/")
     try:
         is_dir, is_file = p.is_dir(), p.is_file()
-    except OSError:                    # a name the filesystem cannot hold (3.13 raises)
-        raise Missing(rel) from None
+    except (OSError, ValueError):      # a name the filesystem cannot hold (3.13 raises OSError,
+        raise Missing(rel) from None   # Windows ValueError past 32,767 characters)
     if is_dir:
         entries = []
         for c in sorted(p.iterdir(), key=lambda c: (not c.is_dir(), c.name.lower())):
@@ -114,8 +117,9 @@ def drop(ctx, task, raw: str, content_b64: str) -> dict:
             fh.write(data)
     except FileExistsError:
         raise Exists("a drop never overwrites; rename it") from None
-    except OSError as e:               # audit B3: this was an unhandled 500
-        raise Unwritable(f"cannot create {raw!r}: {e.strerror or e}") from None
+    except (OSError, ValueError) as e:   # audit B3: an unhandled 500; ValueError is what
+        # Windows raises, not OSError, for a path past 32,767 characters (3B M1)
+        raise Unwritable(f"cannot create {raw[:80]!r}: {getattr(e, 'strerror', None) or e}") from None
     rel = os.path.relpath(p, ctx.config.root).replace(os.sep, "/")
     ctx.log.append(task.id, "human.uploaded", {
         "path": rel, "bytes": len(data), "sha256": hashlib.sha256(data).hexdigest(),

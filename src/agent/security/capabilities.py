@@ -257,7 +257,10 @@ def _protected_elsewhere(p: str, state: tuple, _b: int) -> bool:
 
     try:
         st = os.stat(p)
-    except OSError:
+    except (OSError, ValueError):
+        # ValueError: Windows raises it, not OSError, for a path past 32,767
+        # characters (AUDIT-ITERATION-3B M1). A path nothing can open names no
+        # second file.
         return False
     # Regular files only: on POSIX every directory has two or more links
     # (its `.` and `..`), which read as "several names" refused every
