@@ -172,3 +172,79 @@ test holds. Not built. `docs/PROPOSALS.md` P4 says what it would take.
   keep the runner's own status. The alternative - a clean re-run of each -
   would have cost hours of machine time for a handful of mutants whose
   classification is already clear (equivalent or dead, in the README).
+
+# 2026-09-30, the continuation
+
+## U14 - Agent code's process limit is the interpreter's own count (D49)
+
+- **Options.** (a) add `_winapi.CreateProcess` to the audit hook's list; (b) make
+  the kernel refuse: the Job Object's process cap for AGENT code (a run with
+  protected paths) is exactly the interpreter's own processes.
+- **Chosen: (b).** An audit-hook list is the whole class of bug D49 came from -
+  each spawn primitive underneath the last one needs its own name, and ctypes
+  has none. The kernel's limit holds for every route. Harness runs (graders
+  running pytest) keep the normal cap: they must spawn.
+- **Cost.** Agent code that legitimately runs a subprocess was already refused
+  by the hook; nothing that worked stops working. Windows only - POSIX keeps
+  its polled watchdog, with `os.fork` added to the hook's list.
+- **Reverse.** `platform.windows.spawn_denied_processes` returns `None`.
+
+## U15 - A POSIX orphan is "still in our session, adopter not" (D55)
+
+- **Options.** (a) "parent is init or a subreaper"; (b) "parent's session differs
+  from ours while the child's is ours".
+- **Chosen: (b).** (a) selects every daemon - init adopts those too - and the
+  reaper kills what it selects: a model server started as a service would go.
+  A daemon starts its own session; an orphan of ours does not. A test starts a
+  daemon in its own session and requires it never be selected.
+- **Reverse.** `platform.posix.adopted` returns False (the reaper goes inert on
+  POSIX again, as before).
+
+## U16 - A crash inside a side effect is reported, never repeated (D27)
+
+- **Options.** (a) at-least-once: re-run the effect on replay; (b) at-most-once:
+  report `outcome_unknown` and let the model or the human check.
+- **Chosen: (b).** A crash between a send and its receipt used to send twice;
+  a duplicate push or message is worse than one that needs a look. The result
+  says so in words the model can act on, and the receipt row stays claimed.
+- **Reverse.** In `receipts.execute_once`, treat a claim with no in-process
+  runner as absent (delete it and run) - one line, and the old behaviour.
+
+## U17 - Five registered event types removed rather than emitted (D63)
+
+- **Chosen: remove.** `step.started`, `step.completed`, `artifact.tombstoned`,
+  `skill.promoted`, `skill.demoted` were registered and recorded by nothing, in
+  any of the project's records. Emitting them would add chain events - bytes
+  in every future record - for a vocabulary no client uses (progress rides
+  `live.step`). A reverse test now holds the registry to the code.
+- **Reverse.** Re-add the strings to `EVENT_TYPES`/`CLIENT_EVENTS` and emit them.
+
+## U18 - The token estimator measured, not changed (D6)
+
+- **Measured** from records already on disk: it undercounts by ~26%
+  (server = 1.108 x est + 193 tokens, sd 23.5, n=180, granite via Ollama).
+- **Not corrected:** the ceiling fires ~15% late, and fixing it changes when
+  compaction fires - prompt bytes, a HARNESS_VERSION matter. PROPOSALS P6 has
+  the change and the cheaper alternative (scale `context_fill_ratio`).
+
+## U19 - The console's integrity cache is bounded and content-keyed (D72)
+
+- **What happened.** A commit-time security review of the first version found
+  its key too weak (size+mtime of the anchor; `data_version` ignores this
+  connection's own writes; no staleness bound). All three were real; each got a
+  red test, then the key became data_version + total_changes + the anchor's
+  content hash, with a 30 s maximum age.
+- **Cost.** While a task is running its own appends change `total_changes`, so
+  the sweep re-runs each poll then (0.2-0.3 s on the 283-task record); idle,
+  a poll is ~0.3 ms.
+- **Reverse.** `SWEEP_MAX_AGE_S = 0` disables reuse.
+
+## U20 - POSIX refuses multiply-linked regular files in the gate (D70)
+
+- **Why.** POSIX has no call that lists a file's other names, so "is any name
+  protected" cannot be answered; the safe answer is refusal. Directories are
+  exempt (two or more links always). The cost is a workspace file hard-linked
+  elsewhere is unreadable to agent tools on Linux/macOS - rare, and refusing is
+  the direction that cannot leak a grader.
+- **Reverse.** `platform.posix.link_names` could read `/proc`-less inode scans
+  under the project root and return the names found.
