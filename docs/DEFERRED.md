@@ -23,16 +23,14 @@ instrument). Everything below waits.
 
 ---
 
-## Where this stands, 2026-09-29
+## Where this stands, 2026-10-01
 
-**Six open from before the audit, five from the audit, six from the first
-Linux run and eight from iteration 3.** D2, D6, D16, D26, D27, D33; the
-audit's D46-D49 and D52 (`docs/AUDIT-2026-09.md`; its HIGH findings F1 and F2
-were fixed in the change that recorded them, and D40-D45, D50, D51 and D53
-are closed); D54-D59 (WSL2, `docs/evidence/wsl-2026-09-25/`); from iteration
-3, D63, its audit's D70, D72 (partly fixed), D74-D77, and D79 from its
-mutation work. D60-D62, D64-D69, D71, D73, D78 and D80-D82 closed in
-iteration 3. See each heading.
+**Eight open, and none of them fixable without the user.** D2 (a live model: the
+cause of the pathological call), D6 (measured 2026-09-30 - the estimator undercounts ~26% -
+and its correction is proposal P6, a HARNESS_VERSION matter), D16 (a live model per backend),
+D26 (credentials), D27 (only the Telegram loop's queue is left, with D26), D33 and D52
+(prompt bytes: HARNESS_VERSION, P2), and D79 (P5). Every defect from the two audits, the
+WSL2 runs and iteration 3's own work is closed. See each heading.
 
 Everything else on this page is marked in its own heading:
 

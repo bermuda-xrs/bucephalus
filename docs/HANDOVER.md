@@ -280,12 +280,12 @@ measurement wins, and the contradiction is written down beside the code defects.
 # D — STATE
 
 **Everything volatile is here and nowhere else in this file**, each row with the command that
-regenerates it. Verified 2026-09-29, against commit `1f9143e`.
+regenerates it. Verified 2026-10-01, against commit `4c39167`.
 
 | Fact | Value | Regenerate with |
 |---|---|---|
 | Branch | `main`, the line of record, fast-forwarded to `iteration-3` (the unattended run of 2026-09-28/29, `docs/UNATTENDED-REPORT.md`) once its suite, frozen gate and audit passed; tag `g1-closed-2026-09-25` marks the measurement branch's tip; no remote | `git branch --show-current` |
-| Written against | `1f9143e`; the test asserts this is an ancestor of HEAD | `git log --oneline -1` |
+| Written against | `4c39167`; the test asserts this is an ancestor of HEAD | `git log --oneline -1` |
 | Harness version | **6**, bumped 2026-09-25: a check must be able to fail (DR7) - the final sweep graded "{}" and `execution` passed it; five more verifiers could not fail (FINDINGS 1.34). 5 held the grader out under measurement. Pass rates before 5 are too high | `grep HARNESS_VERSION src/agent/__init__.py` |
 | Toolset version | **6** | `grep TOOLSET_VERSION src/agent/__init__.py` |
 | Test count | *deliberately not stated* | `python -m pytest tests -q`, and read the tail line. The skips are the live-credential tests, until D26's credentials exist |
@@ -330,14 +330,14 @@ Each owns its subject; nothing here is reproduced above.
 | | What closes it |
 |---|---|
 | **D2** — the cause of the pathological model call is unknown | Separating llama.cpp KV-cache behaviour, OS paging, thermal throttling and I/O contention. Detection and recovery already exist, so no measurement is at risk; this is diagnosis |
-| **D6** — the in-loop token estimator is uncalibrated | One ordinary run. The instrument exists: every step call records `est_input_tokens` beside the server's own count. Read the two columns and fit the ratio. No API key needed |
-| **D16** — per-backend context windows are unreachable over the OpenAI protocol | D6 first. The only portable signal is the returned `prompt_tokens`, and comparing it against an uncalibrated estimator gives a check with an unknown false-alarm rate |
+| **D6** — the in-loop token estimator is uncalibrated | **Measured 2026-09-30** from the G1 records: it undercounts ~26% (server = 1.108 x est + 193), so the ceiling fires late. Correcting it moves compaction: `docs/PROPOSALS.md` P6, a HARNESS_VERSION matter |
+| **D16** — per-backend context windows are unreachable over the OpenAI protocol | The fit above exists for ONE tokenizer (granite via Ollama); a check on another backend's `prompt_tokens` still has an unknown false-alarm rate. Needs a live model per backend |
 | **D26** — the Telegram transport and the Anthropic adapter have never made a live call | A bot token and an API key. Both tests are written and skip cleanly; `README.md` gives the one command per credential and what a pass looks like |
-| **D27** — one task at a time, and the bot has no queue | Not a queue: the single-writer chain lock serialises anyway, so the honest fix is the claim-then-execute receipt protocol |
+| **D27** — the bot has no queue | The lock half is fixed (claim-then-execute receipts). What is left is the Telegram loop's queue and acknowledgement, with D26: that transport has never made a live call |
 | **D33** — tier 1 sits before the tool schemas on this template | A `HARNESS_VERSION` bump, which is a stop. Its criterion — a boundary rebuild more than once per task — is **measured at zero** as of 2026-09-17 (`bench/inventory.py`): no session has ever rotated. Re-refused, not unexamined |
 
-Also open: the audit's D46-D49 and D52; the WSL2 run's D54-D59; iteration 3's D63, D70, D72, D74-D77
-and **D79**, a graded program can print its own verdict (P5). **D26** is the user's. D32's acceptance is in C4.
+Also open: D52 (tool schemas' per-step tokens, P2) and **D79**, a graded program can print its own
+verdict (P5); everything else from the audits and the WSL2 runs is closed. **D26** is the user's. D32's acceptance is in C4.
 
 ## E3. Next steps, in order
 

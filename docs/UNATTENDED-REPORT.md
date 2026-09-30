@@ -1,14 +1,47 @@
 # The unattended run - what happened while you were away
 
-Iteration 3, 2026-09-28 to 2026-09-29, on branch `iteration-3` (from `main` at
-`1d911cc`). Every judgment call is in `docs/DECISIONS-UNATTENDED.md` (U1-U13),
+Iteration 3, 2026-09-28 to 2026-09-30, on branch `iteration-3` (from `main` at
+`1d911cc`). Every judgment call is in `docs/DECISIONS-UNATTENDED.md` (U1-U20),
 the running record in `docs/UNATTENDED-LOG.md`. This page is the five-minute
 version.
 
-**Main was fast-forwarded to `iteration-3`** at the end, because the three
-conditions held: the full suite green (twice, at the final commit), the
-frozen gate passing on a build of the final commit, and the audit's critical
-and high findings fixed. Nothing was pushed; there is no remote.
+**Main was fast-forwarded to `iteration-3`** again at the end of the
+continuation, because the three conditions held at the final commit: the full
+suite green, the frozen gate passing on a build of it, and both audits'
+critical and high findings fixed (there were none of either, the second time).
+Nothing was pushed; there is no remote.
+
+## The continuation, 2026-09-30
+
+You were still away, so I worked the open-defect list. Closed, each with a
+test written first: **D70** (a hard link in the workspace to a grader or
+`policy.md` read as an ordinary file to every check - a real hole in the gate),
+**D49** (agent code could start a process through `_winapi.CreateProcess`,
+which raises no audit event; the Job Object now holds only the interpreter's
+own processes, so the kernel refuses a spawn by any route), D46-D48, D54-D59
+(the Linux defects, fixed and checked in WSL2), D63, D72, D74-D77, D80-D85, and
+the enabling half of D27 (receipts now claim before an effect, so the chain
+lock no longer freezes every append during a slow push, and a crash inside a
+send is reported as unknown, never repeated).
+
+**Checked from outside, twice.** A commit-time security review found the D72
+cache's key too weak (three real gaps; fixed). A second independent audit of
+the day's commits (`docs/AUDIT-ITERATION-3B.md`, committed unedited): 0
+critical, 0 high, 2 medium, 3 low - all regressions of the day's own changes,
+all fixed. Linux (WSL2, Python 3.13): whole suite 1257 passed, none failed; it
+also found two tests that needed the network. The frozen app was rebuilt from
+the final code: gate 63 passed, a task through its window, nothing left
+running. Mutation testing of the day's new code (receipts, the hard-link check, the
+console cache, the guard, the Windows platform functions) found the claim
+sentinel forgeable - a tool returning `{"claimed": true}` would have read back
+as an unknown outcome - and the console poll unprotected against a skipped
+memory check; both fixed, scores 64-94% before and 83-100% after
+(`docs/evidence/mutation-2026-09-30/`).
+
+**Measured, not changed:** the in-loop token estimator undercounts by ~26%
+(D6; server = 1.108 x estimate + 193, 180 calls), so the context ceiling fires
+~15% late. Fixing it changes when compaction fires, which is prompt bytes:
+proposal **P6**, with the measurement.
 
 ## What needs you
 
@@ -25,12 +58,16 @@ In the order I would take them:
    verdict marker on stdout, and the grader runs the answer inside its own
    process. A strict xfail shows it. Nothing recorded shows it happening.
    Every fix changes what counts as a pass (HARNESS_VERSION), so it waits.
-3. **Four more proposals**, each with its measurement (`docs/PROPOSALS.md`):
+3. **Five more proposals**, each with its measurement (`docs/PROPOSALS.md`):
    P1 a real network fence on Windows (AppContainer: persistent ACL changes),
    P2 what the model sees each step and what it costs, P3 whether a
-   follow-up task should see the conversation before it, P4 a tray icon.
+   follow-up task should see the conversation before it, P4 a tray icon,
+   **P6 calibrating the token estimator** (the ceiling fires late; a
+   HARNESS_VERSION matter).
 4. **D26**: a bot token and an API key; the two live tests are written and
-   skip cleanly without them.
+   skip cleanly without them. The Telegram bot's queue and acknowledgement
+   (what is left of D27) wait with it: that transport has never made a live
+   call, and I would not change it untested.
 5. **A Mac and a bare-metal Linux box**: `docs/PLATFORMS.md` section 5 is the
    checklist. CI is written (`.github/workflows/ci.yml`) and has never run:
    there is no remote, and pushing was not mine to do.
@@ -184,9 +221,10 @@ And in my own instruments, each caught before it reached a number here:
 ## Not done, or not verified
 
 - **Close under 2 s**: not met (above).
-- **D72**: the console's poll still walks every chain; faster, not bounded.
+- **Linux is checked in WSL2, not bare metal**, and its new code (`adopted`,
+  zombie handling) could not be mutation-tested there.
 - **CI and POSIX**: the workflow has never run; macOS has never run anything;
-  Linux ran once, in WSL2.
+  Linux ran three times, in WSL2 only.
 - **One full-suite failure was not captured**: a run of the final code failed
   one test that `--lf` then passed, and every full run since was green. The
   load-sensitive timing tests above are the likely source; the other flakes

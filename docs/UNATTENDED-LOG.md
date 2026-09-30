@@ -226,6 +226,22 @@ passed on a build of the final code, a scripted task through its window.
 Main fast-forwarded to iteration-3 (`git fetch . iteration-3:main`, which
 refuses anything but a fast-forward). Nothing pushed.
 
+## The continuation (2026-09-30)
+
+Worked the open list, red first, each closed in its own change (DEFERRED has
+the details): D46-D49, D54-D59, D63, D70 (a real gate hole: hard links),
+D49 (a real sandbox hole: `_winapi.CreateProcess`), D72 (+ a review-hardened
+key), D74-D77, D80-D85, D27's enabling half (claim-then-execute receipts).
+D6 measured (P6); D2, D16, D26, D33, D52, D79 and the Telegram loop stay open
+for reasons each entry gives (a live model, credentials, prompt bytes).
+
+Checks from outside: a commit-time security review (D72's cache key, fixed);
+a second independent audit, `docs/AUDIT-ITERATION-3B.md` (0 critical, 0 high,
+2 medium, 3 low, all regressions of the day's own work, all fixed); WSL2 twice
+(1257 passed; found two tests that needed the network); the frozen app
+rebuilt, gate 63 passed, a task through its window. Mutation of the new code:
+queue6 (results below when it finishes).
+
 ## RESUME
 
 Nothing in flight. Start from docs/UNATTENDED-REPORT.md, "What needs you".
