@@ -650,7 +650,9 @@ explainable:
 * `HoldoutRegistry.contains_any` — test-only, and its docstring says so.
 * `Anchor.all_tasks`, `BackendBase.set_throughput`, `ToolRegistry.read_only`,
   `SkillStore.by_status`, `EventLog.last_of_type`,
-  `AgentContext.gate_queue` — small helpers with no caller.
+  `AgentContext.gate_queue` — small helpers with no caller. (All but
+  `Anchor.all_tasks`, which is called now, were deleted on 2026-10-04 with
+  the rest of the code nothing called: DECISIONS-UNATTENDED U21.)
 
 **One is not explainable, and it is the reason this entry exists.**
 

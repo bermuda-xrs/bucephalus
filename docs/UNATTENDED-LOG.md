@@ -256,6 +256,27 @@ itself on 2026-09-30 21:19 - never touched. Main fast-forwarded to the final
 commit (`git fetch . iteration-3:main`, which refuses anything else). Nothing
 pushed.
 
+## After the user returned (2026-10-04)
+
+Asked to finish what was left and to find errors and dead code. Done, each
+commit green:
+- 344d3b9: 20 definitions nothing called, deleted (U21). Two rules that only
+  a dead copy's test checked now hold on the live path; a routing test that
+  could not fail is two-sided.
+- fbc52f2: three statements made untrue by the code (the console's grounding
+  note and integrity lede; README's `alpha.cmd`, which fails at this path).
+- dac0ffc: found with `-W default`: the code-action bridge leaked the child's
+  stderr pipe on every run; a refused job leaked its child's pipes; invalid
+  escapes in two source files and a test; a BOM that hid a script from every
+  AST audit. Test fixtures that left pipes or children to the collector.
+- a249740: ruff (bug rules only) in CI and `[dev]` (U22); it found three
+  unused imports in `src` the AST scan had counted as used.
+Verified at a249740: Windows 1288 passed; WSL2 (3.13) 1262 passed, lint
+clean; the frozen gate 63 passed, 1 skipped, on a fresh build; a task
+through the rebuilt app's window (signed, answered), closed in 3.3 s, no
+orphans. Review of every line added to src: two pipe closes and imports;
+nothing outside src calls a deleted name. Main fast-forwarded.
+
 ## RESUME
 
 Nothing in flight. Start from docs/UNATTENDED-REPORT.md, "What needs you".

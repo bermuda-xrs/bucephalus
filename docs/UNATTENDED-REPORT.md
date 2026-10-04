@@ -1,7 +1,7 @@
 # The unattended run - what happened while you were away
 
 Iteration 3, 2026-09-28 to 2026-09-30, on branch `iteration-3` (from `main` at
-`1d911cc`). Every judgment call is in `docs/DECISIONS-UNATTENDED.md` (U1-U20),
+`1d911cc`). Every judgment call is in `docs/DECISIONS-UNATTENDED.md` (U1-U22),
 the running record in `docs/UNATTENDED-LOG.md`. This page is the five-minute
 version.
 
@@ -10,6 +10,20 @@ continuation, because the three conditions held at the final commit: the full
 suite green, the frozen gate passing on a build of it, and both audits'
 critical and high findings fixed (there were none of either, the second time).
 Nothing was pushed; there is no remote.
+
+## After you came back, 2026-10-04
+
+Errors and dead code, as asked. **Deleted 20 definitions nothing called** (U21),
+porting first the two rules only their tests checked: the quarantined
+summarizer is given no tools, and routing moves off a slow tier (that test
+could not fail before). **Two resource leaks in the product**, found by
+running the suite with warnings on: every code action left the child's
+stderr pipe open, and a refused job left its child's pipes open. Source that
+a later Python will reject (invalid escapes) and a BOM that hid a script from
+every AST audit are fixed, with a test that keeps them out. **ruff now lints
+for bugs in CI** (U22; new dev dependency). Three sentences the code no
+longer made true are corrected, including README's `alpha.cmd` examples,
+which fail at this path. Windows 1288 passed, WSL2 1262, frozen gate 63.
 
 ## The continuation, 2026-09-30
 
