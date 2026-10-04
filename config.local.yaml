@@ -1,6 +1,6 @@
 # ALL-LOCAL profile — runs the whole system with NO API key and no network.
 #
-#   alpha.cmd --config config.local.yaml new "..." --scope work
+#   .\alpha.ps1 --config config.local.yaml new "..." --scope work
 #
 # Everything runs on Granite 4.1 through the dedicated Ollama instance. Start
 # it first with ollama-serve.cmd, or every call fails with a connection refusal.

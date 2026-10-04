@@ -57,13 +57,14 @@ folder.** Two environment facts forced both choices:
    Move it back to `.venv` once sync is healthy — the launcher checks that
    location first.
 
-```bat
-alpha.cmd status
-```
-
 ```powershell
 .\alpha.ps1 status
 ```
+
+`alpha.cmd` does the same from `cmd.exe`, but only at a path without
+non-ASCII characters: `cmd.exe` reads a batch file in the OEM codepage, so at
+this folder's path it fails silently (HANDOVER B1). The examples below use
+`.\alpha.ps1`, which works anywhere.
 
 Tests:
 
@@ -84,8 +85,8 @@ ollama-serve.cmd
 Then in another window:
 
 ```bat
-alpha.cmd --config config.local.yaml new "Read work/note.txt and report what it says." --scope work --seconds 1800
-alpha.cmd --config config.local.yaml run t_xxxxxxxx
+.\alpha.ps1 --config config.local.yaml new "Read work/note.txt and report what it says." --scope work --seconds 1800
+.\alpha.ps1 --config config.local.yaml run t_xxxxxxxx
 ```
 
 Verified working end to end: `done` in 2 steps, ~27s, 1,868 free tokens,
@@ -127,10 +128,10 @@ Two things make this work that are worth knowing about:
 ## The two-touch loop
 
 ```
-alpha.cmd new "Refactor work/parser.py to use pathlib" --scope work
-alpha.cmd plan   t_abc123      # drafts a plan. Cannot write: enforced in the gate.
-alpha.cmd approve t_abc123     # HUMAN TOUCH #1
-alpha.cmd run    t_abc123      # runs unattended. HUMAN TOUCH #2 is the result.
+.\alpha.ps1 new "Refactor work/parser.py to use pathlib" --scope work
+.\alpha.ps1 plan   t_abc123      # drafts a plan. Cannot write: enforced in the gate.
+.\alpha.ps1 approve t_abc123     # HUMAN TOUCH #1
+.\alpha.ps1 run    t_abc123      # runs unattended. HUMAN TOUCH #2 is the result.
 ```
 
 Between those two touches the agent does not interrupt you. Boundary crossings
@@ -142,18 +143,18 @@ you walk away.
 Other commands:
 
 ```
-alpha.cmd status              list tasks, cost, and anything waiting on you
-alpha.cmd approvals           decide what parked
-alpha.cmd alerts              integrity breaks + monitor findings (NOT approvals)
-alpha.cmd bench-local         measure local tier throughput before trusting it
-alpha.cmd report <task>       per-run JSON + CSV of every model call
-alpha.cmd pareto              cost vs pass rate across arms
-alpha.cmd steer <task> "..."  correct a task — forks it, never mutates
-alpha.cmd monitor <task>      run the out-of-band inspector over a trace
-alpha.cmd skills                          list skills + promotion rate
-alpha.cmd skills --add S.md --when "..."  store a hand-written skill (candidate)
-alpha.cmd skills --gate <id> [--yes]      evaluate, then promote with a human
-alpha.cmd serve               control plane on :8901 for phone/web clients
+.\alpha.ps1 status              list tasks, cost, and anything waiting on you
+.\alpha.ps1 approvals           decide what parked
+.\alpha.ps1 alerts              integrity breaks + monitor findings (NOT approvals)
+.\alpha.ps1 bench-local         measure local tier throughput before trusting it
+.\alpha.ps1 report <task>       per-run JSON + CSV of every model call
+.\alpha.ps1 pareto              cost vs pass rate across arms
+.\alpha.ps1 steer <task> "..."  correct a task — forks it, never mutates
+.\alpha.ps1 monitor <task>      run the out-of-band inspector over a trace
+.\alpha.ps1 skills                          list skills + promotion rate
+.\alpha.ps1 skills --add S.md --when "..."  store a hand-written skill (candidate)
+.\alpha.ps1 skills --gate <id> [--yes]      evaluate, then promote with a human
+.\alpha.ps1 serve               control plane on :8901 for phone/web clients
 ```
 
 The control plane also runs under any ASGI server via a module-level app:
@@ -261,7 +262,7 @@ instance on port **11435**, so your existing models on 11434 are untouched:
 set OLLAMA_MODELS=..\ollama-models && set OLLAMA_HOST=127.0.0.1:11435 && ollama serve
 ```
 
-Run `alpha.cmd bench-local` before trusting either tier. On CPU-only hardware
+Run `.\alpha.ps1 bench-local` before trusting either tier. On CPU-only hardware
 output tokens are wall-clock seconds, and §0.1c says to settle model choice
 from your own measurements rather than someone else's leaderboard.
 
