@@ -118,10 +118,3 @@ def execute_once(
     return result
 
 
-def has_receipt(conn: sqlite3.Connection, key: str) -> bool:
-    return (
-        conn.execute(
-            "SELECT 1 FROM receipts WHERE idempotency_key=?", (key,)
-        ).fetchone()
-        is not None
-    )

@@ -5,16 +5,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from agent.execute.codeact import StepPlan, choose_action_mode, run_code_action
+from agent.execute.codeact import run_code_action
 from agent.execute.sandbox import run_sandboxed
-
-
-def test_choose_action_mode():
-    assert choose_action_mode(StepPlan(tool_calls=5)) == "code"
-    assert choose_action_mode(StepPlan(has_iteration=True)) == "code"
-    assert choose_action_mode(StepPlan(has_conditional_chain=True)) == "code"
-    # A single atomic action stays direct — code adds risk for nothing.
-    assert choose_action_mode(StepPlan(tool_calls=1)) == "direct"
 
 
 def test_sandbox_runs_and_reports():

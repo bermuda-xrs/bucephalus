@@ -9,7 +9,6 @@ subsystems has a single home.
 from __future__ import annotations
 
 import json
-import re
 import sqlite3
 import time
 import uuid
@@ -484,17 +483,6 @@ class AgentContext:
             sid = s.get("id")
             if sid:
                 self.skills.record_invocation(sid, task_id, success)
-
-    def gate_queue(self) -> list[str]:
-        """Candidates waiting for the gate. DERIVED from the store.
-
-        This was a list on the context that `generate_skill` appended to, so
-        "handed to the gate" held for exactly as long as the generating process
-        lived - and nothing in production ever read it. A candidate's status IS
-        the queue: durable, the thing the gate changes, and unable to disagree
-        with itself.
-        """
-        return [s["id"] for s in self.skills.by_status("candidate")]
 
     def record_promotion(self, skill_id: str, detail: dict) -> None:
         path = self.config.resolve_state("runs") / "promotions.jsonl"

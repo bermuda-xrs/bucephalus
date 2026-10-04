@@ -119,14 +119,6 @@ class ToolRegistry:
                 "rather than computing it in your head.")
         return "\n".join(lines)
 
-    def read_only(self) -> "ToolRegistry":
-        r = ToolRegistry()
-        for t in self._tools.values():
-            if not t.side_effecting:
-                r.register(t)
-        return r
-
-
 def _library_manual() -> str:
     """Sandbox libraries, if the registry is importable.
 

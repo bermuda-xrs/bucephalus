@@ -206,9 +206,3 @@ def _first_diff(a: str, b: str) -> int:
     return min(len(a), len(b))
 
 
-def freeze_skills(skills: list[dict]) -> list[dict]:
-    """Skill set is frozen at task start. Promotion mid-task would break the prefix."""
-    return [
-        {"name": s["name"], "version": s["version"], "body": s["body"], "id": s.get("id", "")}
-        for s in sorted(skills, key=lambda s: (s["name"], s["version"]))
-    ]

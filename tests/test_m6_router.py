@@ -29,11 +29,16 @@ def test_no_local_tier_falls_back_to_cloud(ctx, task):
     assert ctx.router.choose("summarize", task).name == "cloud"
 
 
-def test_latency_aware_routing(ctx, task):
-    """Tight time budget -> cloud even though local is free."""
-    ctx.backends["local"].set_throughput(0.5)  # half a token per second
-    task.budget.spent_seconds = task.budget.seconds - 1  # ~1s left
+def test_latency_aware_routing(ctx, task, routing_only):
+    """With ~10 s left, a local tier too slow to answer in time is skipped for
+    the cloud, and one fast enough is used. Throughput comes from telemetry,
+    then the backend's configured assumption - the knob set here."""
+    task.budget.spent_seconds = task.budget.seconds - 10
+    local = ctx.backends["local"]
+    local.cfg.assumed_tokens_per_sec = 0.5                 # 512 tokens: ~17 minutes
     assert ctx.router.choose("summarize", task).name == "cloud"
+    local.cfg.assumed_tokens_per_sec = 10_000.0            # 512 tokens: 0.05 s
+    assert ctx.router.choose("summarize", task).name == "local"
 
 
 def test_normalize_compares_parsed_objects():

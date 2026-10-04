@@ -28,8 +28,7 @@ from ..kernel.types import GateDecision, Taint, TaskStatus, join_taint
 from ..ledger.artifacts import project, read_artifact, write_artifact
 from ..ledger.compact import compact, enforce_ceiling
 from ..ledger.entries import LedgerEntry, render_tail, sum_tokens
-from ..ledger.prefix import (PrefixBuilder, PrefixGuard, SYSTEM_CONTRACT,
-                             system_contract)
+from ..ledger.prefix import PrefixBuilder, PrefixGuard, system_contract
 from ..ledger.semantic_cache import cached_op
 from ..security.capabilities import gate_tool_call, render_preview
 from ..security.origin import is_unattended

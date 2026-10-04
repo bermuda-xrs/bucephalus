@@ -8,7 +8,7 @@ import time
 import uuid
 from dataclasses import dataclass
 
-from .events import EventLog, canonical
+from .events import EventLog
 from .types import Budget, TaskContract, TaskStatus
 
 
@@ -144,16 +144,3 @@ def spend(
     )
 
 
-def children(conn: sqlite3.Connection, task_id: str) -> list[str]:
-    return [
-        r[0]
-        for r in conn.execute(
-            "SELECT id FROM tasks WHERE parent_id=? ORDER BY created_at", (task_id,)
-        ).fetchall()
-    ]
-
-
-def contract_hash(contract: TaskContract) -> str:
-    from .events import sha256_hex
-
-    return sha256_hex(canonical(json.loads(contract.model_dump_json())))

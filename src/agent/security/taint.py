@@ -75,24 +75,3 @@ class TaintTracker:
         return join_taint(*parts) if parts else Taint.TRUSTED
 
 
-def quarantined_summarize(
-    ctx, content: str, question: str, backend_name: str | None = None, task=None
-) -> str:
-    """Summarize untrusted content with a TOOL-LESS backend (M8.1 rule 4).
-
-    Only the summary crosses back into the agent's context; the full text
-    stays in the artifact store behind a reference. The backend is called with
-    tools=None so that even a successful injection inside `content` has
-    nothing to actuate.
-    """
-    name = backend_name or ctx.active_local_tier() or "cloud"
-    backend = ctx.backends.get(name) or ctx.backends["cloud"]
-    resp = ctx.call_model(
-        task if task is not None else "unattributed", backend, "quarantine",
-        prefix=QUARANTINE_PREFIX,
-        tail=f"<question>{question}</question>\n<data>\n{content}\n</data>",
-        tools=None,
-        max_tokens=512,
-        temperature=0.0,
-    )
-    return resp.text

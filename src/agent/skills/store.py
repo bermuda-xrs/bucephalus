@@ -171,12 +171,6 @@ class SkillStore:
         ).fetchall()
         return [self.load(r[0]) for r in rows]
 
-    def by_status(self, status: str) -> list[dict]:
-        rows = self.conn.execute(
-            "SELECT id FROM skills WHERE status=? ORDER BY name, version", (status,)
-        ).fetchall()
-        return [self.load(r[0], verify=False) for r in rows]
-
     # -- lifecycle ---------------------------------------------------------
 
     def set_status(self, skill_id: str, status: str, log=None, task_id: str | None = None) -> None:

@@ -108,9 +108,3 @@ def test_side_effecting_tools_route_through_execute_once():
     assert "execute_once(" in code_src
 
 
-def test_quarantine_call_passes_no_tools():
-    """M8.1 rule 4 — the quarantined summarizer must have no tools to actuate."""
-    from agent.security import taint
-
-    src = inspect.getsource(taint.quarantined_summarize)
-    assert "tools=None" in src

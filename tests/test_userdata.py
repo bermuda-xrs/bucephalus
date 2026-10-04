@@ -153,9 +153,3 @@ def test_grounding_documents_round_trip(ctx):
     assert ctx.userdata.get_document("grounding", "tps")["body"].startswith("thermal")
 
 
-def test_grounding_is_matched_by_overlap(ctx):
-    ctx.userdata.put_document("grounding", "tiles", "thermal protection tiles ablative")
-    ctx.userdata.put_document("grounding", "cooking", "recipes for bread and pasta")
-    hits = ctx.userdata.grounding_sources("thermal protection tiles", k=5)
-    assert hits and hits[0][0] == "tiles"
-    assert all(n != "cooking" for n, _ in hits)

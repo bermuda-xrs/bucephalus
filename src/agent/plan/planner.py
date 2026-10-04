@@ -262,20 +262,6 @@ def reject_plan(ctx, task, plan: Plan, comment: str) -> None:
     ctx.log.append(task.id, "plan.rejected", {"plan_id": plan.id, "comment": comment})
 
 
-def edit_step(plan: Plan, step_id: str, **changes) -> Plan:
-    """Human touch #1, verb 2. The plan is re-hashed, so approval is required again."""
-    for s in plan.steps:
-        if s.id == step_id:
-            for k, v in changes.items():
-                setattr(s, k, v)
-    return plan.seal()
-
-
-def delete_step(plan: Plan, step_id: str) -> Plan:
-    plan.steps = [s for s in plan.steps if s.id != step_id]
-    return plan.seal()
-
-
 def verify_plan_pin(ctx, task) -> Plan:
     """Invariant 17 — verify the approved hash before EVERY step.
 

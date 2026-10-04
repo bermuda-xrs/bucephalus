@@ -603,7 +603,7 @@ What to do, in the words a model reads.</textarea></label>
       refuse. In effect from <code>${esc(p.effective_source)}</code>.</p>
       <label class="field">Policy<textarea id="pBody" class="tall">${esc(p.body)}</textarea></label>
       <button class="btn primary" data-action="savePolicy">Save policy</button>
-      <h4>Grounding notes</h4><p class="note">Reference text a person wrote, kept for skills to cite.</p>
+      <h4>Grounding notes</h4><p class="note">Reference text a person wrote. Stored only: nothing in a run reads these.</p>
       <table>${g.documents.map(x => `<tr><td><button class="link" data-action="editGrounding" ${args(x.name)}>${esc(x.name)}</button></td>
         <td>${x.bytes.toLocaleString()} bytes</td><td class="r"><button class="quiet" data-action="delGrounding" ${args(x.name)}>Delete</button></td></tr>`).join("")
         || '<tr><td class="empty">No notes yet.</td></tr>'}</table>
@@ -615,7 +615,7 @@ What to do, in the words a model reads.</textarea></label>
     const d = await api("/panels/integrity");
     const crit = d.findings.filter(f => f.severity === "critical");
     return `<h3>Integrity</h3><p class="lede">Every task's record is a hash chain, checkpointed to an anchor kept
-      outside the database. This re-verifies all ${d.tasks} of them now.</p>
+      outside the database. All ${d.tasks} are re-verified whenever the record changes, and at least every 30 seconds.</p>
       ${crit.length ? `<div class="integrity"><strong>${crit.length} record${crit.length > 1 ? "s do" : " does"} not verify.</strong>
         Do not approve anything until this is explained.</div>`
         : `<p class="caveat good">Every chain verifies.</p>`}

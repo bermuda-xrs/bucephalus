@@ -95,9 +95,6 @@ class BackendBase:
             self._tokens_per_sec = 0.0
         return self._tokens_per_sec
 
-    def set_throughput(self, tps: float) -> None:
-        self._tokens_per_sec = tps
-
     def _response(self, text: str, usage: TokenUsage, t0: float, raw: dict) -> ModelResponse:
         return ModelResponse(
             text=text,

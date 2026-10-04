@@ -22,7 +22,6 @@ from __future__ import annotations
 import json
 import os
 import threading
-import uuid
 from pathlib import Path
 
 from fastapi import FastAPI, Header, HTTPException

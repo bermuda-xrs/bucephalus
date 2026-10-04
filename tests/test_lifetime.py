@@ -135,7 +135,7 @@ def test_a_candidate_is_still_queued_for_the_gate_after_a_restart(ctx):
     sid = _candidate(ctx)
     second = restarted(ctx)
     try:
-        assert sid in second.gate_queue()
+        assert second.skills.load(sid, verify=False)["status"] == "candidate"
     finally:
         second.close()
 

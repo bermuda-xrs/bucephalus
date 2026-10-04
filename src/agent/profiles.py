@@ -156,7 +156,3 @@ def enforce(config, profile: str, env: dict | None = None) -> dict:
     }
 
 
-def describe(config, profile: str) -> str:
-    """One line for a report header or a CLI banner."""
-    names = ", ".join(f"{n}={b.model}" for n, b in sorted(config.backends.items()))
-    return f"profile={profile} · {names}"

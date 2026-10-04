@@ -396,19 +396,3 @@ class UserStore:
         return [{"sha256": r[0][:12], "actor": r[1], "replaced_at": r[2],
                  "bytes": r[3]} for r in rows]
 
-    def grounding_sources(self, query: str, k: int = 5) -> list[tuple[str, str]]:
-        """(name, body) for grounding docs overlapping the query, best first."""
-        import re
-
-        terms = {w.lower() for w in re.findall(r"\w{4,}", query)}
-        scored = []
-        for row in self.conn.execute(
-            "SELECT name, body FROM documents WHERE owner=? AND kind='grounding' "
-            "AND active=1",
-            (self.owner,),
-        ).fetchall():
-            hay = {w.lower() for w in re.findall(r"\w{4,}", row[1])}
-            overlap = len(terms & hay) / max(1, len(terms))
-            if overlap > 0:
-                scored.append((overlap, row[0], row[1]))
-        return [(n, b) for _, n, b in sorted(scored, key=lambda x: -x[0])[:k]]

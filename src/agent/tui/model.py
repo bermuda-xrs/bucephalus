@@ -143,13 +143,6 @@ class RunState:
             self.approvals.append({"data": data, "role": APPROVAL_ROLE})
         return True
 
-    def resolve_last_tool(self, ok: bool, refused: bool = False) -> None:
-        for call in reversed(self.trail):
-            if call.status == "running":
-                call.status = "refused" if refused else ("ok" if ok else "failed")
-                return
-
-
 def fold(events: list[dict], live: list[tuple[str, dict]] | None = None) -> RunState:
     """Build a RunState from a chain history plus any live events."""
     st = RunState()

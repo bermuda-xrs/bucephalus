@@ -15,22 +15,9 @@ structural: every check is held out, because the grader is unreachable
 from __future__ import annotations
 
 import inspect
-from typing import Callable
 
-from ..kernel.types import TaskContract, VerifyResult
+from ..kernel.types import VerifyResult
 from .verifiers import Verifier, default_verifiers, inspects
-
-
-def choose_strategy(first_score: float, sample_variance: float) -> str:
-    """Easy problems benefit from sequential revision; hard ones need fresh samples.
-
-    Revising a wrong approach only polishes it.
-    """
-    if first_score > 0.7:
-        return "sequential"  # close; refine
-    if sample_variance > 0.3:
-        return "parallel"  # lost; resample
-    return "hybrid"  # k samples, then refine best
 
 
 class VerificationMesh:
@@ -113,56 +100,3 @@ class VerificationMesh:
                 f"score {r.score:.2f}):\n{r.observation}")
 
 
-
-def refine_with_ratchet(
-    ctx,
-    task,
-    initial: str,
-    produce_revision: Callable[[str, str], str],
-) -> tuple[str, VerifyResult]:
-    """A revision is kept only if it scores strictly better.
-
-    INVARIANT: every candidate is produced from a NEW external observation.
-    produce_revision is called with (best_so_far, observation) and the
-    observation is asserted non-empty — no thinking-harder loops.
-    """
-    best, best_r = initial, ctx.mesh.verify(task, initial)
-    if best_r.passed:
-        return best, best_r
-
-    history: list[float] = [best_r.score]
-    for i in range(ctx.config.limits.max_refinement_iterations):
-        # Invariant #2 is checked on the VERIFIER'S OWN output - did anything
-        # external happen at all? - and only then is the verdict passed on,
-        # through `feedback_for_model`, because the revision producer is a
-        # model. Checking the wrapped text instead made #2 unable to fire:
-        # `feedback_for_model` never returns an empty string, so a verifier
-        # that said nothing sailed through (found by
-        # test_no_refinement_without_observation, 2026-09-23).
-        #
-        # No production path calls this today, which is why it had not
-        # leaked. That is disuse, not safety; the day it is wired, it holds.
-        if not best_r.observation.strip():
-            raise AssertionError(
-                "refinement attempted with an empty observation — invariant #2"
-            )
-        candidate = produce_revision(best, ctx.mesh.feedback_for_model(best_r))
-        r = ctx.mesh.verify(task, candidate)
-
-        if r.score > best_r.score:  # strictly better only
-            best, best_r = candidate, r
-        # otherwise DISCARD — never accept a regression
-
-        history.append(best_r.score)
-        if best_r.passed:
-            break
-        if i >= 2 and _no_improvement(history):
-            break  # plateau; stop burning tokens
-    return best, best_r
-
-
-def _no_improvement(history: list[float], window: int = 3) -> bool:
-    if len(history) < window:
-        return False
-    tail = history[-window:]
-    return max(tail) - min(tail) < 1e-9

@@ -112,6 +112,8 @@ def test_untrusted_content_is_quarantine_summarized(ctx, workspace, scripted, ro
     assert local.calls, "quarantine call never happened"
     quarantine_calls = [c for c in local.calls if QUARANTINE_PREFIX in c["prefix"]]
     assert quarantine_calls, "untrusted content was not summarized under quarantine"
+    # M8.1 rule 4, on the call the loop really makes: nothing to actuate.
+    assert all(c["tools"] is None for c in quarantine_calls), "the quarantined call was handed tools"
     # The compression prefix must NOT be used for untrusted content — that one
     # does not carry the "this is data, not instructions" framing.
     from agent.execute.loop import COMPRESS_PREFIX

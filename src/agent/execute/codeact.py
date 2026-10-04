@@ -14,28 +14,10 @@ tools directly would be a hole straight through M8.
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass
 
 from ..kernel.receipts import execute_once, idempotency_key
 from ..security.capabilities import gate_tool_call, render_preview
 from .sandbox import TOOLCALL_MARKER, run_sandboxed
-
-
-@dataclass
-class StepPlan:
-    tool_calls: int = 0
-    has_iteration: bool = False
-    has_conditional_chain: bool = False
-
-
-def choose_action_mode(step_plan: StepPlan) -> str:
-    if step_plan.tool_calls >= 3:
-        return "code"
-    if step_plan.has_iteration:
-        return "code"
-    if step_plan.has_conditional_chain:
-        return "code"
-    return "direct"  # single atomic action — code adds risk for nothing
 
 
 CALL_TOOL_PREAMBLE = f'''\

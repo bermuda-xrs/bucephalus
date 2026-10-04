@@ -252,12 +252,3 @@ class EventLog:
             for seq, etype, payload_json, created_at in rows
         ]
 
-    def last_of_type(self, task_id: str, etype: str) -> dict | None:
-        row = self.conn.execute(
-            """SELECT seq, payload_json FROM events
-               WHERE task_id=? AND type=? ORDER BY seq DESC LIMIT 1""",
-            (task_id, etype),
-        ).fetchone()
-        if not row:
-            return None
-        return {"seq": row[0], "payload": json.loads(row[1])}

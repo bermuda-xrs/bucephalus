@@ -106,10 +106,3 @@ def on_deviation(ctx, task, plan, step_id: str, discovery: str) -> Deviation:
     return dev
 
 
-def deviation_rate(conn, task_id: str) -> float:
-    row = conn.execute(
-        """SELECT COUNT(*), COALESCE(SUM(CASE WHEN action!='proceed' THEN 1 ELSE 0 END),0)
-           FROM deviations WHERE task_id=?""",
-        (task_id,),
-    ).fetchone()
-    return (row[1] / row[0]) if row[0] else 0.0

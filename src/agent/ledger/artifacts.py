@@ -104,11 +104,3 @@ def project(
     )
 
 
-def artifacts_for(conn: sqlite3.Connection, task_id: str) -> list[dict]:
-    rows = conn.execute(
-        "SELECT id, kind, n_tokens, taint FROM artifacts WHERE task_id=? ORDER BY created_at",
-        (task_id,),
-    ).fetchall()
-    return [
-        {"id": r[0], "kind": r[1], "n_tokens": r[2], "taint": r[3]} for r in rows
-    ]

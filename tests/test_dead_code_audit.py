@@ -34,30 +34,12 @@ KNOWN_INERT = {
     "local_with_escalation":
         "M6.3 escalation-by-disagreement never runs; the router escalates on "
         "allowlist rules only.",
-    "freeze_skills":
-        "A second implementation. `AgentContext.freeze_skills` is the one the "
-        "loop calls; this module-level version in ledger/prefix.py has no "
-        "caller. It looked wired only because the audit credited the METHOD "
-        "call `ctx.freeze_skills(task)` to it.",
-
-    # --- superseded by an inline implementation ---------------------------
-    "refine_with_ratchet":
-        "The ratchet is implemented inline in execute/loop.py (best_score). "
-        "This is a second, unused implementation of the same rule.",
-    "quarantined_summarize":
-        "loop.condense_observation inlines the quarantine via "
-        "QUARANTINE_PREFIX and tools=None. Second implementation.",
-    "choose_strategy":
-        "assure/mesh picks verifiers directly.",
-    "choose_action_mode":
-        "execute/loop decides code-vs-action inline.",
 
     # --- not yet reached in the build order -------------------------------
     "import_external_skill":
         "External skills go through the same gate; none imported yet.",
 
-    # --- small helpers, genuinely unused ----------------------------------
-    "artifacts_for": "helper; superseded by ledger/artifacts.project().",
+    # --- test-only hooks, unreachable from a real run BY DESIGN -----------
     "reset":
         "test-only hook clearing net/politeness.py's robots and rate-limit "
         "caches, which are module-level and would otherwise leak between "
@@ -67,16 +49,6 @@ KNOWN_INERT = {
         "test-only helper for the ALPHA_INJECT_STALL fault-injection switch. "
         "Production has no call site BY DESIGN - a reset reachable from a "
         "real run is one more way for injection to affect a measurement.",
-    "describe":
-        "profile banner helper; report headers build their own provenance "
-        "block from profile_provenance instead. Surfaced 2026-09-03 by the "
-        "same audit fix as `calibrate`.",
-    "children": "task-tree helper; no caller.",
-    "contract_hash": "helper; plan pinning hashes the plan, not the contract.",
-    "has_receipt": "receipts are checked inside execute_once.",
-    "deviation_rate": "reporting helper for M13.4; never surfaced.",
-    "delete_step": "plan editing is done through the console API.",
-    "edit_step": "plan editing is done through the console API.",
 
     # --- METHODS, visible since D22 was closed 2026-09-16 -----------------
     # Invoked by a framework, not by this project. False positives, named
@@ -104,12 +76,6 @@ KNOWN_INERT = {
     "NoExternalProvider.recall": "the null implementation of that interface.",
 
     # Genuinely uncalled. Each is small, and each is a decision to leave it.
-    "AgentContext.gate_queue": "candidates are read by status; this derives the same list for a caller that does not exist yet.",
-    "BackendBase.set_throughput": "the router reads observed throughput from telemetry instead.",
-    "EventLog.last_of_type": "helper; every caller writes its own query.",
-    "ToolRegistry.read_only": "the planner builds its read-only set from the registry directly.",
-    "RunState.resolve_last_tool": "TUI helper for a view that was never built.",
-    "UserStore.grounding_sources": "M11's grounding input. The generator was retired 2026-09-15 (FINDINGS 1.27); the console still stores the notes and nothing reads them.",
 }
 
 
