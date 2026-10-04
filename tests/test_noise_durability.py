@@ -128,6 +128,7 @@ def test_a_real_kill_mid_pass_loses_at_most_one_task(tmp_path):
     finally:
         proc.kill()
         proc.wait(timeout=10)
+        proc.stdout.close()
 
     survived = noise.load_completed(led, sig)
     assert (0, "E01") in survived and (0, "E02") in survived, \

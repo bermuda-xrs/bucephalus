@@ -153,6 +153,9 @@ def _refuse(proc: subprocess.Popen, k32, job: int) -> None:
         proc.wait(timeout=5)
     finally:
         k32.CloseHandle(job)
+        for stream in (proc.stdin, proc.stdout, proc.stderr):   # the caller never sees proc
+            if stream:
+                stream.close()
 
 
 def close_job(job: int) -> None:

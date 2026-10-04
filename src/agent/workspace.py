@@ -80,7 +80,7 @@ def reset_workspace(root: str | Path, artifact_scope: list[str],
 
 
 def _empty(target: Path, attempts: int = 5) -> None:
-    """Delete every FILE under `target`, leaving the directories.
+    r"""Delete every FILE under `target`, leaving the directories.
 
     Not `shutil.rmtree`. Removing directories fails on Windows whenever
     anything holds a handle inside them, and this project lives under

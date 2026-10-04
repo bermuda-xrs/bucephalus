@@ -1,4 +1,4 @@
-﻿import json, os, pathlib, sys
+import json, os, pathlib, sys
 from agent.paths import state_root, ensure_state_dirs
 root = state_root(None)
 print("state_root ->", root)

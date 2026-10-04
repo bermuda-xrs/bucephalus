@@ -209,3 +209,25 @@ def test_the_inert_guarantees_are_named_as_such():
     for name in ("local_with_escalation",):
         assert name in KNOWN_INERT
         assert "INERT" in KNOWN_INERT[name] or "never" in KNOWN_INERT[name]
+
+
+def test_every_source_file_parses_cleanly():
+    """Audits like this one read source with `ast`. A file with a UTF-8 BOM
+    did not parse from text, so every such audit skipped it in silence; an
+    invalid escape (a regex's backslash-w in a plain string) is a SyntaxWarning on 3.12 and
+    an error in a later Python. Neither is allowed back."""
+    import warnings
+
+    skip = {".git", "build", "dist", ".venv", "node_modules", "__pycache__"}
+    bad = []
+    for f in sorted(ROOT.rglob("*.py")):
+        if skip & set(f.relative_to(ROOT).parts):
+            continue
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            try:
+                compile(f.read_text(encoding="utf-8"), str(f), "exec")
+            except SyntaxError as e:
+                bad.append(f"{f.relative_to(ROOT)}: {e.msg}")
+        bad += [f"{f.relative_to(ROOT)}:{w.lineno}: {w.message}" for w in caught]
+    assert not bad, "\n".join(bad)

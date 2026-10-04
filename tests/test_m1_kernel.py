@@ -183,6 +183,7 @@ def test_kill_and_resume(tmp_path: Path):
     kill_tree(proc.pid)
     proc.kill()
     proc.wait(timeout=10)
+    proc.stdout.close(), proc.stderr.close()
 
     assert marker.read_text(encoding="utf-8").count("\n") == 1
 

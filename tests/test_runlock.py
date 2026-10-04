@@ -128,6 +128,7 @@ def test_the_lock_is_released_when_a_process_is_killed(tmp_path):
         kill_tree(proc.pid)      # the trampoline AND the interpreter
         proc.kill()
         proc.wait(timeout=10)
+        proc.stdout.close()
 
     deadline = time.time() + 15
     while time.time() < deadline:                 # the OS releases lazily
@@ -234,6 +235,7 @@ def test_kill_tree_kills_the_child_not_just_the_parent(tmp_path):
     finally:
         proc.kill()
         proc.wait(timeout=10)
+        proc.stdout.close()
 
 
 def test_kill_tree_on_a_dead_pid_is_success():

@@ -118,6 +118,7 @@ def family(tmp_path):
             if pid:
                 kill_tree(pid)
         kill_tree(proc.pid)
+        proc.wait(timeout=15)                     # reaped here, not by the collector
 
 
 def test_a_healthy_child_is_not_selected(family):

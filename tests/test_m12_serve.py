@@ -74,16 +74,21 @@ def server(tmp_path_factory):
         "ALPHA_DATA_DIR": str(tmp / "user_data"),
         "ALPHA_CONFIG_DIR": str(tmp / "user_config"),
     }
+    # A file, not a pipe nobody reads: a full pipe blocks the server's next
+    # log write, and the pipes were never closed.
+    log_path = tmp / "server.log"
+    log = log_path.open("w", encoding="utf-8")
     proc = subprocess.Popen(  # noqa: S603
         [sys.executable, "-m", "uvicorn", "agent.control.asgi:app",
          "--host", "127.0.0.1", "--port", str(port), "--log-level", "warning"],
-        env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+        env=env, stdout=log, stderr=subprocess.STDOUT,
     )
+    log.close()                                   # the child holds its own copy
     base = f"http://127.0.0.1:{port}"
     deadline = time.time() + 60
     while time.time() < deadline:
         if proc.poll() is not None:
-            pytest.fail(f"server exited early: {proc.stderr.read()[:2000]}")
+            pytest.fail(f"server exited early: {log_path.read_text(encoding='utf-8')[:2000]}")
         try:
             if httpx.get(base + "/health", timeout=2).status_code == 200:
                 break

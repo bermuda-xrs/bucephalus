@@ -99,6 +99,7 @@ def test_the_code_runs_inside_the_job_trampoline_included():
     finally:
         proc.kill()
         close_job(job)
+        proc.communicate(timeout=15)
 
 
 def test_the_child_is_started_suspended(monkeypatch):
@@ -132,7 +133,7 @@ def test_closing_the_job_kills_what_it_started():
                              JobLimits(**SMALL), **PIPES)
     time.sleep(0.5)
     close_job(job)
-    proc.wait(timeout=5)
+    proc.communicate(timeout=5)
 
 
 def test_a_job_that_cannot_be_applied_refuses_the_run(monkeypatch):
@@ -155,11 +156,19 @@ def test_a_job_that_cannot_be_applied_refuses_the_run(monkeypatch):
         return K(), ntdll
 
     monkeypatch.setattr(winjob, "_api", broken)
-    with pytest.raises(JobError, match="never ran"):
-        spawn_in_job([*PY, "-c", "print('ran')"], JobLimits(**SMALL), **PIPES)
-    r = run_sandboxed("print('ran')", timeout_s=30)
+    import gc
+    import warnings
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always", ResourceWarning)
+        with pytest.raises(JobError, match="never ran"):
+            spawn_in_job([*PY, "-c", "print('ran')"], JobLimits(**SMALL), **PIPES)
+        r = run_sandboxed("print('ran')", timeout_s=30)
+        gc.collect()
     assert "ran" not in r["stdout"] and r["returncode"] == -1, r
     assert "limits could not be applied" in r["stderr"], r
+    # The refused child's pipes are closed with it, not left to the collector.
+    assert not [w for w in caught if issubclass(w.category, ResourceWarning)]
 
 
 def test_agent_code_cannot_start_a_process_below_the_audit_hook(tmp_path):

@@ -226,7 +226,7 @@ def test_every_bench_task_grader_can_fail(path, tmp_path, monkeypatch):
 
 SLUGIFY_RIGHT = (
     "import re\n\n\ndef slugify(s):\n"
-    "    return '-'.join(re.sub(r'[^\w\s]', '', s).lower().split())\n")
+    "    return '-'.join(re.sub(r'[^\\w\\s]', '', s).lower().split())\n")
 SLUGIFY_WRONG = "def slugify(s):\n    return s.lower().replace(' ', '-')\n"
 
 

@@ -1,4 +1,4 @@
-"""End-to-end demo with no API key, no GPU, and no network.
+r"""End-to-end demo with no API key, no GPU, and no network.
 
 Runs the real loop — real gate, real deputy, real receipts, real hash chain —
 with a scripted model standing in for the cloud backend, so you can watch the

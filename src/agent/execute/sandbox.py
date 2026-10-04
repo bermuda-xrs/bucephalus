@@ -708,8 +708,11 @@ def _run_with_bridge(
     stderr_parts: list[str] = []
 
     def _drain() -> None:
+        # Closed by the thread that read it to EOF: closing it from the main
+        # thread under a blocked read would wait on the stream's lock.
         try:
-            stderr_parts.append(proc.stderr.read() or "")
+            with proc.stderr:
+                stderr_parts.append(proc.stderr.read() or "")
         except Exception:  # noqa: BLE001
             pass
 

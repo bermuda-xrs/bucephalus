@@ -15,6 +15,21 @@ def test_sandbox_runs_and_reports():
     assert "hello from the box" in r["stdout"]
 
 
+def test_the_bridge_closes_every_pipe_it_opened():
+    """The bridge drained the child's stderr and never closed it: one open
+    handle per code action until the collector found it (ResourceWarning)."""
+    import gc
+    import warnings
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always", ResourceWarning)
+        r = run_sandboxed("import sys; print('x'); print('e', file=sys.stderr)",
+                          tool_handler=lambda tool, args: None)
+        gc.collect()
+    assert r["returncode"] == 0 and r["stderr"].strip() == "e"
+    assert not [w for w in caught if issubclass(w.category, ResourceWarning)]
+
+
 def test_sandbox_timeout():
     r = run_sandboxed("while True: pass", timeout_s=3)
     assert r["stderr"] == "TIMEOUT"
