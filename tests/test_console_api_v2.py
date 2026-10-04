@@ -4,7 +4,6 @@ meter, and the Control Center's panes. Every route is behind the token."""
 from __future__ import annotations
 
 import json
-import time
 
 import pytest
 from fastapi.testclient import TestClient
@@ -29,7 +28,7 @@ def _draft(ctx, task_id):
     # Stored the way the planner stores a draft: a fixture that spelled the
     # status by hand ("draft", where the planner writes "drafted") let the
     # console test green while it never offered a real plan for signature.
-    plan = store_plan(ctx, load_task(ctx.conn, task_id),
+    store_plan(ctx, load_task(ctx.conn, task_id),
                       Plan(objective="o", steps=[PlanStep(id="1", intent="read it")]).seal())
 
 

@@ -32,6 +32,8 @@ jobs:
           python-version: "3.11"
       - name: Install
         run: python -m pip install ".[dev]"
+      - name: Lint (bug rules only; see tool.ruff in pyproject.toml)
+        run: python -m ruff check src tests scripts packaging demo.py
       - name: Test (parallel, as pyproject's addopts says)
         env:
           PYTHONUTF8: "1"

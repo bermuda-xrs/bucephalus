@@ -22,7 +22,6 @@ it policed (M11, 2026-09-15, FINDINGS 1.27).
 from __future__ import annotations
 
 import ast
-import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]

@@ -27,7 +27,6 @@ from agent.execute.tools import (  # noqa: E402
     tool_glob,
     tool_grep,
     tool_web_fetch,
-    tool_web_search,
 )
 from agent.kernel.tasks import create_task  # noqa: E402
 from agent.kernel.types import Budget, Taint, TaskContract  # noqa: E402
@@ -154,7 +153,6 @@ def test_provenance_is_recorded_on_the_artifact(tmp_path, monkeypatch):
     exactly this, because a skill generated from a page is only checkable if
     the page can be named and re-fetched."""
     ctx = make_ctx(tmp_path)
-    t = new_task(ctx)
 
     class FakeResp:
         status_code = 200

@@ -282,7 +282,6 @@ def test_an_integrity_halt_is_deliberately_not_swept(ctx, workspace, tmp_path, m
 def test_a_human_park_is_not_swept(ctx, workspace, tmp_path, monkeypatch):
     """TaskPaused means a human must decide. The task is not finished, so
     grading it now would score work that was never authorised to complete."""
-    from agent.execute import loop as loop_mod
 
     # Scan the TaskPaused branch ONLY - to the next handler at the same
     # indent, not to the next `except Exception` anywhere below it. The

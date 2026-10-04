@@ -203,7 +203,7 @@ def test_a_denied_call_refuses_the_whole_batch_and_nothing_runs(tmp_path):
     that the rest were refused."""
     ctx = make_ctx(tmp_path)
     t = new_task(ctx)
-    calls = five_files(tmp_path)
+    five_files(tmp_path)                          # the work/ that grep would read
 
     ran: list[str] = []
     from agent.execute.tools import ToolSpec

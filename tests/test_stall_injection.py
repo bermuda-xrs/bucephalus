@@ -12,8 +12,6 @@ run is worse than no switch: it would turn a measurement into a fabrication.
 
 from __future__ import annotations
 
-import json
-import os
 import sys
 from pathlib import Path
 

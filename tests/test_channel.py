@@ -247,7 +247,6 @@ def test_run_code_is_denied_by_exposure_and_not_by_taint(bot):
     """
     out = bot.handle_update(message(text="tell me the date"))
     task = load_task(bot.ctx.conn, out["task_id"])
-    spec = bot.ctx.tools.get("run_code")
     own_words = {"code": "import os\nprint(os.listdir('.'))\n"}
 
     tracker = bot.ctx.taint_tracker(task.id)

@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import ctypes
 import msvcrt
-import subprocess
 import threading
 from ctypes import wintypes
 

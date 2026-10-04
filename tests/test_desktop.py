@@ -9,7 +9,6 @@ build's end-to-end close is in docs/evidence (step 3).
 from __future__ import annotations
 
 import json
-import os
 import subprocess
 import sys
 import threading

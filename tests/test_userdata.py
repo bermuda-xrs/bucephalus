@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import pytest
 
-from agent.userdata.store import SuiteTask, UserStore, ValidationError, validate_task
+from agent.userdata.store import SuiteTask, ValidationError, validate_task
 
 VERIFIERS = {"expected_value", "contains_all", "json_schema", "always_pass", "execution"}
 

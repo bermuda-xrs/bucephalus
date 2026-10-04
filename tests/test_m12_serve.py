@@ -8,7 +8,6 @@ start a server and talk to it.
 
 from __future__ import annotations
 
-import json
 import socket
 import subprocess
 import sys

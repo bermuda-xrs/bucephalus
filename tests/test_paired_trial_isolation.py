@@ -27,7 +27,6 @@ from __future__ import annotations
 
 import json
 
-import pytest
 
 from agent.skills.gate import TaskSpec, fetch_paired_outcomes, run_paired_trial
 

@@ -12,9 +12,7 @@ a display — a test that needed one is a test nobody runs.
 
 from __future__ import annotations
 
-import json
 import sys
-import threading
 from pathlib import Path
 
 import pytest

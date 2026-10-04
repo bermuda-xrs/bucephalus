@@ -194,7 +194,8 @@ def test_p2_the_executor_sees_the_same_bytes_whatever_the_secret(
         "other: the grader's secret changed the COURSE of the task")
     for i, (x, y) in enumerate(zip(pa, pb)):
         if x != y:
-            at = next(j for j, (c, d) in enumerate(zip(x, y)) if c != d)
+            # one prompt may be a prefix of the other: then they differ where it ends
+            at = next((j for j, (c, d) in enumerate(zip(x, y)) if c != d), min(len(x), len(y)))
             raise AssertionError(
                 f"executor prompt #{i + 1} depends on the grader's secret. "
                 f"First difference at byte {at}:\n"
@@ -224,7 +225,6 @@ def test_an_existing_database_stops_indexing_the_answer_key(tmp_path):
     new task is indexed twice, once with its answer. And the rows the old one
     already wrote still carry `x-expected`. The migration drops it by name and
     re-indexes through the new expression."""
-    import sqlite3
     import time
 
     from agent.kernel.db import open_db

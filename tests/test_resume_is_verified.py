@@ -19,7 +19,6 @@ and require a halt; leave an anchor behind and require the task to run.
 
 from __future__ import annotations
 
-import json
 import sys
 from pathlib import Path
 

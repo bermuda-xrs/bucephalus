@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import json
 
-import pytest
 
 from agent.execute.loop import run_task
 from agent.kernel.tasks import create_task

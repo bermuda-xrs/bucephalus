@@ -248,3 +248,25 @@ test holds. Not built. `docs/PROPOSALS.md` P4 says what it would take.
   the direction that cannot leak a grader.
 - **Reverse.** `platform.posix.link_names` could read `/proc`-less inode scans
   under the project root and return the names found.
+
+## U21 - Code with no caller is deleted, not listed (after the run, 2026-10-04)
+
+- **Why.** `KNOWN_INERT` had become a second home for code nothing called:
+  superseded copies of logic now inline elsewhere, and helpers no path
+  reached. Each was a place a reader had to check and a mutant that could
+  only survive. 20 were deleted. Where a test pinned a rule only on the dead
+  copy (the quarantined summarizer gets no tools; routing reacts to a slow
+  tier), the rule was asserted on the live path first.
+- **Kept.** The inert guarantee `local_with_escalation` (a decision for the
+  user: wire it or delete it), interfaces by design, test-only hooks, and
+  `import_external_skill`.
+- **Reverse.** `git revert 344d3b9`.
+
+## U22 - ruff as a dev dependency, bug rules only (2026-10-04)
+
+- **Why.** The project's AST scan counted a name inside a string template as
+  a use, so three unused imports in `src` survived it; ruff's pyflakes rules
+  do not. Added to `[dev]` (`ruff>=0.6`, installed 0.16.10 in the venv) and
+  run in CI over `src tests scripts packaging demo.py` with `F`, `E9`, `PLE`
+  only: bugs, never style. `bench/` is measurement tooling and is not linted.
+- **Reverse.** Remove the CI step, the `[tool.ruff]` tables, and the extra.

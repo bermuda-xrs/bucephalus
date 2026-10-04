@@ -19,7 +19,6 @@ flagged, and the flag stops meaning "this task was measured under pressure".
 from __future__ import annotations
 
 import ast
-import os
 import sys
 from pathlib import Path
 

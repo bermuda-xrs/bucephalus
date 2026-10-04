@@ -125,7 +125,7 @@ def test_an_anchor_that_disagrees_with_a_self_consistent_database_halts(tmp_path
     """
     ctx = make_ctx(tmp_path)
     t = new_task(ctx)
-    plan = approved(ctx, t)
+    approved(ctx, t)
     checkpoint(ctx.log, ctx.anchor, t.id)
 
     # The database still agrees with itself. Only the out-of-band copy differs,
@@ -180,7 +180,7 @@ def test_the_pin_is_checked_before_every_step_not_only_the_first(tmp_path):
 
     ctx = make_ctx(tmp_path)
     t = new_task(ctx)
-    plan = approved(ctx, t)
+    approved(ctx, t)
     checkpoint(ctx.log, ctx.anchor, t.id)
 
     calls = {"n": 0}
