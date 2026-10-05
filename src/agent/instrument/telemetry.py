@@ -58,12 +58,15 @@ def record_call(
 
 
 def begin_call(conn: sqlite3.Connection, task_id: str, backend: str, purpose: str,
-               escalated: bool = False, thinking: str = "unknown") -> int:
+               escalated: bool = False, thinking: str = "unknown",
+               model: str | None = None, est_input_tokens: int | None = None) -> int:
     """D36 - the row, written BEFORE the call. Usage is NULL until it returns."""
     cur = conn.execute(
-        """INSERT INTO calls(task_id, backend, purpose, escalated, thinking, created_at)
-           VALUES (?,?,?,?,?,?)""",
-        (task_id, backend, purpose, int(escalated), thinking, time.time()),
+        """INSERT INTO calls(task_id, backend, model, purpose, escalated, thinking,
+                             est_input_tokens, created_at)
+           VALUES (?,?,?,?,?,?,?,?)""",
+        (task_id, backend, model, purpose, int(escalated), thinking, est_input_tokens,
+         time.time()),
     )
     conn.commit()
     return cur.lastrowid

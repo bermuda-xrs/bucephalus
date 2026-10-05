@@ -150,6 +150,7 @@ CREATE TABLE IF NOT EXISTS calls (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     task_id         TEXT NOT NULL,
     backend         TEXT NOT NULL,
+    model           TEXT,
     purpose         TEXT NOT NULL,
     -- D36: written when the call STARTS, so usage is NULL until it returns.
     -- A row whose usage never arrives is the record of a call that never
@@ -164,6 +165,7 @@ CREATE TABLE IF NOT EXISTS calls (
     escalated       INTEGER NOT NULL DEFAULT 0,
     thinking        TEXT NOT NULL DEFAULT 'unknown',
     created_at      REAL NOT NULL,      -- the START (pre-D36 rows: the return)
+    est_input_tokens INTEGER,
     outcome         TEXT                -- NULL in flight or never ended;
                                         -- returned | stalled | error | interrupted
 );
@@ -554,6 +556,8 @@ def connect(db_path: str | Path) -> sqlite3.Connection:
 _ADDED_COLUMNS = (
     ("tasks", "origin", "TEXT NOT NULL DEFAULT 'local'"),
     ("approvals", "consumed_at", "REAL"),
+    ("calls", "model", "TEXT"),
+    ("calls", "est_input_tokens", "INTEGER"),
 )
 
 

@@ -77,6 +77,7 @@ ROWS: list[tuple[str, str, str, str]] = [
     ("the deputy decides", "review.decided", "event", ""),
     ("a task is steered (forked)", "human.steered", "event", ""),
     ("deviation from the plan is detected", "deviation.detected", "event", ""),
+    ("the ceiling budgets against a fitted estimator", "tokens.calibration", "fitted", ""),
 
     # -- context management: G1's mechanisms ------------------------------
     # Counted from what the code WRITES. These three rows used to count
@@ -153,6 +154,10 @@ def _count(conn: sqlite3.Connection, kind: str, what: str) -> int | None:
         if kind == "event":
             return conn.execute(
                 "SELECT COUNT(*) FROM events WHERE type=?", (what,)).fetchone()[0]
+        if kind == "fitted":
+            return sum(1 for (p,) in conn.execute(
+                "SELECT payload_json FROM events WHERE type=?", (what,))
+                if json.loads(p).get("fitted"))
         if kind == "rotate":
             # A boundary, not the first session every task opens at start.
             return sum(

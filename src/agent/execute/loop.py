@@ -37,7 +37,7 @@ from ..security.exposure import ToolNotExposed
 from ..security.exposure import check as exposure_check
 from ..security.taint import QUARANTINE_PREFIX
 from ..assure.verifiers import inspects
-from ..tokens import count_tokens
+from ..tokens import Calibration, calibration, count_tokens
 from .. import stream
 
 COMPRESS_PREFIX = """\
@@ -266,6 +266,12 @@ def run_task(ctx, task_id: str) -> TaskResult:
         set_status(ctx.conn, ctx.log, task, TaskStatus.FAILED, "skill_set_changed")
         raise
     memory = ctx.freeze_memory(task.id)   # same reason, same moment
+    exe = ctx.backends.get("cloud")
+    cal = calibration(ctx.conn, "cloud", exe.cfg.model) if exe else Calibration()
+    ctx.log.append(task.id, "tokens.calibration",
+                   {"backend": "cloud", "model": exe.cfg.model if exe else None,
+                    "n": cal.n, "slope": round(cal.slope, 4),
+                    "intercept": round(cal.intercept, 1), "fitted": cal.fitted})
     entries: list[LedgerEntry] = list(ctx.seed_entries(task))
     plan = ctx.approved_plan(task)
     started = time.time()
@@ -336,8 +342,7 @@ def run_task(ctx, task_id: str) -> TaskResult:
 
             window = ctx.window_for("cloud")
             action = enforce_ceiling(
-                count_tokens(prefix),
-                sum_tokens(entries),
+                *cal.apply(count_tokens(prefix), sum_tokens(entries)),
                 window,
                 ctx.config.limits.context_fill_ratio,
             )

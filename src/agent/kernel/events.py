@@ -148,6 +148,7 @@ EVENT_TYPES = frozenset(
         # Each now records what it verified.
         "integrity.verified",
         "plan.pin_verified",
+        "tokens.calibration",
     }
 )
 

@@ -184,8 +184,11 @@ class AgentContext:
 
         b = self.backends[backend] if isinstance(backend, str) else backend
         task_id = task if isinstance(task, str) else task.id
+        from .tokens import count_tokens
+
+        est = count_tokens(kwargs.get("prefix") or "") + count_tokens(kwargs.get("tail") or "")
         cid = begin_call(self.conn, task_id, b.name, purpose, escalated=escalated,
-                         thinking=b.cfg.thinking)
+                         thinking=b.cfg.thinking, model=b.cfg.model, est_input_tokens=est)
         t0 = time.time()
         try:
             resp = b.complete(**kwargs)
