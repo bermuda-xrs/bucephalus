@@ -78,6 +78,7 @@ ROWS: list[tuple[str, str, str, str]] = [
     ("a task is steered (forked)", "human.steered", "event", ""),
     ("deviation from the plan is detected", "deviation.detected", "event", ""),
     ("the ceiling budgets against a fitted estimator", "tokens.calibration", "fitted", ""),
+    ("a follow-up is given its conversation", "conversation.history", "event", ""),
 
     # -- context management: G1's mechanisms ------------------------------
     # Counted from what the code WRITES. These three rows used to count

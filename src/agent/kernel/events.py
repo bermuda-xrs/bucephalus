@@ -149,6 +149,7 @@ EVENT_TYPES = frozenset(
         "integrity.verified",
         "plan.pin_verified",
         "tokens.calibration",
+        "conversation.history",
     }
 )
 

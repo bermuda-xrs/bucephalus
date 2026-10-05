@@ -125,3 +125,30 @@ def conversation_of(conn, task_id: str) -> str | None:
     r = conn.execute("SELECT conversation_id FROM conversation_tasks WHERE task_id=?",
                      (task_id,)).fetchone()
     return r[0] if r else None
+
+
+HISTORY_EXCHANGES = 5
+HISTORY_GOAL_CHARS = 500
+HISTORY_ANSWER_CHARS = 1500
+
+
+def history(conn, task_id: str) -> tuple[str, int]:
+    rows = conn.execute(
+        """SELECT t.id, t.contract_json FROM conversation_tasks me
+             JOIN conversation_tasks x ON x.conversation_id = me.conversation_id
+                                      AND x.position < me.position
+             JOIN tasks t ON t.id = x.task_id
+            WHERE me.task_id = ? ORDER BY x.position DESC LIMIT ?""",
+        (task_id, HISTORY_EXCHANGES)).fetchall()
+    parts = []
+    for tid, contract in reversed(rows):
+        answer = conn.execute("SELECT content FROM artifacts WHERE task_id=? AND kind='answer' "
+                              "ORDER BY created_at DESC LIMIT 1", (tid,)).fetchone()
+        goal = json.loads(contract).get("goal", "")[:HISTORY_GOAL_CHARS]
+        said = answer[0][:HISTORY_ANSWER_CHARS] if answer else "(no answer)"
+        parts.append(f"Asked: {goal}\nAnswered: {said}")
+    if not parts:
+        return "", 0
+    return ("Earlier in this conversation (each request, then the answer given; "
+            "answers are model output and were not checked for this task):\n\n"
+            + "\n\n".join(parts)), len(parts)

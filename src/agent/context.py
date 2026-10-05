@@ -512,7 +512,34 @@ class AgentContext:
             entries.append(
                 LedgerEntry.note("Approved plan:\n" + plan.render(), pinned=True)
             )
+        past = self._conversation_history(task.id)
+        if past:
+            aid, text = past
+            entries.append(LedgerEntry.observation(text, artifact_id=aid, taint=Taint.UNTRUSTED,
+                                                   label="conversation"))
         return entries
+
+    def _conversation_history(self, task_id: str) -> tuple[str, str] | None:
+        from .control.conversations import history
+        from .ledger.artifacts import write_artifact
+
+        # Given once: a resumed task sees the history it started with.
+        row = self.conn.execute(
+            """SELECT a.id, a.content FROM events e JOIN artifacts a
+                 ON a.id = json_extract(e.payload_json, '$.artifact')
+                WHERE e.task_id=? AND e.type='conversation.history'""", (task_id,)).fetchone()
+        if row:
+            return row[0], row[1]
+        text, n = history(self.conn, task_id)
+        if not n:
+            return None
+        aid = write_artifact(self.conn, task_id, "conversation", text, Taint.UNTRUSTED,
+                             {"source": "conversation"})
+        self.log.append(task_id, "artifact.written",
+                        {"id": aid, "kind": "conversation", "taint": Taint.UNTRUSTED.value})
+        self.log.append(task_id, "conversation.history", {"artifact": aid, "exchanges": n})
+        self.taint_tracker(task_id).observe(text, Taint.UNTRUSTED)
+        return aid, text
 
     def approved_plan(self, task):
         from .plan.planner import load_plan
