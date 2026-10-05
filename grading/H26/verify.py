@@ -47,8 +47,9 @@ def check():
         if k not in got:
             return False, 0.0
         if k in EXACT_KEYS:
-            hit = (list(got[k]) == list(exp) if isinstance(exp, list)
-                   else got[k] == exp)
+            hit = (isinstance(got[k], list) and len(got[k]) == len(exp)
+                   and all(type(a) is type(b) and a == b for a, b in zip(got[k], exp))
+                   if isinstance(exp, list) else type(got[k]) is type(exp) and got[k] == exp)
             scores.append(1.0 if hit else 0.0)
             ok = ok and hit
             continue

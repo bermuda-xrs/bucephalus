@@ -71,7 +71,11 @@ __version__ = "0.1.0"
 #      measurement `always_pass` is not a pass. write-function-002 is graded
 #      by a held-out verify.py. v5's pass counts, strict and unannounced, are
 #      void on that task (FINDINGS 1.34).
-HARNESS_VERSION = 6
+#   7  2026-10-05: P5, P6, P3 together. A graded program cannot write its own
+#      verdict (nonce, read last, os._exit; code graders run the answer in a
+#      child; exact keys compare types). The ceiling budgets against a per-
+#      backend fit of the estimator. A follow-up task sees its conversation.
+HARNESS_VERSION = 7
 
 
 # Bump this whenever the set of libraries model-written code may import

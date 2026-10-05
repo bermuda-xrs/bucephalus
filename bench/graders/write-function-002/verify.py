@@ -1,12 +1,3 @@
-"""Grader for write-function-002. Held out: grader_dir lies outside
-artifact_scope, and verify_program sends only this file's TEXT into the
-sandbox. Runs with the workspace (work/) as its working directory.
-
-The cases avoid the spec's ambiguities - whether an apostrophe or an inner
-hyphen splits a word - so that any reasonable reading of "lowercases, strips
-punctuation, and joins words with hyphens" passes and only a wrong one fails.
-"""
-
 CASES = [
     ("Hello, World!", "hello-world"),
     ("  Multiple   spaces  here ", "multiple-spaces-here"),
@@ -16,23 +7,39 @@ CASES = [
     ("(parenthesised) words, too!", "parenthesised-words-too"),
 ]
 
+# The graded code runs in a child: in this process it could rewrite check() or its verdict.
+CHILD = r"""
+import importlib.util, json, sys
+spec = importlib.util.spec_from_file_location("strings_under_test", "strings.py")
+mod = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(mod)
+fn = getattr(mod, "slugify", None)
+out = []
+for given in json.loads(sys.argv[1]):
+    try:
+        r = fn(given)
+        out.append(str.__str__(r) if isinstance(r, str) else None)
+    except Exception:
+        out.append(None)
+sys.stdout.write("\x00" + json.dumps(out))
+"""
+
 
 def check():
-    import importlib.util
+    import json
     import os
+    import subprocess
+    import sys
 
     if not os.path.exists("strings.py"):
         return False, 0.0
-    spec = importlib.util.spec_from_file_location("strings_under_test", "strings.py")
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    fn = getattr(mod, "slugify", None)
-    if not callable(fn):
+    try:
+        r = subprocess.run([sys.executable, "-c", CHILD, json.dumps([g for g, _ in CASES])],
+                           capture_output=True, text=True, encoding="utf-8", timeout=30)
+        got = json.loads(r.stdout.rsplit("\x00", 1)[1])
+    except (subprocess.TimeoutExpired, IndexError, ValueError):
         return False, 0.0
-    ok = 0
-    for given, want in CASES:
-        try:
-            ok += fn(given) == want
-        except Exception:  # noqa: BLE001 - a raising slugify fails the case
-            pass
+    if not isinstance(got, list) or len(got) != len(CASES):
+        return False, 0.0
+    ok = sum(type(g) is str and g == want for g, (_, want) in zip(got, CASES))
     return ok == len(CASES), ok / len(CASES)

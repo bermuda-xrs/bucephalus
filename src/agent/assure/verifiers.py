@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import json
 import re
+import secrets
 import shutil
 import subprocess
 from pathlib import Path
@@ -575,45 +576,56 @@ class VerifyProgramVerifier:
         # the sandbox links the task directory in under its own name and runs
         # with the workdir as cwd — so without this chdir every check looks in
         # the wrong place and reports a missing answer that is actually there.
+        nonce = secrets.token_hex(16)
         harness = (
-            f"import os as _os\n_os.chdir({workdir.name!r})\n\n"
+            "import os as _o\n"
+            "from json.encoder import encode_basestring_ascii as _q\n"
+            "try:\n    _o.remove(__file__)\nexcept OSError:\n    pass\n"
+            f"_o.chdir({workdir.name!r})\n\n"
             + script.read_text(encoding="utf-8")
-            + "\n\nimport json as _j, sys as _s\n"
-            "try:\n"
-            "    _p, _sc = check()\n"
-            "    _s.stdout.write('\\x02RESULT' + _j.dumps("
-            "{'passed': bool(_p), 'score': float(_sc)}))\n"
-            "except Exception as _e:\n"
-            "    _s.stdout.write('\\x02RESULT' + _j.dumps("
-            "{'passed': False, 'score': 0.0, 'error': type(_e).__name__ + ': ' + str(_e)}))\n"
+            + "\n\ndef _verdict(_w=_o.write, _x=_o._exit, _f=float, _q=_q, _s=str):\n"
+            "    try:\n"
+            "        _p, _sc = check()\n"
+            "        _sc = _f(_sc)\n"
+            "        _sc = _sc if -1e308 < _sc < 1e308 else 0.0\n"
+            "        _line = '{\"passed\": %s, \"score\": %r}' % ('true' if _p is True else 'false', _sc)\n"
+            "    except BaseException as _e:\n"
+            "        _line = '{\"passed\": false, \"score\": 0.0, \"error\": %s}' % _q(\n"
+            "            _s(type(_e).__name__) + ': ' + _s(_e))\n"
+            f"    _w(1, ('\\n\\x02RESULT{nonce}' + _line + '\\n').encode())\n"
+            "    _x(0)\n\n\n"
+            "_verdict()\n"
         )
         r = run_sandboxed(harness, allowed_paths=[str(workdir)], timeout_s=60)
+        return self._read_verdict(r, nonce)
 
+    @classmethod
+    def _read_verdict(cls, r: dict, nonce: str) -> VerifyResult:
         out = r.get("stdout", "")
-        marker = "\x02RESULT"
+        marker = "\x02RESULT" + nonce
         if marker not in out:
             return VerifyResult(
                 passed=False, score=0.0,
-                observation=(f"{self.SCRIPT} produced no verdict.\n"
+                observation=(f"{cls.SCRIPT} produced no verdict.\n"
                              f"stdout: {out[-800:]}\nstderr: {r.get('stderr','')[-800:]}"),
-                verifier_id=self.kind,
+                verifier_id=cls.kind,
             )
         try:
-            payload = json.loads(out.split(marker, 1)[1].strip().splitlines()[0])
+            payload = json.loads(out.rsplit(marker, 1)[1].strip().splitlines()[0])
         except (json.JSONDecodeError, IndexError) as e:
             return VerifyResult(passed=False, score=0.0,
                                 observation=f"unparseable verdict: {e}",
-                                verifier_id=self.kind)
+                                verifier_id=cls.kind)
 
         note = payload.get("error", "")
         return VerifyResult(
-            passed=bool(payload.get("passed")),
+            passed=payload.get("passed") is True,
             score=float(payload.get("score", 0.0)),
-            observation=(f"{self.SCRIPT}: passed={payload.get('passed')} "
+            observation=(f"{cls.SCRIPT}: passed={payload.get('passed')} "
                          f"score={payload.get('score')}"
                          + (f" · {note}" if note else "")
                          + (f"\n{r.get('stderr','')[-400:]}" if r.get("stderr") else "")),
-            verifier_id=self.kind,
+            verifier_id=cls.kind,
         )
 
 

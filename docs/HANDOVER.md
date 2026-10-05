@@ -286,7 +286,7 @@ regenerates it. Verified 2026-10-01, against commit `4c39167`.
 |---|---|---|
 | Branch | `main`, the line of record, fast-forwarded to `iteration-3` (the unattended run of 2026-09-28/29, `docs/UNATTENDED-REPORT.md`) once its suite, frozen gate and audit passed; tag `g1-closed-2026-09-25` marks the measurement branch's tip; no remote | `git branch --show-current` |
 | Written against | `4c39167`; the test asserts this is an ancestor of HEAD | `git log --oneline -1` |
-| Harness version | **6**, bumped 2026-09-25: a check must be able to fail (DR7) - the final sweep graded "{}" and `execution` passed it; five more verifiers could not fail (FINDINGS 1.34). 5 held the grader out under measurement. Pass rates before 5 are too high | `grep HARNESS_VERSION src/agent/__init__.py` |
+| Harness version | **7**, bumped 2026-10-05: P5 (a graded program cannot write its own verdict), P6 (the ceiling uses a per-backend fit of the estimator), P3 (a follow-up sees its conversation). Numbers from 6 and earlier do not compare | `grep HARNESS_VERSION src/agent/__init__.py` |
 | Toolset version | **6** | `grep TOOLSET_VERSION src/agent/__init__.py` |
 | Test count | *deliberately not stated* | `python -m pytest tests -q`, and read the tail line. The skips are the live-credential tests, until D26's credentials exist |
 | Open defects | *deliberately not stated* | the state table at the top of `docs/DEFERRED.md`; every entry also carries its state in its own heading |

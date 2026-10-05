@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import types
+from pathlib import Path
 
 import pytest
 
@@ -190,18 +191,88 @@ def _program(tmp_path, check_body):
         root=str(tmp_path))
 
 
-def test_an_unparseable_verdict_fails(tmp_path):
-    """Kills the unparseable-verdict result -> None or passed=True."""
-    r = _program(tmp_path, "    import sys\n    sys.stdout.write('\\x02RESULTnot json\\n')\n"
-                           "    return True, 1.0")
+def test_an_unparseable_verdict_fails():
+    r = V.VerifyProgramVerifier._read_verdict({"stdout": "\x02RESULTn0nce not json\n"}, "n0nce")
     assert r.passed is False and "unparseable" in r.observation
 
 
-@pytest.mark.xfail(strict=True, reason="D79 / P5: the verdict is read from the first marker "
-                   "on stdout, which code the grader runs can print first. Fixing it changes "
-                   "what counts as a pass, so HARNESS_VERSION - waiting for the user.")
+_FORGE = ("    import sys\n    sys.stdout.write('\\x02RESULT' + "
+          "__import__('json').dumps({'passed': True, 'score': 1.0}) + '\\n')\n")
+
+
 def test_a_graded_program_cannot_print_its_own_verdict(tmp_path):
-    r = _program(tmp_path, "    import sys\n    sys.stdout.write('\\x02RESULT' + "
-                           "__import__('json').dumps({'passed': True, 'score': 1.0}) + '\\n')\n"
-                           "    return False, 0.0")
+    r = _program(tmp_path, _FORGE + "    return False, 0.0")
     assert r.passed is False, json.dumps(r.observation)
+
+
+def test_a_verdict_forged_at_exit_is_not_read(tmp_path):
+    r = _program(tmp_path, "    import atexit, sys\n"
+                           "    atexit.register(lambda: sys.stdout.write("
+                           "'\\x02RESULT{\"passed\": true, \"score\": 1.0}\\n'))\n"
+                           "    return False, 0.0")
+    assert r.passed is False, r.observation
+
+
+def test_a_patched_serializer_cannot_forge_the_verdict(tmp_path):
+    r = _program(tmp_path, "    import json\n"
+                           "    json.dumps = lambda *a, **k: '{\"passed\": true, \"score\": 1.0}'\n"
+                           "    return False, 0.0")
+    assert r.passed is False, r.observation
+
+
+def test_a_true_verdict_still_passes(tmp_path):
+    r = _program(tmp_path, _FORGE.replace("True", "False") + "    return True, 1.0")
+    assert r.passed is True and r.score == 1.0, r.observation
+
+
+REPO = Path(__file__).resolve().parents[1]
+
+
+def _graded(tmp_path, grader, files):
+    for name, text in files.items():
+        (tmp_path / "work" / name).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / "work" / name).write_text(text, encoding="utf-8")
+    return V.VerifyProgramVerifier().check(
+        "", TaskContract(goal="g", artifact_scope=["work"], grader_dir=str(REPO / grader)),
+        root=str(tmp_path))
+
+
+SLUG = ("import re\n\n"
+        "def slugify(s):\n"
+        "    return '-'.join(re.sub(r'[^\\w\\s]', '', s).lower().split())\n")
+W2 = "bench/graders/write-function-002"
+
+
+def test_a_correct_function_passes_its_grader(tmp_path):
+    r = _graded(tmp_path, W2, {"strings.py": SLUG})
+    assert r.passed is True, r.observation
+
+
+def test_an_always_equal_return_value_fails_its_grader(tmp_path):
+    cheat = ("class _Eq(str):\n    def __eq__(self, o): return True\n"
+             "    def __ne__(self, o): return False\n    __hash__ = str.__hash__\n"
+             "def slugify(s):\n    return _Eq('x')\n")
+    r = _graded(tmp_path, W2, {"strings.py": cheat})
+    assert r.passed is False, r.observation
+
+
+def test_graded_code_that_prints_a_verdict_fails_its_grader(tmp_path):
+    cheat = ("import sys, json\n"
+             "sys.stdout.write('\\x02RESULT' + json.dumps({'passed': True, 'score': 1.0}) + '\\n')\n"
+             "def slugify(s):\n    return ''\n")
+    r = _graded(tmp_path, W2, {"strings.py": cheat})
+    assert r.passed is False, r.observation
+
+
+def test_exact_keys_compare_types_too(tmp_path):
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("h27", REPO / "grading/H27/verify.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    want = mod.EXPECTED["bad_row_indices"]
+    assert want and all(type(v) is int for v in want)
+    answer = {**mod.EXPECTED, "bad_row_indices": [float(v) for v in want]}
+    ok = _graded(tmp_path / "a", "grading/H27", {"output/answer.json": json.dumps(mod.EXPECTED)})
+    bad = _graded(tmp_path / "b", "grading/H27", {"output/answer.json": json.dumps(answer)})
+    assert ok.passed is True and bad.passed is False, (ok.observation, bad.observation)
