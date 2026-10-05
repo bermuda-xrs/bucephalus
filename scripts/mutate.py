@@ -1,25 +1,3 @@
-"""Mutation testing for the security-critical modules (iteration 3, 2.3).
-
-DR7 applied to the suite itself: a check must be shown able to fail, and a
-mutant that survives is a change to the code no test notices.
-
-mutmut does not run on Windows, so this is the equivalent, kept small:
-
-    python scripts/mutate.py src/agent/security/taint.py tests/test_m8_security.py ...
-        [--only name,name] [--jobs 6] [--out result.json]
-
-Each mutant is ONE operator at ONE place, written into a private copy of src/
-(the repository is never mutated), and the named tests run against it with
--x. Exit 0 = SURVIVED. A failure, an import error or a timeout = KILLED.
-Operators: comparison flips, and<->or, `not` removed, if/while condition
-negated, True<->False, int n -> n+1, + <-> -, `return X` -> `return None`,
-`raise` -> `pass`, and one string dropped from a literal tuple/list/set (an
-allowlist or denylist with a member missing).
-
-Tests that spawn `python -m agent...` run the REAL source, so a mutant only
-they would catch is reported as surviving: the count errs toward "survived".
-"""
-
 from __future__ import annotations
 
 import argparse
@@ -44,7 +22,6 @@ _FLIP = {ast.Eq: ast.NotEq, ast.NotEq: ast.Eq, ast.Lt: ast.GtE, ast.GtE: ast.Lt,
 
 
 def _nodes(tree: ast.AST, only: set[str] | None) -> list[ast.AST]:
-    """Every node in mutation scope, in a fixed depth-first order."""
     roots: list[ast.AST] = []
     for n in tree.body:
         name = getattr(n, "name", None)
@@ -53,14 +30,14 @@ def _nodes(tree: ast.AST, only: set[str] | None) -> list[ast.AST]:
             name = next((t.id for t in tg if isinstance(t, ast.Name)), None)
         if only is None or name in only:
             roots.append(n)
-        elif isinstance(n, ast.ClassDef):          # --only Class.method
+        elif isinstance(n, ast.ClassDef):
             roots += [m for m in n.body
                       if f"{n.name}.{getattr(m, 'name', '')}" in only]
     out: list[ast.AST] = []
 
     def walk(n: ast.AST) -> None:
         if isinstance(n, ast.Expr) and isinstance(n.value, ast.Constant):
-            return                                   # docstrings
+            return
         out.append(n)
         for c in ast.iter_child_nodes(n):
             walk(c)
@@ -153,10 +130,6 @@ def apply(source: str, m: dict, only: set[str] | None = None) -> str:
 
 def _run(tree_dir: Path, tests: list[str], timeout: float,
          why: list | None = None) -> tuple[str, float]:
-    """Run the tests against a tree. `why`, if given, receives the ids of the
-    tests that failed - so a kill can be traced to the test that made it, and
-    an unrelated failure (a flaky test) is visible rather than a silent kill
-    (AUDIT-ITERATION-3 B2)."""
     from agent import proc as _proc
 
     env = dict(os.environ, PYTHONPATH=str(tree_dir / "src"), PYTHONDONTWRITEBYTECODE="1")
@@ -182,16 +155,13 @@ def _run(tree_dir: Path, tests: list[str], timeout: float,
 def _copy(dst: Path) -> Path:
     shutil.copytree(ROOT / "src", dst / "src",
                     ignore=shutil.ignore_patterns("__pycache__", "*.egg-info"))
-    # A checkout, as the real one is: the desktop reads its default config
-    # from beside the source, and a tree without one failed the whole suite
-    # unmutated - which silently disabled every recheck (first queue).
     for f in [ROOT / "pyproject.toml", *ROOT.glob("config*.yaml")]:
         shutil.copy2(f, dst / f.name)
     return dst
 
 
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    ap = argparse.ArgumentParser()
     ap.add_argument("module")
     ap.add_argument("tests", nargs="+")
     ap.add_argument("--only", default="")
@@ -216,7 +186,6 @@ def main(argv: list[str] | None = None) -> int:
         ms = [m for m in ms if (m["node"], m["op"]) in again]
     work = Path(tempfile.mkdtemp(prefix="alpha-mut-"))
     trees = [_copy(work / f"w{i}") for i in range(a.jobs)]
-    # Baseline: the UNPARSED, unmutated module must pass, or every kill is noise.
     (trees[0] / rel).write_text(ast.unparse(ast.parse(source)), encoding="utf-8")
     status, base = _run(trees[0], a.tests, 600)
     if status != "survived":
@@ -252,10 +221,6 @@ def main(argv: list[str] | None = None) -> int:
             results = list(ex.map(one, ms))
     survivors = [r for r in results if r["status"] == "survived"]
     if a.recheck and survivors:
-        # A survivor of the targeted tests may die to a test elsewhere; only
-        # what the whole suite misses is a gap worth a new test. The whole
-        # suite must first PASS here unmutated, or every survivor would read
-        # as killed (DR7 - it was not checked the first time).
         t = trees[0]
         (t / rel).write_text(ast.unparse(ast.parse(source)), encoding="utf-8")
         ok, _ = _run(t, ["tests", "-n", "12", "--dist", "loadgroup"], 1800)
@@ -267,8 +232,6 @@ def main(argv: list[str] | None = None) -> int:
             (t / rel).write_text(apply(source, r, only), encoding="utf-8")
             why: list[str] = []
             st, _ = _run(t, ["tests", "-n", "12", "--dist", "loadgroup"], 900, why)
-            # Only a FAILING test is a kill; a timeout is undecided here too
-            # (AUDIT-ITERATION-3 B1 - the first fix stopped one phase short).
             if st == "killed":
                 r["status"], r["killed_by"] = "killed-by-suite", why[:3]
             elif st == "timeout":
@@ -281,7 +244,6 @@ def main(argv: list[str] | None = None) -> int:
         print(f"  SURVIVED {rel}:{r['line']} {r['op']:<12} {lines[r['line'] - 1].strip()[:90]}")
     for r in timeouts:
         print(f"  TIMEOUT  {rel}:{r['line']} {r['op']:<12} {lines[r['line'] - 1].strip()[:90]}")
-    # A timeout proves nothing either way: it is neither a kill nor a survivor.
     decided = len(results) - len(timeouts)
     killed = decided - len(survived)
     score = killed / decided if decided else 1.0

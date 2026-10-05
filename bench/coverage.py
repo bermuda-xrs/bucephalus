@@ -1,25 +1,3 @@
-"""Can this skill reach the gate's discordant-pair floor at all?
-
-M9.4 measures retrieval separately from quality, because "the right procedure
-existed and was not applied" is a different failure from "the procedure was
-bad". This is the cheaper cousin of that question, asked BEFORE spending the
-compute:
-
-    a task whose trap the skill does not address cannot become a discordant
-    pair, because the skill has nothing to say about it.
-
-Only discordant pairs carry information in McNemar's test, and the gate needs
-`min_discordant_pairs` of them. So if a skill's modules touch only 8 of 30
-tasks, the calibration cannot clear a floor of 10 no matter how good the
-skill is — and that is worth knowing before, not after, a four-hour run.
-
-This is an UPPER BOUND and nothing more. Covering a trap does not mean fixing
-it; the skill still has to work. Treat a low number as a reason to stop and a
-high number as permission to proceed, never as a prediction.
-
-  python bench/coverage.py --skill examples/skills/aero_units_discipline.md
-"""
-
 from __future__ import annotations
 
 import argparse
@@ -27,9 +5,6 @@ import re
 from collections import defaultdict
 from pathlib import Path
 
-# What a module claims to handle, as the vocabulary its tasks' traps use.
-# Deliberately generous: this is an upper bound, so over-matching is the safe
-# direction to be wrong in.
 TOPICS = {
     "units": re.compile(
         r"km/h|km |minutes|hours|seconds to|to seconds|to days|units|SI", re.I),
@@ -41,7 +16,6 @@ TOPICS = {
 
 
 def skill_topics(text: str) -> set[str]:
-    """Which topics this skill's text actually claims."""
     return {name for name, rx in TOPICS.items() if rx.search(text)}
 
 

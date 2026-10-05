@@ -1,31 +1,10 @@
-"""Where the measurement is, and what may run next.
-
-The plan has decision points in it, and a decision point that lives only in a
-person's memory is one that gets skipped at 2am when a run finishes and the
-obvious thing to do is start the next one. So the gates are here, in code:
-
-  pass 1        ->  mean outside 25-75%? STOP and rebalance difficulty.
-                    A single pass of 30 is about +/-9pp at 1 SE, so this net
-                    only catches gross miscalibration - which is its job.
-  passes 2-3    ->  more than 8 of 30 flaky? STOP and tighten task specs.
-                    A lift measured against that much noise cannot be read.
-  calibration   ->  rejected? The INSTRUMENT is broken, and every later
-                    rejection is uninterpretable. Fix that before anything.
-
-`status` prints where things stand and the exact next command. It exits 0 when
-the next step may proceed and 1 when a gate says stop, so a driver script can
-branch on it rather than on someone reading the output.
-
-  python bench/nextstep.py status
-"""
-
 from __future__ import annotations
 
 import argparse
 import json
 from pathlib import Path
 
-BAND_PASS1 = (0.25, 0.75)      # gross-miscalibration net, one pass only
+BAND_PASS1 = (0.25, 0.75)
 MAX_FLAKY_FRACTION = 8 / 30
 TOTAL_PASSES = 3
 
@@ -40,7 +19,6 @@ def _load(p: Path):
 
 
 def read_ledger(path: Path) -> tuple[dict, dict]:
-    """(signature, {(run, key): row}) from the append-only ledger."""
     sig, rows = {}, {}
     if not path.exists():
         return sig, rows
@@ -51,7 +29,7 @@ def read_ledger(path: Path) -> tuple[dict, dict]:
         try:
             row = json.loads(line)
         except json.JSONDecodeError:
-            continue          # truncated final line: a kill mid-write
+            continue
         if "_signature" in row:
             sig = row["_signature"]
         else:
@@ -80,7 +58,6 @@ def assess(runs_dir: Path, n_tasks: int = 30) -> dict:
         "calibration_done": cal is not None,
     }
 
-    # --- pass 1 not finished -------------------------------------------
     if done < n_tasks:
         state.update(
             phase="pass 1 in progress",
@@ -93,7 +70,6 @@ def assess(runs_dir: Path, n_tasks: int = 30) -> dict:
         )
         return state
 
-    # --- pass 1 done: the difficulty gate ------------------------------
     if passes_done < TOTAL_PASSES:
         lo, hi = BAND_PASS1
         if not (lo <= rate <= hi):
@@ -127,7 +103,6 @@ def assess(runs_dir: Path, n_tasks: int = 30) -> dict:
         )
         return state
 
-    # --- all passes done: the noise gate -------------------------------
     if noise is None:
         state.update(
             phase="passes complete, report missing",
@@ -153,7 +128,6 @@ def assess(runs_dir: Path, n_tasks: int = 30) -> dict:
         )
         return state
 
-    # --- calibration ----------------------------------------------------
     if cal is None:
         state.update(
             phase="noise floor usable - calibration next",

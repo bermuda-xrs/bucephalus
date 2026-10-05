@@ -1,21 +1,3 @@
-"""Part 13 — the benchmark harness.
-
-Two jobs:
-
-  * `arms`   — run the same task suite under several configurations and emit a
-               cost-versus-pass-rate Pareto frontier. NOT a single score.
-  * `paired` — run the M9 paired-trial harness for one skill.
-
-The M9 harness is not skill-specific: swap the arms from skill/no-skill to
-model A/model B, run 30 paired trials on your own tasks, and read the result
-off the same statistics. That is how you settle model choice empirically
-rather than from someone else's leaderboard.
-
-Reporting rule, enforced by `_provenance`: every number carries the date, the
-model version, and the scaffold version, and contamination caveats go in the
-same paragraph as the number — never a footnote.
-"""
-
 from __future__ import annotations
 
 import argparse
@@ -55,14 +37,6 @@ CAVEATS = [
 
 
 def _contamination_caveat(ctx, skill_id: str, scored: set[str]) -> str:
-    """What the skill's own provenance says about the tasks it was scored on.
-
-    Derived, never assumed. This was one sentence for every skill - "written
-    by an author who saw the entire suite" - true of aero_units_discipline,
-    false of the control written from the drafting split alone (D35) and of
-    every generated skill. A caveat that reads the same whatever the skill is
-    not a caveat about the skill. Missing provenance is stated, not guessed.
-    """
     try:
         row = ctx.conn.execute(
             "SELECT provenance_json FROM skills WHERE id=?", (skill_id,)).fetchone()
@@ -91,11 +65,6 @@ def _contamination_caveat(ctx, skill_id: str, scored: set[str]) -> str:
 
 
 def load_suite(spec: str | Path, ctx=None) -> list[dict]:
-    """Load a suite by name from the database, or from files.
-
-    `--suite mine` reads the suite authored in the UI; anything that looks like
-    a path still reads files, so existing folders keep working.
-    """
     text = str(spec)
     if ctx is not None and not Path(text).exists():
         name = text.split("suite:", 1)[-1]
@@ -130,18 +99,11 @@ def _provenance(ctx, arm: str) -> dict:
 
 
 def provision(ctx, spec: dict) -> None:
-    """Create the files a task expects to find.
-
-    A benchmark whose fixtures you have to place by hand is a benchmark nobody
-    reruns. Each task declares its own inputs under `fixtures`, so the suite is
-    self-contained and every arm starts from identical bytes.
-    """
     reset_workspace(ctx.config.root, spec.get("artifact_scope") or [],
                     spec.get("fixtures") or {})
 
 
 def run_arm(ctx, suite: list[dict], arm: str, skills_on: bool) -> dict:
-    """One configuration over the whole suite. Tasks are labelled for the chart."""
     results = []
     for spec in suite:
         provision(ctx, spec)
@@ -150,8 +112,6 @@ def run_arm(ctx, suite: list[dict], arm: str, skills_on: bool) -> dict:
             success_criterion=spec.get("success_criterion", "always_pass"),
             output_schema=spec.get("output_schema", {}),
             artifact_scope=spec.get("artifact_scope", []),
-            # Dropped here until 2026-09-25, though `paired` passed it: a
-            # verify_program task in `arms` found no grader and failed.
             grader_dir=spec.get("grader_dir"),
         )
         budget = Budget(
@@ -182,8 +142,6 @@ def run_arm(ctx, suite: list[dict], arm: str, skills_on: bool) -> dict:
         "provenance": _provenance(ctx, arm),
         "n": len(results),
         "pass_rate": sum(r["passed"] for r in results) / n,
-        # The convention is that both counts are reported; only the strict
-        # one was. A sweep pass is a pass of the work, not of termination.
         "unannounced_rate": sum(r["status"] == "done_unannounced"
                                 for r in results) / n,
         "mean_usd_per_task": sum(r["cost_usd"] for r in results) / n,
@@ -200,10 +158,6 @@ def cmd_arms(args) -> int:
     out = {}
 
     if args.executor:
-        # Spec 0.1c: the paired-trial harness is not skill-specific. Swap the
-        # arms from skill/no-skill to model A/model B and read the result off
-        # the same statistics — that is how model choice gets settled from
-        # your own workload instead of someone else's leaderboard.
         ctx.config.backends["cloud"].model = args.executor
         ctx.backends = build_backends(ctx.config)
         label = args.label or args.executor
@@ -235,14 +189,7 @@ def cmd_arms(args) -> int:
 
 
 def cmd_paired(args) -> int:
-    # Shares the lock file with the noise floor deliberately: a calibration
-    # racing a noise-floor pass corrupts both, and they are the same kind of
-    # measurement competing for the same CPU.
     try:
-        # Anchored beside the OUT file, resolved against the config's own
-        # directory. A bare `--out calibration.json` would otherwise put the
-        # lock in whatever the current directory happens to be, so two runs
-        # started from different places would not see each other.
         _out = Path(args.out or "runs/x")
         if not _out.is_absolute():
             _out = Path(args.config).resolve().parent / _out
@@ -253,9 +200,6 @@ def cmd_paired(args) -> int:
     except RunLockBusy as e:
         print(f"REFUSING TO START.\n{e}")
         return 2
-    # Released on EVERY exit. It was released on the success path only, so an
-    # exception after this point held the lock for the rest of the process:
-    # one failing test made the next nine report "lock busy".
     try:
         return _paired(args)
     finally:
@@ -267,21 +211,6 @@ def _paired(args) -> int:
                            isolate=True,
                            why="a measured arm must not read another's work")
 
-    # The deputy comes OUT, exactly as it does for the noise floor. Two
-    # reasons, and the first is fatal to the comparison:
-    #
-    #   * the noise floor measured the baseline arm with auto_review OFF. If
-    #     the calibration runs with it ON, the two arms are not measuring the
-    #     same system and the lift is not attributable to the skill.
-    #   * an LLM in the decision path is a source of variance in exactly the
-    #     signal this run exists to measure, and on this hardware it loads a
-    #     SECOND model beside the executor - which is what produced
-    #     "500 Internal Server Error ... timed out waiting for llama-server"
-    #     on a 15.5 GB machine.
-    #
-    # Nothing about safety is relaxed: the capability gate is code - scope,
-    # taint ceilings, protected paths, trusted-tier parking - and still runs
-    # on every action.
     if not args.auto_review:
         ctx.config.autonomy.auto_review = False
         ctx.config.autonomy.approve_scoped_writes = True
@@ -291,11 +220,6 @@ def _paired(args) -> int:
 
     suite = load_suite(args.suite, ctx)
 
-    # The contamination rule is a property of WHICH tasks run, so it has to be
-    # expressible here. Without --split the gate runs on all 30 and a skill
-    # drafted from the drafting half is scored on tasks it was drafted from —
-    # `check_contamination` only catches that when provenance names them, and
-    # a hand-written skill names nothing.
     if args.split:
         suite = [s for s in suite
                  if (s.get("output_schema") or {}).get("x-split") == args.split]
@@ -309,8 +233,6 @@ def _paired(args) -> int:
             success_criterion=s.get("success_criterion", "always_pass"),
             output_schema=s.get("output_schema", {}),
             artifact_scope=s.get("artifact_scope", []),
-            # Without these the trial runs against whatever the last run left
-            # on disk: no input files, or worse, the previous arm's answer.
             fixtures=s.get("fixtures") or {},
             grader_dir=s.get("grader_dir"),
         )
@@ -342,9 +264,6 @@ def _paired(args) -> int:
         try:
             _paired_with_retry(ctx, args.skill_id, spec, seed=i)
         except BackendError as e:
-            # Leave the pair UNRECORDED rather than half-recorded: the
-            # analysis drops any pair missing an arm, and --resume re-runs a
-            # task whose pair is incomplete. Skipping beats fabricating.
             print(f"  {i + 1}/{len(specs)} {spec.key}  SKIPPED - backend "
                   f"error twice: {e}", flush=True)
             skipped.append(spec.key)
@@ -358,17 +277,12 @@ def _paired(args) -> int:
         print("Their pairs are incomplete and excluded from the analysis. "
               "Re-run with --resume before reporting.")
 
-    # PRIMARY - every task that ran.
     primary = evaluate_skill(ctx, args.skill_id)
 
-    # SECONDARY - the eval subset, from the SAME trials. No extra compute:
-    # the eval tasks are a subset of the ones already run. Contamination-clean
-    # but underpowered, and labelled as such wherever it is reported.
     eval_keys = {sp.get("key") for sp in suite
                  if (sp.get("output_schema") or {}).get("x-split") == "eval"}
     secondary = (evaluate_skill(ctx, args.skill_id, task_keys=eval_keys)
                  if eval_keys else None)
-    # The pairs the analysis reads - complete pairs, earlier runs included.
     scored = _completed_trials(ctx, args.skill_id)
 
     report = {
@@ -418,7 +332,6 @@ def _paired(args) -> int:
 
 
 def _paired_with_retry(ctx, skill_id: str, spec, seed: int, attempts: int = 2):
-    """One retry on a model-server failure before giving up on the pair."""
     for attempt in range(1, attempts + 1):
         try:
             return run_paired_trial(ctx, skill_id, spec, seed=seed)
@@ -431,11 +344,6 @@ def _paired_with_retry(ctx, skill_id: str, spec, seed: int, attempts: int = 2):
 
 
 def _completed_trials(ctx, skill_id: str) -> set[str]:
-    """Task keys with BOTH arms already recorded.
-
-    A half-finished pair is not resumable: `fetch_paired_outcomes` drops any
-    pair missing an arm, so the task must be re-run rather than counted.
-    """
     rows = ctx.conn.execute(
         "SELECT task_key, arm FROM skill_trials WHERE skill_id=?", (skill_id,)
     ).fetchall()
@@ -458,10 +366,6 @@ def _print_arm(label: str, d: dict) -> None:
 def main() -> int:
     p = argparse.ArgumentParser(description="alpha test 1 benchmark harness")
     p.add_argument("--config", default="config.yaml")
-    # Declared, enforced before any work starts, and recorded on the result.
-    # Without it these two commands defaulted to profile=mixed while the rest
-    # of the harness ran local, so the most important measurement in the
-    # project was the one not checking what it was allowed to touch.
     p.add_argument("--profile", choices=["local", "mixed"],
                    help="enforced backend profile; 'local' forbids cloud "
                         "backends and provider credentials")

@@ -1,24 +1,3 @@
-"""Noise floor — run the baseline arm N times and classify each task.
-
-Run this BEFORE any skill evaluation. A paired trial compares two arms on the
-same task; if a task's own outcome swings run to run, the comparison is
-measuring the swing rather than the skill. You cannot tell a 6-point lift from
-noise without knowing how loud the noise is.
-
-Classification per task:
-
-  * ``stable_pass``  — passed every run. Contributes no discordant pairs, so
-                       it cannot show a lift; it can still catch a regression.
-  * ``stable_fail``  — failed every run. Headroom for a skill to work in.
-  * ``flaky``        — mixed. Carries information AND noise, and at small n
-                       is the main way a false positive gets in.
-
-The stop rule is a real stop, not advice: more than `--max-flaky` flaky tasks
-and the suite is not an instrument yet. Tighten the task specs — usually an
-under-specified output format or a tolerance doing too much work — rather than
-running an evaluation whose result you would not be able to interpret.
-"""
-
 from __future__ import annotations
 
 import argparse
@@ -44,129 +23,29 @@ from agent.proc import (  # noqa: E402
     free_memory_gb, memory_pressure, reap_orphans, worker_private_gb,
     worker_rss_gb)
 
-# When a task's wall-clock stops being trustworthy.
-#
-# The first version of this used the house rule's 2 GB free-memory floor. That
-# was WRONG, and wrong in this project's signature way: the 2 GB rule is a
-# PREFLIGHT check, taken with no model loaded, while this one runs with the
-# model resident. Measured on this hardware, a healthy run with granite4.1:3b
-# at 16k context sits at 1.17-1.48 GB available - so the 2 GB test flagged
-# 100% of a correct run, and the abort rule built on it would have killed a
-# healthy pass within a few tasks.
-#
-# Two measured anchors, 15.47 GB physical:
-#     healthy, 3B resident        available 1.17 GB   commit ratio 1.231
-#     pathological, orphan held   available 0.90 GB   commit ratio 1.574
-#
-# Available memory barely separates those; the commit ratio does. 1.40 sits
-# between the two anchors with margin on both sides. The absolute floor is
-# kept only as an emergency backstop, well below normal operation.
 COMMIT_RATIO_SUSPECT = 1.40
 EMERGENCY_FREE_GB = 0.50
 
-# When a run has lost too much data to be a measurement.
-#
-# The threshold counts EXCLUDED tasks only. An earlier version counted
-# `machine_fault OR excluded`, which conflated two different things: H23
-# stalled once, re-ran, and produced a perfectly valid measured result, while
-# M11 stalled twice and its data was lost. Only the second removes a
-# measurement. Counting them together would have aborted a healthy run on
-# evidence of recovery.
-#
-# `machine_fault` is retained as HEALTH TELEMETRY with no abort authority: it
-# says a stall occurred and was handled, which is worth knowing and is not a
-# reason to stop.
 ABORT_EXCLUDED_MAX = 3
 
-# L5. RE-ANCHORED after the L6 verification run. Read this before changing it.
-#
-# The commit ratio DETECTED the worker leak in Phase 2A - 23 consecutive
-# readings climbing 1.231 -> 1.421 without one decrease - and that detection
-# was correct and load-bearing. It is NOT usable as the per-task suspect flag,
-# and L6 showed why with the fix in place:
-#
-#   post-fix commit ratio, 10 tasks : 1.278 1.384 1.606 1.608 1.599 1.633
-#                                     1.634 1.589 1.571 1.531
-#   flagged at 1.40                 : 8 of 10, including M15 at 2.52 GB free
-#
-# The old "pathological" anchor of 1.574 now sits INSIDE the healthy operating
-# range. The two-point calibration was invalid: its healthy anchor (1.223) was
-# taken before any task had run and with a different set of applications
-# loaded, so it measured the machine's state, not the run's health. Committed
-# memory on Windows also releases lazily, so the ratio has heavy hysteresis -
-# across seven successful refreshes it moved 1.606->1.609, 1.633->1.634,
-# 1.587->1.589, i.e. not at all, while worker RSS returned to 3.252 GB every
-# single time.
-#
-# What DOES discriminate is wall clock against the run's own median. The real
-# hazard is a single pathological model call, seen three times now: E02 in L6
-# took 2539 s to emit 512 tokens (~0.2 tok/s against a normal 2-3), the v3
-# probe hit 2465 s, and the historical orphan incident hit 1499.8 s. Those are
-# 15x, 29x and 18x their medians. A ratio test cannot separate them from a
-# healthy task; a median test separates them trivially.
-#
-# So: the ratio is still RECORDED, because it is what caught the leak and a
-# future monotonic climb should be visible. It no longer decides the flag.
 WALL_OUTLIER_FACTOR = 3.0
 
-# D11. The factor needs three completed tasks, so tasks 1-3 of a run could
-# never be flagged - M18 took 1777.4 s as task 2 and passed unflagged. Until
-# a median exists, an absolute ceiling stands in. 900 s is above the
-# reference run's p90 (941.2 s was the slowest healthy tier) and far below
-# the three pathological calls (1499.8, 2465, 2539 s).
 WALL_OUTLIER_ABS_S = 900.0
 
-# A prefix mutation shows up as the cache ratio collapsing against the run's
-# own established level. Phase 1 made this observable for the first time: no
-# local backend reported cache accounting until the /v1 adapter, so the ratio
-# was a constant 0.0 and could not have signalled anything.
-#
-# Same shape as the wall-clock outlier and for the same reason - an ABSOLUTE
-# threshold cannot work here, because the healthy level depends on how much of
-# the prompt is prefix, which differs per suite. A drop against the run's own
-# running median is the comparison that means something.
-#
-# This is a SIGNAL, not a controller: it flags the task and does not abort.
-# The commit-ratio episode is the precedent - a real detector wired as a
-# controller produced 8 false aborts out of 10.
-CACHE_DROP_FRACTION = 0.5      # below half the running median is suspect
-MIN_CACHE_SAMPLES = 3          # no median, no judgement
+CACHE_DROP_FRACTION = 0.5
+MIN_CACHE_SAMPLES = 3
 
-# L1. When to reload the model worker mid-run.
-#
-# Phase 2A aborted at task 23/30 because the worker's commitment grew
-# monotonically - 1.231 to 1.421 across 23 tasks, not one decrease, about
-# 139 MB per task - until the suspect flag fired six times. An unload plus
-# reload reclaims all of it (RSS 4.86 GB -> 3.41 GB, the fresh value).
-#
-# The refresh trigger sits BELOW the suspect threshold on purpose. Firing at
-# 1.35 means the run repairs itself before any task is flagged, so the flag
-# keeps its meaning: "this task was measured under pressure" rather than
-# "the run has been climbing for a while". If tasks are still flagged after
-# this lands, the refresh is not working - which is what L6 checks.
 REFRESH_COMMIT_RATIO = 1.35
 from agent.runlock import RunLock, RunLockBusy  # noqa: E402
 from agent.workspace import reset_workspace  # noqa: E402
 
-TARGET_BAND = (0.35, 0.65)   # mean pass rate where measurement has power
+TARGET_BAND = (0.35, 0.65)
 
-# The baseline arm carries no skills. `--skill` swaps in exactly one, which
-# turns this script into a cheap sighting shot: before committing hours to a
-# full paired gate, run the same handful of tasks both ways and see whether
-# the skill moves anything at all. A skill that shifts nothing on five tasks
-# will not suddenly find signal on thirty.
 SKILLS_FOR_ARM: list = []
 BUDGET_SCALE: float = 1.0
 
 
 def provision(ctx, spec: dict) -> None:
-    """Rebuild the task workspace from its declared fixtures.
-
-    Writing the fixtures over the top is not enough: `verify_program` grades
-    files on disk, so run 2 of a repeat pass would be scored against run 1's
-    `output/answer.json` whenever run 2 fails to produce one. A flaky task
-    then reads as stable, which is the one thing this script exists to detect.
-    """
     reset_workspace(ctx.config.root, spec.get("artifact_scope") or [],
                     spec.get("fixtures") or {})
 
@@ -180,10 +59,6 @@ def run_once(ctx, spec: dict, run_ix: int) -> dict:
         output_schema=spec.get("output_schema", {}),
         artifact_scope=spec.get("artifact_scope", []),
     )
-    # The suite's time budgets were written against granite4.1:3b. A model
-    # ~3x slower hits them before it can finish, so an unscaled comparison
-    # measures the budget rather than the model. Scaling is controlling a
-    # variable; it does not change what counts as a pass.
     budget = Budget(
         usd=spec.get("budget_usd", 0.0) or 0.0,
         seconds=int((spec.get("budget_seconds")
@@ -192,13 +67,6 @@ def run_once(ctx, spec: dict, run_ix: int) -> dict:
     )
     task = create_task(ctx.conn, ctx.log, contract, budget)
     ctx.set_frozen_skills(task.id, SKILLS_FOR_ARM)
-    # Free memory is read per TASK, not only in preflight. Preflight alone
-    # cannot see pressure that arrives mid-run, and this project has already
-    # measured what that costs: one model call took 2465 s against a 600 s
-    # budget - 29x the median for its rung - and ended `budget_exhausted`.
-    # Because that outcome is a TIME limit, memory pressure converts directly
-    # into apparent task difficulty, which is the one thing a difficulty
-    # measurement must not be allowed to invent.
     press_before = memory_pressure()
     mem_before = press_before.get("available_gb", free_memory_gb())
     rss_before = worker_rss_gb()
@@ -212,10 +80,6 @@ def run_once(ctx, spec: dict, run_ix: int) -> dict:
     ratios = [p["commit_ratio"] for p in (press_before, press_after)
               if p.get("commit_ratio") is not None]
     worst_ratio = max(ratios) if ratios else None
-    # The commit-ratio test is retained as a SEPARATE recorded signal rather
-    # than as the flag - see the L5 note at the top of this file. The flag
-    # itself is decided by the caller, which is the only place that knows the
-    # run's median so far.
     ratio_high = bool(worst_ratio is not None
                       and worst_ratio >= COMMIT_RATIO_SUSPECT)
     suspect = bool(low is not None and low < EMERGENCY_FREE_GB)
@@ -223,62 +87,37 @@ def run_once(ctx, spec: dict, run_ix: int) -> dict:
         "run": run_ix,
         "task_id": task.id,
         "status": result.status,
-        # done_unannounced is a PASS: the artifact verified, the model
-        # just never said <final>. Counted separately in the report.
         "passed": result.status in ("done", "done_unannounced"),
         "wall_s": wall,
         "free_gb_before": None if mem_before is None else round(mem_before, 2),
         "free_gb_after": None if mem_after is None else round(mem_after, 2),
-        # The flag travels with the row, so a suspect wall-clock stays suspect
-        # through resume, through the ledger, and into the report.
-        # Emergency free-memory backstop only; the wall-clock outlier test is
-        # applied by the caller once a median exists.
         "memory_suspect": suspect,
         "commit_ratio_high": ratio_high,
         "commit_ratio": worst_ratio,
-        # L2: the leak, observable rather than inferred. If this climbs
-        # monotonically across a run, the L1 refresh is not working.
         "worker_rss_before_gb": rss_before,
         "worker_rss_after_gb": worker_rss_gb(),
-        # D1: working set is trimmed under pressure, private commit is not.
-        # A leak signal keyed off the first reads the trim.
         "worker_private_after_gb": worker_private_gb(),
         "free_tokens": m.free_tokens,
         "cost_usd": m.cost_usd,
-        # D36 surfaced, not just recorded. A stalled or killed call keeps an
-        # open row in `calls`; without these two the run report - the thing
-        # anyone actually reads - could not show that it happened.
         "n_calls": m.n_calls,
         "n_unreturned": m.n_unreturned,
-        # None means UNMEASURED, not zero. Every run before 2026-09-06 has it
-        # null because no local backend reported cache accounting at all; a
-        # chart that treats those as 0% is inventing a prefix mutation that
-        # never happened.
         "cache_hit_ratio": m.cache_hit_ratio,
     }
 
 
 def refresh_worker(ctx) -> dict:
-    """Unload and reload the executor model. Returns what it cost.
-
-    Reclaims the worker leak (L1). The cost is a cold load - about 58 s on
-    this hardware - and it is RECORDED against the refresh rather than left
-    to smear into the wall-clock of whichever task happened to follow it.
-    That distinction is the whole reason this is reported: a task that looks
-    slow because it paid for a reload is not a hard task.
-    """
     b = ctx.config.backends["cloud"]
     url = _ollama_admin_base(b) + "/api/generate"
     t0 = time.time()
     before = worker_rss_gb()
     try:
         _ollama_post(url, {"model": b.model, "keep_alive": 0})
-        time.sleep(3.0)                       # let the OS reclaim the pages
+        time.sleep(3.0)
         _ollama_post(url, {"model": b.model, "prompt": "ok", "stream": False,
                            "keep_alive": "30m",
                            "options": {"num_ctx": b.usable_context_window,
                                        "num_predict": 1}})
-    except Exception as e:  # noqa: BLE001 - a failed refresh must not kill a run
+    except Exception as e:  # noqa: BLE001
         return {"ok": False, "error": str(e),
                 "cost_s": round(time.time() - t0, 1),
                 "rss_before_gb": before, "rss_after_gb": worker_rss_gb()}
@@ -287,31 +126,18 @@ def refresh_worker(ctx) -> dict:
 
 
 def _ollama_admin_base(b) -> str:
-    """The Ollama admin root for a backend, whichever protocol it speaks.
-
-    `endpoint` is None on an `openai`-kind backend and `base_url` carries a
-    /v1 suffix, so the previous `b.endpoint.rstrip("/")` raised AttributeError
-    the moment a run used config.openai.yaml. Introduced by phase 1 and caught
-    here rather than three hours into a pass.
-
-    Unload/reload and /api/ps are Ollama extensions with no OpenAI-protocol
-    equivalent, so this is deliberately Ollama-shaped. Against a server that
-    is not Ollama the calls fail and every caller already treats a failed
-    refresh as non-fatal.
-    """
     url = (b.base_url or b.endpoint or "").rstrip("/")
     return url[:-3].rstrip("/") if url.endswith("/v1") else url
 
 
 def _ollama_loaded(b) -> dict | None:
-    """What the server currently has resident, or None if it cannot say."""
     import json as _json
     import urllib.request
     try:
         with urllib.request.urlopen(
                 _ollama_admin_base(b) + "/api/ps", timeout=5.0) as r:
             models = (_json.loads(r.read().decode("utf-8")) or {}).get("models") or []
-    except Exception:  # noqa: BLE001 - preflight telemetry is never fatal
+    except Exception:  # noqa: BLE001
         return None
     for m in models:
         if m.get("name") == b.model or m.get("model") == b.model:
@@ -328,29 +154,6 @@ def _ollama_post(url: str, body: dict) -> None:
 
 
 def run_with_backend_retry(ctx, spec: dict, run_ix: int, key: str) -> dict:
-    """A model-server failure is NOT a task failure.
-
-    An ollama ReadTimeout on H27 killed a ten-task pass outright: one slow
-    call, and every remaining task was lost. In a five-hour calibration that
-    is the difference between a result and a wasted night.
-
-    But the fix must not be to swallow it. Recording a backend error as
-    `passed=False` would count a network problem as evidence the model cannot
-    do the task - the same silent-0% trap as a verifier that cannot find its
-    script. So it gets its own status, is excluded from the pass rate, and is
-    reported loudly.
-    """
-    # A STALL is not a backend error and not a task outcome. The task budget
-    # is wall clock and `budget_exhausted` is scored as a failure, so a
-    # machine stall silently converts a task that would have passed into one
-    # that failed - and in a paired trial that manufactures a discordant pair
-    # from a machine event. Interleaving arms cannot help, because a single
-    # stalled call lands on exactly one arm by definition.
-    #
-    # So: abort, re-run the task once, and if it stalls again mark it
-    # EXCLUDED. Excluded is reported as excluded. It is never a failure, and
-    # never quietly dropped either - a silently discarded task is how a suite
-    # gets easier without anyone deciding that it should.
     stalls: list[dict] = []
     for stall_attempt in (1, 2):
         try:
@@ -409,38 +212,12 @@ def run_with_backend_retry(ctx, spec: dict, run_ix: int, key: str) -> dict:
 
 
 def assert_machine_fault_never_scored_as_failure(row: dict) -> None:
-    """S4. A machine event must never reach the pass rate as a failure.
-
-    Both aborted Phase 2A attempts violated exactly this and neither was
-    caught by an abort condition, because the mis-scored tasks were recorded
-    as `crashed` rather than as machine faults. It is cheap to enforce
-    permanently, so it is enforced permanently.
-
-    Two ways it can be violated:
-
-      * an EXCLUDED task that is still measured - it would depress the pass
-        rate with a machine event, and
-      * a task whose status is `crashed` carrying a stall or timeout cause -
-        which is the generic-catch bug returning by another door.
-    """
     if row.get("excluded") and not row.get("unmeasured"):
         raise AssertionError(
             f"{row.get('key')}: excluded_machine_fault must be unmeasured, "
             "or a machine event depresses the pass rate")
     status = str(row.get("status") or "")
     if status == "crashed":
-        # ANY crash aborts. The earlier version of this guard looked for
-        # evidence of a stall in the row - a `stalls` key, or "timed out" in
-        # an error string - and a crashed row carrying NEITHER slipped
-        # straight through it. That is what an injected transport timeout
-        # produced, and the guard written to catch exactly that case passed it.
-        #
-        # So the test is no longer "does this crash look like a machine
-        # event". Every machine event now has its own terminal status, which
-        # makes `crashed` unreachable for one; if it appears, a path was
-        # missed and the run must stop rather than score it as a failure.
-        # Requiring the guard to RECOGNISE the cause is what let two aborted
-        # attempts through, and recognition is the part that keeps failing.
         raise AssertionError(
             f"{row.get('key')}: status `crashed`, which the suite scores as "
             "FAILED. Machine events have their own terminal statuses, so a "
@@ -452,15 +229,10 @@ def assert_machine_fault_never_scored_as_failure(row: dict) -> None:
 
 
 def _library_provenance() -> list[str]:
-    """Pinned versions of everything model-written code could import.
-
-    Recorded per run, not just the version number, so a later reader can see
-    WHAT changed rather than only that something did.
-    """
     try:
         from agent.execute.libraries import REGISTRY
         return REGISTRY.provenance()
-    except Exception:  # noqa: BLE001 - provenance must never stop a run
+    except Exception:  # noqa: BLE001
         return []
 
 
@@ -473,7 +245,6 @@ def classify(passes: list[bool]) -> str:
 
 
 def ledger_path(out: str | Path) -> Path:
-    """Sidecar beside the report: one JSON line per completed run."""
     p = Path(out)
     return p.with_suffix(p.suffix + ".partial.jsonl")
 
@@ -484,35 +255,10 @@ def _isolation_state(ctx) -> dict:
 
 
 def _median_or_none(values: list) -> float | None:
-    """None when there is nothing to take a median OF.
-
-    Not 0.0. An empty sample is not a measurement of zero, and this project
-    has already paid for that distinction once - see the note on
-    cache_hit_ratio.
-    """
     return round(statistics.median(values), 4) if values else None
 
 
 def run_signature(args, n_specs: int) -> dict:
-    """What a ledger must agree with before its rows may be reused.
-
-    Resuming across a changed suite, split, run count, or PROFILE would
-    silently blend two different measurements into one report — the same
-    class of error `profiles.py` exists to prevent. The profile belongs here
-    for the same reason it is on the report: half a pass measured local and
-    half measured mixed is not a measurement, and nothing downstream could
-    tell.
-    """
-    # `runs` is deliberately NOT part of the signature. Each row is keyed
-    # (run_index, task_key), so rows from a --runs 1 pass are the same work
-    # as rows 0 of a --runs 3 pass. Excluding it is what lets a pass-1-then-
-    # decide plan resume into passes 2 and 3 without repeating pass 1 —
-    # hours, on this hardware. Everything that would change WHAT is being
-    # measured is included.
-    # order_seed IS part of the signature. Rows are keyed (run, task_key) so
-    # resume would work regardless, but two orders mean two different sets of
-    # measurement conditions per task, and blending them silently is exactly
-    # what this signature exists to prevent.
     return {"suite": args.suite, "split": args.split,
             "executor": args.executor, "order_seed": args.order_seed,
             "limit": args.limit, "tier": sorted(args.tier) if args.tier else None,
@@ -522,12 +268,6 @@ def run_signature(args, n_specs: int) -> dict:
 
 
 def append_run(path: Path, sig: dict, record: dict) -> None:
-    """Append one completed run and flush it to the OS immediately.
-
-    A multi-hour pass that holds every result in memory and writes once at
-    the end loses ALL of it to a kill at hour three. One line per task, and
-    at most one task's work is ever at risk.
-    """
     path.parent.mkdir(parents=True, exist_ok=True)
     first = not path.exists()
     with path.open("a", encoding="utf-8") as fh:
@@ -539,11 +279,6 @@ def append_run(path: Path, sig: dict, record: dict) -> None:
 
 
 def load_completed(path: Path, sig: dict) -> dict[tuple[int, str], dict]:
-    """Rows from a previous attempt, keyed (run_index, task_key).
-
-    A truncated final line — the signature of a kill mid-write — is dropped
-    rather than guessed at.
-    """
     if not path.exists():
         return {}
     done: dict[tuple[int, str], dict] = {}
@@ -569,7 +304,6 @@ def load_completed(path: Path, sig: dict) -> dict[tuple[int, str], dict]:
 
 
 def write_report(dest: Path, report: dict) -> None:
-    """Atomic: a kill during the write must not leave a half-parsed report."""
     dest.parent.mkdir(parents=True, exist_ok=True)
     tmp = dest.with_suffix(dest.suffix + ".tmp")
     tmp.write_text(json.dumps(report, indent=2), encoding="utf-8")
@@ -581,11 +315,6 @@ def main() -> int:
     ap.add_argument("--config", default="config.local.yaml")
     ap.add_argument("--profile", default="local",
                     help="enforced backend profile; 'local' forbids cloud backends")
-    # A suite is now REQUIRED. There is no default and there is no fallback:
-#     a missing suite fails loudly naming what is missing, rather than
-#     silently measuring whichever suite happened to be the default. The
-#     aerospace suite was that default for the project's whole history,
-#     which is how it became load-bearing without anyone choosing it.
     ap.add_argument("--suite", required=True,
                     help="suite name to measure, e.g. a suite loaded into the "
                          "user data store. REQUIRED - there is no default")
@@ -630,18 +359,12 @@ def main() -> int:
                          "beside --out; a killed pass restarts where it stopped")
     args = ap.parse_args()
 
-    # L3: a seed is always chosen and always recorded, so a run is
-    # replayable even when nobody asked for a particular order.
     if args.order_seed is None:
         args.order_seed = random.randrange(1, 2**31 - 1)
         print(f"task order seed (generated): {args.order_seed}")
     else:
         print(f"task order seed (given): {args.order_seed}")
 
-    # One measurement process at a time. Two concurrent runs measure their
-    # tasks under CPU contention, which can manufacture `budget_exhausted` on
-    # a task that would otherwise finish - the suite then looks harder than it
-    # is, for reasons that have nothing to do with the tasks.
     try:
         _out = Path(args.out)
         if not _out.is_absolute():
@@ -653,9 +376,6 @@ def main() -> int:
     except RunLockBusy as e:
         print(f"REFUSING TO START.\n{e}")
         return 2
-    # Released on EVERY exit. It was released on two of four: the unknown-skill
-    # and unknown-suite returns, and any exception, held it for the rest of
-    # the process - the same leak cmd_paired had.
     try:
         return _noise_floor(args)
     finally:
@@ -663,25 +383,12 @@ def main() -> int:
 
 
 def _noise_floor(args) -> int:
-    # Preflight. An orphan's memory is charged to whatever runs next: on this
-    # box a stray llama-server holding 5.9 GB turned an 88s model call into a
-    # 1499.8s one. Wall clock is the cost axis, so reap BEFORE measuring.
     before_gb = free_memory_gb()
     reaped = reap_orphans()
     free_gb = free_memory_gb()
     if reaped:
         print(f"reaped {len(reaped)} orphaned worker(s): {reaped}")
 
-    # L4. This used the same 2 GB free-memory rule the per-task check used,
-    # and it was wrong for the same reason: 2 GB is a NO-MODEL-LOADED figure,
-    # so it warns spuriously whenever the worker is legitimately warm. Both
-    # call sites now read the one function, and
-    # tests/test_memory_gate_single_source.py fails if a third copy of the
-    # rule appears.
-    # Opened BEFORE its config is read. `exec_cfg` was added (2026-09-06)
-    # reading `ctx` forty-five lines before `ctx` was assigned, so every
-    # noise-floor run since died with UnboundLocalError before its first task.
-    # No test ran `main`; tests/test_noise_main.py does.
     ctx = open_measurement(args.config, profile=args.profile, isolate=True,
                            why="paired trials and noise floor: arms and runs "
                                "must be independent observations")
@@ -696,21 +403,6 @@ def _noise_floor(args) -> int:
         if rss0 is not None:
             print(f"model worker resident at start: {rss0} GB")
 
-        # 4A/4B. Two things that silently change what a wall-clock number
-        # means, both recorded rather than assumed.
-        #
-        # COLD LOAD. A cold model costs ~30s against ~8s warm on this CPU.
-        # A pass that starts cold and one that starts warm are not comparable
-        # on the axis this project measures, and /v1 cannot set keep_alive
-        # per request at all (SPEC-DELTA C28) - it is the server's setting or
-        # nothing.
-        #
-        # CONTEXT. The window costs memory: 2.51 GB resident at ctx 4096
-        # against 3.61 GB at 16384, measured. On a 15.5 GB box that is a
-        # budget line, and on the OpenAI protocol the configured number is a
-        # claim about the server rather than a request (C29). /api/ps reports
-        # what the server ACTUALLY allocated, so the claim is checkable here
-        # even though it is not checkable portably inside the adapter.
         loaded = _ollama_loaded(exec_cfg)
         warm_at_start = None if loaded is None else bool(loaded)
         server_ctx = (loaded or {}).get("context_length")
@@ -730,34 +422,15 @@ def _noise_floor(args) -> int:
                   "before the first task. Paging rewrites a seconds-based "
                   "measurement - one call has been seen 18x slower.")
 
-    # RETRIEVAL ISOLATION, set here rather than read from a config file.
-    #
-    # search_history indexes `answer` artifacts, so without this the skill arm
-    # of a paired trial can look up the answer the control arm just wrote and
-    # the run reports a lift that retrieval produced. Same class as the
-    # workspace leak `workspace.py` fixes on disk, and the same granularity:
-    # per ATTEMPT, so run 2 of an arm cannot read run 1 either - the noise
-    # floor assumes those runs are independent draws.
-    #
-    # Not a yaml key, because a contaminated measurement caused by editing the
-    # wrong config is the exact failure this removes. See kernel/scope.py.
     ctx.config.isolate_retrieval = True
 
     if args.executor:
-        # Same suite, same harness, different model: that is what makes the
-        # error SIGNATURE comparable between executors.
         from agent.models.registry import build_backends
 
         ctx.config.backends["cloud"].model = args.executor
         ctx.backends = build_backends(ctx.config)
-        # Generation rate is a property of the EXECUTOR. Carrying 3B rates
-        # into an 8B run would make every 8B call look like a stall, and the
-        # 8B is legitimately 10-16x slower per token.
         reset_rates()
         ctx.config.profile_provenance["executor_override"] = args.executor
-        # profile_provenance["backends"] was captured at config load, BEFORE
-        # this override, so the report header named the wrong model while the
-        # run used the right one. Refresh it, or every 8B result reads as 3B.
         for name, b in ctx.config.backends.items():
             ctx.config.profile_provenance.setdefault("backends", {})[name] = {
                 "kind": b.kind, "model": b.model, "tier": b.trust_tier}
@@ -780,16 +453,6 @@ def _noise_floor(args) -> int:
     else:
         print("arm: baseline (no skills)")
 
-    # The deputy is an LLM, and an LLM in the decision path is a source of
-    # variance in exactly the signal this suite exists to measure. Observed on
-    # granite4.1:8b: the same class of action approved once and denied four
-    # times with mutually contradictory reasons, including one denial of a
-    # path that was inside artifact_scope. A benchmark run measures the
-    # executor, so the deputy comes out by default.
-    #
-    # Nothing about safety is relaxed. The capability gate is code — scope,
-    # taint ceilings, protected paths, trusted-tier parking — and it still
-    # runs on every action. What is removed is the nondeterministic layer.
     if not args.auto_review:
         ctx.config.autonomy.auto_review = False
         ctx.config.autonomy.approve_scoped_writes = True
@@ -834,7 +497,6 @@ def _noise_floor(args) -> int:
         print(f"resuming: {len(done)} of {len(specs) * args.runs} runs already "
               f"in {ledger.name}")
     elif ledger.exists():
-        # Never silently extend someone else's ledger.
         raise SystemExit(
             f"{ledger} already exists. Pass --resume to continue that pass, "
             "or delete it / choose another --out to start fresh."
@@ -844,8 +506,6 @@ def _noise_floor(args) -> int:
     started = time.time()
     reloads: list[dict] = []
     for r in range(args.runs):
-        # A fresh permutation per run index, derived from the recorded seed so
-        # the whole thing replays exactly.
         ordered = list(specs)
         random.Random(f"{args.order_seed}:{r}").shuffle(ordered)
         print(f"  task order for run {r + 1}: "
@@ -859,9 +519,6 @@ def _noise_floor(args) -> int:
                       f"{cached['status']:<16} {cached['wall_s']:>6.1f}s  (resumed)",
                       flush=True)
                 continue
-            # L1: repair the worker leak BEFORE it can flag a task, so the
-            # suspect flag keeps meaning "measured under pressure" rather
-            # than "the run has been climbing for a while".
             pre = memory_pressure()
             if (pre.get("commit_ratio") or 0) >= REFRESH_COMMIT_RATIO:
                 info = refresh_worker(ctx)
@@ -893,11 +550,6 @@ def _noise_floor(args) -> int:
                     "ledger is intact and resumable; partial results must NOT "
                     "be reported as a pass rate.")
 
-            # A task far off the run's own median is the signature of the
-            # pathological single call this project keeps hitting - 2539 s for
-            # 512 tokens in L6, 2465 s in the v3 probe, 1499.8 s historically.
-            # Computed against completed tasks so far, which is why it lives
-            # here and not in run_once.
             prior = [x["wall_s"] for xs in results.values() for x in xs
                      if not x.get("unmeasured")]
             if len(prior) >= 3:
@@ -906,16 +558,11 @@ def _noise_floor(args) -> int:
                                            out["wall_s"] > WALL_OUTLIER_FACTOR * med)
                 out["wall_vs_median"] = round(out["wall_s"] / med, 2) if med else None
             else:
-                # D11: no median yet - an absolute ceiling, not silence.
                 out["wall_outlier"] = out["wall_s"] > WALL_OUTLIER_ABS_S
                 out["wall_vs_median"] = None
             if out["wall_outlier"]:
                 out["memory_suspect"] = True
 
-            # The prefix signal. Only over tasks where the ratio was actually
-            # MEASURED - mixing in nulls would drag the median toward nothing
-            # and fire on the absence of a measurement, which is the same
-            # error as scoring a machine fault as a task failure.
             seen = [x["cache_hit_ratio"] for xs in results.values() for x in xs
                     if x.get("cache_hit_ratio") is not None
                     and not x.get("unmeasured")]
@@ -932,7 +579,6 @@ def _noise_floor(args) -> int:
                 reloads and reloads[-1]["before_task"] == key
                 and reloads[-1]["run"] == r)
             results.setdefault(key, []).append(out)
-            # Before the print, so a kill between them loses nothing.
             append_run(ledger, sig, out)
             flag = ""
             if out.get("cache_drop"):
@@ -953,8 +599,6 @@ def _noise_floor(args) -> int:
     rows = []
     unmeasured_keys = []
     for key, runs in results.items():
-        # A backend error is not an observation. Counting it would let a model
-        # server hiccup masquerade as task difficulty.
         measured = [x for x in runs if not x.get("unmeasured")]
         if len(measured) != len(runs):
             unmeasured_keys.append(key)
@@ -982,10 +626,6 @@ def _noise_floor(args) -> int:
             "classification": classify(passes),
             "passes": sum(passes), "runs": len(passes),
             "mean_wall_s": round(statistics.mean(x["wall_s"] for x in runs), 1),
-            # A task is memory-suspect if ANY of its runs dipped below the
-            # floor. Its pass/fail still counts - the artifact either verified
-            # or it did not - but its SECONDS are not a measurement, and the
-            # cost axis of this project is seconds.
             "memory_suspect": any(x.get("memory_suspect") for x in runs),
             "wall_outlier": any(x.get("wall_outlier") for x in runs),
             "commit_ratio_high": any(x.get("commit_ratio_high") for x in runs),
@@ -995,26 +635,6 @@ def _noise_floor(args) -> int:
             "statuses": [x["status"] for x in runs],
         })
 
-    # Why a pass ended matters as much as whether it passed, and the three
-    # terminal statuses mean genuinely different things:
-    #
-    #   max_steps         burned all 6 turns. Usually the agent looping,
-    #                     rather than the task being hard.
-    #   plateau           three identical scores; more turns bought nothing.
-    #   budget_exhausted  ran out of TIME, not attempts. The task may not
-    #                     have been failed on the physics at all.
-    #
-    # That last one matters for interpretation and was mis-documented here
-    # earlier: an initial reading of the record said budget_exhausted had
-    # never fired and largely could not, on the reasoning that max_steps=6
-    # binds first. M16 then ended budget_exhausted at 705.6s against its 600s
-    # budget on 2026-08-27 — six slow turns on a medium task cross 600s of
-    # model time before the step limit is reached. Both limits bind, and
-    # which one does is itself a signal.
-    #
-    # Budget.spent_seconds accumulates MODEL wall time only (context.record ->
-    # spend), not sandbox or verification time, so a task's reported wall_s
-    # still runs ahead of the budget it is checked against.
     status_counts: dict[str, int] = {}
     for r in rows:
         for st in r["statuses"]:
@@ -1023,7 +643,6 @@ def _noise_floor(args) -> int:
     flaky = [r for r in rows if r["classification"] == "flaky"]
     stable_pass = [r for r in rows if r["classification"] == "stable_pass"]
     stable_fail = [r for r in rows if r["classification"] == "stable_fail"]
-    # denominator counts only real observations
     mean_rate = sum(r["passes"] for r in rows) / max(1, sum(r["runs"] for r in rows))
     unmeasured = [r for r in rows if r["classification"] == "unmeasured"]
 
@@ -1031,14 +650,7 @@ def _noise_floor(args) -> int:
         "date": time.strftime("%Y-%m-%d"),
         "harness_version": HARNESS_VERSION,
         "budget_scale": args.budget_scale,
-        # Per-task memory, summarised. Preflight numbers alone cannot show
-        # pressure that arrived mid-run.
         "memory_suspect_keys": [r["key"] for r in rows if r.get("memory_suspect")],
-        # The prefix observable. `None` means this run could not measure it -
-        # every run before 2026-09-06 is null here, because no local backend
-        # reported cache accounting. Recorded at run level so the NEXT run on
-        # the same config can be compared against it; the per-task
-        # `cache_drop` flag is the within-run half of the same signal.
         "cache_hit_ratio_median": _median_or_none(
             [x["cache_hit_ratio"] for xs in results.values() for x in xs
              if x.get("cache_hit_ratio") is not None
@@ -1050,25 +662,13 @@ def _noise_floor(args) -> int:
             k for k, xs in results.items()
             if any(x.get("cache_drop") for x in xs)),
         "cache_drop_fraction": CACHE_DROP_FRACTION,
-        # Which persistence subsystems could be read during this run. A reader
-        # must never have to infer it: a paired trial where one arm could
-        # retrieve the other's answer is not a paired trial, and the record is
-        # where that is established.
         "retrieval_isolation": _isolation_state(ctx),
-        # A4. Which inbound channels could create tasks in this database while
-        # the run was going. Same argument as retrieval_isolation: a reader
-        # must never have to infer whether somebody's phone was an input.
-        # B1. Where a session boundary falls and what happens at it. Under
-        # isolation the flush cannot write, so the prefix a measured task sees
-        # is byte-identical across a boundary; recorded rather than inferred.
         "session_boundary": ("at deletion compaction: memory flush (skipped "
                              "under isolation), compact() unchanged, session "
                              "rotated; no summarizer"),
         "channels_enabled": sorted(
             n for n in ("telegram",)
             if getattr(getattr(ctx.config.channels, n, None), "enabled", False)),
-        # A5. 1 means every tool call ran in turn. Recorded because wall
-        # clock is the cost axis and concurrency changes what a second means.
         "max_parallel_tools": ctx.config.limits.max_parallel_tools,
         "min_free_gb_any_task": min(
             [r["min_free_gb"] for r in rows
@@ -1114,8 +714,6 @@ def _noise_floor(args) -> int:
         "mean_pass_rate": round(mean_rate, 4),
         "stable_pass": len(stable_pass), "stable_fail": len(stable_fail),
         "flaky": len(flaky),
-        # Two different numbers, and conflating them understates the cost of
-        # a resumed run: this process only ran the tasks it did not resume.
         "wall_s_this_session": round(time.time() - started, 1),
         "wall_s_all_runs": round(
             sum(x["wall_s"] for runs in results.values() for x in runs), 1),
@@ -1123,9 +721,6 @@ def _noise_floor(args) -> int:
         "unmeasured": len(unmeasured),
         "unmeasured_keys": [r["key"] for r in unmeasured],
         "partially_unmeasured_keys": unmeasured_keys,
-        # S1 - never collapsed. A reader must be able to see how much of the
-        # pass rate came from the final sweep rather than from the model
-        # announcing completion.
         "done": status_counts.get("done", 0),
         "done_unannounced": status_counts.get("done_unannounced", 0),
         "ended_at_step_limit": status_counts.get("max_steps", 0),
@@ -1151,12 +746,6 @@ def _noise_floor(args) -> int:
         t = [r for r in rows if r["tier"] == tier]
         if not t:
             continue
-        # An EXCLUDED task contributes 0 runs, so a tier whose tasks were all
-        # excluded divides by zero here. The report block above already
-        # guarded this; the printing block did not, and it crashed AFTER the
-        # numbers were computed - on a 2.5-hour run that means losing the
-        # summary at the very end. Report the tier as unmeasured rather than
-        # inventing a rate for it.
         denom = sum(r["runs"] for r in t)
         if denom == 0:
             print(f"  {tier:<7}    n/a  ({len(t)} tasks, all excluded)")

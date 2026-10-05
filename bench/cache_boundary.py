@@ -1,21 +1,3 @@
-"""Phase 9.6 - the cache at a session boundary, measured against a real server.
-
-The prediction was committed first, on its own (ca990ed):
-docs/evidence/phase9-cache-boundary-PREDICTION.json. This script refuses to run
-if that file is uncommitted or edited, then measures it and writes
-docs/evidence/phase9-cache-boundary.json with every number it used.
-
-DECISIONS SCRIPTED, PREFILL REAL. Each prompt the loop builds is sent to the
-real server with max_tokens=1, so every cache figure is the server's response
-to exactly the bytes the loop produced. What the model DOES is scripted, so the
-two conditions differ only in whether the flush writes a fact.
-
-Nothing here touches the user's state: each condition gets its own temporary
-database, anchor, skills store, workspace and tier-1 memory directory.
-
-usage:  python bench/cache_boundary.py [--config config.openai.yaml]
-"""
-
 from __future__ import annotations
 
 import argparse
@@ -61,8 +43,6 @@ def remember(text):
 
 
 class Measured:
-    """Scripted text; the real server's usage for exactly the prompt sent."""
-
     def __init__(self, real, script):
         self.real, self.script, self.rows = real, list(script), []
 
@@ -89,8 +69,6 @@ class Measured:
 
 
 def fire_once(n):
-    """The boundary on the Nth step. The trigger is not under test here - the
-    cache at the boundary is - so it is pinned rather than tuned."""
     seen = {"k": 0}
 
     def fake(prefix_tokens, tail_tokens, window, ratio):
@@ -126,8 +104,6 @@ def run_condition(cfg_path: Path, label: str, flush_reply: str) -> dict:
     cfg.db_path = str(tmp / "agent.db")
     cfg.anchor_path = str(tmp / "anchor" / "chain.anchor")
     cfg.skills_path = str(tmp / "skills")
-    # DECLARED, not defaulted: tier 1 must be live, or the flush cannot change
-    # the prefix and condition A does not exist. Not a paired trial.
     cfg.isolate_retrieval = False
     cfg.autonomy.auto_review = False
     cfg.autonomy.approve_scoped_writes = True
@@ -137,15 +113,14 @@ def run_condition(cfg_path: Path, label: str, flush_reply: str) -> dict:
 
     ctx = AgentContext(cfg)
     assert_isolation_declared(ctx)
-    ctx.memory = MemoryStore(tmp / "memory")        # never the user's memory
+    ctx.memory = MemoryStore(tmp / "memory")
     real = ctx.backends["cloud"]
-    real.cfg.usable_context_window = 3000           # compact() keeps ~600 tokens
+    real.cfg.usable_context_window = 3000
     m = Measured(real, [read("a.txt"), read("b.txt"), read("c.txt"),
                         read("d.txt"), flush_reply, read("e.txt"), FINAL])
     ctx.backends["cloud"] = m
     loop.enforce_ceiling = fire_once(5)
 
-    # Evict: an unrelated prompt, so this condition starts cold.
     real.complete("You are a calculator. Reply with digits only.", "17 * 3 =",
                   None, max_tokens=1, temperature=0.0)
 
@@ -207,7 +182,6 @@ def main() -> int:
     A = run_condition(Path(args.config), "A", remember(FACT))
     B = run_condition(Path(args.config), "B", "NOTHING")
 
-    # References LAST, so they cannot warm anything the runs measured.
     real, tools = A["real"], A["ctx"].tools.schemas()
     pre = next(r["_prefix"] for r in A["rows"] if not r["flush"])
     post = split(A["rows"])[2][0]["_prefix"]

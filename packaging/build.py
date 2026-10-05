@@ -1,18 +1,3 @@
-"""Freeze the agent with PyInstaller (onedir). One command each:
-
-    python packaging/build.py             # the desktop app, windowed
-    python packaging/build.py --probe     # the D13 gate: sandbox tests, frozen
-
-Run it from a BUILD venv that has the project installed (non-editable) plus
-PyInstaller - never the measurement venv, whose toolset is part of the record
-(TOOLSET_VERSION). Output goes outside the OneDrive folder, which would
-otherwise sync ~200 MB of build churn.
-
-The whole standard library is bundled, not what the analysis finds: the
-sandbox runs MODEL-WRITTEN code through this binary as its interpreter, and a
-model may import any stdlib module the unfrozen sandbox would have given it.
-"""
-
 from __future__ import annotations
 
 import argparse
@@ -26,7 +11,6 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 OUT = Path(os.environ.get("ALPHA_BUILD_DIR", Path.home() / ".alpha-build"))
 
-# Never importable or never wanted in a sandbox interpreter.
 _SKIP = {"tkinter", "_tkinter", "turtle", "turtledemo", "idlelib", "test",
          "lib2to3", "ensurepip", "venv", "antigravity", "this", "__phello__"}
 
@@ -49,11 +33,6 @@ def build(name: str, entry: Path, extra: list[str], console: bool = True) -> Pat
             "--distpath", str(OUT / "dist"), "--workpath", str(OUT / "work"),
             "--specpath", str(OUT), "--collect-submodules", "agent",
             "--collect-data", "agent",
-            # sympy is a SANDBOX library: the model may import it, so all of it
-            # ships - as compiled modules. --collect-all also shipped its 1,501
-            # .py sources beside the archive (~25 MB, measured). scipy and
-            # numpy were pulled in by the skill gate's one binomtest, now
-            # stdlib (skills/gate.binom_greater); the model is not offered them.
             "--collect-submodules", "sympy", "--collect-submodules", "mpmath",
             "--exclude-module", "scipy", "--exclude-module", "numpy", *extra]
     for m in _stdlib():
@@ -65,14 +44,10 @@ def build(name: str, entry: Path, extra: list[str], console: bool = True) -> Pat
     return dist
 
 
-# A task is its goal plus its grader; neither ships. The suite is the user's
-# to write (bench/README.md), and a grader in the bundle is one the sandbox's
-# read fence would have to be trusted to hide.
 _TASK_PARTS = {"bench", "graders", "grading"}
 
 
 def no_task_content(dist: Path) -> list[str]:
-    """Paths in a build that are task content. Empty means clean."""
     bad = []
     for f in dist.rglob("*"):
         rel = f.relative_to(dist)
@@ -89,7 +64,7 @@ def no_task_content(dist: Path) -> list[str]:
 
 
 def main(argv=None) -> int:
-    p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    p = argparse.ArgumentParser()
     p.add_argument("--probe", action="store_true", help="the D13 gate build")
     args = p.parse_args(argv)
     sep = os.pathsep
@@ -101,7 +76,6 @@ def main(argv=None) -> int:
         return 0
     dist = build("alpha", ROOT / "packaging" / "app_entry.py",
                  ["--collect-all", "webview",
-                  # The first-run profile (agent.desktop._default_config).
                   "--add-data", f"{ROOT / 'config.local.yaml'}{sep}."],
                  console=False)
     bad = no_task_content(dist)

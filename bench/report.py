@@ -1,31 +1,10 @@
-"""Turn the run artifacts into the run sheet, with the caveats attached.
-
-Part 13's reporting rules are not decoration, so they are enforced here rather
-than left to whoever writes the summary:
-
-  * a cost-versus-quality picture, never a single score
-  * three ways - bare model, model + scaffold, full system - with date,
-    model version and profile
-  * contamination caveats in the SAME paragraph as the number, never a
-    footnote
-
-The generator refuses to emit a headline lift when the noise floor that would
-make it interpretable is missing or says the suite is too noisy. That refusal
-is the point: a lift measured against an unmeasured noise floor is exactly the
-number this project exists not to publish.
-
-  python bench/report.py --noise runs/noise-floor.json \
-                         --calibration runs/calibration.json \
-                         --out docs/run-sheet.md
-"""
-
 from __future__ import annotations
 
 import argparse
 import json
 from pathlib import Path
 
-MAX_FLAKY_FRACTION = 8 / 30      # the stop rule, as a fraction of tasks
+MAX_FLAKY_FRACTION = 8 / 30
 BAND = (0.35, 0.65)
 
 
@@ -43,7 +22,6 @@ def _pct(x: float) -> str:
 
 
 def interpret_noise(noise: dict) -> tuple[str, list[str]]:
-    """(verdict, notes). The stop rule scales with the number of tasks."""
     n = noise.get("n_tasks", 0)
     flaky = noise.get("flaky", 0)
     runs = noise.get("runs_per_task", 1)
@@ -122,7 +100,6 @@ def render(noise: dict | None, cal: dict | None) -> str:
             add(f"  * {d}")
     add("")
 
-    # ---------------------------------------------------------------- noise
     add("## Noise floor")
     add("")
     if noise is None:
@@ -145,14 +122,10 @@ def render(noise: dict | None, cal: dict | None) -> str:
             f"**{noise.get('flaky')}** |")
         add(f"| ended at the step limit | {noise.get('ended_at_step_limit', 'n/a')} |")
         add(f"| ended budget-exhausted | {noise.get('ended_budget_exhausted', 'n/a')} |")
-        # wall_s_total is the pre-resume field name; older artifacts carry it.
         secs = (noise.get("wall_s_all_runs")
                 or noise.get("wall_s_this_session")
                 or noise.get("wall_s_total") or 0)
         add(f"| wall clock, all runs | {secs / 3600:.2f} h |")
-        # D7. `noise.py` has emitted both of these since the stall rule
-        # landed and the run sheet rendered neither, so a reader could not
-        # tell "30 tasks measured" from "30 attempted, 2 never scored".
         faults = noise.get("machine_fault_keys") or []
         excluded = noise.get("excluded_keys") or []
         add(f"| machine faults, recovered | "
@@ -160,12 +133,6 @@ def render(noise: dict | None, cal: dict | None) -> str:
         add(f"| **EXCLUDED** - stalled twice, never scored | "
             f"**{len(excluded)}**{': ' + ', '.join(excluded) if excluded else ''} |")
 
-        # Memory-suspect tasks. A wall-clock reading taken while the machine
-        # was paging is not a measurement of the task, and seconds are the
-        # only cost axis this project has. One call has already been observed
-        # at 2465 s against a 600 s budget - 29x its rung median - which
-        # ended `budget_exhausted`, i.e. memory pressure masquerading as
-        # difficulty. These are named rather than silently averaged in.
         suspect = noise.get("memory_suspect_keys") or []
         floor = noise.get("commit_ratio_suspect_threshold")
         lowest = noise.get("min_free_gb_any_task")
@@ -200,7 +167,6 @@ def render(noise: dict | None, cal: dict | None) -> str:
             add(f"> {nte}")
         add("")
 
-    # ---------------------------------------------------------- calibration
     add("## Calibration — is the instrument able to detect a real effect?")
     add("")
     if cal is None:
@@ -223,10 +189,6 @@ def render(noise: dict | None, cal: dict | None) -> str:
                 f"{d.get('caveat', '')}")
             add("")
 
-    # ------------------------------------------------------------ three ways
-    # Part 13 requires bare model / model + scaffold / full system. Omitting
-    # the arms that were not measured would make the one that was look like
-    # the whole picture, so the missing ones are named.
     add("## The three ways, and which of them exist")
     add("")
     add("| arm | what it is | measured? |")
@@ -253,7 +215,6 @@ def render(noise: dict | None, cal: dict | None) -> str:
         "moves the scaffolded model.")
     add("")
 
-    # ----------------------------------------------------------- cost axis
     add("## Cost versus quality")
     add("")
     add("**The cost axis is SECONDS, not dollars.** On an all-local rig every "
@@ -262,9 +223,6 @@ def render(noise: dict | None, cal: dict | None) -> str:
         "hardware, and the spec's own laptop-tier reasoning already says "
         "output tokens are the budget when the machine is the bottleneck.")
     add("")
-    # S3 - a chart may not mix harness versions. The final sweep changed what
-    # counts as a pass, so a pre-fix rate and a post-fix rate are answers to
-    # different questions. Refuse rather than plot them together.
     pts = (cal or {}).get("pareto", []) or (noise or {}).get("pareto", []) or []
     versions = {p.get("harness_version") for p in pts}
     if len(versions) > 1:
@@ -277,11 +235,6 @@ def render(noise: dict | None, cal: dict | None) -> str:
         add("")
         pts = []
 
-    # T3 - the same refusal for the TOOLSET version. The library set does not
-    # change what counts as a pass, so it is not a harness bump; but a run
-    # whose model could import sympy is not attempting the same problem as one
-    # that could not, and a frontier through both would attribute a tooling
-    # difference to the model or the skill.
     tvs = {p.get("toolset_version") for p in pts}
     if len(tvs) > 1:
         add("> **REFUSING TO PLOT.** These points come from different toolset "
@@ -292,8 +245,6 @@ def render(noise: dict | None, cal: dict | None) -> str:
         add("")
         pts = []
 
-    # S1 - done and done_unannounced are never collapsed. A reader must be
-    # able to see how much of a pass rate came from the sweep.
     add("| arm | median s/task | pass rate | done | done_unannounced | USD/task |")
     add("|---|---|---|---|---|---|")
     for pt in pts:
@@ -311,7 +262,6 @@ def render(noise: dict | None, cal: dict | None) -> str:
             add("| *(no arms recorded yet)* | | | |")
     add("")
 
-    # --------------------------------------------- budget censoring per arm
     arms = [a for a in ((noise or {}).get("arms") or []) if a]
     if len(arms) >= 2:
         add("### Budget censoring")
@@ -340,7 +290,6 @@ def render(noise: dict | None, cal: dict | None) -> str:
                 "do not plot them as a clean frontier.")
             add("")
 
-    # -------------------------------------------------------------- caveats
     add("## Caveats that travel with every number above")
     add("")
     for c in (cal or {}).get("caveats", []) or _DEFAULT_CAVEATS:

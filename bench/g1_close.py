@@ -1,30 +1,3 @@
-"""G1 closed as the product of two measured quantities (FINDINGS 1.35).
-
-Four live runs said the same thing: on granite4.1:3b three of the four
-mechanisms never engage, because the model rarely reads anything (1.32). A
-fifth task redesign would not change a property of the model. So G1 is
-stated per mechanism as
-
-    mechanism X saves N tokens WHEN IT FIRES, and fires in F% of steps
-
-with each factor measured where it can be measured without noise:
-
-  savings   A SCRIPTED model and controlled observations, each mechanism on
-            and off over byte-identical work. No live model, nothing
-            nondeterministic: run it twice and every number repeats.
-  firerate  Read straight out of the recorded real-model runs: how often
-            each mechanism actually engaged on the 3B, per executor step.
-
-    python bench/g1_close.py savings  [--out docs/evidence/g1-close-savings.json]
-    python bench/g1_close.py firerate [--out docs/evidence/g1-close-firerate.json]
-
-The savings side is a MODEL of the provider, and says so. The mock's prefix
-cache is exact longest-prefix on the prefix bytes, which is Anthropic's
-behaviour; this project's Ollama server reuses less than that (FINDINGS
-1.21's cache-reuse probe found it snapping back to checkpoints), so a prefix
-saving here is an upper bound on what the local server gives back.
-"""
-
 from __future__ import annotations
 
 import argparse
@@ -37,9 +10,6 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
-# ---------------------------------------------------------------------------
-# savings: scripted, deterministic
-# ---------------------------------------------------------------------------
 
 FINAL = '<final>{"answer": "done"}</final>'
 FILES = "abcdef"
@@ -59,16 +29,6 @@ CODE = ("<code>\ntotal = 0\nfor n in 'abcd':\n"
 
 
 class Script:
-    """The model's side, as a fixed list of turns.
-
-    A responder, not the backend's queue: compaction's pre-boundary memory
-    flush is an extra model call, and from a queue it would consume the next
-    scripted turn - so the arm WITH compaction would do different work from
-    the arm without it. The flush is answered here and the work stays
-    byte-identical across arms. The flush call itself is still counted: it is
-    part of what compaction costs.
-    """
-
     def __init__(self, turns):
         self.turns, self.i = list(turns), 0
 
@@ -92,9 +52,6 @@ def _ctx(tmp: Path, window: int | None = None, items: int = 90, **mechanisms):
     cfg = make_config(tmp)
     for k, v in mechanisms.items():
         setattr(cfg.mechanisms, k, v)
-    # The local tier on the SAME backend as the executor, as in the measured
-    # runs (config.local.yaml, v5): the escalation guard permits that, so the
-    # cache arm needs no test-only bypass.
     cfg.backends["local"] = cfg.backends["cloud"].model_copy(
         update={"trust_tier": "local"})
     if window:
@@ -104,7 +61,7 @@ def _ctx(tmp: Path, window: int | None = None, items: int = 90, **mechanisms):
     record_fingerprint(ctx.memory)
     ctx.config.autonomy.auto_review = False
     ctx.config.autonomy.approve_scoped_writes = True
-    ctx.config.limits.max_steps = 30      # every scenario runs to its <final>
+    ctx.config.limits.max_steps = 30
     work = tmp / "work"
     work.mkdir(exist_ok=True)
     for n in FILES:
@@ -115,7 +72,6 @@ def _ctx(tmp: Path, window: int | None = None, items: int = 90, **mechanisms):
 
 
 def _run(turns, window=None, local=None, setup=None, items=90, **mechanisms) -> dict:
-    """One scripted task in a fresh directory. Returns what it cost."""
     from agent.execute.loop import run_task
     from agent.kernel.tasks import create_task
     from agent.kernel.types import Budget, TaskContract
@@ -123,13 +79,13 @@ def _run(turns, window=None, local=None, setup=None, items=90, **mechanisms) -> 
     here = os.getcwd()
     with tempfile.TemporaryDirectory() as d:
         tmp = Path(d)
-        os.chdir(tmp)                 # the sandbox resolves scope from cwd
+        os.chdir(tmp)
         ctx = _ctx(tmp, window, items, **mechanisms)
         try:
             if setup:
                 setup(ctx)
-            ctx.backends["cloud"]._responder = Script(turns)          # noqa: SLF001
-            ctx.backends["local"]._responder = local or (             # noqa: SLF001
+            ctx.backends["cloud"]._responder = Script(turns)  # noqa: SLF001
+            ctx.backends["local"]._responder = local or (  # noqa: SLF001
                 lambda p, t: "summary: a file of numbered values")
             task = create_task(ctx.conn, ctx.log,
                                TaskContract(goal="g1 savings", artifact_scope=["work"]),
@@ -153,10 +109,7 @@ def _cost(ctx, task_id, status) -> dict:
     return {
         "status": status,
         "executor_calls": len(ex),
-        # What was SENT, cached or not: prefix + tail on every call.
         "executor_prompt_tokens": sum((r[2] or 0) + (r[3] or 0) for r in ex),
-        # What had to be PREFILLED: the mock serves a byte-identical prefix
-        # from cache, so this is the tail plus any prefix that moved.
         "executor_uncached_tokens": sum(r[2] or 0 for r in ex),
         "executor_cache_read_tokens": sum(r[3] or 0 for r in ex),
         "executor_cache_write_tokens": sum(r[4] or 0 for r in ex),
@@ -164,7 +117,6 @@ def _cost(ctx, task_id, status) -> dict:
         "local_calls": len(lo),
         "local_prompt_tokens": sum((r[2] or 0) + (r[3] or 0) for r in lo),
         "rotations": sum(1 for e in ev("session.opened") if e.get("parent_id")),
-        # Tombstones in the tail at the last boundary (the rotation record).
         "tombstones": max([e.get("tombstoned", 0) for e in ev("session.opened")] or [0]),
         "cache_hits": ctx.conn.execute(
             "SELECT COALESCE(SUM(hits),0) FROM semantic_cache").fetchone()[0],
@@ -175,9 +127,6 @@ def _cost(ctx, task_id, status) -> dict:
 
 
 def _prefix_tokens() -> tuple[int, int]:
-    """How big the prefix is, so the window can be sized to cross the
-    ceiling on the tail rather than on the prefix (which is 'delegate', a
-    different branch)."""
     from agent.tokens import count_tokens
 
     here = os.getcwd()
@@ -189,7 +138,7 @@ def _prefix_tokens() -> tuple[int, int]:
             from agent.kernel.tasks import create_task
             from agent.kernel.types import Budget, TaskContract
 
-            ctx.backends["cloud"]._responder = Script([FINAL])       # noqa: SLF001
+            ctx.backends["cloud"]._responder = Script([FINAL])  # noqa: SLF001
             t = create_task(ctx.conn, ctx.log,
                             TaskContract(goal="g1 savings", artifact_scope=["work"]),
                             Budget(usd=5.0, seconds=600))
@@ -206,10 +155,6 @@ def savings() -> dict:
     P, F = _prefix_tokens()
     out = {"prefix_tokens": P, "file_tokens": F, "mechanisms": {}}
 
-    # COMPACTION. The REAL ceiling, no probe: the shipped executor window
-    # (16384, ceiling 0.28 of it) with files sized so it is crossed during
-    # the third read, then three more reads. And the geometry that exposed
-    # the target defect: a small window, the prefix over 8% of it.
     window = 16384
     items = int(90 * (0.28 * window - P) / 2.5 / F)
     reads = [READ(n) for n in FILES] + [FINAL]
@@ -224,10 +169,6 @@ def savings() -> dict:
         "small_on": _run(reads, window=small),
         "small_off": _run(reads, window=small, compaction=False)}
 
-    # SEMANTIC CACHE. The same large file read three times; observations over
-    # 50 tokens are compressed on the local tier. The saving is local-tier
-    # calls, NOT executor tokens: the executor sees the same compressed text
-    # either way.
     def _compress(ctx):
         ctx.config.compress_observations_over_tokens = 50
     same = [READ("a")] * 3 + [FINAL]
@@ -237,7 +178,6 @@ def savings() -> dict:
         "scenario": "the same file read 3 times, compressed on the local tier",
         "on": on, "off": off}
 
-    # PREFIX STABILITY. One tier-1 write mid-task, then four more steps.
     mem = [READ("a"), REMEMBER("The deploy port is 8443."),
            READ("b"), READ("c"), READ("d"), FINAL]
     on, off = _run(mem), _run(mem, prefix_stability=False)
@@ -248,10 +188,6 @@ def savings() -> dict:
         "scenario": "one memory write mid-task then 4 steps; and three writes",
         "on": on, "off": off, "on_3_writes": on3, "off_3_writes": off3}
 
-    # CODE AS ACTION. Fires: the same four files summed, once as one <code>
-    # block, once as four reads (the only way the ablated arm can do it).
-    # Idle: four reads under both arms, so the difference is what carrying
-    # run_code and its instructions costs a task that never uses them.
     code = [CODE, FINAL]
     four = [READ(n) for n in "abcd"] + [FINAL]
     out["mechanisms"]["code_as_action"] = {
@@ -262,11 +198,6 @@ def savings() -> dict:
     return out
 
 
-# ---------------------------------------------------------------------------
-# firerate: the recorded real-model runs
-# ---------------------------------------------------------------------------
-
-# (label, database, {arm: arm-json}) - every real-model G1 run kept.
 EVIDENCE = ROOT / "docs" / "evidence"
 RECORDS = [
     ("v3 2026-09-17 (answer in prompt)", EVIDENCE / "g1-ablation-2026-09-17.db",
@@ -281,8 +212,7 @@ RECORDS = [
 
 
 def _replication_records():
-    """The v6 replication, one database per repetition and arm."""
-    base = EVIDENCE / "g1-rep-v6"   # copied from runs/, which is gitignored
+    base = EVIDENCE / "g1-rep-v6"
     for d in sorted(base.glob("rep*-*")) if base.exists() else []:
         rep, arm = d.name.split("-", 1)
         db, js = d / "agent.g1.db", d / f"{arm}.json"
@@ -323,8 +253,6 @@ def firerate() -> dict:
                         "SELECT COUNT(*) FROM calls WHERE task_id=? AND "
                         "purpose='compress_tool_output'", (tid,)).fetchone()[0]
                     fired = {
-                        # A REAL ceiling crossing: every boundary, rotated or
-                        # skipped, minus the ones the probe forced.
                         "compaction": max(0, rotations + boundary_skips - probes),
                         "semantic_cache": compress,
                         "prefix_stability": len(ev("memory.written")),
@@ -334,9 +262,6 @@ def firerate() -> dict:
                            "steps": steps, "probes": probes, **fired}
                     detail.append(row)
                     for m, n in fired.items():
-                        # A mechanism cannot fire in the arm that removed it;
-                        # counting those steps would dilute F with zeros the
-                        # arm guaranteed.
                         if OFF[arm] == m:
                             continue
                         tally[m]["steps"] += steps
@@ -350,7 +275,7 @@ def firerate() -> dict:
 
 def main(argv=None) -> int:
     sys.path.insert(0, str(ROOT / "src"))
-    p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    p = argparse.ArgumentParser()
     p.add_argument("what", choices=["savings", "firerate"])
     p.add_argument("--out", help="write the JSON here as well")
     args = p.parse_args(argv)

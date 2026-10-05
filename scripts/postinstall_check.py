@@ -4,7 +4,6 @@ root = state_root(None)
 print("state_root ->", root)
 print("is the checkout? ", "alpha-test-1" in str(root) and "OneDrive" in str(root))
 ensure_state_dirs(root)
-# a real task, end to end, with a mock backend so no model is needed
 from agent.config import Config, BackendConfig, Limits, AutonomyConfig, GateConfig
 from agent.context import AgentContext
 from agent.kernel.tasks import create_task
@@ -51,10 +50,6 @@ print("db written under state_root:", (pathlib.Path(root)/"agent.db").exists())
 print("nothing written to cwd:", not (pathlib.Path.cwd()/"agent.db").exists())
 ctx.close()
 
-# The console's HTML is package DATA, not code, so an installed wheel can pass
-# every check above and still 500 on GET / - which is exactly what happened
-# until 2026-09-06 (SPEC-DELTA C24). "An installed wheel can run a task" was
-# never the same claim as "an installed wheel is usable".
 import agent.control.server as _srv
 _ui = pathlib.Path(_srv.__file__).parent / "ui.html"
 print("console html shipped:", _ui.exists())

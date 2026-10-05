@@ -1,31 +1,3 @@
-"""Phase 9.6 follow-up: WHY P3 failed. Where does this server's reuse stop?
-
-P3 (committed in ca990ed) predicted that when the rebuilt prefix differs at the
-memory block, cache reuse on the next call stops at that byte - about 1662
-tokens in. It stopped at 698. The prefix bytes BEFORE the memory block were
-compared directly and are identical (first differing character 2860; memory
-block begins at 2837), so the rebuild did what it claims. What was wrong was
-the prediction's model of the SERVER, which assumed exact longest-common-prefix
-reuse. This probe injects divergences at chosen points to find the real one.
-
-Three candidate models, with different signatures:
-
-  exact-prefix   reuse stops at the divergence, wherever it is (the model the
-                 prediction assumed; P1 and P2 are consistent with it)
-  message        a divergence inside an earlier message falls back to the
-                 start of that message; 698 would be where the system message
-                 begins, after the template's tools block
-  checkpoint     the model keeps recurrent state that cannot be truncated at an
-                 arbitrary token, so reuse falls back to the nearest saved state
-                 checkpoint at or before the divergence
-
-The discriminating case is a divergence in the MIDDLE of the user message, at a
-point no earlier prompt ended: exact-prefix and message both reuse to it;
-checkpoint snaps back.
-
-Writes docs/evidence/phase9-cache-reuse-probe.json. Temporary state only.
-"""
-
 from __future__ import annotations
 
 import hashlib
@@ -61,9 +33,6 @@ def main() -> int:
     ctx = AgentContext(cfg)
     real, tools = ctx.backends["cloud"], ctx.tools.schemas()
 
-    # The run's pre-boundary prefix, rebuilt from the same inputs - and
-    # checked against the hash the run recorded, so the probe measures the
-    # bytes the run actually sent rather than a lookalike.
     snap = tier1_snapshot(MemoryStore(tmp / "memory"), isolated=False)
     contract = json.loads(TaskContract(goal=GOAL, artifact_scope=["work"])
                           .model_dump_json())
@@ -87,7 +56,7 @@ def main() -> int:
     mem = ran["references"]["first_diff_char"]
     mid_u = len(USER) // 2
     real.complete("You are a calculator. Reply with digits only.", "17 * 3 =",
-                  None, max_tokens=1, temperature=0.0)          # evict
+                  None, max_tokens=1, temperature=0.0)
 
     seq = []
     for label, system, user in [
@@ -103,8 +72,6 @@ def main() -> int:
         seq.append({"label": label, **req(system, user)})
         print(f"{label:44s} {seq[-1]}")
 
-    # References LAST: the token position of each divergence, and of the start
-    # of the system text.
     refs = {
         "system_text_starts": req("", "")["prompt"],
         "mid_user": req(pre, USER[:mid_u])["prompt"],

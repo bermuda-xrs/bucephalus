@@ -1,22 +1,3 @@
-"""D18 — the one door a measurement comes through.
-
-Every measurement path used to call `AgentContext.open()` for itself, and
-only `noise.py` set an isolation state. `ladder.py` and the calibration path
-in `run.py` declared none, so they ran unrestricted. Nothing leaked, because
-neither retrieves — but "nothing leaks today" is a fact about the current
-tool set, not a property of the system, and Phase 4 has just added five tools
-including two that retrieve.
-
-The fix is not three call sites remembering a flag. It is that **you cannot
-obtain a context for a measurement without saying what its isolation is**:
-`isolate` is keyword-only with no default, so forgetting it is a TypeError at
-the call, not a silently unrestricted run three hours later.
-
-`tests/test_tool_exposure.py` holds the other half — no measurement module
-may call `AgentContext.open` directly. Together those make it structurally
-impossible rather than currently-true, which is what D18 asked for.
-"""
-
 from __future__ import annotations
 
 import sys
@@ -28,42 +9,15 @@ from agent.context import AgentContext  # noqa: E402
 
 
 class IsolationNotDeclared(RuntimeError):
-    """A measurement tried to start without stating its isolation."""
+    ...
 
 
 def open_measurement(config, *, profile: str | None, isolate: bool,
                      why: str = "") -> AgentContext:
-    """Open a context for a MEASUREMENT. `isolate` is not optional.
-
-    isolate=True   a benchmark attempt reads only what it produced itself:
-                   no other arm's answer, no earlier run of the same task, no
-                   persistent memory. This is what a paired trial requires.
-
-    isolate=False  unrestricted, and legitimate for a path that measures
-                   something other than task outcomes — but it must be
-                   DECLARED, because a reader of the run record has to be able
-                   to tell "isolation was considered and not needed" from
-                   "nobody thought about it".
-    """
     ctx = AgentContext.open(config, profile=profile)
     ctx.config.isolate_retrieval = bool(isolate)
-    # A5/10.3. Wall clock IS the cost axis here, so a task that read five
-    # files at once is not comparable with one that read them in turn.
-    # Sequential for every measurement, and reported either way — the run
-    # record must never leave a reader to infer which it was.
     ctx.config.limits.max_parallel_tools = 1
-    # A4. A measured run with an inbound channel open is not a controlled run:
-    # anyone on the allowlist can create tasks in the same database while the
-    # trial is going, and the arms are then sharing a workspace with somebody's
-    # phone. Pinned OFF here rather than merely recorded, for the same reason
-    # max_parallel_tools is pinned - the run record should never have to say
-    # "a stranger could have written to this and we hope they did not".
     ctx.config.channels.telegram.enabled = False
-    # The grader is held out for EVERY measurement, isolated or not. A score
-    # the model can read its way to is not a score - three routes proved it
-    # (filesystem, prompt, feedback; FINDINGS 1.31, 1.33). Pinned here, and
-    # recorded, so no measured number can come from a run that fed its own
-    # grader's output back to the model.
     ctx.config.grader_held_out = True
     ctx.config.profile_provenance["grader"] = (
         "held out: the grading verifier's result reached the model as "
@@ -75,7 +29,6 @@ def open_measurement(config, *, profile: str | None, isolate: bool,
 
 
 def assert_isolation_declared(ctx) -> None:
-    """For a path that builds its own context and cannot use the helper."""
     if getattr(ctx.config, "isolate_retrieval", None) is None:
         raise IsolationNotDeclared(
             "this measurement has not declared an isolation state. Use "
