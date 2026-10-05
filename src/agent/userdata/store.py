@@ -57,7 +57,7 @@ permits it. A category with no rule is refused.
 - Anything irreversible the plan did not anticipate.
 """
 
-VALID_KINDS = ("policy", "grounding")
+VALID_KINDS = ("policy",)
 
 
 class ValidationError(ValueError):
@@ -369,22 +369,6 @@ class UserStore:
             return None
         return {"id": row[0], "kind": row[1], "name": row[2], "body": row[3],
                 "active": bool(row[4]), "updated_at": row[5]}
-
-    def list_documents(self, kind: str) -> list[dict]:
-        rows = self.conn.execute(
-            "SELECT id,name,length(body),active,updated_at FROM documents "
-            "WHERE owner=? AND kind=? ORDER BY name",
-            (self.owner, kind),
-        ).fetchall()
-        return [{"id": r[0], "name": r[1], "bytes": r[2], "active": bool(r[3]),
-                 "updated_at": r[4]} for r in rows]
-
-    def delete_document(self, kind: str, name: str) -> None:
-        self.conn.execute(
-            "DELETE FROM documents WHERE owner=? AND kind=? AND name=?",
-            (self.owner, kind, name),
-        )
-        self.conn.commit()
 
     def document_history(self, kind: str, name: str, limit: int = 50) -> list[dict]:
         """Prior versions, newest first. Append-only; nothing here is edited."""

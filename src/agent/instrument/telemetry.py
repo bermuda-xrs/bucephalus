@@ -268,8 +268,3 @@ class Telemetry:
                 return tokens / (wall_ms / 1000.0)
         return None
 
-    def totals(self) -> dict:
-        row = self.conn.execute(
-            "SELECT COUNT(*), COALESCE(SUM(cost_usd),0), COALESCE(SUM(wall_ms),0) FROM calls"
-        ).fetchone()
-        return {"n_calls": row[0], "cost_usd": row[1], "wall_ms": row[2]}

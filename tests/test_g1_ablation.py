@@ -263,7 +263,7 @@ def _run_two_identical_compressions(ctx):
 
 
 def test_semantic_cache_on_serves_the_second_identical_compression(
-        tmp_path, routing_only):
+        tmp_path):
     ctx = _ctx(tmp_path)
     _run_two_identical_compressions(ctx)
     hits = ctx.conn.execute(
@@ -272,7 +272,7 @@ def test_semantic_cache_on_serves_the_second_identical_compression(
     ctx.close()
 
 
-def test_semantic_cache_off_neither_reads_nor_writes(tmp_path, routing_only):
+def test_semantic_cache_off_neither_reads_nor_writes(tmp_path):
     """Not merely bypassed on read. A bypass that still FILLED the store would
     leave a warm cache for whatever ran next, which in a paired trial is the
     ablated arm paying for the other one's hits."""

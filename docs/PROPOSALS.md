@@ -1,4 +1,13 @@
-# Proposals waiting for the user
+# Proposals (all decided 2026-10-05; nothing here is open)
+
+| | decision |
+|---|---|
+| P1 | rejected |
+| P2 | dropped: the schemas sit in the server-cached prefix, so the cut saves only on cold calls (phase9-cache-boundary.json: warm steps re-evaluate ~600-700 tokens) |
+| P3 | built, HARNESS_VERSION 7 |
+| P4 | rejected |
+| P5 | built, all three parts, HARNESS_VERSION 7 |
+| P6 | built (calibration), HARNESS_VERSION 7 |
 
 Changes the unattended run (iteration 3) measured or researched but did not
 make: each changes prompt bytes the model sees (a `HARNESS_VERSION` bump), or

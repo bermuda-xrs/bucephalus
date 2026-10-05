@@ -598,18 +598,11 @@ What to do, in the words a model reads.</textarea></label>
       </div>`;
   },
   async policy() {
-    const [p, g] = await Promise.all([api("/policy"), api("/grounding")]);
+    const p = await api("/policy");
     return `<h3>Reviewer policy</h3><p class="lede">What the reviewing model may approve on its own. Default is to
       refuse. In effect from <code>${esc(p.effective_source)}</code>.</p>
       <label class="field">Policy<textarea id="pBody" class="tall">${esc(p.body)}</textarea></label>
-      <button class="btn primary" data-action="savePolicy">Save policy</button>
-      <h4>Grounding notes</h4><p class="note">Reference text a person wrote. Stored only: nothing in a run reads these.</p>
-      <table>${g.documents.map(x => `<tr><td><button class="link" data-action="editGrounding" ${args(x.name)}>${esc(x.name)}</button></td>
-        <td>${x.bytes.toLocaleString()} bytes</td><td class="r"><button class="quiet" data-action="delGrounding" ${args(x.name)}>Delete</button></td></tr>`).join("")
-        || '<tr><td class="empty">No notes yet.</td></tr>'}</table>
-      <div class="grid2"><label class="field">Name<input id="gName"></label></div>
-      <label class="field">Contents<textarea id="gBody"></textarea></label>
-      <button class="btn" data-action="saveGrounding">Save note</button>`;
+      <button class="btn primary" data-action="savePolicy">Save policy</button>`;
   },
   async integrity() {
     const d = await api("/panels/integrity");
@@ -766,22 +759,6 @@ async function savePolicy() {
         toast("Policy saved. It applies from the next review."); openPane("policy"); }
   catch (e) { toast(e.message, true); }
 }
-async function editGrounding(name) {
-  const d = await api("/grounding/" + encodeURIComponent(name));
-  $("#gName").value = d.name; $("#gBody").value = d.body;
-}
-async function saveGrounding() {
-  const name = $("#gName").value.trim();
-  if (!name) return toast("Give the note a name first.", true);
-  try { await api("/grounding/" + encodeURIComponent(name), {method: "PUT", body: JSON.stringify({body: $("#gBody").value})});
-        toast("Note saved."); openPane("policy"); }
-  catch (e) { toast(e.message, true); }
-}
-async function delGrounding(name) {
-  await api("/grounding/" + encodeURIComponent(name), {method: "DELETE"});
-  toast("Note deleted."); openPane("policy");
-}
-
 // ------------------------------------------------------------- command palette
 // Existing actions only: each entry names a key of ACTIONS. The palette is a
 // faster way to click, never a new thing a click could not do.
@@ -852,8 +829,8 @@ for (const id of ["#palette", "#control"]) $(id).addEventListener("click", e => 
 const ACTIONS = {newConversation, selectConversation, renameConversation, archiveConversation,
   toggleArchived, openLooseList, openTaskAlone, openTaskOf, draft, showSendBack, sign, sendBack, decide,
   toggleFiles, toggleSide, openFile, openControl, closeControl, openPane, openPalette, focusSearch,
-  toggleTheme, acceptMemory, createSuite, saveTask, closeSuite, addSkill, savePolicy, saveGrounding,
-  openSuite, delSuite, delTask, checkGate, editGrounding, delGrounding};
+  toggleTheme, acceptMemory, createSuite, saveTask, closeSuite, addSkill, savePolicy,
+  openSuite, delSuite, delTask, checkGate};
 document.addEventListener("click", e => {
   const el = e.target.closest("[data-action]");
   if (!el || !ACTIONS[el.dataset.action]) return;

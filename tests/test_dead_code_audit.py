@@ -10,13 +10,6 @@ This test freezes the known set. A NEW unreferenced function fails it. The
 existing ones are listed with why they are tolerated, so the list is a record
 rather than a suppression.
 
-The one that actually matters is called out in `KNOWN_INERT`:
-
-  * `local_with_escalation` is never called, so escalation-by-disagreement
-    (M6.3) does not happen; the router escalates on allowlist rules alone.
-
-`record_holdout_gap` was the other, until it was retired with the generator
-it policed (M11, 2026-09-15, FINDINGS 1.27).
 """
 
 from __future__ import annotations
@@ -29,11 +22,6 @@ SRC = ROOT / "src" / "agent"
 
 # name -> why it is unreferenced and whether that is acceptable
 KNOWN_INERT = {
-    # --- inert guarantees. These are the expensive ones. -------------------
-    "local_with_escalation":
-        "M6.3 escalation-by-disagreement never runs; the router escalates on "
-        "allowlist rules only.",
-
     # --- not yet reached in the build order -------------------------------
     "import_external_skill":
         "External skills go through the same gate; none imported yet.",
@@ -201,13 +189,6 @@ def test_the_known_list_does_not_rot():
     stale = sorted(set(KNOWN_INERT) - set(found))
     assert not stale, (
         f"these are now referenced and should leave KNOWN_INERT: {stale}")
-
-
-def test_the_inert_guarantees_are_named_as_such():
-    """The point of the list is that the expensive ones stay visible."""
-    for name in ("local_with_escalation",):
-        assert name in KNOWN_INERT
-        assert "INERT" in KNOWN_INERT[name] or "never" in KNOWN_INERT[name]
 
 
 def test_every_source_file_parses_cleanly():

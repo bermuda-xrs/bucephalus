@@ -202,7 +202,7 @@ def test_api_refuses_a_task_that_measures_nothing(server):
     _delete(f"{server}/suites/{sid}", timeout=10)
 
 
-def test_policy_and_grounding_over_http(server):
+def test_policy_over_http(server):
     got = _get(server + "/policy", timeout=10).json()
     assert "body" in got and got["body"].strip()
 
@@ -215,10 +215,7 @@ def test_policy_and_grounding_over_http(server):
     assert _put(server + "/policy", timeout=10,
                      json={"body": "  "}).status_code == 400
 
-    _put(server + "/grounding/notes", timeout=10, json={"body": "some notes"})
-    docs = _get(server + "/grounding", timeout=10).json()["documents"]
-    assert any(d["name"] == "notes" for d in docs)
-    _delete(server + "/grounding/notes", timeout=10)
+    assert _get(server + "/grounding", timeout=10).status_code == 404
 
 
 def test_skill_added_via_api_is_a_candidate(server):

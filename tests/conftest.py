@@ -168,20 +168,3 @@ def python_exe() -> str:
     return sys.executable
 
 
-@pytest.fixture
-def routing_only(monkeypatch):
-    """Opt a test out of the escalation guard.
-
-    `Router.choose` raises when it actually selects the local tier while
-    M6.3 escalation-by-disagreement has no call site, because routing that
-    looks active while the escalation path is dead produces numbers nobody
-    can interpret.
-
-    These tests are about ROUTING - which backend is picked - not about
-    escalation, so they say so explicitly rather than the guard being
-    softened for everyone. When escalation is wired, delete this fixture and
-    every use of it; the tests should then pass unaided.
-    """
-    import agent.router.cascade as cascade
-
-    monkeypatch.setattr(cascade, "_ESCALATION_WIRED", True, raising=False)

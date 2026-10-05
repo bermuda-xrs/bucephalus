@@ -285,7 +285,7 @@ CREATE INDEX IF NOT EXISTS idx_suite_tasks ON suite_tasks(suite_id, position);
 -- they have identical lifecycles: authored, versioned by edit, activated.
 CREATE TABLE IF NOT EXISTS documents (
     id         TEXT PRIMARY KEY,
-    kind       TEXT NOT NULL,          -- policy | grounding
+    kind       TEXT NOT NULL,          -- policy
     name       TEXT NOT NULL,
     owner      TEXT NOT NULL DEFAULT 'local',
     body       TEXT NOT NULL,

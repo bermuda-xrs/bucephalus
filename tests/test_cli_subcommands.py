@@ -615,7 +615,7 @@ def test_serve_binds_and_answers_health(cli):
             except Exception:  # noqa: BLE001 - not up yet
                 time.sleep(0.5)
         assert body is not None, "`alpha serve` never answered /health"
-        assert "router" in body, body
+        assert body.get("ok") is True and "backends" in body, body
     finally:
         kill_tree(p.pid)
         try:

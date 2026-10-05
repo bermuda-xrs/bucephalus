@@ -481,7 +481,6 @@ def create_app(ctx: AgentContext) -> FastAPI:
         return {
             "ok": True,
             "backends": sorted(ctx.backends),
-            "router": ctx.router.health(),
         }
 
     # ------------------------------------------------------------------
@@ -593,29 +592,6 @@ def create_app(ctx: AgentContext) -> FastAPI:
     def policy_history() -> dict:
         """Prior versions of the rule book, so a run can be audited later."""
         return {"history": ctx.userdata.document_history("policy", "default")}
-
-    @app.get("/grounding")
-    def list_grounding() -> dict:
-        return {"documents": ctx.userdata.list_documents("grounding")}
-
-    @app.put("/grounding/{name}")
-    def put_grounding(name: str, body: DocIn) -> dict:
-        try:
-            return ctx.userdata.put_document("grounding", name, body.body)
-        except ValidationError as e:
-            raise HTTPException(400, str(e)) from None
-
-    @app.get("/grounding/{name}")
-    def get_grounding(name: str) -> dict:
-        doc = ctx.userdata.get_document("grounding", name)
-        if doc is None:
-            raise HTTPException(404, "no such document")
-        return doc
-
-    @app.delete("/grounding/{name}")
-    def delete_grounding(name: str) -> dict:
-        ctx.userdata.delete_document("grounding", name)
-        return {"deleted": name}
 
     @app.get("/skills")
     def list_skills() -> dict:

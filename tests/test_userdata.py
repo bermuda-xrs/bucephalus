@@ -143,13 +143,8 @@ def test_empty_policy_is_refused(ctx):
         ctx.userdata.set_policy("   ")
 
 
-# ------------------------------------------------------------- grounding
-
-
-def test_grounding_documents_round_trip(ctx):
-    ctx.userdata.put_document("grounding", "tps", "thermal protection notes about tiles")
-    docs = ctx.userdata.list_documents("grounding")
-    assert docs[0]["name"] == "tps"
-    assert ctx.userdata.get_document("grounding", "tps")["body"].startswith("thermal")
+def test_grounding_notes_are_gone(ctx):
+    with pytest.raises(ValidationError):
+        ctx.userdata.put_document("grounding", "tps", "thermal protection notes about tiles")
 
 

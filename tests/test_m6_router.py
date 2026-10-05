@@ -6,10 +6,10 @@ nothing in the loop ever asks it for a local-eligible purpose.
 
 from __future__ import annotations
 
-from agent.router.cascade import local_with_escalation, max_cluster_fraction, normalize
+from agent.router.cascade import normalize
 
 
-def test_router_respects_allowlist(ctx, task, routing_only):
+def test_router_respects_allowlist(ctx, task):
     """A 'plan' purpose never routes local, whatever the measurements say."""
     assert ctx.router.choose("plan", task).name == "cloud"
     assert ctx.router.choose("review", task).name == "cloud"
@@ -17,7 +17,7 @@ def test_router_respects_allowlist(ctx, task, routing_only):
     assert ctx.router.choose("summarize", task).name == "local"
 
 
-def test_laptop_tier_is_narrower(ctx, task, routing_only):
+def test_laptop_tier_is_narrower(ctx, task):
     ctx.config.active_local_tier = "laptop"
     assert ctx.router.choose("classify", task).name == "laptop"
     # summarize is on the desktop allowlist but not the laptop one
@@ -29,7 +29,7 @@ def test_no_local_tier_falls_back_to_cloud(ctx, task):
     assert ctx.router.choose("summarize", task).name == "cloud"
 
 
-def test_latency_aware_routing(ctx, task, routing_only):
+def test_latency_aware_routing(ctx, task):
     """With ~10 s left, a local tier too slow to answer in time is skipped for
     the cloud, and one fast enough is used. Throughput comes from telemetry,
     then the backend's configured assumption - the knob set here."""
@@ -46,49 +46,10 @@ def test_normalize_compares_parsed_objects():
     assert normalize("  Yes  ") == normalize("yes")
 
 
-def test_agreement_fraction():
-    assert max_cluster_fraction(["a", "a", "b"]) == 2 / 3
-    assert max_cluster_fraction(["a", "b", "c"]) == 1 / 3
-
-
-def test_two_of_three_agreement_does_not_escalate(ctx, task):
-    """The spec's literal 0.67 fails this case; 2/3 is 0.6667."""
-    ctx.backends["local"].queue("same", "same", "different")
-    resp, escalated = local_with_escalation(ctx, task, "summarize", "P", "T", k=3)
-    assert escalated is False
-    assert resp.backend == "local"
-
-
-def test_escalation_on_disagreement(ctx, task):
-    """Three divergent local samples -> cloud is called and escalated=1 is recorded."""
-    ctx.backends["local"].queue("alpha", "beta", "gamma")
-    ctx.backends["cloud"].queue("the cloud answer")
-
-    resp, escalated = local_with_escalation(ctx, task, "summarize", "P", "T", k=3)
-    assert escalated is True
-    assert resp.backend == "cloud"
-    rows = ctx.conn.execute(
-        "SELECT COUNT(*) FROM calls WHERE task_id=? AND escalated=1", (task.id,)
-    ).fetchone()[0]
-    assert rows == 1
-
-
-def test_escalation_rate_is_a_health_metric(ctx, task):
-    ctx.backends["local"].queue("a", "b", "c")
-    ctx.backends["cloud"].queue("x")
-    local_with_escalation(ctx, task, "summarize", "P", "T", k=3)
-    health = ctx.router.health()
-    assert 0.0 <= health["escalation_rate"] <= 1.0
-    assert health["verdict"] in {
-        "healthy", "local tier is out of its depth",
-        "too cautious — savings left unclaimed", "no data",
-    }
-
-
 # -- the call site ---------------------------------------------------------
 
 
-def test_large_observations_route_to_the_local_tier(ctx, workspace, scripted, routing_only):
+def test_large_observations_route_to_the_local_tier(ctx, workspace, scripted):
     """The loop must actually ISSUE a local-eligible purpose, or the free
     column stays at zero forever no matter how good the router is."""
     from agent.execute.loop import run_task
@@ -177,27 +138,6 @@ def _same_model_local_tier(ctx):
     ctx.backends["local"] = build_backend("local", ctx.config.backends["local"])
     ctx.config.active_local_tier = "local"
     ctx.config.local_allowlist = ["compress_tool_output"]
-
-
-def test_a_local_tier_that_is_the_executor_does_not_raise(ctx, task):
-    _same_model_local_tier(ctx)
-    ctx.router.choose("compress_tool_output", task)      # must not raise
-    note = ctx.config.profile_provenance.get("escalation", "")
-    assert "not reachable" in note and "same backend" in note, (
-        "a one-tier config that looks routed must still say so in the record")
-
-
-def test_a_genuinely_different_second_tier_still_raises(ctx, task):
-    """The guard is NARROWED, not removed. A different model behind the local
-    tier is a real second tier with a dead escalation path, and that is the
-    case the guard exists for."""
-    import pytest
-
-    ctx.config.active_local_tier = "local"       # conftest's 'local' is mock-local
-    ctx.config.local_allowlist = ["compress_tool_output"]
-    assert ctx.config.backends["local"].model != ctx.config.backends["cloud"].model
-    with pytest.raises(RuntimeError, match="escalation-by-disagreement"):
-        ctx.router.choose("compress_tool_output", task)
 
 
 def test_the_semantic_cache_is_reachable_and_hits(ctx, task, workspace, scripted):
