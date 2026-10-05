@@ -234,6 +234,8 @@ def run_task(ctx, task_id: str) -> TaskResult:
             if task.budget.exhausted():
                 return _final_sweep(ctx, task, "budget_exhausted",
                                     best_answer, step)
+            if load_task(ctx.conn, task.id).status == TaskStatus.PAUSED:
+                raise TaskPaused(None, "human requested")
 
             if plan is not None:
                 from ..plan.planner import verify_plan_pin

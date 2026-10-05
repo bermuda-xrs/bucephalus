@@ -144,6 +144,20 @@ TAMPERED = "tampered"
 UNRECORDED = "unrecorded"
 
 
+def forget(store: MemoryStore, text: str) -> list[str]:
+    needle = text.lower()
+    removed = []
+    for tier in sorted(store.FILES):
+        entries = store.entries(tier)
+        gone = [e for e in entries if needle in e.text.lower()]
+        if gone:
+            store.path(tier).write_text(_render([e for e in entries if e not in gone]),
+                                        encoding="utf-8")
+            removed += [f"{tier}: {e.text}" for e in gone]
+    record_fingerprint(store)
+    return removed
+
+
 def record_fingerprint(store: MemoryStore) -> str:
     fp = store.fingerprint()
     (store.root / BLESSED_FILE).write_text(fp, encoding="utf-8")

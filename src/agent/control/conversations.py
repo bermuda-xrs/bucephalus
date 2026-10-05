@@ -18,18 +18,18 @@ def create(conn, title: str = "") -> dict:
 
 
 def get_row(conn, cid: str) -> dict:
-    r = conn.execute("SELECT id, title, created_at, updated_at, archived FROM conversations "
+    r = conn.execute("SELECT id, title, created_at, updated_at, archived, pinned FROM conversations "
                      "WHERE id=?", (cid,)).fetchone()
     if r is None:
         raise KeyError(cid)
     return {"id": r[0], "title": r[1], "created_at": r[2], "updated_at": r[3],
-            "archived": bool(r[4])}
+            "archived": bool(r[4]), "pinned": bool(r[5])}
 
 
 def listing(conn, q: str = "", archived: bool = False) -> list[dict]:
     like = f"%{q.strip()}%"
     rows = conn.execute(
-        """SELECT c.id, c.title, c.updated_at, c.archived,
+        """SELECT c.id, c.title, c.updated_at, c.archived, c.pinned,
                   (SELECT COUNT(*) FROM conversation_tasks x WHERE x.conversation_id=c.id),
                   (SELECT COUNT(*) FROM conversation_tasks x
                      JOIN approvals a ON a.task_id = x.task_id AND a.status = 'pending'
@@ -42,18 +42,21 @@ def listing(conn, q: str = "", archived: bool = False) -> list[dict]:
             WHERE c.archived = ? AND (? = '' OR c.title LIKE ? OR EXISTS (
                   SELECT 1 FROM conversation_tasks x JOIN tasks t ON t.id = x.task_id
                    WHERE x.conversation_id = c.id AND t.contract_json LIKE ?))
-            ORDER BY c.updated_at DESC LIMIT 200""",
+            ORDER BY c.pinned DESC, c.updated_at DESC LIMIT 200""",
         (1 if archived else 0, q.strip(), like, like)).fetchall()
     return [{"id": r[0], "title": r[1], "updated_at": r[2], "archived": bool(r[3]),
-             "n_tasks": r[4], "needs_you": r[5]} for r in rows]
+             "pinned": bool(r[4]), "n_tasks": r[5], "needs_you": r[6]} for r in rows]
 
 
-def update(conn, cid: str, title: str | None = None, archived: bool | None = None) -> dict:
+def update(conn, cid: str, title: str | None = None, archived: bool | None = None,
+           pinned: bool | None = None) -> dict:
     get_row(conn, cid)
     if title is not None:
         conn.execute("UPDATE conversations SET title=? WHERE id=?", (title.strip()[:120], cid))
     if archived is not None:
         conn.execute("UPDATE conversations SET archived=? WHERE id=?", (int(archived), cid))
+    if pinned is not None:
+        conn.execute("UPDATE conversations SET pinned=? WHERE id=?", (int(pinned), cid))
     conn.commit()
     return get_row(conn, cid)
 
@@ -103,7 +106,29 @@ def thread(ctx, cid: str) -> dict:
             "approvals": ctx.pending_approvals(tid),
             "answer": answer[0] if answer else None,
         })
-    return {"conversation": conv, "items": items}
+    spent = {"usd": round(sum(i["budget"].get("spent_usd", 0) for i in items), 6),
+             "seconds": round(sum(i["budget"].get("spent_seconds", 0) for i in items), 1)}
+    return {"conversation": conv, "items": items, "spent": spent}
+
+
+def markdown(th: dict) -> str:
+    out = [f"# {th['conversation']['title']}", ""]
+    for it in th["items"]:
+        out += [f"## {firstline(it['goal'])}", "", it["goal"], ""]
+        plan = (it.get("plan") or {}).get("body") or {}
+        if plan:
+            out += [f"**Plan** ({it['plan']['status']}): {plan.get('objective', '')}", ""]
+            out += [f"{n}. {s.get('intent', '')}" for n, s in enumerate(plan.get("steps", []), 1)]
+            out.append("")
+        out += [f"**Status:** {it['status']}", ""]
+        if it.get("answer"):
+            out += ["**Answer:**", "", it["answer"], ""]
+    out.append(f"Spent ${th['spent']['usd']:.4f} in {th['spent']['seconds']:.0f} s.")
+    return "\n".join(out) + "\n"
+
+
+def firstline(text: str) -> str:
+    return (text or "(no goal)").strip().splitlines()[0][:120]
 
 
 def conversation_of(conn, task_id: str) -> str | None:

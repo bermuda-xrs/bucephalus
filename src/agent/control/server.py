@@ -87,6 +87,18 @@ class NewConversation(BaseModel):
 class PatchConversation(BaseModel):
     title: str | None = None
     archived: bool | None = None
+    pinned: bool | None = None
+
+
+class Forget(BaseModel):
+    text: str
+
+
+class NewSchedule(BaseModel):
+    spec: str
+    goal: str
+    scope: str = "work"
+    budget_usd: float | None = None
 
 
 class Message(BaseModel):
@@ -327,7 +339,7 @@ def create_app(ctx: AgentContext) -> FastAPI:
         from . import conversations as conv
 
         try:
-            return conv.update(ctx.conn, cid, body.title, body.archived)
+            return conv.update(ctx.conn, cid, body.title, body.archived, body.pinned)
         except KeyError:
             raise HTTPException(404, "no such conversation") from None
 
@@ -339,6 +351,23 @@ def create_app(ctx: AgentContext) -> FastAPI:
             return conv.thread(ctx, cid)
         except KeyError:
             raise HTTPException(404, "no such conversation") from None
+
+    @app.get("/conversations/{cid}/export")
+    def export_conversation(cid: str, format: str = "md"):
+        from fastapi.responses import Response
+
+        from . import conversations as conv
+
+        if format not in ("md", "json"):
+            raise HTTPException(400, "format is md or json")
+        try:
+            th = conv.thread(ctx, cid)
+        except KeyError:
+            raise HTTPException(404, "no such conversation") from None
+        body = conv.markdown(th) if format == "md" else json.dumps(th, indent=2)
+        kind = "text/markdown; charset=utf-8" if format == "md" else "application/json"
+        return Response(body, media_type=kind, headers={
+            "Content-Disposition": f'attachment; filename="conversation-{cid}.{format}"'})
 
     @app.post("/conversations/{cid}/messages")
     def post_message(cid: str, body: Message) -> dict:
@@ -369,6 +398,36 @@ def create_app(ctx: AgentContext) -> FastAPI:
         from .panels import accept_memory
 
         return accept_memory(ctx)
+
+    @app.post("/memory/forget")
+    def post_memory_forget(body: Forget) -> dict:
+        from ..memory.store import forget
+
+        if not body.text.strip():
+            raise HTTPException(400, "say what to forget")
+        return {"removed": forget(ctx.memory, body.text)}
+
+    @app.post("/schedules")
+    def post_schedule(body: NewSchedule) -> dict:
+        from .. import schedule as sched
+
+        lim = ctx.config.limits
+        try:
+            sid = sched.add(ctx.conn, body.spec,
+                            TaskContract(goal=body.goal, artifact_scope=[body.scope or "work"]),
+                            Budget(usd=body.budget_usd or lim.default_task_budget_usd,
+                                   seconds=lim.default_task_budget_seconds))
+        except ValueError as e:
+            raise HTTPException(400, str(e)) from None
+        return {"id": sid}
+
+    @app.delete("/schedules/{sid}")
+    def delete_schedule(sid: str) -> dict:
+        from .. import schedule as sched
+
+        if not sched.remove(ctx.conn, sid):
+            raise HTTPException(404, "no such active schedule")
+        return {"removed": sid}
 
     @app.get("/panels/{name}")
     def get_panel(name: str) -> dict:
@@ -533,6 +592,14 @@ def create_app(ctx: AgentContext) -> FastAPI:
             {"id": r[0], "name": r[1], "version": r[2], "status": r[3]} for r in rows
         ]}
 
+    @app.get("/skills/{skill_id}")
+    def get_skill(skill_id: str) -> dict:
+        try:
+            s = ctx.skills.load(skill_id, verify=False)
+        except KeyError:
+            raise HTTPException(404, "no such skill") from None
+        return {k: s[k] for k in ("id", "name", "version", "body", "status", "contract")}
+
     @app.post("/skills")
     def add_skill(body: SkillIn) -> dict:
         try:
@@ -560,7 +627,8 @@ def create_app(ctx: AgentContext) -> FastAPI:
 
     from fastapi.responses import Response
 
-    for name, media in (("ui.js", "text/javascript"), ("ui.css", "text/css")):
+    for name, media in (("ui.js", "text/javascript"), ("md.js", "text/javascript"),
+                        ("ui.css", "text/css")):
         def asset(name=name, media=media) -> Response:
             body = (Path(__file__).parent / name).read_text(encoding="utf-8")
             return Response(body, media_type=media, headers={"Cache-Control": "no-store"})

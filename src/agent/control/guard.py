@@ -65,7 +65,7 @@ def is_loopback_host(host_header: str) -> bool:
     return _host_only(host_header).lower() in LOOPBACK_HOSTS
 
 
-PUBLIC_UI = frozenset({"/", "/ui.js", "/ui.css"})
+PUBLIC_UI = frozenset({"/", "/ui.js", "/md.js", "/ui.css"})
 
 SECURITY_HEADERS = {
     "Content-Security-Policy": (

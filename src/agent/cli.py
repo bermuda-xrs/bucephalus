@@ -271,20 +271,10 @@ def cmd_tui(ctx, args, console) -> int:
 
 
 def cmd_memory(ctx, args, console) -> int:
-    from .memory.store import (MemoryStore, _render, check_fingerprint,
-                               record_fingerprint)
+    from .memory.store import MemoryStore, check_fingerprint, forget, record_fingerprint
 
     if args.forget:
-        needle = args.forget.lower()
-        removed = []
-        for tier in sorted(MemoryStore.FILES):
-            entries = ctx.memory.entries(tier)
-            kept = [e for e in entries if needle not in e.text.lower()]
-            gone = [e for e in entries if needle in e.text.lower()]
-            if gone:
-                ctx.memory.path(tier).write_text(_render(kept), encoding="utf-8")
-                removed += [f"{tier}: {e.text}" for e in gone]
-        record_fingerprint(ctx.memory)
+        removed = forget(ctx.memory, args.forget)
         for line in removed:
             console.print(f"[red]forgotten[/red] {line}")
         if not removed:

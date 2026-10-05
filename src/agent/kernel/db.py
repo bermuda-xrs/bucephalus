@@ -306,7 +306,8 @@ CREATE TABLE IF NOT EXISTS conversations (
     title       TEXT NOT NULL,
     created_at  REAL NOT NULL,
     updated_at  REAL NOT NULL,
-    archived    INTEGER NOT NULL DEFAULT 0
+    archived    INTEGER NOT NULL DEFAULT 0,
+    pinned      INTEGER NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS conversation_tasks (
     task_id         TEXT PRIMARY KEY REFERENCES tasks(id),
@@ -372,6 +373,7 @@ _ADDED_COLUMNS = (
     ("approvals", "consumed_at", "REAL"),
     ("calls", "model", "TEXT"),
     ("calls", "est_input_tokens", "INTEGER"),
+    ("conversations", "pinned", "INTEGER NOT NULL DEFAULT 0"),
 )
 
 

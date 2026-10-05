@@ -72,5 +72,5 @@ def test_the_only_non_python_payload_is_the_runtime_assets(wheel):
                      and not n.startswith("alpha_test_1-")
                      and not n.endswith("/"))
     assert payload == ["agent/assets/banner.ans", "agent/control/ui.css",
-                       "agent/control/ui.html", "agent/control/ui.js",
+                       "agent/control/md.js", "agent/control/ui.html", "agent/control/ui.js",
                        "agent/themes/default.toml"], payload

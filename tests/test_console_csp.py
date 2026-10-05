@@ -28,7 +28,7 @@ def _headers(url: str, token: str | None = None) -> tuple[int, dict]:
         return e.code, {k.lower(): v for k, v in e.headers.items()}
 
 
-@pytest.mark.parametrize("path", ["/", "/health", "/tasks", "/ui.js", "/ui.css"])
+@pytest.mark.parametrize("path", ["/", "/health", "/tasks", "/ui.js", "/md.js", "/ui.css"])
 def test_every_response_refuses_framing_and_inline_script(base, path):
     status, h = _headers(base + path)
     assert h.get("x-frame-options") == "DENY", (path, status)
