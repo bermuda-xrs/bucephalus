@@ -1,10 +1,3 @@
-"""M13 acceptance — two touches, a read-only planner, and a deputy that
-cannot widen anything.
-
-The last two in the spec's list are the ones that catch real bugs: the
-monitor-leak test and the plan-pinning test.
-"""
-
 from __future__ import annotations
 
 import json
@@ -56,10 +49,8 @@ def _planned_task(ctx, workspace):
 
 
 def test_two_touch_completion(ctx, workspace):
-    """Objective -> plan -> approve -> completion, with exactly ONE human
-    interaction between submission and result."""
     task, plan = _planned_task(ctx, workspace)
-    approve_plan(ctx, task, plan)  # human touch #1
+    approve_plan(ctx, task, plan)
 
     ctx.backends["cloud"].queue(
         '<action tool="write_file">'
@@ -69,11 +60,10 @@ def test_two_touch_completion(ctx, workspace):
     )
     ctx.backends["review"].queue("VERDICT: approve\nBECAUSE: write inside artifact_scope")
 
-    result = run_task(ctx, task.id)  # human touch #2 is reading this
+    result = run_task(ctx, task.id)
 
     assert result.status == "done"
     assert (workspace / "out.txt").read_text(encoding="utf-8") == "hello"
-    # Nothing parked in between: no third touch.
     assert ctx.pending_approvals(task.id) == []
     approvals = ctx.conn.execute(
         "SELECT COUNT(*) FROM events WHERE task_id=? AND type='human.approved'",
@@ -83,7 +73,6 @@ def test_two_touch_completion(ctx, workspace):
 
 
 def test_planner_cannot_write(ctx, workspace):
-    """During the plan phase, every write tool is denied at the gate."""
     from agent.security.capabilities import gate_tool_call
 
     task = create_task(
@@ -111,7 +100,6 @@ def test_plan_phase_restores_execute_phase(ctx, workspace):
 
 
 def test_auto_review_is_different_backend(ctx, task):
-    """Assert the reviewer backend != the executing backend."""
     assert ctx.config.autonomy.auto_review_backend != "cloud"
     ctx.executing_backend = ctx.config.autonomy.auto_review_backend
     with pytest.raises(AssertionError, match="different backend"):
@@ -120,7 +108,6 @@ def test_auto_review_is_different_backend(ctx, task):
 
 
 def test_auto_review_cannot_widen_scope(ctx, workspace, scripted):
-    """An approve verdict never expands artifact_scope or enables network."""
     task = create_task(
         ctx.conn, ctx.log,
         TaskContract(goal="try to escape", artifact_scope=["work"]),
@@ -133,8 +120,6 @@ def test_auto_review_cannot_widen_scope(ctx, workspace, scripted):
         + "</action>",
         '<final>{"answer": "blocked"}</final>',
     )
-    # The reviewer says yes to everything. It still cannot widen scope, because
-    # the gate refuses before the reviewer is ever consulted.
     ctx.backends["review"].queue("VERDICT: approve\nBECAUSE: looks fine to me")
 
     run_task(ctx, task.id)
@@ -147,7 +132,6 @@ def test_auto_review_cannot_widen_scope(ctx, workspace, scripted):
 
 
 def test_trusted_tier_always_parks(ctx, workspace, scripted):
-    """A TRUSTED action escalates to a human even with auto_review on."""
     task = create_task(
         ctx.conn, ctx.log,
         TaskContract(goal="push it", artifact_scope=["work"]),
@@ -160,7 +144,6 @@ def test_trusted_tier_always_parks(ctx, workspace, scripted):
     assert result.approval_id
     pending = ctx.pending_approvals(task.id)
     assert len(pending) == 1 and pending[0]["tool"] == "git_push"
-    # The deputy was never asked for a real verdict.
     assert ctx.conn.execute(
         "SELECT COUNT(*) FROM review_decisions WHERE task_id=? AND verdict!='escalate'",
         (task.id,),
@@ -168,7 +151,6 @@ def test_trusted_tier_always_parks(ctx, workspace, scripted):
 
 
 def test_denial_returns_rationale_not_error(ctx, workspace, scripted):
-    """The agent receives the rationale plus the no-circumvention instruction."""
     from agent.plan.review import NO_CIRCUMVENTION
 
     task = create_task(
@@ -197,7 +179,6 @@ def test_denial_returns_rationale_not_error(ctx, workspace, scripted):
 
 
 def test_unparseable_reviewer_output_denies(ctx):
-    """False means reject, not approve. A garbled reviewer is a denial."""
     d = parse_decision("I think that's probably fine?")
     assert d.verdict == "deny"
     d2 = parse_decision("VERDICT: approve\nBECAUSE: rule 2")
@@ -219,13 +200,12 @@ def test_review_decision_reaches_the_agent_as_guidance(ctx):
 
 
 def test_plan_hash_pinned_after_approval(ctx, workspace):
-    """Mutate the plan post-approval. Assert execution halts."""
     task, plan = _planned_task(ctx, workspace)
     approve_plan(ctx, task, plan)
     assert verify_plan_pin(ctx, task).id == plan.id
 
     tampered = json.loads(json.dumps(plan.body()))
-    tampered["steps"][0]["artifact_scope"] = ["/"]  # quietly widen the scope
+    tampered["steps"][0]["artifact_scope"] = ["/"]
     ctx.conn.execute(
         "UPDATE plans SET body_json=? WHERE id=? AND task_id=?",
         (json.dumps(tampered), plan.id, task.id),

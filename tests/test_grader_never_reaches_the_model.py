@@ -1,37 +1,3 @@
-"""Under measurement, nothing the grader knows reaches any model's context.
-
-THREE ROUTES WERE FOUND ONE AT A TIME, each only after the previous one closed:
-
-  1. filesystem - a verify.py the agent could read (closed at HARNESS_VERSION 2)
-  2. prompt     - `x-expected` rendered into the prefix (closed at v4, 1.31)
-  3. feedback   - the verifier's own failure text, "$.total: expected 4825,
-                  got 0", appended to the ledger (closed at v5, 1.33)
-
-and the sweep that closed the third found a fourth: the search index matched
-against the whole contract, so `search_history` was an ORACLE on the answer key
-- a hit for the right guess and none for a wrong one - without the key's bytes
-ever appearing in a prompt.
-
-So these tests do not look for a route. They state the property and let any
-route violate it:
-
-  P1  DISCLOSURE. A sentinel known only to the grader appears in no prompt sent
-      to any model - executor, reviewer, compressor - during the task.
-  P2  NON-INTERFERENCE. The same scripted task run under two different secrets
-      sends the executor byte-identical prompts. If grader state influences
-      what the model sees by ANY channel, including one that never prints the
-      secret, the prompts differ. P1 alone would pass the search oracle; P2
-      is what catches it.
-  P3  THE PRODUCT IS NOT WEAKENED. Outside measurement the detailed feedback
-      still arrives: a user's own tests saying "expected 9, got 7" is what the
-      refinement loop exists to deliver.
-
-The script deliberately walks the channels the sweep enumerated: it fails
-verification (feedback), probes the search index with a guess (oracle), makes
-a write that the deputy reviews (the reviewer reads `compact_transcript`,
-which renders `verify.*` events), and fails again.
-"""
-
 from __future__ import annotations
 
 import json
@@ -45,7 +11,7 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "bench"))
 
-GUESS = "GUESS7731"      # the model's fixed probe. One secret equals it.
+GUESS = "GUESS7731"
 
 
 def _config(root: Path) -> Path:
@@ -60,9 +26,6 @@ def _config(root: Path) -> Path:
                      "review": {**mock, "model": "mock-review"}},
         "active_local_tier": None,
         "limits": {"max_steps": 8, "default_task_budget_usd": 1.0},
-        # The deputy ON, so the reviewer's prompt - compact_transcript, which
-        # renders verify.* events - is exercised. Measured arms turn it off;
-        # the property has to hold with it on.
         "autonomy": {"plan_required": False, "auto_review": True,
                      "auto_review_backend": "review",
                      "auto_review_policy": str(root / "policy.md"),
@@ -79,7 +42,6 @@ def _config(root: Path) -> Path:
 
 
 def _run(root: Path, secret: str, measured: bool, monkeypatch):
-    """One task whose grader knows `secret`. Returns every prompt, by backend."""
     from agent.context import AgentContext
     from agent.execute.loop import run_task
     from agent.kernel.tasks import create_task
@@ -127,9 +89,9 @@ def _run(root: Path, secret: str, measured: bool, monkeypatch):
         return f'<action tool="{tool}">' + json.dumps(args) + "</action>"
 
     ctx.backends["cloud"].queue(
-        '<final>{"total": "first wrong answer"}</final>',      # -> feedback
-        act("search_history", query=GUESS),                    # -> the oracle
-        act("write_file", path="work/notes.txt", content="x"), # -> the deputy
+        '<final>{"total": "first wrong answer"}</final>',
+        act("search_history", query=GUESS),
+        act("write_file", path="work/notes.txt", content="x"),
         '<final>{"total": "second wrong answer"}</final>',
         '<final>{"total": "third wrong answer"}</final>',
     )
@@ -140,16 +102,11 @@ def _run(root: Path, secret: str, measured: bool, monkeypatch):
 
 
 def _normalise(text: str, root: Path) -> str:
-    """Remove what legitimately differs between two runs: the temporary root,
-    ids and hashes, timestamps. What is left must be identical."""
     text = text.replace(str(root), "<ROOT>").replace(
         str(root).replace("\\", "\\\\"), "<ROOT>")
     text = re.sub(r"\b[a-z]_[0-9a-f]{8,}\b", "<ID>", text)
     text = re.sub(r"\b[0-9a-f]{12,}\b", "<HEX>", text)
     return re.sub(r"\b\d{10}(\.\d+)?\b", "<TS>", text)
-
-
-# -- P1 ----------------------------------------------------------------------
 
 
 def test_p1_the_grader_s_secret_appears_in_no_prompt(tmp_path, monkeypatch):
@@ -167,7 +124,6 @@ def test_p1_the_grader_s_secret_appears_in_no_prompt(tmp_path, monkeypatch):
 
 
 def test_p1_the_model_is_told_only_that_it_failed(tmp_path, monkeypatch):
-    """No score, no location, no text: the held-out feedback is a constant."""
     prompts = _run(tmp_path, "SENTINEL" + uuid.uuid4().hex, measured=True,
                    monkeypatch=monkeypatch)
     later = prompts["cloud"][1]
@@ -177,14 +133,8 @@ def test_p1_the_model_is_told_only_that_it_failed(tmp_path, monkeypatch):
         "a score reached the model: under measurement it is pass/fail only")
 
 
-# -- P2 ----------------------------------------------------------------------
-
-
 def test_p2_the_executor_sees_the_same_bytes_whatever_the_secret(
         tmp_path, monkeypatch):
-    """Non-interference. One secret EQUALS the model's probe, the other does
-    not, so any channel through which the grader's state shapes the context -
-    including an oracle that never prints the secret - makes these differ."""
     a = _run(tmp_path / "a", GUESS, measured=True, monkeypatch=monkeypatch)
     b = _run(tmp_path / "b", "OTHER4402", measured=True, monkeypatch=monkeypatch)
     pa = [_normalise(p, tmp_path / "a") for p in a["cloud"]]
@@ -194,7 +144,6 @@ def test_p2_the_executor_sees_the_same_bytes_whatever_the_secret(
         "other: the grader's secret changed the COURSE of the task")
     for i, (x, y) in enumerate(zip(pa, pb)):
         if x != y:
-            # one prompt may be a prefix of the other: then they differ where it ends
             at = next((j for j, (c, d) in enumerate(zip(x, y)) if c != d), min(len(x), len(y)))
             raise AssertionError(
                 f"executor prompt #{i + 1} depends on the grader's secret. "
@@ -203,12 +152,8 @@ def test_p2_the_executor_sees_the_same_bytes_whatever_the_secret(
                 f"  secret='OTHER4402': ...{y[max(0, at - 120):at + 120]}...")
 
 
-# -- P3 ----------------------------------------------------------------------
-
-
 def test_p3_outside_measurement_the_detailed_feedback_still_arrives(
         tmp_path, monkeypatch):
-    """The fix must not weaken the product. Held out is a MEASUREMENT rule."""
     sentinel = "SENTINEL" + uuid.uuid4().hex.upper()
     prompts = _run(tmp_path, sentinel, measured=False, monkeypatch=monkeypatch)
     assert any(sentinel in p for p in prompts["cloud"]), (
@@ -216,15 +161,7 @@ def test_p3_outside_measurement_the_detailed_feedback_still_arrives(
         "reaches the model - the product was weakened to fix the benchmark")
 
 
-# -- the search index on a database that predates the fix --------------------
-
-
 def test_an_existing_database_stops_indexing_the_answer_key(tmp_path):
-    """CREATE TRIGGER IF NOT EXISTS leaves the OLD trigger running beside the
-    new one on any database created before 2026-09-23: both fire, and every
-    new task is indexed twice, once with its answer. And the rows the old one
-    already wrote still carry `x-expected`. The migration drops it by name and
-    re-indexes through the new expression."""
     import time
 
     from agent.kernel.db import open_db
@@ -251,7 +188,7 @@ def test_an_existing_database_stops_indexing_the_answer_key(tmp_path):
     assert hits == 1, "the fixture is not a pre-fix database"
     conn.close()
 
-    conn = open_db(path)                         # the migration runs here
+    conn = open_db(path)
     names = {r[0] for r in conn.execute(
         "SELECT name FROM sqlite_master WHERE type='trigger'")}
     assert "trg_search_task_ai" not in names, "the old trigger is still firing"

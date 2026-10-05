@@ -1,12 +1,3 @@
-"""The decision gates, enforced in code rather than remembered.
-
-A decision point that lives only in someone's memory is the one that gets
-skipped at 2am, when a run finishes and the obvious next thing is to start
-the following one. Each gate below has a stated reason to stop, and the exit
-code has to reflect it so a driver script branches on the gate rather than on
-a person reading the output.
-"""
-
 from __future__ import annotations
 
 import importlib.util
@@ -51,7 +42,6 @@ def test_pass_one_in_progress_decides_nothing(tmp_path):
 
 
 def test_a_floor_effect_after_pass_one_stops_the_run(tmp_path):
-    """3 of 30 is 10%, far below the 25-75% net."""
     _ledger(tmp_path, _rows(30, 3))
     s = ns.assess(tmp_path)
     assert s["proceed"] is False
@@ -61,8 +51,6 @@ def test_a_floor_effect_after_pass_one_stops_the_run(tmp_path):
 
 
 def test_the_difficulty_gate_states_the_counter_argument(tmp_path):
-    """The band guards floor effects in BOTH arms; the noise floor measures
-    only one. Stopping without weighing that discards a usable instrument."""
     _ledger(tmp_path, _rows(30, 3))
     note = ns.assess(tmp_path)["note"]
     assert "BASELINE arm only" in note
@@ -102,8 +90,6 @@ def test_a_usable_noise_floor_leads_to_the_calibration(tmp_path):
 
 
 def test_a_rejected_calibration_stops_everything(tmp_path):
-    """The most important gate. A gate that rejects everything and a gate
-    that works look identical until a known-good skill passes."""
     rows = _rows(30, 15) + _rows(30, 15, run=1) + _rows(30, 15, run=2)
     _ledger(tmp_path, rows)
     (tmp_path / "noise-floor.json").write_text(json.dumps(
@@ -139,7 +125,6 @@ def test_a_truncated_ledger_line_is_ignored_not_fatal(tmp_path):
 
 
 def test_all_runs_done_but_no_report_says_so(tmp_path):
-    """A process killed before it wrote the report leaves a full ledger."""
     rows = _rows(30, 15) + _rows(30, 15, run=1) + _rows(30, 15, run=2)
     _ledger(tmp_path, rows)
     s = ns.assess(tmp_path)

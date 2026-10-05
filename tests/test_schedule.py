@@ -1,11 +1,3 @@
-"""A3 - cron. Time is INJECTED, never waited for: every wake takes `now`.
-
-The acceptance, one test each, plus the rules underneath them: the schedule is
-a fact and its next fire is derived (11.5), an occurrence is claimed before it
-acts, a missed window is logged and never replayed, and an unattended task
-never auto-proceeds. Each test was run against the defect it names.
-"""
-
 from __future__ import annotations
 
 import json
@@ -32,7 +24,6 @@ WRITE = ('<action tool="write_file">'
 
 
 def _base() -> float:
-    """A whole LOCAL hour, three hours ago. Cron fields are local time."""
     d = datetime.now().replace(minute=0, second=0, microsecond=0)
     return (d - timedelta(hours=3)).timestamp()
 
@@ -53,8 +44,6 @@ def _actions(out):
     return [r["action"] for r in out]
 
 
-# -- cron ----------------------------------------------------------------------
-
 def test_cron_fields_and_the_next_occurrence():
     base = _base()
     assert Cron.parse("*/15 * * * *").next_after(base) == base + 15 * 60
@@ -68,7 +57,6 @@ def test_cron_fields_and_the_next_occurrence():
 
 
 def test_both_day_fields_restricted_means_either():
-    """The Vixie rule: "0 0 1 * 1" is the 1st of the month OR any Monday."""
     c = Cron.parse("0 0 1 * 1")
     days = [datetime.fromtimestamp(t) for t in _walk(c, datetime(2026, 9, 1), 6)]
     assert all(d.day == 1 or d.isoweekday() == 1 for d in days)
@@ -98,8 +86,6 @@ def test_last_at_or_before_inverts_next_after():
         assert c.last_at_or_before(o, t) == o
 
 
-# -- acceptance 1: fires and completes ------------------------------------------
-
 def test_a_scheduled_task_fires_and_completes(ctx):
     base = _base()
     sid = _sched(ctx, created=base)
@@ -112,10 +98,8 @@ def test_a_scheduled_task_fires_and_completes(ctx):
     assert sched.next_fire(ctx.conn, sched.get(ctx.conn, sid)) == base + 120
 
 
-# -- acceptance 2: a USER boundary parks, notifies, and is actionable ----------
-
 def test_a_boundary_parks_notifies_and_the_approval_is_actionable(ctx):
-    ctx.config.autonomy.approve_scoped_writes = True  # would let a local write through
+    ctx.config.autonomy.approve_scoped_writes = True
     base = _base()
     _sched(ctx, created=base)
     ctx.backends["cloud"].queue(WRITE)
@@ -153,8 +137,6 @@ def test_the_deputy_never_sees_a_scheduled_task(ctx):
     assert "review.skipped" in types and "review.requested" not in types
 
 
-# -- acceptance 3: a missed schedule produces no backlog -------------------------
-
 def test_a_dark_window_is_logged_once_and_not_replayed(ctx):
     base = _base()
     _sched(ctx, created=base)
@@ -162,7 +144,7 @@ def test_a_dark_window_is_logged_once_and_not_replayed(ctx):
     sched.tick(ctx, now=base + 65)
     sched.run_due(ctx)
 
-    out = sched.tick(ctx, now=base + 60 * 11 + 5)      # ten minutes dark
+    out = sched.tick(ctx, now=base + 60 * 11 + 5)
     fired = [r for r in out if r["action"] == "fired"]
     missed = [r for r in out if r["action"] == "missed"]
     assert [f["occurrence"] for f in fired] == [base + 660]
@@ -192,21 +174,16 @@ def test_a_parked_run_is_not_joined_by_a_copy_every_minute(ctx):
     assert _scheduled_tasks(ctx) == 1
 
 
-# -- acceptance 4: a restart neither double-fires nor drops ------------------
-
 def test_a_restart_neither_double_fires_nor_drops_the_next(ctx):
     base = _base()
     _sched(ctx, created=base)
     assert _actions(sched.tick(ctx, now=base + 65)) == ["fired"]
-    # The supervisor dies HERE - after claiming and firing, before running.
 
-    second = AgentContext(ctx.config)          # and restarts
+    second = AgentContext(ctx.config)
     try:
         second.backends["cloud"].queue(FINAL, FINAL)
         assert [r["status"] for r in sched.run_due(second)] == ["done"], (
             "the run claimed before the crash is not lost: run_due derives it")
-        # Not merely refused by the primary key - not even ATTEMPTED. A wake
-        # that re-derived from the start would report "already_claimed" here.
         assert sched.tick(second, now=base + 70) == [], "no double fire"
         assert _actions(sched.tick(second, now=base + 125)) == ["fired"], (
             "and the next occurrence is not dropped")
@@ -216,8 +193,6 @@ def test_a_restart_neither_double_fires_nor_drops_the_next(ctx):
 
 
 def test_an_occurrence_can_be_claimed_only_once(ctx):
-    """Two supervisors computing the same due occurrence at the same instant:
-    the primary key, not the derivation, is what refuses the second."""
     base = _base()
     sid = _sched(ctx, created=base)
     other = AgentContext(ctx.config)
@@ -229,13 +204,10 @@ def test_an_occurrence_can_be_claimed_only_once(ctx):
 
 
 def test_the_next_fire_is_stored_nowhere(ctx):
-    """11.5 as a schema fact: no column holds a computed next-fire time."""
     for table in ("schedules", "schedule_firings"):
         cols = [r[1] for r in ctx.conn.execute(f"PRAGMA table_info({table})")]
         assert not [c for c in cols if "next" in c], (table, cols)
 
-
-# -- acceptance 5: telemetry separates scheduled runs ---------------------------
 
 def test_scheduled_runs_are_separable_in_telemetry(ctx, task):
     base = _base()
@@ -243,15 +215,13 @@ def test_scheduled_runs_are_separable_in_telemetry(ctx, task):
     ctx.backends["cloud"].queue(FINAL, FINAL)
     sched.tick(ctx, now=base + 65)
     [r] = sched.run_due(ctx)
-    run_task(ctx, task.id)                           # an interactive run
+    run_task(ctx, task.id)
 
     s = run_report(ctx.conn, ctx.telemetry, r["task_id"])["provenance"]
     i = run_report(ctx.conn, ctx.telemetry, task.id)["provenance"]
     assert s["origin"] == "schedule" and s["schedule"]["occurrence"] == int(base + 60)
     assert i["origin"] == "local" and "schedule" not in i
 
-
-# -- acceptance 6: the scheduled origin derives a tool floor --------------------
 
 def test_the_scheduled_origin_derives_a_tool_floor(ctx):
     base = _base()

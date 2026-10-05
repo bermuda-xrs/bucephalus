@@ -1,16 +1,3 @@
-"""D28 - a resumed task sees what it saw when it parked.
-
-Measured 2026-09-15: a resumed task received its objective, its plan and the
-released decisions - and nothing it had observed. No tool could recover the
-rest: `search_history` does not index tool output, and `expand_artifact`
-needs ids that only the lost tail carried.
-
-Now the tail is written at the park as STRUCTURED entries, each with its own
-taint, restored on resume, and followed by the id of every earlier
-observation. The step counter is deliberately NOT restored: receipt keys are
-built from it, and execute-once works as designed.
-"""
-
 from __future__ import annotations
 
 import json
@@ -33,7 +20,6 @@ FINAL = '<final>{"answer": "done"}</final>'
 
 @pytest.fixture
 def hctx(ctx):
-    """A human in the loop: no deputy, no scoped auto-approval."""
     ctx.config.autonomy.auto_review = False
     ctx.config.autonomy.approve_scoped_writes = False
     ctx.config.autonomy.plan_required = False
@@ -54,8 +40,6 @@ def _park(ctx):
 
 
 def _resume(ctx, t, approval_id, new_process=True):
-    """Resume after a human approves. `new_process` drops the in-memory taint
-    tracker, so it is rebuilt from the record as a restarted process would."""
     ctx.resolve_approval(approval_id, True)
     if new_process:
         ctx._taint.pop(t.id, None)  # noqa: SLF001
@@ -93,10 +77,6 @@ def test_every_earlier_observation_is_listed_by_id_and_readable(hctx):
 
 
 def test_the_restore_does_not_make_the_objective_untrusted(hctx):
-    """Per-entry taint IS the design. A seed restored as one blob carries the
-    join of everything in it - UNTRUSTED - and the objective's own words would
-    then park every action that quotes them: on a channel task, a human
-    interrupted for no security gain."""
     t, aid = _park(hctx)
     _resume(hctx, t, aid)
     tracker = hctx.taint_tracker(t.id)
@@ -107,8 +87,6 @@ def test_the_restore_does_not_make_the_objective_untrusted(hctx):
 
 
 def test_the_step_counter_is_not_restored(hctx):
-    """Receipt keys are (task, step, tool, args). Restoring step numbering
-    would change every later key - its own decision, not this one's."""
     t, aid = _park(hctx)
     _resume(hctx, t, aid)
     steps = [e["step"] for e in _events(hctx, t.id, "model.called")]

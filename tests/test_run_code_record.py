@@ -1,13 +1,3 @@
-"""A2-4 - what run_code RAN and what it TOUCHED, recoverable from the record.
-
-The record kept an 80-character repr of each program in the chained intent and
-200 characters in the output artifact's origin, so the one question Part 1
-needed answered - did any recorded program read outside its scope? - could be
-answered only for a prefix. Now: the full source, content-addressed, with its
-hash on the chained intent; and every path the program opened, listed, changed
-or was refused, on the chained receipt. What the MODEL sees is unchanged.
-"""
-
 from __future__ import annotations
 
 import json
@@ -28,7 +18,7 @@ FINAL = '<final>{"answer": "done"}</final>'
 def _run_code(ctx, code: str):
     root = Path(ctx.config.root)
     (root / "work" / "notes.txt").write_text("ordinary work\n", encoding="utf-8")
-    ctx.config.autonomy.auto_review = False          # as the measurement runs
+    ctx.config.autonomy.auto_review = False
     ctx.config.autonomy.approve_scoped_writes = True
     t = create_task(ctx.conn, ctx.log,
                     TaskContract(goal="probe", artifact_scope=["work"]),
@@ -109,13 +99,11 @@ def test_the_observation_the_model_sees_is_unchanged(ctx):
 
 
 def test_touched_is_null_when_nothing_captured_it():
-    """A harness run keeps no touch log. Unmeasured is null, never empty."""
     r = run_sandboxed("print(1)", allowed_paths=[], timeout_s=120)
     assert r["returncode"] == 0 and r["touched"] is None
 
 
 def test_in_memory_sqlite_still_runs_in_agent_code(ctx, task):
-    """The read fence must not refuse a database that is not a file."""
     res = run_code_action(
         ctx, task, "import sqlite3\n"
         "print(sqlite3.connect(':memory:').execute('select 41+1').fetchone()[0])\n",

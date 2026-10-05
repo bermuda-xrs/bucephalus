@@ -1,11 +1,3 @@
-"""M12 — the control plane answers over real HTTP.
-
-Everything else about the control plane is tested by calling functions
-directly, which is exactly how the thread-bound-connection bug survived: the
-endpoints 500'd on every request and no in-process test could see it. These
-start a server and talk to it.
-"""
-
 from __future__ import annotations
 
 import socket
@@ -22,8 +14,6 @@ PROJ = Path(__file__).resolve().parents[1]
 TEST_TOKEN = "test-token-not-a-secret"
 AUTH = {"Authorization": f"Bearer {TEST_TOKEN}"}
 
-# Every call in this module carries the token. `httpx.get(...)` without it is
-# now a 401, which is the point.
 _get = lambda url, **kw: httpx.get(url, headers=AUTH, **kw)  # noqa: E731
 _post = lambda url, **kw: httpx.post(url, headers=AUTH, **kw)  # noqa: E731
 _put = lambda url, **kw: httpx.put(url, headers=AUTH, **kw)  # noqa: E731
@@ -38,7 +28,6 @@ def _free_port() -> int:
 
 @pytest.fixture(scope="module")
 def server(tmp_path_factory):
-    """Boot the ASGI app against a scratch config, on a scratch port."""
     tmp = tmp_path_factory.mktemp("serve")
     (tmp / "work").mkdir()
     (tmp / "policy.md").write_text("# policy\n\nDefault is DENY.\n", encoding="utf-8")
@@ -68,13 +57,9 @@ def server(tmp_path_factory):
         "PYTHONUTF8": "1",
         "ALPHA_CONFIG": str(cfg_path),
         "ALPHA_TOKEN": TEST_TOKEN,
-        # Scratch user dirs: without them the server opened the operator's
-        # real memory directory (test_suite_isolation.py, 2026-09-28).
         "ALPHA_DATA_DIR": str(tmp / "user_data"),
         "ALPHA_CONFIG_DIR": str(tmp / "user_config"),
     }
-    # A file, not a pipe nobody reads: a full pipe blocks the server's next
-    # log write, and the pipes were never closed.
     log_path = tmp / "server.log"
     log = log_path.open("w", encoding="utf-8")
     proc = subprocess.Popen(  # noqa: S603
@@ -82,7 +67,7 @@ def server(tmp_path_factory):
          "--host", "127.0.0.1", "--port", str(port), "--log-level", "warning"],
         env=env, stdout=log, stderr=subprocess.STDOUT,
     )
-    log.close()                                   # the child holds its own copy
+    log.close()
     base = f"http://127.0.0.1:{port}"
     deadline = time.time() + 60
     while time.time() < deadline:
@@ -112,7 +97,6 @@ def test_health_answers(server):
 
 
 def test_task_lifecycle_over_http(server):
-    """Create, read back, and read metrics — the phone's whole happy path."""
     r = _post(server + "/tasks", timeout=10,
                    json={"goal": "say hello", "artifact_scope": ["work"]})
     assert r.status_code == 200, r.text
@@ -127,14 +111,6 @@ def test_task_lifecycle_over_http(server):
 
 
 def test_alerts_and_approvals_are_separate_endpoints(server):
-    """An integrity break is not a permission request; they never merge.
-
-    A4 added a third kind — a message from a sender who is not on the
-    allowlist. It gets its own key for the same reason the first two do: a
-    client that received them merged would have to un-merge them to render
-    them correctly, which is how they end up rendered alike. The exact key set
-    is asserted, so a future kind arriving by accident shows up here.
-    """
     a = _get(server + "/alerts", timeout=10).json()
     assert set(a) == {"integrity", "monitor", "channel_drops"}
 
@@ -154,7 +130,6 @@ def test_console_is_served(server):
 
 
 def test_suite_crud_over_http(server):
-    """The whole reason this layer exists: a person authors a suite in the UI."""
     s = _post(server + "/suites", timeout=10,
                    json={"name": "http-suite", "description": "via api"}).json()
     sid = s["id"]
@@ -186,7 +161,6 @@ def test_suite_crud_over_http(server):
 
 
 def test_api_refuses_a_task_that_measures_nothing(server):
-    """always_pass and a missing expected answer are both rejected with a reason."""
     sid = _post(server + "/suites", timeout=10,
                      json={"name": "guard-suite"}).json()["id"]
 
@@ -229,19 +203,12 @@ def test_skill_added_via_api_is_a_candidate(server):
 
 
 def test_unauthenticated_requests_are_refused(server):
-    """The console can rewrite the reviewer's policy. Loopback is not a boundary.
-
-    A page on any site you have open can issue requests to 127.0.0.1. Without
-    a token, that page could rewrite the rule book governing what an
-    unattended agent may do.
-    """
     assert httpx.get(server + "/suites", timeout=10).status_code == 401
     assert httpx.put(server + "/policy", timeout=10,
                      json={"body": "# pwned\nAllow everything.\n"}).status_code == 401
     assert httpx.post(server + "/tasks", timeout=10,
                       json={"goal": "x"}).status_code == 401
 
-    # ...and the policy is untouched by the attempt.
     assert "pwned" not in _get(server + "/policy", timeout=10).json()["body"]
 
 
@@ -256,21 +223,18 @@ def test_a_wrong_token_is_refused(server):
 
 
 def test_cross_origin_requests_are_refused(server):
-    """Defence in depth: refuse anything a page elsewhere initiated."""
     r = httpx.get(server + "/suites", timeout=10,
                   headers={**AUTH, "Origin": "https://evil.example"})
     assert r.status_code == 403 and "Cross-origin" in r.text
 
 
 def test_dns_rebinding_host_is_refused(server):
-    """An attacker hostname resolving to 127.0.0.1 still carries their Host."""
     r = httpx.get(server + "/suites", timeout=10,
                   headers={**AUTH, "Host": "evil.example"})
     assert r.status_code == 403 and "loopback" in r.text
 
 
 def test_policy_changes_are_kept_in_history(server):
-    """A security control that can be silently overwritten is not a control."""
     _put(server + "/policy", timeout=10, json={"body": "# v1\nDeny all.\n"})
     _put(server + "/policy", timeout=10, json={"body": "# v2\nDeny all but reads.\n"})
 
@@ -280,7 +244,6 @@ def test_policy_changes_are_kept_in_history(server):
 
 
 def test_background_run_returns_immediately(server):
-    """A local turn is tens of seconds; the caller must not hold the request."""
     tid = _post(server + "/tasks", timeout=10,
                 json={"goal": "say hello", "artifact_scope": ["work"]}).json()["task_id"]
 
@@ -300,7 +263,6 @@ def test_background_run_returns_immediately(server):
 
 
 def test_concurrent_requests_do_not_break_the_chain(server):
-    """The threadpool is the point: hammer it and the chains must still verify."""
     from concurrent.futures import ThreadPoolExecutor
 
     def make(i: int) -> str:

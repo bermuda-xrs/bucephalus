@@ -1,12 +1,3 @@
-"""Routing must not cost a model call.
-
-`measure_throughput()` used to fire a real completion the first time the
-router asked how fast a backend was. That call bypassed `ctx.record`, so it
-never appeared in `calls` — invariant 12 says every model call is recorded —
-and on a CPU tier it triggered a cold model load purely to make a routing
-decision.
-"""
-
 from __future__ import annotations
 
 from agent.router.profile import estimate_seconds
@@ -24,39 +15,30 @@ def test_routing_makes_no_model_calls(ctx, task):
 
 
 def test_estimate_uses_the_configured_assumption_before_any_data(ctx):
-    """With no history, fall back to the config rather than probing."""
     ctx.backends["local"].cfg.assumed_tokens_per_sec = 4.0
     ctx.backends["local"]._tokens_per_sec = None  # noqa: SLF001
 
-    # 512 default output tokens / 4 tok per sec
     assert abs(estimate_seconds(ctx, "local", "summarize") - 128.0) < 1.0
 
 
 def test_observed_rate_beats_the_assumption(ctx, task):
-    """Real work is better evidence than a configured guess."""
     from agent.instrument.telemetry import record_call
     from agent.kernel.types import TokenUsage
 
     ctx.backends["local"].cfg.assumed_tokens_per_sec = 100.0
     ctx.backends["local"]._tokens_per_sec = None  # noqa: SLF001
 
-    # 100 tokens in 10s = 10 tok/s, far off the optimistic assumption.
     record_call(ctx.conn, task.id, "local", "summarize",
                 TokenUsage(output_tokens=100), 0.0, 10_000)
 
     observed = ctx.telemetry.observed_tokens_per_sec("local", "summarize")
     assert abs(observed - 10.0) < 0.1
 
-    # That same call also gives the router a real p50 output length (100), so
-    # the estimate is 100 tokens / 10 tok-per-sec = 10s. Under the optimistic
-    # 100 tok/s assumption it would have been 1s — an order of magnitude off,
-    # which is exactly the mistake that makes a slow local tier look free.
     est = estimate_seconds(ctx, "local", "summarize")
     assert abs(est - 10.0) < 1.0
 
 
 def test_probe_is_explicit_and_does_call_the_model(ctx):
-    """The measurement still exists — it is just opt-in now."""
     b = ctx.backends["local"]
     before = len(b.calls)
     b.probe_throughput()

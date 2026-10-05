@@ -1,12 +1,3 @@
-"""The high findings of docs/AUDIT-ITERATION-3.md, each red first.
-
-S1 - a drop created a protected file through its Windows data-stream name:
-     `.env::$DATA` is neither `.env` by name nor anything by realpath while the
-     file does not exist, and writing it writes `.env`.
-S2 - the TUI's allow/refuse decided the oldest pending approval of ANY task
-     when the one on screen had none, then ran that task with no signed plan.
-"""
-
 from __future__ import annotations
 
 import asyncio
@@ -44,7 +35,6 @@ def test_S1_a_data_stream_spelling_is_refused_everywhere(ctx, workspace, name):
                           json={"path": name, "content_b64": base64.b64encode(b"ALPHA_TOKEN=x").decode()})
     assert r.status_code == 403, (name, r.status_code, r.text)
     assert {p.name for p in root.iterdir()} == before, "a file appeared"
-    # The shared checks, for every other reader and writer (DR3).
     assert is_protected(name, str(root), ())
     assert within_scope({"path": name}, ["."], str(root))[0] is False
     d = gate_tool_call(ctx, task, ctx.tools.get("write_file"), {"path": name, "content": "x"})
@@ -95,10 +85,7 @@ def test_S2_resuming_from_the_tui_needs_a_signed_plan_when_plans_are_required(ct
         "a task with no signed plan ran from the TUI"
 
 
-
 def test_S4_a_checkouts_moved_state_is_protected_under_the_data_root(ctx, workspace):
-    """1.1 moved a synced checkout's database to <user data>/checkouts/...,
-    which is the installed mode's ROOT - where nothing protected it."""
     from agent.security.capabilities import state_paths
 
     root = Path(ctx.config.root)
@@ -113,8 +100,6 @@ def test_S4_a_checkouts_moved_state_is_protected_under_the_data_root(ctx, worksp
 
 
 def test_I2_a_walk_computes_the_protected_set_once(ctx, workspace, monkeypatch):
-    """The per-file check rebuilt task_state_paths for every file walked:
-    grep 10x slower, a 2,000-entry listing 27 s."""
     import agent.security.capabilities as caps
 
     for i in range(30):
@@ -135,9 +120,6 @@ def test_I2_a_walk_computes_the_protected_set_once(ctx, workspace, monkeypatch):
 
 
 def test_I1_a_sweep_reads_the_anchor_once_not_per_task(ctx, workspace, monkeypatch):
-    """D72 (audit I1): the console's poll runs `verify_all` every few seconds,
-    and the sweep re-read the anchor file twice per task - two thirds of a
-    2.2 s sweep over the 283-task record (profiled). Once per sweep."""
     from agent.kernel.integrity import checkpoint, verify_all
 
     for _ in range(5):
@@ -156,9 +138,6 @@ def test_I1_a_sweep_reads_the_anchor_once_not_per_task(ctx, workspace, monkeypat
     assert len(reads) <= 2, f"{len(reads)} reads of the anchor for one sweep of 5 tasks"
 
 
-# D72 (audit I1), the rest: the console polls /alerts every few seconds, and
-# each poll walked every event of every task. An unchanged database is not
-# re-walked; what the walk exists to catch still is, on the next poll.
 def _alerts(ctx):
     return _client(ctx).get("/alerts").json()["integrity"]
 
@@ -211,15 +190,11 @@ def test_D72_an_edit_by_another_connection_is_seen_on_the_next_poll(ctx, workspa
 def test_D72_an_anchor_change_is_seen_on_the_next_poll(ctx, workspace):
     t = _a_task_with_events(ctx)
     assert _alerts(ctx) == []
-    ctx.anchor.record(t.id, "f" * 64)              # a head this chain never had
+    ctx.anchor.record(t.id, "f" * 64)
     found = [f for f in _alerts(ctx) if f.get("task_id") == t.id]
     assert found and found[0]["severity"] == "critical", found
 
 
-# The security review of the D72 cache (2026-09-30) found its key too weak:
-# an anchor edited in place keeps its size and can keep its mtime; a write
-# through the server's OWN connection never changes data_version; and nothing
-# bounded how stale a hit could be. Each is seen on the next poll now.
 def test_D72_an_anchor_edited_in_place_with_its_mtime_restored_is_seen(ctx, workspace):
     import os
 
@@ -233,8 +208,8 @@ def test_D72_an_anchor_edited_in_place_with_its_mtime_restored_is_seen(ctx, work
     raw = path.read_bytes()
     head = ctx.log.head(t.id).encode()
     assert head in raw
-    path.write_bytes(raw.replace(head, b"f" * len(head)))        # same size
-    os.utime(path, ns=(st.st_atime_ns, st.st_mtime_ns))          # same mtime
+    path.write_bytes(raw.replace(head, b"f" * len(head)))
+    os.utime(path, ns=(st.st_atime_ns, st.st_mtime_ns))
     found = [f for f in _alerts(ctx) if f.get("task_id") == t.id]
     assert found and found[0]["severity"] == "critical", found
 

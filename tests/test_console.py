@@ -1,14 +1,3 @@
-"""The console (control/ui.html) and the routes it added for plan review.
-
-Two rules are held structurally, because a stylesheet has no runtime to test:
-
-  * THE INTEGRITY COLOUR IS RESERVED. `--danger` may style `.integrity` and
-    nothing else - a broken hash chain must never look like a permission
-    request, or it will one day be approved by muscle memory (theme file).
-  * THE BANNER IS DISPLAY ONLY. It reaches the page through /theme and no
-    prompt ever carries it (tests/test_tui.py greps every prompt).
-"""
-
 from __future__ import annotations
 
 import json
@@ -23,7 +12,6 @@ from agent import desktop
 
 CONTROL = Path(__file__).resolve().parents[1] / "src" / "agent" / "control"
 UI = CONTROL / "ui.html"
-# The console's styles and script are files since the CSP (iteration 3, 1.5).
 CSS, JS = CONTROL / "ui.css", CONTROL / "ui.js"
 
 
@@ -49,9 +37,6 @@ def test_the_integrity_colour_styles_integrity_and_nothing_else():
 
 
 def test_the_console_makes_no_stale_claim_about_verifiers():
-    """checker_program was removed and execution refuses without a script
-    (DR7); a page that still counted them as checking correctness would tell
-    the user a shape-only suite was sound."""
     text = _all_ui()
     assert "checker_program" not in text
     counted = re.search(r"function checksCorrectness.*?\n}", text, re.S).group(0)
@@ -80,9 +65,6 @@ def _draft(ctx, task_id):
     from agent.kernel.tasks import load_task
     from agent.plan.planner import store_plan
 
-    # Stored the way the planner stores a draft: a fixture that spelled the
-    # status by hand ("draft", where the planner writes "drafted") let the
-    # console test green while it never offered a real plan for signature.
     plan = store_plan(ctx, load_task(ctx.conn, task_id),
                       Plan(objective="o", steps=[PlanStep(id="1", intent="read it")]).seal())
     return plan
@@ -125,8 +107,6 @@ def test_the_theme_route_serves_the_theme_files_colours_and_banner(plane):
 
 
 def test_the_console_compares_plans_against_statuses_the_planner_writes():
-    """The console waited for "draft"; the planner writes "drafted". Every
-    plan status the page tests for must be one the planner can produce."""
     planner = (Path(__file__).resolve().parents[1] / "src" / "agent" / "plan"
                / "planner.py").read_text(encoding="utf-8")
     written = set(re.findall(r"""status\s*(?:=|:\s*str\s*=)\s*['"](\w+)['"]""", planner))

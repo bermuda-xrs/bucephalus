@@ -1,31 +1,3 @@
-"""What the system DOES when tier 1 does not match its blessed fingerprint.
-
-THE SPECIFIED BEHAVIOUR: refuse to load tier 1, continue without it, raise
-CRITICAL.
-
-Not a halt. The distinction is the whole design:
-
-  * a CHAIN BREAK destroys the ability to VERIFY, so anything concluded from
-    the run is unfounded and stopping is the only honest response
-  * MEMORY TAMPERING destroys the trustworthiness of ONE INPUT, and the run
-    stays fully auditable without it
-
-Dropping a corrupted input and carrying on is what this system already does
-with a corrupted observation. Continuing WITH the content is the attack
-succeeding; halting turns a text file anyone can edit into a denial of
-service. Degraded-but-safe is the third option and it is the right one.
-
-CRITICAL is affordable precisely because D17 cleared that channel first. This
-alert arrives into an empty list rather than as the twentieth entry in one
-nobody reads.
-
-WHAT THE FINGERPRINT ACTUALLY DETECTS: unaccounted CHANGE, not authenticated
-tampering. Anyone with write access to the memory directory can rewrite the
-blessing too. The hash chain is evidence for a later audit - every
-`memory.written` event carries the fingerprint at write time - but nothing
-compares against it at load, deliberately (D44, test_memory_integrity_claim).
-"""
-
 from __future__ import annotations
 
 import json
@@ -83,7 +55,6 @@ def new_task(ctx):
 
 @pytest.fixture()
 def rig(tmp_path):
-    """A context whose memory holds one legitimately-written, blessed fact."""
     memory_dir = tmp_path / "memory"
     ctx = make_ctx(tmp_path, memory_dir)
     t = new_task(ctx)
@@ -95,10 +66,6 @@ def rig(tmp_path):
     yield ctx, memory_dir
     ctx.close()
 
-
-# --------------------------------------------------------------------------
-# The injection
-# --------------------------------------------------------------------------
 
 def test_a_hand_edited_memory_file_is_refused_and_the_task_still_runs(rig, tmp_path):
     ctx, memory_dir = rig
@@ -162,8 +129,6 @@ def test_it_raises_critical_into_a_channel_d17_cleared(rig):
 
 
 def test_content_with_no_blessing_at_all_is_also_refused(tmp_path):
-    """Text that cannot be accounted for is the same operational fact as text
-    that was changed. Either way it would go into every future prompt."""
     memory_dir = tmp_path / "memory"
     store = MemoryStore(memory_dir)
     (memory_dir / "MEMORY.md").write_text("- [user] " + POISON + "\n",
@@ -179,18 +144,11 @@ def test_content_with_no_blessing_at_all_is_also_refused(tmp_path):
 
 
 def test_an_empty_store_with_no_blessing_is_the_ordinary_first_run(tmp_path):
-    """The check must not cry wolf on a machine that has never used memory."""
     store = MemoryStore(tmp_path / "memory")
     assert check_fingerprint(store) == INTACT
 
 
-# --------------------------------------------------------------------------
-# The authorised paths must not false-alarm — this is how D17 happened
-# --------------------------------------------------------------------------
-
 def test_every_sanctioned_write_path_re_blesses(rig):
-    """A permanent critical raised by ordinary use is the D17 disease, and it
-    would arrive in the channel D17 just cleared."""
     ctx, _ = rig
     from agent.execute.tools import tool_memory_consolidate, tool_memory_write
 
@@ -203,8 +161,6 @@ def test_every_sanctioned_write_path_re_blesses(rig):
 
 
 def test_accepting_a_hand_edit_clears_the_alert(rig):
-    """Without a way to bless a legitimate hand edit, the only options are a
-    permanent critical or never touching your own files."""
     ctx, memory_dir = rig
     (memory_dir / "MEMORY.md").write_text("- [user] a fact I edited myself\n",
                                           encoding="utf-8")
@@ -216,8 +172,6 @@ def test_accepting_a_hand_edit_clears_the_alert(rig):
 
 
 def test_the_blessing_file_is_not_part_of_what_it_blesses(tmp_path):
-    """Including the sidecar in the hash would mean writing the blessing
-    changes the thing being blessed, and no fingerprint could ever match."""
     store = MemoryStore(tmp_path / "memory")
     from agent.kernel.types import Taint
 
@@ -229,10 +183,6 @@ def test_the_blessing_file_is_not_part_of_what_it_blesses(tmp_path):
 
 
 def test_two_configs_sharing_memory_do_not_flag_each_other(tmp_path):
-    """The bug the cross-session test caught: the blessing first lived in the
-    per-RUN anchor while memory lives in the shared user data dir, so running
-    config.local.yaml then config.openai.yaml had each flagging the other's
-    perfectly good memory."""
     memory_dir = tmp_path / "memory"
     for run in ("run_a", "run_b"):
         d = tmp_path / run

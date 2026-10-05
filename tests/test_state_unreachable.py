@@ -1,22 +1,3 @@
-"""Every artifact holding state the scope checks protect, unreachable by FILE
-path from ANY task scope - not merely by query.
-
-Phase 2 isolated `search_history` and `expand_artifact`; Phase 5 scoped the
-tools' arguments. Both guard the QUERY path. The file path went round them
-four ways, each measured before it was fixed:
-
-  1. `read_file` on a protected file from a root-wide or empty scope - the
-     database of ANOTHER config, the graders, the run records, the token
-  2. `grep` or `glob` with the path OMITTED: the gate never saw the defaulted
-     ".", so a narrow ["work"] scope searched the whole project
-  3. a file-glob containing "..": pathlib follows it out of the directory
-  4. `run_code`: the sandbox's audit hook restricted writes, never reads, and
-     a subprocess is a process the hook is not in
-
-A control that guards a query and not a read is not a control. Every case
-here was run against the code before the fix and goes red there.
-"""
-
 from __future__ import annotations
 
 import json
@@ -34,19 +15,17 @@ from agent.security.capabilities import gate_tool_call
 
 MARK = "zq-protected-marker"
 
-# Every location, relative to the project root. The memory files are added
-# per test, because tier 1 lives outside the root.
 LOCATIONS = [
-    "agent.db", "agent.db-wal",               # this config's live database
-    "agent.local.db", "agent.local.db-wal",   # ANOTHER config's database
+    "agent.db", "agent.db-wal",
+    "agent.local.db", "agent.local.db-wal",
     "config.local.yaml", "policy.md", ".env", ".alpha_token",
     "anchor/chain.anchor",
-    "skills_store/s_x/tests/holdout/1.txt",   # a skill's held-out checks
-    "grading/E01/verify.py",                  # the suite's graders
-    "bench/tasks/E01/verify.py",              # the harness, expected answers
-    "runs/ledger.partial.jsonl",              # other attempts' results
-    "docs/evidence/result.json",              # published results
-    "graders/E07/verify.py",                  # THIS task's own grader_dir
+    "skills_store/s_x/tests/holdout/1.txt",
+    "grading/E01/verify.py",
+    "bench/tasks/E01/verify.py",
+    "runs/ledger.partial.jsonl",
+    "docs/evidence/result.json",
+    "graders/E07/verify.py",
 ]
 SCOPES = {"root": ["."], "none": [], "narrow": ["work"]}
 
@@ -60,8 +39,6 @@ def project(ctx, tmp_path):
             continue
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(f"{MARK} {rel}\n", encoding="utf-8")
-    # A second config beside the active one, naming its own database - a
-    # real one, with a row in it, so reading it proves something.
     (root / "config.local.yaml").write_text(
         'db_path: "./agent.local.db"\nanchor_path: "./anchor/chain.local.anchor"\n'
         f'skills_path: "./skills_store"\n# {MARK}\n', encoding="utf-8")
@@ -69,7 +46,7 @@ def project(ctx, tmp_path):
     other.execute("PRAGMA journal_mode=WAL")
     other.execute("CREATE TABLE answers(v TEXT)")
     other.execute(f"INSERT INTO answers VALUES ('{MARK} another arm answer')")
-    ctx._other_db = other                       # held open: rows stay in -wal
+    ctx._other_db = other
     ctx.memory = MemoryStore(tmp_path / "memory")
     ctx.memory.write("memory", f"{MARK} a tier-one fact", Taint.USER)
     record_fingerprint(ctx.memory)
@@ -90,14 +67,10 @@ def _everything(ctx):
                         str(ctx.memory.root / ".fingerprint")]
 
 
-# -- route 1: a file read ------------------------------------------------------
-
 @pytest.mark.parametrize("scope", list(SCOPES))
 def test_no_protected_file_is_readable_by_path(project, scope):
     t = _task(project, SCOPES[scope])
     spec = project.tools.get("read_file")
-    # Anything short of DENY is reachable: a verdict of needs_approval is one
-    # human click from executing, and since f11be4d that click executes.
     reachable = [loc for loc in _everything(project)
                  if gate_tool_call(project, t, spec, {"path": loc}).verdict != "deny"]
     assert reachable == [], f"readable by path from a {scope} scope: {reachable}"
@@ -112,8 +85,6 @@ def test_no_protected_file_is_writable_by_path(project, scope):
                                    {"path": loc, "content": "x"}).verdict != "deny"]
     assert reachable == [], f"writable by path from a {scope} scope: {reachable}"
 
-
-# -- routes 2 and 3: traversal, omitted paths, and ".." ------------------------
 
 TRAVERSALS = {
     "grep-no-path": ("grep", {"pattern": MARK}),
@@ -150,11 +121,7 @@ def test_ordinary_work_in_scope_is_unaffected(project):
             (tool, args)
 
 
-# -- route 4: code ------------------------------------------------------------
-
 def test_run_code_will_not_link_protected_state_into_its_sandbox(project):
-    """The sandbox links every artifact_scope entry into its working
-    directory. ["."] would carry the database, the graders and the token in."""
     t = _task(project, ["."])
     d = gate_tool_call(project, t, project.tools.get("run_code"), {"code": "print(1)"})
     assert d.allowed is False and "sandbox" in d.reason
@@ -184,15 +151,10 @@ CODE = {
 
 @pytest.mark.parametrize("route", list(CODE))
 def test_code_cannot_read_protected_state_by_absolute_path(project, route):
-    """From a NARROW scope. The gate cannot see inside code, so this is the
-    sandbox's own check: reads, sqlite connections, listings and process
-    starts against protected paths are refused inside the child."""
     snippet, which, leak = CODE[route]
     t = _task(project, ["work"])
     res = run_code_action(project, t, snippet.format(p=_target(project, which)),
                           timeout_s=120)
-    # STDOUT, not the whole result: a refused call's traceback echoes its own
-    # source line, target path included, which reads as a leak and is not one.
     assert leak not in res.get("stdout", ""), (
         f"{route}: the sandbox let code reach it: {res.get('stdout', '')[:300]}")
     assert "sandbox:" in res.get("stderr", ""), (

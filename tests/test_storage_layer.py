@@ -1,17 +1,3 @@
-"""The storage layer - every place that treats the main .db file as the database.
-
-C41 was a test that scanned `agent.db` for absence while the rows it was
-looking for sat in `agent.db-wal`. It bit twice in ten minutes. The sweep it
-prompted covered every site that names a database path directly rather than
-going through a connection, and found two more defects of the same family:
-
-  * the agent's own database was readable as a FILE by any task whose scope
-    covered the project root - a retrieval-isolation bypass
-  * the sandbox copied a scoped database without its `-wal`, in both directions
-
-Each test here was run against the code before the fix and goes red there.
-"""
-
 from __future__ import annotations
 
 import os
@@ -41,19 +27,14 @@ def _tasks_in(path, task_id) -> int:
         return c.execute("SELECT COUNT(*) FROM tasks WHERE id=?",
                          (task_id,)).fetchone()[0]
     except sqlite3.OperationalError:
-        return 0          # the schema itself never reached the main file
+        return 0
     finally:
         c.close()
 
 
-# -- the agent's own state is not a file the agent may read ----------------
-
 @pytest.mark.parametrize("scope", [["."], []], ids=["root-scope", "no-scope"])
 @pytest.mark.parametrize("suffix", ["", "-wal", "-shm"])
 def test_the_database_cannot_be_read_as_a_file(ctx, scope, suffix):
-    """Under isolation, scope ["."]: both reads were allowed and the other
-    arm's goal was readable. An empty scope allows every path, so it is the
-    same hole with nothing declared."""
     ctx.config.isolate_retrieval = True
     me = _task(ctx, scope)
     rel = os.path.relpath(str(Path(ctx.config.db_path)) + suffix, ctx.config.root)
@@ -63,8 +44,6 @@ def test_the_database_cannot_be_read_as_a_file(ctx, scope, suffix):
 
 
 def test_an_anchor_moved_off_its_conventional_name_is_still_protected(ctx):
-    """`anchor/` was protected by NAME. Point anchor_path elsewhere and the
-    name protected an empty directory."""
     ctx.config.anchor_path = str(Path(ctx.config.root) / "elsewhere" / "chain.dat")
     me = _task(ctx, ["."])
     d = gate_tool_call(ctx, me, ctx.tools.get("write_file"),
@@ -79,11 +58,8 @@ def test_ordinary_files_in_scope_are_unaffected(ctx):
     assert d.verdict == "allow"
 
 
-# -- the sandbox carries a database whole -----------------------------------
-
 @pytest.fixture
 def copy_mode(monkeypatch):
-    """This machine cannot always symlink, which is when the copy path runs."""
     def refuse(*a, **k):
         raise OSError("symlinks unavailable")
     monkeypatch.setattr(sandbox.os, "symlink", refuse)
@@ -136,8 +112,6 @@ def test_rows_the_sandboxed_program_left_in_its_wal_come_back(tmp_path, copy_mod
 
 def test_a_stale_sidecar_beside_the_original_is_removed_on_copy_back(
         tmp_path, copy_mode):
-    """A main file copied back beside an OLDER `-wal` lets SQLite replay stale
-    frames onto newer pages on the next open."""
     src = tmp_path / "data.bin"
     src.write_bytes(b"main")
     entry = sandbox.link_into(str(tmp_path / "box"), str(src))
@@ -146,8 +120,6 @@ def test_a_stale_sidecar_beside_the_original_is_removed_on_copy_back(
     sandbox._copy_back([entry])
     assert not Path(str(src) + "-wal").exists()
 
-
-# -- evidence ----------------------------------------------------------------
 
 def test_a_snapshot_keeps_the_rows_a_file_copy_loses(ctx, task, tmp_path):
     db = Path(ctx.config.db_path)

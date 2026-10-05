@@ -1,22 +1,3 @@
-"""D20 — a task's execution does not continue without its chain being verified.
-
-`integrity.resume()` is M1.4/M1.5: verify the chain, halt on a break, compare
-head against anchor. It was written, unit-tested, and IMPORTED BY NOTHING, so
-a paused task resumed without any of it happening. Four modules import other
-names from that file and never this one.
-
-It hid because every textual search for it found something else — the
-unrelated `--resume` flag on `bench/noise.py` (ledger-row resumption, which
-creates NEW tasks and continues none), `runlock.py`'s docstring, the module's
-own. The dead-code audit credited all of them until its reference rule was
-made receiver-aware.
-
-BOTH DIRECTIONS ARE TESTED HERE, and that is the point. A check that halts on
-a broken chain but also halts on a task that merely never checkpointed is not
-a stricter check, it is the denial of service D17 removed. So: break a chain
-and require a halt; leave an anchor behind and require the task to run.
-"""
-
 from __future__ import annotations
 
 import sys
@@ -69,13 +50,7 @@ def run_once(ctx, task):
     return run_task(ctx, task.id)
 
 
-# ==========================================================================
-# D20-4 — injected, both directions
-# ==========================================================================
-
 def test_a_broken_chain_halts_the_resume(tmp_path):
-    """Injected, not reasoned about. A chain break destroys the ability to
-    VERIFY, so anything concluded from the run is unfounded."""
     ctx = make_ctx(tmp_path)
     t = new_task(ctx)
     run_once(ctx, t)
@@ -98,10 +73,6 @@ def test_a_broken_chain_halts_the_resume(tmp_path):
 
 
 def test_an_anchor_merely_behind_resumes_normally(tmp_path):
-    """The other direction, and the one a stricter check gets wrong. A task
-    that ran past its last checkpoint is not tampered with — refusing it
-    would reintroduce the denial of service D17 removed, in the one place
-    that would make every un-checkpointed task unrunnable."""
     ctx = make_ctx(tmp_path)
     t = new_task(ctx)
     run_once(ctx, t)
@@ -119,8 +90,6 @@ def test_an_anchor_merely_behind_resumes_normally(tmp_path):
 
 
 def test_a_rewritten_history_halts_even_though_the_chain_verifies(tmp_path):
-    """The third case: every link hashes correctly, but the hash we anchored
-    is gone. That is a rewrite, and it is what the anchor exists to catch."""
     ctx = make_ctx(tmp_path)
     t = new_task(ctx)
     run_once(ctx, t)
@@ -142,14 +111,7 @@ def test_a_rewritten_history_halts_even_though_the_chain_verifies(tmp_path):
     ctx.close()
 
 
-# ==========================================================================
-# D20-2 — one door, and everything comes through it
-# ==========================================================================
-
 def test_a_fresh_task_passes_the_door_trivially(tmp_path):
-    """No fresh-versus-resumed branch. An empty chain verifies and has no
-    anchor, so the check runs on every task — and a check that only runs on
-    the resumed path is one nobody exercises until the day it matters."""
     ctx = make_ctx(tmp_path)
     t = new_task(ctx)
     assert run_once(ctx, t).status in ("done", "done_unannounced")
@@ -157,8 +119,6 @@ def test_a_fresh_task_passes_the_door_trivially(tmp_path):
 
 
 def test_verification_happens_before_the_task_is_marked_running(tmp_path):
-    """The chain is checked as it STANDS, not after this run has appended to
-    it. Verifying after `set_status` would verify our own new event."""
     src = (ROOT / "src" / "agent" / "execute" / "loop.py").read_text(
         encoding="utf-8")
     i = src.index("def run_task")
@@ -168,15 +128,6 @@ def test_verification_happens_before_the_task_is_marked_running(tmp_path):
 
 
 def test_every_continuation_path_goes_through_run_task():
-    """D20-1, pinned. Three call sites take a task id from OUTSIDE and can
-    therefore continue an interrupted task: `alpha run`, and the control
-    plane's foreground and background runs. The other six create the task
-    immediately before running it.
-
-    Phase 8 (a channel reviving a parked task) and Phase 11 (a scheduled
-    wake) will each add another. They inherit the door by calling run_task,
-    which is why the check lives there and not at the call sites.
-    """
     import ast
 
     sites = []
@@ -194,27 +145,12 @@ def test_every_continuation_path_goes_through_run_task():
         "the door must be inside run_task, so every caller inherits it")
 
 
-# ==========================================================================
-# The keyspace collision the door exposed
-# ==========================================================================
-
 def test_a_plan_pin_does_not_read_as_a_rewritten_chain(tmp_path):
-    """Plan approval used to write `plan:<hash>` under the TASK ID, the same
-    key `checkpoint()` writes a chain head to. Whichever came last won.
-
-    That broke both readers in opposite directions: the resume check saw a
-    `plan:` value, could not find it among the task's event hashes, and
-    called it a rewrite; and `verify_plan_pin` saw a chain head, found it did
-    not start with `plan:`, and skipped its own check — which, since
-    `run_task` checkpoints every run, means that check had effectively never
-    fired.
-    """
     ctx = make_ctx(tmp_path)
     t = new_task(ctx)
     run_once(ctx, t)
     checkpoint(ctx.log, ctx.anchor, t.id)
 
-    # A legacy-format entry, exactly as older anchor files hold it.
     ctx.anchor.record(t.id, "plan:deadbeef")
 
     assert ctx.anchor.latest(t.id) == "plan:deadbeef", "raw read sees it"
@@ -229,8 +165,6 @@ def test_a_plan_pin_does_not_read_as_a_rewritten_chain(tmp_path):
 
 
 def test_the_plan_pin_check_survives_a_later_checkpoint(tmp_path):
-    """The other half. The pin has its own key now, so a chain checkpoint
-    written afterwards cannot hide it."""
     ctx = make_ctx(tmp_path)
     t = new_task(ctx)
     ctx.anchor.record(f"plan:{t.id}", "abc123")

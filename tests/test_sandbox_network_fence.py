@@ -1,15 +1,3 @@
-"""The sandbox's "no network" promise, enforced (AUDIT-2026-09 F3 / D40).
-
-`execute/libraries.py` promised the sandbox had no network, and the audit
-hook policed writes, reads, spawns and SQLite - but not sockets. Sandboxed
-code could connect anywhere, loopback included, where the control plane
-listens: that is how F2 was exploitable, and it would be how the next one is.
-
-Advisory, like the rest of the hook (D32): code that reaches the OS without
-going through Python's socket module - ctypes, a native extension - is not
-stopped. It stops a model that REACHES, which is the threat model.
-"""
-
 from __future__ import annotations
 
 from agent.execute.sandbox import run_sandboxed
@@ -50,8 +38,6 @@ def test_no_socket_can_be_made_or_resolved(workspace):
 
 
 def test_the_tool_bridge_still_works_without_sockets(ctx, task, workspace):
-    """call_tool rides stdin/stdout, not a socket: web_fetch and friends are
-    tools run by the parent, so the fence does not touch them."""
     from agent.execute.codeact import run_code_action
 
     (workspace / "hello.txt").write_text("contents here", encoding="utf-8")

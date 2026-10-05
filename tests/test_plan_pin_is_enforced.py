@@ -1,25 +1,3 @@
-"""Invariant 17 — the approved plan hash is verified before every step.
-
-THIS INVARIANT HAS NEVER FIRED IN PRODUCTION.
-
-`verify_plan_pin` compared the recomputed plan hash against
-`ctx.anchor.latest(task.id)` and only acted `if anchored.startswith("plan:")`.
-But `checkpoint()` wrote chain heads to that same key, and `run_task`
-checkpoints on every run — so after the first step the latest anchor entry
-was a chain head, the `startswith` was False, and the anchor comparison was
-skipped. Silently. Every time. (D21.)
-
-The DB half of the check — recomputed hash against the stored `approved_hash`
-— did keep working, so a plan altered in the `plans` table was still caught.
-What was lost is the ANCHOR half: the copy held outside the database, which
-is the entire reason there is an anchor. A writer with database access could
-edit both the plan and its stored hash and the check would have agreed with
-itself.
-
-So this file injects rather than inspects. A green suite proved nothing about
-this check for as long as it has existed.
-"""
-
 from __future__ import annotations
 
 import json
@@ -73,27 +51,11 @@ def approved(ctx, task):
     return approve_plan(ctx, task, plan.seal())
 
 
-# ==========================================================================
-# I1 — injected. The collision would previously have hidden all of this.
-# ==========================================================================
-
 def test_a_plan_mutated_after_approval_halts_execution(tmp_path):
-    """The two-touch model rests entirely on this. A human approves a plan
-    once and walks away; if the plan can be altered afterwards, the approval
-    was for something other than what runs.
-
-    This half kept working through D21 — the database comparison caught a
-    mutated body regardless of the anchor — and it is here because nothing
-    was exercising it end to end through `run_task`. The anchor half, which
-    D21 destroyed, is the test below.
-    """
     ctx = make_ctx(tmp_path)
     t = new_task(ctx)
     plan = approved(ctx, t)
 
-    # Checkpoint AFTER approval. Under the old shared keyspace this is
-    # exactly what silenced the check: the chain head became the latest
-    # anchor entry and `startswith("plan:")` stopped matching.
     checkpoint(ctx.log, ctx.anchor, t.id)
 
     body = json.loads(ctx.conn.execute(
@@ -111,25 +73,11 @@ def test_a_plan_mutated_after_approval_halts_execution(tmp_path):
 
 
 def test_an_anchor_that_disagrees_with_a_self_consistent_database_halts(tmp_path):
-    """THE HALF THE COLLISION ACTUALLY DESTROYED, isolated.
-
-    The database check compares the plan against its own stored hash, so a
-    writer who can edit both agrees with themselves. The anchor is the copy
-    held OUTSIDE the database and is the entire reason an anchor exists.
-
-    Isolating it needs the database left INTERNALLY CONSISTENT — body, `id`
-    and `approved_hash` all agreeing — with only the anchor dissenting. An
-    earlier version of this test forged `approved_hash`, which trips the DB
-    comparison first and never reaches the anchor at all: it passed against
-    the pre-D21 code, which is how a test passes for the wrong reason.
-    """
     ctx = make_ctx(tmp_path)
     t = new_task(ctx)
     approved(ctx, t)
     checkpoint(ctx.log, ctx.anchor, t.id)
 
-    # The database still agrees with itself. Only the out-of-band copy differs,
-    # which is the case an anchor exists to catch.
     ctx.anchor.record(f"plan:{t.id}", "b" * 64)
 
     with pytest.raises(IntegrityError, match="does not match the anchor"):
@@ -138,7 +86,6 @@ def test_an_anchor_that_disagrees_with_a_self_consistent_database_halts(tmp_path
 
 
 def test_an_unmutated_plan_runs_normally(tmp_path):
-    """The negative. A check that halts on everything is not a check."""
     ctx = make_ctx(tmp_path)
     t = new_task(ctx)
     approved(ctx, t)
@@ -151,9 +98,6 @@ def test_an_unmutated_plan_runs_normally(tmp_path):
 
 
 def test_the_anchor_check_survives_any_number_of_later_checkpoints(tmp_path):
-    """The regression, stated as the property that was broken. `run_task`
-    checkpoints on every run, so 'a checkpoint came after the pin' is the
-    normal case, not an edge one."""
     ctx = make_ctx(tmp_path)
     t = new_task(ctx)
     plan = approved(ctx, t)
@@ -168,12 +112,9 @@ def test_the_anchor_check_survives_any_number_of_later_checkpoints(tmp_path):
 
 
 def test_the_pin_is_checked_before_every_step_not_only_the_first(tmp_path):
-    """Invariant 17 says EVERY step. A plan swapped at step three is the
-    interesting attack, because the first step's check already passed."""
     src = (ROOT / "src" / "agent" / "execute" / "loop.py").read_text(
         encoding="utf-8")
     i = src.index("for step in range(ctx.config.limits.max_steps)")
-    # The step's model call, through the recording door since D36.
     j = src.index("resp = ctx.call_model(", i)
     assert "verify_plan_pin(ctx, task)" in src[i:j], (
         "the pin check must be inside the step loop, before the model call")

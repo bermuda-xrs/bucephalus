@@ -1,14 +1,3 @@
-"""The five POSIX defects, fixed from reading (agent/platform/posix.py,
-darwin.py) - and what can and cannot be shown here.
-
-Two halves. The PORTABLE half runs everywhere: every decision the fixes make
-is a function or a call shape, and each is checked against a fake OS - the
-same tests went red against the pre-fix posix.py. The REAL half needs the
-real kernel; it SKIPS off POSIX, naming the checklist step that runs it.
-Nothing about POSIX is verified until that step runs on a Mac and a Linux
-machine (docs/PLATFORMS.md, section 5).
-"""
-
 from __future__ import annotations
 
 import json
@@ -32,11 +21,8 @@ DARWIN_ONLY = pytest.mark.skipif(
     reason="macOS only - verified on a real Mac by docs/PLATFORMS.md checklist step 5")
 
 
-# =========================================================== portable half
-
 @pytest.fixture
 def fake_os(monkeypatch):
-    """A kernel that records every signal instead of sending it."""
     sent = {"killpg": [], "kill": []}
     monkeypatch.setattr(posix, "signal", types.SimpleNamespace(SIGKILL=9))
     monkeypatch.setattr(posix.os, "killpg", lambda g, s: sent["killpg"].append(g), raising=False)
@@ -45,14 +31,12 @@ def fake_os(monkeypatch):
 
 
 def test_kill_tree_never_signals_the_callers_group(monkeypatch, fake_os):
-    """Defect 1. A pid sharing the caller's group was killed with killpg -
-    which kills the caller. It is killed by parentage instead."""
-    monkeypatch.setattr(posix.os, "getpgid", lambda pid: 500, raising=False)  # one group
+    monkeypatch.setattr(posix.os, "getpgid", lambda pid: 500, raising=False)
     from agent import proc
 
     table = [(10, 1, "python"), (11, 10, "python"), (12, 11, "sleep")]
     monkeypatch.setattr(proc, "process_table", lambda: table)
-    monkeypatch.setattr(proc, "process_start_time", lambda pid: pid)   # parents older
+    monkeypatch.setattr(proc, "process_start_time", lambda pid: pid)
     posix.kill_tree_signal(10, 5)
     assert fake_os["killpg"] == [], "signalled the caller's own process group"
     assert fake_os["kill"] == [12, 11, 10], "not the whole tree, leaves first"
@@ -77,8 +61,6 @@ class _FakePopen:
 
 @pytest.mark.parametrize("mod,capped", [(posix, True), (darwin, False)])
 def test_limits_are_set_by_a_trampoline_in_a_new_session(monkeypatch, mod, capped):
-    """Defects 1 and 3. No preexec_fn - Python code between fork and exec in a
-    threaded process - and every child leads its own session."""
     monkeypatch.setattr(posix.subprocess, "Popen", _FakePopen)
     mod.spawn_limited(["child", "arg"], timeout_s=7, memory_bytes=512 * 2**20,
                       max_processes=32, fsize_bytes=64 * 2**20, cwd=".")
@@ -88,7 +70,6 @@ def test_limits_are_set_by_a_trampoline_in_a_new_session(monkeypatch, mod, cappe
     i = argv.index("-c")
     assert argv[i + 1] == posix.LIMITER and argv[-2:] == ["child", "arg"]
     limits = json.loads(argv[i + 2])
-    # D57: a second past the 7 s timeout - a backstop, not a race with it.
     assert limits["cpu"] == 8 and limits["fsize"] == 64 * 2**20
     assert ("as" in limits) is capped, "darwin must not set RLIMIT_AS; linux must"
     assert "nproc" not in limits, "RLIMIT_NPROC counts every process the USER owns"
@@ -135,13 +116,11 @@ def test_the_trampoline_sets_every_limit_then_becomes_the_child(monkeypatch):
 
 
 def test_a_refused_limit_means_the_child_never_runs(monkeypatch):
-    """macOS refuses a real RLIMIT_AS. Fail closed: exit, never exec."""
     calls, code = _run_limiter(monkeypatch, fail_on="AS")
     assert code == posix.REFUSED_EXIT
 
 
 def test_the_watchdog_decides_on_the_process_group(monkeypatch):
-    """Defect 4: the process count is the run's own group, not the user's."""
     assert posix.over_limits(32, 32) is None
     assert "process limit" in posix.over_limits(33, 32)
     assert "memory limit" in posix.over_limits(3, 32, 600 * 2**20, 512 * 2**20)
@@ -156,16 +135,15 @@ def test_the_watchdog_kills_the_group_and_records_why(monkeypatch):
                                   process_memory_bytes=lambda pid: 300 * 2**20)
     monkeypatch.setattr(platform_pkg, "current", layer)
     proc = types.SimpleNamespace(pid=77, returncode=-9, poll=lambda: None)
-    posix._watch(proc, max_processes=32, memory_bytes=512 * 2**20)   # 900 MB > 512
+    posix._watch(proc, max_processes=32, memory_bytes=512 * 2**20)
     assert killed == [77]
     assert "memory limit" in posix.exit_note(proc, 30)
 
 
 def test_macos_labels_its_memory_cap_reactive():
-    """Defect 5, in the run record: run_code receipts carry limits_note."""
     note = darwin.limits_note(30, 512 * 2**20, 32)
     assert "REACTIVE" in note and "NOT kernel-enforced" in note and "RLIMIT_AS" in note
-    assert "REACTIVE" in posix.limits_note(30, 512 * 2**20, 32)   # the process count
+    assert "REACTIVE" in posix.limits_note(30, 512 * 2**20, 32)
 
 
 PS = """    1     0 /sbin/launchd
@@ -175,7 +153,6 @@ PS = """    1     0 /sbin/launchd
 
 
 def test_darwin_reads_the_process_table_without_proc():
-    """Defect 2."""
     rows = darwin.parse_ps_table(PS)
     assert rows == [(1, 0, "launchd"), (512, 1, "Some App"), (900, 512, "python3")]
     assert darwin.parse_ps_groups("  900   900\n  901   900\n  902   1\n", 900) == [900, 901]
@@ -196,8 +173,6 @@ def test_darwin_start_time_and_memory_parsers():
 
 
 def test_the_run_record_names_how_the_limits_held(ctx, task, workspace, scripted):
-    """A run_code receipt carries the platform's limits note - on a Mac, the
-    word REACTIVE; here, the Job Object."""
     from agent.execute.loop import run_task
     from agent.platform import current
 
@@ -209,13 +184,9 @@ def test_the_run_record_names_how_the_limits_held(ctx, task, workspace, scripted
         "SELECT payload_json FROM events WHERE task_id=? AND type='tool.receipt'", (task.id,))]
     code = [r for r in receipts if r.get("tool") == "run_code"]
     assert code, "no run_code receipt"
-    # The limit APPLIED to agent code: the interpreter's own processes where the
-    # platform can make a spawn the kernel's refusal (D49; audit 3B L1), else 32.
     expected = current.limits_note(30, 512 * 2**20, current.spawn_denied_processes() or 32)
     assert expected and code[0].get("limits") == [expected]
 
-
-# =============================================================== real half
 
 @POSIX_ONLY
 def test_real_memory_past_the_cap_does_not_allocate():
@@ -274,8 +245,6 @@ def test_real_the_timeout_kills_grandchildren():
 
 @POSIX_ONLY
 def test_real_kill_tree_does_not_kill_its_caller():
-    """Run in its own session, so if this defect is live it kills only the
-    probe, not pytest or the terminal."""
     probe = ("import subprocess, sys; sys.path.insert(0, 'src')\n"
              "from agent.proc import kill_tree\n"
              "c = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(30)'])\n"
@@ -288,7 +257,6 @@ def test_real_kill_tree_does_not_kill_its_caller():
 
 @POSIX_ONLY
 def test_real_limits_hold_when_the_caller_is_threaded():
-    """Defect 3's condition: the control plane runs sandboxes from threads."""
     from agent.execute.sandbox import run_sandboxed
 
     out = []

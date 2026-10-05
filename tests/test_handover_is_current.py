@@ -1,27 +1,3 @@
-"""The handover, checked against the repository it describes.
-
-This project's documented failure mode is stale documentation, three times over:
-HANDOVER's "expect 326 passed" long after the suite was 790, RELEASE's demo
-checkbox ticked while `demo.py` exited 1, and README's step-1 commands missing
-the `--suite` that became required. Each was found by running the thing the
-document described, which is the only way a prose file ever gets checked.
-
-So `docs/HANDOVER.md` is checked here like any other artefact. The rules it is
-held to are the ones that made those three defects possible:
-
-  * a path it names must exist;
-  * a command in its quickstart must be a real entry point;
-  * the commit it says it was written against must be an ancestor of HEAD;
-  * a document and section it points at must exist and contain that section;
-  * a number that changes weekly must NOT be written down - the file must give
-    the command that regenerates it instead. The best defence against a stale
-    number is not writing it.
-
-The last rule is why there is no "the test count matches a fresh run" test: the
-handover states no test count, and `test_the_volatile_numbers_are_not_written_down`
-fails if someone adds one.
-"""
-
 from __future__ import annotations
 
 import re
@@ -34,13 +10,8 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 HANDOVER = ROOT / "docs" / "HANDOVER.md"
 TEXT = HANDOVER.read_text(encoding="utf-8")
-# Prose wraps, so phrase checks run against a whitespace-flattened copy.
 FLAT = re.sub(r"\s+", " ", TEXT)
 
-# A token is path-like if it starts with a name character and either contains a
-# directory separator or carries an extension this repository actually uses.
-# `.partial.jsonl` and `.ps1` (spoken of as a suffix) start with a dot and are
-# excluded; `build/` and `runs/` are real directories and are not.
 PATHISH = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_./-]*(?:\.(?:py|md|ps1|yaml|toml)|/)$")
 
 
@@ -68,7 +39,6 @@ def _paths_named() -> list[str]:
 
 
 def test_every_path_the_handover_names_exists():
-    """A renamed or deleted file must break the handover, not outlive it."""
     named = _paths_named()
     assert named, "the path scan found nothing - the regex has stopped matching"
     missing = [p for p in named if not (ROOT / p).exists()]
@@ -76,7 +46,6 @@ def test_every_path_the_handover_names_exists():
 
 
 def test_the_quickstart_commands_are_real_entry_points():
-    """B2 is the first thing a newcomer runs. Two front doors were once dead."""
     blocks = _fenced(TEXT, "powershell")
     assert blocks, "the quickstart's powershell block has gone"
     ran = []
@@ -97,7 +66,6 @@ def test_the_quickstart_commands_are_real_entry_points():
 
 
 def test_the_commands_in_the_cost_table_are_real_entry_points():
-    """B3 tells a reader what a command costs before they start a 4-hour one."""
     table = TEXT.split("## B3.", 1)[1].split("\n## ", 1)[0]
     scripts = {
         t for span in _backtick_spans(table) for t in span.split() if t.endswith(".py")
@@ -108,9 +76,7 @@ def test_the_commands_in_the_cost_table_are_real_entry_points():
 
 
 def test_the_cli_subcommand_count_is_the_real_one():
-    """D39's whole point is a number of unswept rooms. If the CLI grows one and
-    the handover still says 25, the entry understates its own risk."""
-    from agent.cli import build_parser  # noqa: PLC0415 - import cost is the test's
+    from agent.cli import build_parser  # noqa: PLC0415
 
     import argparse
 
@@ -143,8 +109,6 @@ def test_every_named_alpha_subcommand_exists():
 
 
 def test_the_stated_commit_is_an_ancestor_of_head():
-    """Section D pins the commit the file was verified against. If the file is
-    older than the history it claims, that is the staleness this test exists for."""
     m = re.search(r"against commit `([0-9a-f]{7,40})`", TEXT)
     assert m, "section D no longer says which commit the handover was verified against"
     sha = m.group(1)
@@ -157,7 +121,6 @@ def test_the_stated_commit_is_an_ancestor_of_head():
     )
 
 
-# (document, how a reference to section N is written in it)
 SECTION_ANCHORS = {
     "docs/FINDINGS.md": (r"FINDINGS (\d+\.\d+)", lambda n: rf"^#+ {re.escape(n)} "),
     "docs/DEFERRED.md": (r"\bD(\d+)\b", lambda n: rf"^## D{n}\b"),
@@ -185,8 +148,6 @@ def test_the_release_section_the_handover_names_exists():
 
 
 def test_the_volatile_numbers_are_not_written_down():
-    """Prefer 'do not state it, give the command'. A test count, an open-defect
-    count or a commit count in prose is a stale number waiting to happen."""
     offenders = re.findall(r"\b\d[\d,]*\s+(?:passed|skipped|tests|open defects)\b", TEXT)
     assert not offenders, (
         f"the handover states volatile counts in prose: {offenders}. "
@@ -215,16 +176,11 @@ def test_the_stated_versions_match_the_source(const: str):
 
 
 def test_the_handover_stays_short():
-    """Length is a bug here: a section that grows past this is duplicating
-    something that another document already owns."""
     lines = len(TEXT.splitlines())
     assert lines < 400, f"docs/HANDOVER.md is {lines} lines; the budget is under 400"
 
 
 def test_the_posix_claim_is_still_true():
-    """B2 and C4 tell a reader where the POSIX limits have executed. If that
-    changes and the handover does not, the claim becomes a lie about the
-    security posture."""
     assert "POSIX has run twice, in WSL2" in FLAT
     assert "darwin.py`) has never executed anywhere" in FLAT
 

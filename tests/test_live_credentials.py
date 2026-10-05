@@ -1,23 +1,3 @@
-"""A4-1 - the two live paths, tested live when a credential is present.
-
-Neither the Telegram transport nor the Anthropic adapter has ever made a real
-request (D26). These tests make one when the credential is in the environment
-and SKIP otherwise. The token and the key are the user's decision; nothing
-here asks for either.
-
-  ALPHA_TELEGRAM_TOKEN  -> getMe, and a getUpdates at offset 0, timeout 0:
-                           read-only, and it confirms no update.
-  ANTHROPIC_API_KEY     -> one tiny streamed call per Anthropic backend in
-                           config.yaml, with that backend's exact request
-                           shape. A PAID call, a few hundred tokens each - so
-                           a key in the environment makes the full suite spend.
-
-A skipped test proves nothing about its own body. So the same body also runs
-on every suite, against a local fake server speaking each protocol: that is
-what keeps the live tests from rotting unseen, and what the injected transport
-defects in Part 4 were run against.
-"""
-
 from __future__ import annotations
 
 import json
@@ -40,20 +20,15 @@ ANTHROPIC_KEY = os.environ.get("ANTHROPIC_API_KEY")
 
 
 def anthropic_backends() -> dict[str, BackendConfig]:
-    """The Anthropic backends the project would actually run, as configured."""
     raw = yaml.safe_load((ROOT / "config.yaml").read_text(encoding="utf-8"))
     return {n: BackendConfig.model_validate(b) for n, b in raw["backends"].items()
             if b.get("kind") == "anthropic"}
 
 
-# -- the bodies: what one real call must show --------------------------------
-
 def exercise_telegram(transport) -> None:
-    me = transport._call("getMe", {})  # noqa: SLF001 - read-only: the bot's own identity
+    me = transport._call("getMe", {})  # noqa: SLF001
     assert me.get("is_bot") is True and me.get("username"), me
     assert isinstance(transport.get_updates(offset=0, timeout=0), list)
-    # A refusal must surface as one - the live API answers an unknown method
-    # 404, and a transport that read any answer as success would pass it on.
     with pytest.raises(TransportError):
         transport._call("alphaNoSuchMethod", {})  # noqa: SLF001
 
@@ -72,8 +47,6 @@ def exercise_anthropic(backend) -> None:
     assert str(resp.raw.get("model", "")).startswith(backend.cfg.model), resp.raw
 
 
-# -- LIVE: skipped without the credential ------------------------------------
-
 @pytest.mark.skipif(not TELEGRAM_TOKEN, reason="ALPHA_TELEGRAM_TOKEN is not set: "
                     "the live Telegram path stays UNVERIFIED (D26)")
 def test_telegram_transport_live():
@@ -87,8 +60,6 @@ def test_telegram_transport_live():
 def test_anthropic_streaming_live(name):
     exercise_anthropic(AnthropicBackend(name, anthropic_backends()[name]))
 
-
-# -- the same bodies, every suite, against local fakes -----------------------
 
 class _Handler(BaseHTTPRequestHandler):
     def log_message(self, *args):

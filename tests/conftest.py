@@ -1,5 +1,3 @@
-"""Shared fixtures. Every test runs offline: no API key, no GPU, no network."""
-
 from __future__ import annotations
 
 import sys
@@ -13,12 +11,7 @@ from agent.context import AgentContext
 
 @pytest.fixture(autouse=True)
 def _user_dirs_are_scratch(tmp_path_factory, monkeypatch):
-    """No test reads or writes the operator's real user directories. The
-    console token lives in the user config directory (D41), and a suite that
-    wrote tokens into the real one would be touching a live credential."""
     monkeypatch.setenv("ALPHA_CONFIG_DIR", str(tmp_path_factory.mktemp("user_config")))
-    # And the user DATA dir, where tier-1 memory lives: an in-process context
-    # wrote the operator's real MEMORY.md (test_suite_isolation.py).
     data = str(tmp_path_factory.mktemp("user_data"))
     monkeypatch.setattr("platformdirs.user_data_dir", lambda *a, **k: data)
 
@@ -32,12 +25,6 @@ def make_config(tmp_path: Path, **overrides) -> Config:
         backends={
             "cloud": BackendConfig(
                 kind="mock",
-                # The mock fakes a cached prefix on every call after the
-                # first, on purpose, so the telemetry path is exercised.
-                # It therefore DOES report cache accounting and has to say
-                # so, or test_cache_hit_ratio_above_threshold - the only
-                # check that prefix stability is observable at all - reads
-                # None and stops testing anything.
                 reports_prompt_cache=True,
                 model="mock-cloud",
                 input_cost_per_mtok=5.0,
@@ -51,12 +38,6 @@ def make_config(tmp_path: Path, **overrides) -> Config:
             ),
             "review": BackendConfig(
                 kind="mock",
-                # The mock fakes a cached prefix on every call after the
-                # first, on purpose, so the telemetry path is exercised.
-                # It therefore DOES report cache accounting and has to say
-                # so, or test_cache_hit_ratio_above_threshold - the only
-                # check that prefix stability is observable at all - reads
-                # None and stops testing anything.
                 reports_prompt_cache=True,
                 model="mock-review",
                 input_cost_per_mtok=3.0,
@@ -66,12 +47,6 @@ def make_config(tmp_path: Path, **overrides) -> Config:
             ),
             "local": BackendConfig(
                 kind="mock",
-                # The mock fakes a cached prefix on every call after the
-                # first, on purpose, so the telemetry path is exercised.
-                # It therefore DOES report cache accounting and has to say
-                # so, or test_cache_hit_ratio_above_threshold - the only
-                # check that prefix stability is observable at all - reads
-                # None and stops testing anything.
                 reports_prompt_cache=True,
                 model="mock-local",
                 trust_tier="local",
@@ -81,12 +56,6 @@ def make_config(tmp_path: Path, **overrides) -> Config:
             ),
             "laptop": BackendConfig(
                 kind="mock",
-                # The mock fakes a cached prefix on every call after the
-                # first, on purpose, so the telemetry path is exercised.
-                # It therefore DOES report cache accounting and has to say
-                # so, or test_cache_hit_ratio_above_threshold - the only
-                # check that prefix stability is observable at all - reads
-                # None and stops testing anything.
                 reports_prompt_cache=True,
                 model="mock-laptop",
                 trust_tier="local",
@@ -101,8 +70,6 @@ def make_config(tmp_path: Path, **overrides) -> Config:
         local_allowlist=["summarize", "classify", "extract", "compress_tool_output",
                          "draft_candidate"],
         laptop_allowlist=["classify", "extract", "compress_tool_output"],
-        # High enough that ordinary test observations are not compressed; the
-        # tests that exercise compression lower it explicitly.
         compress_observations_over_tokens=100000,
         gate=GateConfig(min_paired_trials=30, min_lift_pp=5.0, max_p_value=0.05,
                         min_discordant_pairs=10),
@@ -155,8 +122,6 @@ def task(ctx, workspace):
 
 @pytest.fixture
 def scripted(ctx):
-    """Queue model turns: scripted('cloud', '<final>{...}</final>')."""
-
     def _q(backend: str, *texts: str):
         ctx.backends[backend].queue(*texts)
 
@@ -166,5 +131,3 @@ def scripted(ctx):
 @pytest.fixture
 def python_exe() -> str:
     return sys.executable
-
-

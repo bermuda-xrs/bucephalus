@@ -1,16 +1,3 @@
-"""Child process for the M1 kill-and-resume test.
-
-Run once with "hang": it appends tool.intent, performs a side effect through
-execute_once, then blocks forever so the parent can kill -9 it between the
-side effect and the receipt being useful to anyone.
-
-Run again with "resume": it verifies the chain and tries the identical call,
-which must NOT re-run the side effect.
-
-Run with "die-mid-effect": the process dies INSIDE the side effect, after it
-happened and before its receipt could record the outcome (D27).
-"""
-
 from __future__ import annotations
 
 import json
@@ -55,14 +42,14 @@ def main() -> int:
             f.write("sent\n")
         if mode == "die-mid-effect":
             import os
-            os._exit(3)               # after the effect, before its receipt is filled in
+            os._exit(3)
         return {"ok": True}
 
     result = execute_once(conn, key, TOOL, ARGS, side_effect)
     log.append(TASK_ID, "tool.receipt", {"tool": TOOL, "key": key, "ok": True})
 
     if mode == "hang":
-        while True:  # the parent kills us here
+        while True:
             time.sleep(0.1)
 
     ok, bad = log.verify(TASK_ID)

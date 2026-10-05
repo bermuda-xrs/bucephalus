@@ -1,5 +1,3 @@
-"""M2 acceptance — the numbers are real or they are nothing."""
-
 from __future__ import annotations
 
 from agent.instrument.telemetry import compute_cost
@@ -21,7 +19,6 @@ def test_cost_math():
 
 
 def test_four_token_types_are_priced_separately():
-    """A blended rate would pass a total-tokens test and still be wrong."""
     cfg = {
         "input_cost_per_mtok": 5.0, "output_cost_per_mtok": 25.0,
         "cache_read_per_mtok": 0.5, "cache_write_per_mtok": 6.25,
@@ -32,7 +29,6 @@ def test_four_token_types_are_priced_separately():
 
 
 def test_no_call_bypasses_telemetry(ctx, task, scripted):
-    """calls-table rows must equal the number of backend invocations."""
     from agent.execute.loop import run_task
 
     scripted("cloud", '<action tool="list_dir">{"path": "work"}</action>',
@@ -49,13 +45,12 @@ def test_no_call_bypasses_telemetry(ctx, task, scripted):
 
 
 def test_zero_budget_means_free_backends_only_not_cannot_run():
-    """A fully local task costs nothing; it must not be born exhausted."""
     from agent.kernel.types import Budget
 
     free = Budget(usd=0.0, seconds=600)
     assert not free.exhausted(), "a $0 budget blocked a free task before step 0"
 
-    free.spent_usd = 0.0001  # any real spend against a $0 budget stops it
+    free.spent_usd = 0.0001
     assert free.exhausted()
 
     paid = Budget(usd=0.50, seconds=600)
@@ -76,4 +71,4 @@ def test_metrics_split_paid_and_free(ctx, task, scripted):
     m = ctx.telemetry.metrics(task.id)
     assert m.paid_tokens > 0
     assert m.cost_usd > 0
-    assert m.free_tokens == 0  # nothing was routed local for purpose "step"
+    assert m.free_tokens == 0

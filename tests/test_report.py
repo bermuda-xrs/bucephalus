@@ -1,10 +1,3 @@
-"""The run sheet must refuse to publish an uninterpretable number.
-
-Part 13's reporting rules are enforced in the generator rather than left to
-whoever writes the summary, because "state the caveat in the same paragraph
-as the number" is exactly the discipline that erodes when a result is good.
-"""
-
 from __future__ import annotations
 
 import importlib.util
@@ -67,18 +60,15 @@ def test_a_missing_calibration_says_rejections_cannot_be_read():
 
 
 def test_too_many_flaky_tasks_makes_the_suite_unusable():
-    """The stop rule, and it must scale with the number of tasks."""
     verdict, notes = report.interpret_noise(_noise(flaky=12))
     assert verdict == "unusable"
     assert "cannot be interpreted" in " ".join(notes)
 
-    # the same 12 against a 60-task suite is under the 8/30 fraction
     verdict2, _ = report.interpret_noise(_noise(n_tasks=60, flaky=12))
     assert verdict2 == "usable"
 
 
 def test_one_run_per_task_cannot_classify_stability():
-    """A single pass produces no flaky classification, and must say so."""
     verdict, notes = report.interpret_noise(_noise(runs_per_task=1, flaky=0))
     assert verdict == "provisional"
     assert "at least two observations" in " ".join(notes)
@@ -92,7 +82,6 @@ def test_a_pass_rate_outside_the_band_is_flagged_with_the_reason():
 
 
 def test_the_contamination_caveat_rides_with_the_number():
-    """Same paragraph as the number, never a footnote."""
     out = report.render(_noise(), _cal())
     for line in out.splitlines():
         if "lift **36.67pp**" in line:
@@ -110,15 +99,12 @@ def test_both_arms_are_rendered_with_their_own_caveats():
 
 
 def test_the_profile_is_on_the_sheet():
-    """A number without the profile that produced it is not checkable."""
     out = report.render(_noise(), _cal())
     assert "local" in out
     assert "cloud backends []" in out
 
 
 def test_the_report_names_the_arms_that_were_never_measured():
-    """Part 13 wants three ways. Omitting the missing ones would make the one
-    that ran look like the whole picture."""
     out = report.render(_noise(), _cal())
     assert "three ways" in out.lower()
     assert "bare model" in out
@@ -127,7 +113,6 @@ def test_the_report_names_the_arms_that_were_never_measured():
 
 
 def test_the_missing_bare_arm_bounds_the_claim():
-    """Without a bare arm you cannot separate the scaffold from the model."""
     out = report.render(_noise(), _cal())
     assert "separates what the scaffold contributes" in out
 
@@ -138,7 +123,6 @@ def test_three_ways_still_renders_with_nothing_measured():
 
 
 def test_the_cost_axis_is_seconds_and_says_why():
-    """Dollars are zero on an all-local rig; a dollar axis is one point."""
     out = report.render(_noise(median_wall_s=214), None)
     assert "SECONDS, not dollars" in out
     assert "n/a under local profile" in out, "keep the dollar column, labelled"
@@ -146,7 +130,6 @@ def test_the_cost_axis_is_seconds_and_says_why():
 
 
 def test_the_header_names_every_disabled_component():
-    """"The measured system is not the shipped system" must be visible."""
     n = _noise()
     n["profile_provenance"]["escalation"] = "NOT WIRED - no call site"
     n["auto_review"] = False
@@ -157,7 +140,6 @@ def test_the_header_names_every_disabled_component():
 
 
 def test_a_scaled_budget_is_disclosed():
-    """Scaling budgets for a slower executor must not be silent."""
     out = report.render(_noise(budget_scale=3.0), None)
     assert "budgets scaled" in out
     assert "x3" in out
@@ -179,8 +161,6 @@ def test_ceiling_hits_are_reported_next_to_every_pass_rate():
 
 
 def test_a_lopsided_ceiling_count_is_called_confounded():
-    """The comparison is not attributable to model quality if one arm was
-    cut off far more often. Easy to miss, so the generator says it."""
     out = report.render(_noise(**_arms(hits_a=0, hits_b=7)), None)
     assert "CONFOUNDED" in out
     assert "not attributable" in out
@@ -193,8 +173,6 @@ def test_comparable_ceilings_are_not_flagged():
 
 
 def test_mixing_harness_versions_is_refused_not_plotted():
-    """S3. The final sweep changed what counts as a pass, so a pre-fix rate
-    and a post-fix rate answer different questions."""
     n = _noise(pareto=[
         {"arm": "old", "harness_version": 1, "pass_rate": 0.1, "median_wall_s": 200},
         {"arm": "new", "harness_version": 2, "pass_rate": 0.8, "median_wall_s": 800},
@@ -218,7 +196,6 @@ def test_one_harness_version_plots_normally():
 
 
 def test_done_and_done_unannounced_are_never_collapsed():
-    """S1. A reader must see how much of a pass rate came from the sweep."""
     n = _noise(pareto=[{"arm": "a", "harness_version": 2, "pass_rate": 0.8,
                         "median_wall_s": 800, "done": 5, "done_unannounced": 19}])
     out = report.render(n, None)

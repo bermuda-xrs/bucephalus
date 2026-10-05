@@ -1,9 +1,3 @@
-"""scripts/mutate.py produces the mutants it claims to (iteration 3, 2.3).
-
-A mutation tool whose operators silently do nothing reports every module at
-100% - the instrument bug this project keeps finding in its own checks.
-"""
-
 from __future__ import annotations
 
 import importlib.util
@@ -32,14 +26,14 @@ def _all() -> set[str]:
 
 def test_each_operator_changes_the_code_it_names():
     out = _all()
-    assert any("x != 1" in s for s in out)                  # comparison flip
-    assert any("x == 1 or not y" in s for s in out)         # and -> or
-    assert any("x == 1 and y:" in s for s in out)           # not dropped
+    assert any("x != 1" in s for s in out)
+    assert any("x == 1 or not y" in s for s in out)
+    assert any("x == 1 and y:" in s for s in out)
     assert any("pass" in s and "raise" not in s for s in out)
-    assert any("return x - 1" in s for s in out)            # + -> -
+    assert any("return x - 1" in s for s in out)
     assert any("return None" in s for s in out)
-    assert any("ALLOW = ('goal',)" in s for s in out)       # allowlist member dropped
-    assert any("x == 2" in s for s in out)                  # int + 1
+    assert any("ALLOW = ('goal',)" in s for s in out)
+    assert any("x == 2" in s for s in out)
 
 
 def test_a_mutant_is_one_change_and_docstrings_are_left_alone():
@@ -61,8 +55,6 @@ def test_only_can_name_one_method():
     assert {m["line"] for m in mutate.mutants(src, {"C.b"})} == {5}
 
 
-# AUDIT-ITERATION-3 B1 and B2: the whole-suite recheck must not turn a
-# timeout into a kill, and a kill must name the test that made it.
 import json  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -76,11 +68,11 @@ def _recheck_with(outcome, tmp_path, monkeypatch, killer=None):
         calls.append(tests)
         if tests[0] == "tests":
             if len([c for c in calls if c[0] == "tests"]) == 1:
-                return "survived", 1.0                  # the baseline passes
+                return "survived", 1.0
             if why is not None and killer:
                 why.append(killer)
             return outcome, 1.0
-        return "survived", 1.0                          # every targeted run survives
+        return "survived", 1.0
     monkeypatch.setattr(mutate, "_run", fake)
     out = tmp_path / "r.json"
     mutate.main([MODULE, "tests/test_origin.py", "--only", "is_channel", "--jobs", "1",

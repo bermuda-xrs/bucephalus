@@ -1,20 +1,3 @@
-"""DR3 again: the sandbox guarded one SPELLING of the route into a database.
-
-Found 2026-09-14, building A2-4. `sqlite3.connect(<protected path>)` was
-refused, but `sqlite3.connect('file:' + path + '?mode=ro', uri=True)` OPENED
-the project database from agent code - 70 tables - because the hook read the
-URI as a path under the work directory, and SQLite opens files itself, in C,
-where no Python audit event sees them. A percent-encoded name opened it too.
-ATTACH and VACUUM INTO open files from inside SQL with no Python event at all,
-and a database SQLite creates is a write the write-confinement never saw.
-
-The fence now reads a database string the way SQLite will, requires every file
-SQLite opens for agent code to be inside the task's scope, and puts an
-authorizer on every connection that refuses ATTACH - and VACUUM INTO, which
-reports as ATTACH - of anything else. Advisory like the rest of the hook
-(D32): code can replace the authorizer. It stops a model that REACHES.
-"""
-
 from __future__ import annotations
 
 import sqlite3
@@ -50,8 +33,6 @@ def test_no_uri_spelling_reaches_the_project_database(ctx, task, route):
     res = _try(ctx, task, f"c = sqlite3.connect({CONNECT_ROUTES[route](_fwd(ctx))}, uri=True)",
                "c.execute('select count(*) from sqlite_master').fetchone()")
     assert "OPENED" not in res["stdout"], res
-    # Refused AS PROTECTED STATE - not by accident, as a mangled path that
-    # happened to fall outside the read fence.
     assert "sandbox: protected path" in res["stdout"], res
 
 
@@ -66,9 +47,6 @@ def test_attach_cannot_reach_the_project_database(ctx, task):
 
 
 def test_an_attach_whose_target_is_not_known_yet_is_refused(ctx, task):
-    """A bound parameter, or an expression, is not a filename when SQLite
-    asks the authorizer - it is resolved later. An unknown target is not a
-    safe one (DR4): the attach is refused, whatever it would have named."""
     db = str(Path(ctx.config.db_path).resolve())
     head, tail = db[: -len("agent.db")], "agent.db"
     res = _try(ctx, task, "c = sqlite3.connect(':memory:')",
@@ -96,8 +74,6 @@ def test_vacuum_into_cannot_write_outside_scope(ctx, task, tmp_path):
 
 
 def test_sqlite_cannot_create_a_file_outside_scope(ctx, task):
-    """The interpreter's directories are READABLE, for imports. That must not
-    make them writable through a database SQLite creates."""
     target = Path(sys.prefix) / "zz-alpha-sqlite-probe.db"
     try:
         res = _try(ctx, task, f"c = sqlite3.connect({str(target)!r})",

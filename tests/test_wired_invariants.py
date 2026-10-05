@@ -1,10 +1,3 @@
-"""Invariants that existed only as unit-tested functions nothing called.
-
-Each of these had a passing test and zero call sites in the running agent —
-the same shape as the semantic cache that sat dead for a week. A test that
-the function works is not a test that the system uses it.
-"""
-
 from __future__ import annotations
 
 import json
@@ -16,8 +9,6 @@ from agent.kernel.types import Budget, TaskContract, VerifyResult
 
 
 class DescendingVerifier:
-    """Scores 0.9 then 0.2, never passing. The ratchet must keep the 0.9."""
-
     kind = "descending"
 
     def __init__(self, scores):
@@ -41,7 +32,6 @@ def _task(ctx, criterion: str) -> object:
 
 
 def test_ratchet_returns_the_best_candidate_not_the_last(ctx, workspace, scripted):
-    """Without the ratchet a run that never passes returns nothing at all."""
     ctx.mesh.registry["descending"] = DescendingVerifier([0.9, 0.2, 0.2, 0.2])
     t = _task(ctx, "descending")
     scripted("cloud",
@@ -57,7 +47,6 @@ def test_ratchet_returns_the_best_candidate_not_the_last(ctx, workspace, scripte
 
 
 def test_plateau_stops_burning_turns(ctx, workspace, scripted):
-    """Three identical scores means more turns buy nothing. On CPU that is minutes."""
     ctx.mesh.registry["descending"] = DescendingVerifier([0.5])
     ctx.config.limits.max_steps = 12
     t = _task(ctx, "descending")
@@ -69,7 +58,6 @@ def test_plateau_stops_burning_turns(ctx, workspace, scripted):
 
 
 def test_skill_invocations_are_recorded_so_decay_has_data(ctx, workspace, scripted):
-    """M9.5 reads skill_invocations. Never writing there demotes every skill."""
     from agent.skills.gate import decay_pass
 
     sid = ctx.skills.store("useful", "# useful\nwhen testing\n\n## step\ndo it\n",
@@ -87,7 +75,6 @@ def test_skill_invocations_are_recorded_so_decay_has_data(ctx, workspace, script
     assert rows, "the skill was used but no invocation was recorded"
     assert rows[0][0] == 1
 
-    # And so decay no longer demotes a skill that is actually in use.
     actions = decay_pass(ctx)
     assert not any(a["skill"] == "useful" and a["why"] == "unused" for a in actions)
 
@@ -102,7 +89,6 @@ def test_decay_still_demotes_a_genuinely_unused_skill(ctx):
 
 
 def test_deviation_parks_a_materially_changed_task(ctx, workspace):
-    """M13.4 — a big surprise is a human's call, not a silent retry."""
     from agent.plan.planner import approve_plan, draft_plan
 
     plan_json = json.dumps({
@@ -148,13 +134,6 @@ def test_deviation_parks_a_materially_changed_task(ctx, workspace):
 
 
 def test_a_promotion_says_the_gaming_veto_does_not_apply_and_why(ctx):
-    """M7.4 rule 4 is RETIRED with M11 (FINDINGS 1.27).
-
-    Removing it removed no protection: nothing recorded the gap it read, so it
-    could not fire. And the gap is undefined here, not unmeasured - every
-    check is held out, the grader unreachable (SPEC-DELTA C1). A promotion
-    says so in words, with the reference, rather than a bare 'skipped'.
-    """
     import time
 
     from agent.skills.gate import GAMING_CHECK, evaluate_skill

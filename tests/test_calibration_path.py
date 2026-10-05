@@ -1,15 +1,3 @@
-"""The calibration run end to end, on scripted outcomes.
-
-This is the run that costs hours on real models. Every blocker it could hit is
-cheaper to find here: running a scripted version first caught four separate
-blockers in one session, including a deputy that denied 100% of actions and
-would have reported 0% on every task.
-
-So this drives `cmd_paired` itself - the split filter, the trial loop, both
-analyses, the printed caveats, the report file - rather than testing the gate
-in isolation.
-"""
-
 from __future__ import annotations
 
 import importlib.util
@@ -21,9 +9,6 @@ from pathlib import Path
 
 import pytest
 
-# These take the REAL checkout's measurement lock (bench/run.py and noise.py
-# lock beside --config config.local.yaml). One worker at a time, or xdist
-# workers contend on it and read "lock busy" (iteration 3, 2.2).
 pytestmark = pytest.mark.xdist_group("real-measurement-lock")
 
 
@@ -56,8 +41,6 @@ def _suite(n_drafting: int, n_eval: int) -> list[dict]:
 
 
 class _Ctx:
-    """A context with a real skill_trials table and nothing else expensive."""
-
     def __init__(self, tmp_path, min_paired=15, min_discordant=10):
         self.conn = sqlite3.connect(":memory:")
         self.conn.execute(
@@ -86,7 +69,6 @@ class _Ctx:
 
 
 def _seed(ctx, skill_id, outcomes):
-    """outcomes: {task_key: (control_success, skill_success)}"""
     for key, (c, s) in outcomes.items():
         for arm, val in (("control", c), ("skill", s)):
             ctx.conn.execute(
@@ -108,10 +90,6 @@ def _args(skill_id, split=None, resume=False):
 
 
 def _wire(mod, monkeypatch, ctx, suite, on_trial):
-    # The seam is `open_measurement`, not `AgentContext`, since D18: a
-    # measurement path may no longer open a context for itself. Patching here
-    # also keeps the isolation declaration in the path under test — the fake
-    # receives `isolate` and would fail loudly if run.py stopped passing it.
     def fake_open(config, *, profile=None, isolate, why=""):
         ctx.config.isolate_retrieval = isolate
         return ctx
@@ -122,10 +100,6 @@ def _wire(mod, monkeypatch, ctx, suite, on_trial):
 
 
 def test_the_whole_calibration_path_reports_two_numbers(tmp_path, monkeypatch, capsys):
-    """A real effect on all 30, reported alongside the eval-15 subset.
-
-    This is the shape the calibration should produce if the instrument works.
-    """
     mod = _load_bench_run()
     suite = _suite(15, 15)
     ctx = _Ctx(tmp_path)
@@ -133,11 +107,11 @@ def test_the_whole_calibration_path_reports_two_numbers(tmp_path, monkeypatch, c
     outcomes = {}
     for i, s in enumerate(suite):
         if i < 12:
-            outcomes[s["key"]] = (0, 1)      # skill wins
+            outcomes[s["key"]] = (0, 1)
         elif i == 12:
-            outcomes[s["key"]] = (1, 0)      # control wins
+            outcomes[s["key"]] = (1, 0)
         else:
-            outcomes[s["key"]] = (1, 1)      # concordant pass
+            outcomes[s["key"]] = (1, 1)
 
     _declare(ctx, "sk1", {"drafted_by": "a test author",
                           "drafted_from": [s["key"] for s in suite[:15]]})
@@ -155,7 +129,6 @@ def test_the_whole_calibration_path_reports_two_numbers(tmp_path, monkeypatch, c
     assert report["primary"]["verdict"] == "promote"
     assert report["secondary"]["n"] == 15, "eval subset comes from the same trials"
     assert report["profile"] == "local"
-    # The caveat travels with the number, printed in the same block.
     cav = report["primary"]["caveat"]
     assert cav in out, "the contamination caveat must be printed"
     assert "a test author" in cav and "15 of the 30 scored tasks" in cav, cav
@@ -163,10 +136,6 @@ def test_the_whole_calibration_path_reports_two_numbers(tmp_path, monkeypatch, c
 
 
 def test_the_caveat_is_derived_from_what_the_skill_declares(tmp_path, monkeypatch):
-    """D35. The caveat said, for EVERY skill, that its author saw the entire
-    suite. True of aero_units_discipline; false of the control drafted from
-    the drafting split, and of every generated skill. It is read from the
-    skill's own provenance, and an absent record is said to be absent."""
     mod = _load_bench_run()
     suite = _suite(15, 15)
     everything = [s["key"] for s in suite]
@@ -196,11 +165,9 @@ def test_the_caveat_is_derived_from_what_the_skill_declares(tmp_path, monkeypatc
 
 
 def test_an_underpowered_secondary_still_reports_direction(tmp_path, monkeypatch):
-    """A verdict of insufficient that reports only n hides where it pointed."""
     mod = _load_bench_run()
     suite = _suite(15, 15)
     ctx = _Ctx(tmp_path, min_discordant=10)
-    # every win lands in the drafting half; the eval half is quiet
     outcomes = {s["key"]: ((0, 1) if i < 11 else (1, 1))
                 for i, s in enumerate(suite)}
 
@@ -217,12 +184,11 @@ def test_an_underpowered_secondary_still_reports_direction(tmp_path, monkeypatch
 
 
 def test_resume_skips_only_complete_pairs(tmp_path, monkeypatch):
-    """A half-finished pair is dropped by the analysis, so it must be re-run."""
     mod = _load_bench_run()
     suite = _suite(2, 1)
     ctx = _Ctx(tmp_path, min_paired=1, min_discordant=1)
 
-    for arm in ("control", "skill"):                 # D00 complete
+    for arm in ("control", "skill"):
         ctx.conn.execute("INSERT INTO skill_trials VALUES (?,?,?,?,?,?,?,?,?)",
                          ("sk3", "D00", arm, 1, 1.0, 0, 0, 0, _t.time()))
     ctx.conn.execute("INSERT INTO skill_trials VALUES (?,?,?,?,?,?,?,?,?)",
@@ -239,7 +205,6 @@ def test_resume_skips_only_complete_pairs(tmp_path, monkeypatch):
 
 
 def test_a_skill_that_hurts_is_rejected_not_quietly_promoted(tmp_path, monkeypatch):
-    """The outcome the literature says to expect. It has to be visible."""
     mod = _load_bench_run()
     suite = _suite(15, 15)
     ctx = _Ctx(tmp_path)
@@ -257,7 +222,6 @@ def test_a_skill_that_hurts_is_rejected_not_quietly_promoted(tmp_path, monkeypat
 
 
 def test_split_eval_restricts_the_trials_that_run(tmp_path, monkeypatch):
-    """Generated skills stay eval-only, so the filter must bite before trials."""
     mod = _load_bench_run()
     suite = _suite(15, 15)
     ctx = _Ctx(tmp_path, min_paired=1, min_discordant=1)
@@ -271,17 +235,6 @@ def test_split_eval_restricts_the_trials_that_run(tmp_path, monkeypatch):
 
 
 def test_the_calibration_takes_the_deputy_out_like_the_noise_floor(tmp_path, monkeypatch, capsys):
-    """The arms must measure the same system.
-
-    noise.py sets auto_review=False for the baseline arm. cmd_paired did not,
-    so the calibration would have run WITH an LLM deputy in the decision path
-    while the baseline ran without one - and any lift would then be partly
-    attributable to the deputy rather than the skill.
-
-    On this hardware it also loaded a second model beside the executor, which
-    is what produced `500 Internal Server Error ... timed out waiting for
-    llama-server` and killed the first calibration attempt.
-    """
     mod = _load_bench_run()
     suite = _suite(1, 1)
     ctx = _Ctx(tmp_path, min_paired=1, min_discordant=1)
@@ -304,9 +257,6 @@ def test_the_calibration_takes_the_deputy_out_like_the_noise_floor(tmp_path, mon
 
 
 def test_an_exception_mid_run_releases_the_measurement_lock(tmp_path, monkeypatch):
-    """The lock was released on the success path only. One exception held it
-    for the rest of the process, and every later measurement in that process
-    reported "lock busy" - one failing test showed up as ten."""
     import pytest
     from agent.runlock import RunLock, measurement_lock_path
 
@@ -325,11 +275,6 @@ def test_an_exception_mid_run_releases_the_measurement_lock(tmp_path, monkeypatc
 
 
 def test_a_backend_error_skips_the_pair_rather_than_half_recording_it(tmp_path, monkeypatch, capsys):
-    """A five-hour run must not die on one 500, and must not fabricate a pair.
-
-    An incomplete pair is dropped by fetch_paired_outcomes anyway, so the task
-    is left unrecorded and --resume re-runs it. Skipping beats fabricating.
-    """
     from agent.models.base import BackendError
 
     mod = _load_bench_run()
@@ -361,5 +306,4 @@ def test_a_backend_error_skips_the_pair_rather_than_half_recording_it(tmp_path, 
     assert "SKIPPED" in out and "D00" in out
     assert attempted.count("D00") == 2, "the pair should be retried once"
     assert "D01" in attempted, "one failure must not end the run"
-    # D00 must not appear in the analysis
     assert "V00" in attempted

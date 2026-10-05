@@ -1,27 +1,3 @@
-"""The prefix observable, and why it reported nothing for the whole project.
-
-`cache_hit_ratio` and `cache_alarm` have existed since M3.2. The alarm has
-never fired once, and until 2026-09-06 it COULD not have, for two independent
-reasons that each had to be fixed:
-
-  1. No local backend reported cache accounting. Ollama's native /api/chat
-     returns no cached-token field, so the ratio was a constant 0.0 — which is
-     indistinguishable from a total prefix mutation, and is why the number was
-     never trusted enough to act on. Phase 1 measured that the SAME SERVER
-     reports it on /v1: an unseen 206-token prompt gave cached_tokens 5 then
-     205 on the repeat, against 0 and 0 native.
-
-  2. `cache_alarm` was gated on `paid_tokens > 0`. Under `--profile local`
-     nothing costs money, so the gate was never true. The one machine this
-     project runs on was the one machine the alarm could not protect.
-
-Fixing either alone leaves it dead, which is why both are pinned here.
-
-The distinction that carries the whole thing: **None is not zero.** None means
-no backend on this task could report the number. 0.0 means a backend that CAN
-report it said nothing was cached — which is the actual alarm condition.
-"""
-
 from __future__ import annotations
 
 import sqlite3
@@ -57,11 +33,6 @@ def record(conn: sqlite3.Connection, backend: str, task: str,
 
 
 def test_a_backend_that_cannot_report_caching_gives_none_not_zero(conn):
-    """The native Ollama case, and every published run before 2026-09-06.
-
-    Zero would read as "the prefix is being mutated on every call", which is
-    a claim about the run. None is the truth: nobody measured.
-    """
     t = Telemetry(conn, cloud_backends=set(), cache_reporting_backends=set())
     for _ in range(4):
         record(conn, "cloud", "t1", input_tokens=100, cache_read=0)
@@ -73,8 +44,6 @@ def test_a_backend_that_cannot_report_caching_gives_none_not_zero(conn):
 
 
 def test_a_reporting_backend_that_says_zero_does_raise_the_alarm(conn):
-    """0.0 from a backend that CAN report is the real condition: the prefix
-    is not being reused, which is what the alarm exists to catch."""
     t = Telemetry(conn, cloud_backends=set(),
                   cache_reporting_backends={"cloud"})
     for _ in range(4):
@@ -85,15 +54,7 @@ def test_a_reporting_backend_that_says_zero_does_raise_the_alarm(conn):
 
 
 def test_the_alarm_is_no_longer_gated_on_spending_money(conn):
-    """`paid_tokens > 0` made the alarm unreachable under --profile local.
-
-    The spec justified this alarm by COST: a prefix mutation raises spend
-    ~10x. On this hardware the same mutation is paid in wall clock instead,
-    re-processing a prompt the server had already cached. Gating a
-    correctness alarm on the axis that happens to be zero here is how it came
-    to be dead on the only machine it runs on.
-    """
-    t = Telemetry(conn, cloud_backends=set(),          # nothing is paid
+    t = Telemetry(conn, cloud_backends=set(),
                   cache_reporting_backends={"cloud"})
     for _ in range(3):
         record(conn, "cloud", "t3", input_tokens=100, cache_read=0)
@@ -120,9 +81,6 @@ def test_a_healthy_prefix_does_not_alarm(conn):
 
 
 def test_calls_from_a_non_reporting_backend_do_not_drag_the_ratio_down(conn):
-    """A task that used both a reporting and a non-reporting backend must not
-    average a real 0.9 with an unmeasured 0.0 and call it 0.45. That would
-    manufacture an alarm out of a protocol difference."""
     t = Telemetry(conn, cloud_backends=set(),
                   cache_reporting_backends={"reporting"})
     for _ in range(3):
@@ -134,9 +92,6 @@ def test_calls_from_a_non_reporting_backend_do_not_drag_the_ratio_down(conn):
 
 
 def test_the_capability_is_declared_never_inferred_from_the_adapter():
-    """The same server behind two protocols reports it on one and not the
-    other, so the adapter class is the wrong question — and asking it would
-    be a fourth instance of the class-name defect."""
     cfg = Config(
         profile="local",
         backends={

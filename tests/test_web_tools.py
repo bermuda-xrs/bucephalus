@@ -1,12 +1,3 @@
-"""A2 — web tools and file ops, and the composition with Phase 3.
-
-The test that matters most here is 4.6: an agent fetches a page and tries to
-remember something from it. Phase 3 tested that with a SYNTHETIC untrusted
-artifact; this uses the real path an attacker would take, end to end, because
-two separately-tested mechanisms meeting correctly is a third thing that
-needs testing.
-"""
-
 from __future__ import annotations
 
 import json
@@ -66,19 +57,7 @@ def new_task(ctx, goal="research something"):
         Budget(usd=1.0, seconds=120))
 
 
-# ==========================================================================
-# 4.6 — the two mechanisms meeting
-# ==========================================================================
-
 def test_a_fact_from_a_fetched_page_cannot_enter_tier_one(tmp_path):
-    """THE REALISTIC ATTACK, end to end.
-
-    Phase 3's version handed the store an untrusted artifact directly. This
-    one walks the whole path: fetch a page, let the page's text raise the
-    task's taint through `observe()`, then have the model try to persist a
-    line the page told it to remember. The refusal has to come from the two
-    mechanisms composing, not from either one being tested in isolation.
-    """
     ctx = make_ctx(tmp_path)
     ctx.web_fetcher = lambda url: POISON_PAGE
     t = new_task(ctx)
@@ -97,7 +76,6 @@ def test_a_fact_from_a_fetched_page_cannot_enter_tier_one(tmp_path):
         "a page that says 'remember X' must not be able to write X into the "
         "prefix of every future session")
 
-    # And the refusal must be visible, not silent.
     denied = ctx.conn.execute(
         "SELECT COUNT(*) FROM events WHERE task_id=? AND type='human.denied'",
         (t.id,)).fetchone()[0]
@@ -110,12 +88,6 @@ def test_a_fact_from_a_fetched_page_cannot_enter_tier_one(tmp_path):
 
 
 def test_the_same_content_does_persist_in_tier_two_as_untrusted(tmp_path):
-    """The other half of 4.6, and the half that makes the refusal honest.
-
-    The content is not lost — it is in tier 2, retrievable, and stamped
-    UNTRUSTED. The tiers do not differ in whether content survives; they
-    differ in whether it survives as something the model is told to believe.
-    """
     ctx = make_ctx(tmp_path)
     ctx.web_fetcher = lambda url: POISON_PAGE
     t = new_task(ctx)
@@ -135,10 +107,6 @@ def test_the_same_content_does_persist_in_tier_two_as_untrusted(tmp_path):
     ctx.close()
 
 
-# ==========================================================================
-# 4.1 / 4.3 — taint and provenance
-# ==========================================================================
-
 def test_web_output_is_always_untrusted():
     r = default_registry()
     for name in ("web_fetch", "web_search"):
@@ -149,9 +117,6 @@ def test_web_output_is_always_untrusted():
 
 
 def test_provenance_is_recorded_on_the_artifact(tmp_path, monkeypatch):
-    """4.3. URL, fetch time, content hash — G4's skill provenance needs
-    exactly this, because a skill generated from a page is only checkable if
-    the page can be named and re-fetched."""
     ctx = make_ctx(tmp_path)
 
     class FakeResp:
@@ -173,8 +138,6 @@ def test_provenance_is_recorded_on_the_artifact(tmp_path, monkeypatch):
 
     import agent.net.fetch as fetch_mod
 
-    # The property is provenance, not DNS: `_is_public` resolved example.com
-    # for real, so the test failed offline (found in WSL2 with no network).
     monkeypatch.setattr(fetch_mod, "_is_public", lambda host: True)
 
     class FakeClient:
@@ -209,8 +172,6 @@ def test_provenance_is_recorded_on_the_artifact(tmp_path, monkeypatch):
 
 
 def test_the_hash_covers_the_raw_bytes_not_our_extraction():
-    """Hashing the extracted text would make the same page hash differently
-    after an unrelated edit to the HTML reducer."""
     src = (ROOT / "src" / "agent" / "net" / "fetch.py").read_text(encoding="utf-8")
     i = src.index("content_sha256")
     assert "raw.encode" in src[i - 200:i + 200], (
@@ -234,10 +195,6 @@ def test_a_private_address_is_refused(tmp_path):
     ctx.close()
 
 
-# ==========================================================================
-# 4.4 — robots and rate limiting
-# ==========================================================================
-
 def test_robots_disallow_refuses_the_fetch(monkeypatch):
     import agent.net.politeness as pol
 
@@ -246,22 +203,19 @@ def test_robots_disallow_refuses_the_fetch(monkeypatch):
     rp.parse(["User-agent: *", "Disallow: /private"])
     monkeypatch.setattr(pol, "_robots_for", lambda url, timeout_s=5.0: rp)
 
-    pol.check_robots("https://example.com/public")          # allowed
+    pol.check_robots("https://example.com/public")
     with pytest.raises(pol.RobotsRefused, match="disallows"):
         pol.check_robots("https://example.com/private/x")
     pol.reset()
 
 
 def test_an_unreachable_robots_txt_allows_rather_than_blocks(monkeypatch):
-    """Fails OPEN, deliberately. A site with no robots.txt has not refused
-    anything, and treating an unreachable file as a prohibition would let one
-    flaky request break every later one."""
     import agent.net.politeness as pol
 
     pol.reset()
     monkeypatch.setattr(pol.httpx, "get",
                         lambda *a, **k: (_ for _ in ()).throw(OSError("down")))
-    pol.check_robots("https://example.com/anything")        # must not raise
+    pol.check_robots("https://example.com/anything")
     pol.reset()
 
 
@@ -284,8 +238,6 @@ def test_the_rate_limiter_waits_between_calls_to_one_host(monkeypatch):
 
 
 def test_a_longer_crawl_delay_wins_but_a_shorter_one_does_not(monkeypatch):
-    """A site asking for more space gets it. A site asking for less does not
-    lower our floor, because the floor is our politeness, not theirs."""
     import agent.net.politeness as pol
 
     class RP:
@@ -298,10 +250,6 @@ def test_a_longer_crawl_delay_wins_but_a_shorter_one_does_not(monkeypatch):
         def can_fetch(self, ua, url):
             return True
 
-    # A clock that moves only when the code sleeps. On the real clock the
-    # time between the two calls was subtracted from the wait - 4.99996 s on
-    # Linux (D59), far less on a loaded machine, where this test failed and,
-    # under the mutation runner, "killed" mutants it had nothing to do with.
     clock, slept = [1000.0], []
 
     def sleep(s):
@@ -326,9 +274,6 @@ def test_a_longer_crawl_delay_wins_but_a_shorter_one_does_not(monkeypatch):
 
 
 def test_D59_the_spacing_does_not_follow_the_wall_clock(monkeypatch):
-    """The spacing was measured on the wall clock: set back an hour between
-    two calls (a clock correction), the second call waited an hour; set
-    forward, not at all. On a monotonic clock it waits the delay."""
     import agent.net.politeness as pol
 
     wall = iter([1000.0, 1000.0 - 3600])
@@ -345,8 +290,6 @@ def test_D59_the_spacing_does_not_follow_the_wall_clock(monkeypatch):
 
 
 def test_search_reports_a_parse_failure_rather_than_no_results(monkeypatch):
-    """'Nothing matched' and 'the markup changed' look identical to a caller
-    and have opposite fixes."""
     from agent.net import search as search_mod
 
     class R:
@@ -370,10 +313,6 @@ def test_search_unwraps_the_redirect_so_provenance_names_the_real_site():
 
 
 def test_a_failed_search_comes_back_as_data_carrying_its_kind(tmp_path, monkeypatch):
-    """A failed search is an observation the agent routes around, not an
-    exception that kills the task — and the KIND survives into the result,
-    the provenance, and the chain. Without that a broken scraper reads as a
-    topic with no coverage."""
     from agent.net import search as search_mod
     import agent.execute.tools as tools_mod
 
@@ -399,9 +338,6 @@ def test_a_failed_search_comes_back_as_data_carrying_its_kind(tmp_path, monkeypa
 
 
 def test_an_honest_empty_result_is_not_a_failure(tmp_path, monkeypatch):
-    """The other side of the distinction. Zero results from a WORKING parser
-    is a successful search that found nothing, and must not be recorded as a
-    broken tool."""
     from agent.net import search as search_mod
     import agent.execute.tools as tools_mod
 
@@ -419,10 +355,6 @@ def test_an_honest_empty_result_is_not_a_failure(tmp_path, monkeypatch):
         (t.id,)).fetchall()
     ctx.close()
 
-
-# ==========================================================================
-# 4.5 — file ops
-# ==========================================================================
 
 def test_glob_lists_matching_files(tmp_path):
     ctx = make_ctx(tmp_path)
@@ -449,7 +381,6 @@ def test_grep_finds_lines_with_file_and_number(tmp_path):
 
 
 def test_grep_is_bounded_so_it_cannot_flood_the_context(tmp_path):
-    """An unbounded grep is the ledger discipline defeated by accident."""
     from agent.execute.tools import MAX_GREP_HITS
 
     ctx = make_ctx(tmp_path)
@@ -480,9 +411,6 @@ def test_edit_file_replaces_an_exact_string(tmp_path):
 
 
 def test_edit_file_refuses_when_the_target_is_absent(tmp_path):
-    """An edit that matched nothing and reported success is the same failure
-    class as every instrument bug in this project: an operation reporting a
-    result adjacent to what it actually did."""
     ctx = make_ctx(tmp_path)
     f = tmp_path / "work" / "x.py"
     f.write_text("a = 1\n", encoding="utf-8")
@@ -511,5 +439,3 @@ def test_edit_file_is_gated_like_write_file():
     r = default_registry()
     assert r.get("edit_file").side_effecting is True
     assert r.get("edit_file").max_arg_taint is Taint.USER
-
-

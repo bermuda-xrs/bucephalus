@@ -1,30 +1,3 @@
-"""The class-name defect, pinned the way the dead-code audit is pinned.
-
-Three instances of one defect were found one at a time:
-
-  * `profiles.enforce` decided "is this local" from `kind == "anthropic"`
-  * `execute/loop.py` decided whether to send the ACTION SCHEMA from
-    `cfg.kind == "ollama"`
-  * `plan/review.py` decided whether the deputy gets a schema the same way
-
-The last two are the serious ones, because they change WHAT THE MODEL IS
-ASKED. Point a second adapter at the same Ollama server running the same
-weights and the class-name test flips while nothing about the model changed:
-same model, same task, a different question, and the run does not say so.
-
-The rule this test enforces:
-
-    A branch on a backend's ADAPTER TYPE is a defect.
-    A branch on a declared CAPABILITY is correct.
-
-"Does this backend need an action envelope", "does it report cached tokens",
-"does it honour num_ctx" are all capabilities and all belong in
-`BackendConfig` as declared fields. "Is it an OllamaBackend" is an identity
-and belongs nowhere except the registry that constructs one.
-
-Waiting for the fourth instance to surface is what this file exists to stop.
-"""
-
 from __future__ import annotations
 
 import ast
@@ -36,14 +9,10 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from agent.config import BackendConfig  # noqa: E402
 
-# Taken from the model rather than retyped, so adding an adapter cannot leave
-# this test silently checking a stale list.
 ADAPTER_KINDS = set(BackendConfig.model_fields["kind"].annotation.__args__)
 
 SEARCH_ROOTS = [ROOT / "src" / "agent", ROOT / "bench"]
 
-# file -> why a branch on adapter identity is allowed to live there.
-# A record, not a suppression: each entry says what makes it not the defect.
 ALLOWED = {
     "src/agent/models/registry.py":
         "build_backend IS the adapter registry. Mapping a kind to the class "
@@ -84,14 +53,6 @@ def _touches_kind(node: ast.Compare) -> bool:
 
 
 def find_identity_branches() -> list[str]:
-    """Comparisons of a `.kind` attribute against an ADAPTER name.
-
-    Deliberately narrow. `parsed.kind == "final"` and the injection spec's
-    `kind == "stall"` also compare something called `kind` against a string,
-    and neither has anything to do with backends. The discriminator is
-    whether the string is an adapter kind, which is why ADAPTER_KINDS is read
-    off the model.
-    """
     hits = []
     for root in SEARCH_ROOTS:
         for path in sorted(root.rglob("*.py")):
@@ -120,8 +81,6 @@ def test_no_branch_on_adapter_identity_outside_the_registry():
 
 
 def test_the_allowlist_does_not_rot():
-    """An allowed file that no longer branches on kind should leave the list,
-    or the list stops being a record of anything."""
     stale = []
     for rel in ALLOWED:
         text = (ROOT / rel).read_text(encoding="utf-8")
@@ -141,15 +100,11 @@ def test_the_allowlist_does_not_rot():
 
 
 def test_the_kind_list_is_read_from_the_model_not_retyped():
-    """If this test hardcoded the adapter names, adding one would leave the
-    sweep quietly checking the old set - the same staleness the dead-code
-    audit's KNOWN_INERT list guards against."""
     assert "openai" in ADAPTER_KINDS and "ollama" in ADAPTER_KINDS
     assert len(ADAPTER_KINDS) == len(BackendConfig.model_fields["kind"].annotation.__args__)
 
 
 def test_the_three_known_instances_are_actually_fixed():
-    """Named explicitly, so a revert is loud rather than a silent regression."""
     loop = (ROOT / "src" / "agent" / "execute" / "loop.py").read_text(encoding="utf-8")
     review = (ROOT / "src" / "agent" / "plan" / "review.py").read_text(encoding="utf-8")
     profiles = (ROOT / "src" / "agent" / "profiles.py").read_text(encoding="utf-8")

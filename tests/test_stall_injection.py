@@ -1,15 +1,3 @@
-"""Fault injection, and the invariant both aborted runs violated.
-
-Stalls occurred about three times in sixty tasks. A short shakedown will
-almost certainly see none, and "no stall occurred" is not evidence that the
-handler works - it is the same absence of evidence that let the wiring defect
-survive two aborted Phase 2A attempts. So the shakedown injects the condition
-rather than waiting for it.
-
-The injection itself needs a guard, because a switch that can fire in a real
-run is worse than no switch: it would turn a measurement into a fabrication.
-"""
-
 from __future__ import annotations
 
 import sys
@@ -33,7 +21,6 @@ def _clean_env(monkeypatch):
 
 
 def test_injection_cannot_fire_without_the_flag():
-    """The whole safety property. Unset means unreachable."""
     assert stall._inject_on() == set()  # noqa: SLF001
     for _ in range(50):
         stall._CALLS["n"] += 1  # noqa: SLF001
@@ -48,22 +35,12 @@ def test_injection_fires_only_on_the_named_calls(monkeypatch):
 
 
 def test_garbage_in_the_flag_disables_it_rather_than_firing(monkeypatch):
-    """A malformed switch must fail CLOSED. Failing open would inject stalls
-    into a real run on a typo."""
     for bad in ("yes", "all", "-1", "1;2", " ", "abc,def"):
         monkeypatch.setenv("ALPHA_INJECT_STALL", bad)
         assert stall._inject_on() == set(), f"{bad!r} should disable injection"
 
 
 def test_the_flag_is_read_from_the_environment_only():
-    """No config key, no CLI default, nothing that could persist into a run.
-
-    Widened from "once in ollama.py" to "once in the whole package" when a
-    second adapter arrived. The narrow version would have passed while a new
-    adapter read the switch for itself, which is the failure it exists to
-    stop: one read site is one way for injection to fire, and the count is
-    the entire guarantee.
-    """
     sites = {
         path.relative_to(ROOT).as_posix(): text.count(
             'os.environ.get("ALPHA_INJECT_STALL"')
@@ -79,19 +56,10 @@ def test_the_flag_is_read_from_the_environment_only():
 
 
 def test_the_call_counter_is_shared_across_adapters():
-    """An injected index means "the Nth model call of this run", not "the Nth
-    call on whichever adapter". Phase 1 makes the adapter a config edit, so a
-    per-adapter counter would make an injected shakedown produce different
-    calls before and after that edit - the switch would stop being a way to
-    reproduce a fault and become a way to relabel one."""
     from agent.models import ollama, openai_compat
     assert ollama.next_call_index is stall.next_call_index
     assert openai_compat.next_call_index is stall.next_call_index
 
-
-# ---------------------------------------------------------------------------
-# S4: the invariant both aborted attempts violated.
-# ---------------------------------------------------------------------------
 
 def _noise():
     import importlib.util
@@ -110,22 +78,12 @@ def test_an_excluded_task_must_be_unmeasured():
 
 
 def test_any_crashed_status_is_rejected():
-    """H23 and H30 were both recorded as `crashed` and scored FAILED.
-
-    The guard no longer tries to RECOGNISE a machine cause in the row. An
-    earlier version looked for a `stalls` key or "timed out" in an error
-    string, and a crashed row carrying neither went straight through it -
-    which is what an injected transport timeout produced. Recognition is the
-    part that kept failing, so every machine event now has its own terminal
-    status and `crashed` is simply unreachable for one.
-    """
     n = _noise()
     for row in (
         {"key": "H23", "status": "crashed", "passed": False,
          "stalls": [{"observed_tok_s": 0.59, "median_tok_s": 5.97}]},
         {"key": "H30", "status": "crashed", "passed": False,
          "error": "ollama call failed at http://localhost:11435: timed out"},
-        # The one the previous guard missed: no stall record, no error text.
         {"key": "E06", "status": "crashed", "passed": False},
     ):
         with pytest.raises(AssertionError, match="a path was missed"):
@@ -133,7 +91,6 @@ def test_any_crashed_status_is_rejected():
 
 
 def test_a_normal_failure_is_untouched():
-    """The invariant must not reject ordinary task failures."""
     n = _noise()
     n.assert_machine_fault_never_scored_as_failure(
         {"key": "E01", "status": "plateau", "passed": False})
@@ -142,8 +99,6 @@ def test_a_normal_failure_is_untouched():
 
 
 def test_a_recovered_task_may_carry_machine_fault_and_still_be_measured():
-    """A stall that was re-run and then completed normally is a real result;
-    the flag records that a fault occurred, not that the result is void."""
     n = _noise()
     n.assert_machine_fault_never_scored_as_failure(
         {"key": "E03", "status": "done", "passed": True,
@@ -151,8 +106,6 @@ def test_a_recovered_task_may_carry_machine_fault_and_still_be_measured():
 
 
 def test_the_invariant_runs_on_every_task_not_just_at_the_end():
-    """Checked per task so a violation aborts the run rather than being
-    discovered in the report three hours later."""
     src = (ROOT / "bench" / "noise.py").read_text(encoding="utf-8")
     i = src.index("out = run_with_backend_retry(")
     j = src.index("append_run(ledger", i)
@@ -161,17 +114,7 @@ def test_the_invariant_runs_on_every_task_not_just_at_the_end():
         "to the ledger")
 
 
-# ---------------------------------------------------------------------------
-# The abort rule: EXCLUDED counts, machine_fault does not.
-# ---------------------------------------------------------------------------
-
 def test_a_recovered_machine_fault_carries_no_abort_authority():
-    """H23 stalled once, re-ran, and produced a valid measured result. M11
-    stalled twice and its data was lost. Only the second is missing data.
-
-    The first version of the rule counted `machine_fault OR excluded`, which
-    would have aborted a healthy run on evidence that recovery WORKED.
-    """
     n = _noise()
     recovered = {"key": "H23", "status": "plateau", "passed": False,
                  "machine_fault": True, "excluded": False, "unmeasured": False}
@@ -199,15 +142,6 @@ def test_the_abort_threshold_counts_excluded_only():
 
 
 def test_the_bench_catches_the_same_class_the_new_adapter_raises():
-    """bench/noise.py catches ModelStall imported from agent.models.ollama.
-
-    Phase 1 added a second adapter. If the OpenAI-compatible one raised a
-    DIFFERENT ModelStall - its own class, or one from a module that got
-    re-imported under another name - the bench would miss it and score a
-    machine event as a task failure, which is the exact defect the whole
-    machine-fault path exists to prevent. It is an identity question, so it
-    is asked as one rather than inferred from the imports.
-    """
     from agent.models import openai_compat
 
     n = _noise()
@@ -219,17 +153,6 @@ def test_the_bench_catches_the_same_class_the_new_adapter_raises():
 
 
 def test_one_stall_re_runs_the_task_and_the_result_still_counts():
-    """The re-run, exercised rather than grepped for.
-
-    The existing checks read noise.py for the word `continue` in the stall
-    branch. That is a test of spelling: it passes for any code containing the
-    token, and it says nothing about whether a second attempt actually happens
-    or what the recovered row looks like. Phase 1 made the acceptance question
-    "does the machine-fault path work on the NEW adapter", and answering that
-    by reasoning about which class gets caught is exactly the inference this
-    project keeps getting wrong. So the condition is injected into the retry
-    itself and the resulting row is inspected.
-    """
     n = _noise()
     calls = {"n": 0}
 
@@ -269,5 +192,4 @@ def test_two_stalls_exclude_the_task_and_never_score_it_as_a_failure():
     assert out["excluded"] is True and out["unmeasured"] is True
     assert out["passed"] is False
     assert len(out["stalls"]) == 2
-    # The invariant that both aborted Phase 2A attempts violated.
     n.assert_machine_fault_never_scored_as_failure(out)

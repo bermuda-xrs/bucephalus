@@ -1,6 +1,3 @@
-"""The console's new API (iteration 3, 4.2-4.3): conversations, the context
-meter, and the Control Center's panes. Every route is behind the token."""
-
 from __future__ import annotations
 
 import json
@@ -25,9 +22,6 @@ def _draft(ctx, task_id):
     from agent.kernel.tasks import load_task
     from agent.plan.planner import store_plan
 
-    # Stored the way the planner stores a draft: a fixture that spelled the
-    # status by hand ("draft", where the planner writes "drafted") let the
-    # console test green while it never offered a real plan for signature.
     store_plan(ctx, load_task(ctx.conn, task_id),
                       Plan(objective="o", steps=[PlanStep(id="1", intent="read it")]).seal())
 
@@ -39,10 +33,9 @@ def test_a_message_is_a_new_task_in_its_conversation(ctx, api):
     assert a["task_id"] != b["task_id"] and (a["position"], b["position"]) == (0, 1)
     th = api.get(f"/conversations/{c['id']}").json()
     assert [i["goal"] for i in th["items"]] == ["list the files", "now count them"]
-    assert th["conversation"]["title"] == "list the files"       # named by its first ask
+    assert th["conversation"]["title"] == "list the files"
     assert th["items"][0]["scope"] == ["work"]
     assert api.get(f"/tasks/{a['task_id']}").json()["conversation_id"] == c["id"]
-    # Nothing ran: a message waits for a plan and a signature.
     assert all(i["status"] == "pending" and i["plan"] is None for i in th["items"])
 
 
@@ -66,7 +59,7 @@ def test_conversations_are_searchable_and_archivable(api):
     api.post(f"/conversations/{b['id']}/messages", json={"text": "compute the thrust margin"})
     ids = lambda **kw: [x["id"] for x in api.get("/conversations", params=kw).json()["conversations"]]
     assert ids(q="loads") == [a["id"]]
-    assert ids(q="thrust") == [b["id"]]            # matches a goal in the thread
+    assert ids(q="thrust") == [b["id"]]
     api.patch(f"/conversations/{a['id']}", json={"archived": True})
     assert a["id"] not in ids() and ids(archived=True) == [a["id"]]
     assert api.post(f"/conversations/{a['id']}/messages", json={"text": "  "}).status_code == 400

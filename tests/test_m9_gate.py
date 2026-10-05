@@ -1,10 +1,3 @@
-"""M9 acceptance — the gate, including the calibration check.
-
-The second test is the calibration check. Run it before trusting any
-rejection: a gate that rejects a genuinely good skill is measuring your task
-suite, not the skill.
-"""
-
 from __future__ import annotations
 
 import hashlib
@@ -52,8 +45,6 @@ def _specs(n: int = 30) -> list[TaskSpec]:
 
 
 def _install_responder(ctx, mode: str) -> None:
-    """A model whose behaviour depends on whether the skill is in the prefix."""
-
     def responder(prefix: str, tail: str) -> str:
         has_skill = MAGIC in prefix
         key = ""
@@ -66,7 +57,6 @@ def _install_responder(ctx, mode: str) -> None:
                 if has_skill
                 else '<final>{"note": "no idea what is wanted"}</final>'
             )
-        # "useless": outcome is noise that ignores the skill entirely
         seed = f"{key}:{'s' if has_skill else 'c'}".encode()
         wins = hashlib.sha256(seed).digest()[0] % 2 == 0
         return (
@@ -75,15 +65,12 @@ def _install_responder(ctx, mode: str) -> None:
         )
 
     for name in ("cloud", "local", "review"):
-        ctx.backends[name]._responder = responder  # noqa: SLF001 - test seam
+        ctx.backends[name]._responder = responder  # noqa: SLF001
 
 
 def test_gate_rejects_useless_skill(ctx, workspace):
-    """Synthetic skill of pure filler text. 30 paired trials. Assert rejection."""
     ctx.config.limits.max_steps = 1
     _install_responder(ctx, "useless")
-    # drafted_from=[]: a declaration, not a default. Since D29's sweep an
-    # undeclared drafting set certifies no trial (test_empty_means_nothing).
     sid = ctx.skills.store("filler", USELESS_SKILL, {"applies_when": "anything"},
                            {"drafted_by": "test", "drafted_from": []})
     for i, spec in enumerate(_specs()):
@@ -96,8 +83,6 @@ def test_gate_rejects_useless_skill(ctx, workspace):
 
 
 def test_gate_accepts_known_good_skill(ctx, workspace):
-    """Calibration check. If this fails, the gate is too strict OR the suite
-    is not sensitive enough — debug that before trusting any rejection."""
     ctx.config.limits.max_steps = 1
     _install_responder(ctx, "good")
     sid = ctx.skills.store("checked-value", GOOD_SKILL,
@@ -113,7 +98,6 @@ def test_gate_accepts_known_good_skill(ctx, workspace):
 
 
 def test_promotion_requires_a_human(ctx, workspace):
-    """Only the gate promotes, and only with human approval (M8.4 rule 6)."""
     ctx.config.limits.max_steps = 1
     _install_responder(ctx, "good")
     sid = ctx.skills.store("checked-value", GOOD_SKILL,
@@ -143,27 +127,24 @@ def test_insufficient_trials_is_not_a_pass(ctx, workspace):
 
 
 def test_no_contamination(ctx):
-    """The drafting task never appears in the trial set."""
     sid = ctx.skills.store(
         "grounded", GOOD_SKILL, {"applies_when": "x"},
         {"drafted_by": "local", "drafted_from": ["trial-0", "trial-1"]},
     )
     with pytest.raises(ContaminationError):
         check_contamination(ctx, sid, "trial-0")
-    check_contamination(ctx, sid, "trial-99")  # clean key, no raise
+    check_contamination(ctx, sid, "trial-99")
 
     with pytest.raises(ContaminationError):
         run_paired_trial(ctx, sid, TaskSpec(key="trial-1", goal="g"))
 
 
 def test_catastrophic_regression_is_a_veto(ctx, workspace):
-    """A task control passed and skill failed is worse than neither passing."""
     import time
 
     sid = ctx.skills.store("risky", GOOD_SKILL, {"applies_when": "x"}, {})
     rows = []
     for i in range(30):
-        # skill wins broadly, but destroys one important task
         ctrl, skl = (1, 0) if i == 0 else ((0, 1) if i < 20 else (0, 0))
         rows.append((f"k{i}", "control", ctrl))
         rows.append((f"k{i}", "skill", skl))
@@ -192,7 +173,6 @@ def test_decay_demotes_unused_skills(ctx):
 
 
 def test_promotion_rate_reports_candidates(ctx):
-    """Moved from the retired generator's tests: the gate reports its own rate."""
     from agent.skills.gate import promotion_rate
 
     ctx.skills.store("waiting", GOOD_SKILL, {"applies_when": "x"}, {})
@@ -201,23 +181,7 @@ def test_promotion_rate_reports_candidates(ctx):
     assert r["verdict"] == "no decisions yet"
 
 
-# ---------------------------------------------------------------------------
-# Which gate conditions actually bind, at the scale this suite runs at.
-#
-# These pin the arithmetic that config.local.yaml's gate section asserts in
-# prose. If someone retunes a threshold, the comment and the behaviour must
-# not be allowed to drift apart silently.
-# ---------------------------------------------------------------------------
-
-
 def test_min_discordant_pairs_is_the_load_bearing_guard():
-    """~75-80% of disagreements must favour the skill, at any n.
-
-    min_paired_trials was never a statistical guard — McNemar reads only
-    discordant pairs. Lowering the pool from 30 to 15 while holding
-    min_discordant_pairs at 10 RAISES the bar, from 33% of outcomes changed
-    to 67%.
-    """
     from scipy.stats import binomtest
 
     expected = {10: 9, 13: 10, 15: 12, 20: 15}
@@ -230,21 +194,13 @@ def test_min_discordant_pairs_is_the_load_bearing_guard():
 
 
 def test_min_lift_pp_is_inert_at_this_scale():
-    """Do not treat the lift threshold as protection here.
-
-    With min_discordant_pairs=10 and p<0.05 the minimum passing configuration
-    is b=9, c=1, so b-c=8 and lift = 800/n. That stays above 5pp for every n
-    below 160 — far beyond any suite this project runs. It is retained for
-    larger suites, where it starts to bind.
-    """
-    min_b_minus_c = 8          # b=9, c=1: the smallest significant split
+    min_b_minus_c = 8
     for n in (15, 30, 100, 160):
         assert 100.0 * min_b_minus_c / n >= 5.0, f"lift would bind at n={n}"
     assert 100.0 * min_b_minus_c / 161 < 5.0, "the crossover should be ~160"
 
 
 def test_the_shipped_local_gate_config_matches_that_reasoning():
-    """The config the calibration will actually run under."""
     import yaml
     from pathlib import Path
 

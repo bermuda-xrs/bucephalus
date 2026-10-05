@@ -1,15 +1,3 @@
-"""A skill that touches too few tasks cannot clear the discordant floor.
-
-Only discordant pairs carry information in McNemar's test, and a task whose
-trap the skill says nothing about is unlikely to become one. So there is a
-cheap upper bound available BEFORE the four-hour run: if the skill's topics
-touch fewer tasks than `min_discordant_pairs`, the calibration will report
-"insufficient" and that verdict will say nothing about the skill.
-
-The tool must be honest about being an upper bound. Covering a trap is not
-fixing it.
-"""
-
 from __future__ import annotations
 
 import importlib.util
@@ -99,12 +87,7 @@ def test_the_split_filter_narrows_the_bound():
 
 
 def test_the_real_suite_and_the_real_skill_clear_the_floor():
-    """Guards the go/no-go the calibration depends on.
-
-    If a future edit narrows the skill or the suite, this fails before four
-    hours are spent discovering it.
-    """
-    import yaml  # noqa: F401 - load_tasks needs it
+    import yaml  # noqa: F401
 
     tasks = cov.load_tasks(ROOT / "bench" / "tasks" / "archive" / "aero_calc")
     assert len(tasks) == 30

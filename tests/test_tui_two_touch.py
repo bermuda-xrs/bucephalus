@@ -1,10 +1,3 @@
-"""The TUI is plan-first too (iteration 3, 4.5).
-
-FOUND 2026-09-28: the TUI's start button created a task and ran it at once -
-no plan, no signature. The two-touch model is the product; a surface that
-skips it is a second product. Driven headless through Textual's Pilot.
-"""
-
 from __future__ import annotations
 
 import asyncio
@@ -47,7 +40,7 @@ def test_submitting_drafts_a_plan_and_runs_nothing_until_it_is_signed(ctx, works
             assert _status(ctx, tid) == "pending"
             assert not _steps_run(ctx, tid), "a step ran before anyone signed the plan"
 
-            await pilot.press("s")                           # sign and run
+            await pilot.press("s")
             assert await _until(pilot, lambda: _status(ctx, tid) == "done", 30), \
                 "signing did not run the task"
             assert "plan.approved" in _events(ctx, tid)
@@ -84,10 +77,6 @@ def test_the_status_bar_carries_the_model_and_the_context_meter(ctx, workspace):
 
 
 def test_the_input_and_the_status_bar_are_on_screen(ctx, workspace):
-    """Found in the 4.7 screenshots, 2026-09-29: the tabs took every row, so
-    the input was laid out below the screen, and the status bar was docked to
-    the same edge as the key bar, which covered it. The tests above set the
-    input's value and read the bar's text, so neither could see it."""
     from textual.widgets import Footer
 
     async def go():

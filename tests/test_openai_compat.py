@@ -1,16 +1,3 @@
-"""B2 — one adapter for the OpenAI chat-completions protocol.
-
-The properties here are the ones that would let a config edit quietly change
-what a run measured. Streaming and the stall path are covered against BOTH
-adapters in test_stall_is_not_a_task_failure.py; this file covers the wire
-format, the profile gate, and the two class-name checks that phase 1 replaced
-with declared properties.
-
-No server is involved. A fake httpx client replays a recorded SSE stream, so
-these run in the suite rather than only when Ollama happens to be up. The live
-parity measurement is a separate artifact — docs/evidence/phase1-openai-parity.json.
-"""
-
 from __future__ import annotations
 
 import sys
@@ -59,8 +46,6 @@ class FakeStream:
 
 
 class FakeClient:
-    """Records what was sent, replays what was scripted."""
-
     def __init__(self, lines, status=200, body=""):
         self.lines, self.status, self.body = lines, status, body
         self.sent: list[dict] = []
@@ -93,10 +78,6 @@ def backend(lines=TEXT_STREAM, **kw):
     return OpenAICompatibleBackend("t", cfg(), client=c), c
 
 
-# --------------------------------------------------------------------------
-# The wire format
-# --------------------------------------------------------------------------
-
 def test_a_streamed_reply_is_reassembled_with_its_usage():
     b, _ = backend()
     r = b.complete("system", "user", None, 64, 0.0)
@@ -107,16 +88,11 @@ def test_a_streamed_reply_is_reassembled_with_its_usage():
 
 
 def test_token_counts_come_from_the_server_not_from_counted_chunks():
-    """Two content chunks arrived; the server said 12 completion tokens. A
-    chunk is not a token, and reporting one as the other would put a wrong
-    number straight into the cost axis."""
     b, _ = backend()
     assert b.complete("s", "u", None, 64, 0.0).usage.output_tokens == 12
 
 
 def test_without_a_usage_block_the_count_falls_back_to_chunks_not_to_zero():
-    """Servers that ignore stream_options exist. Zero output tokens would read
-    as a free call and silently understate every cost this project tracks."""
     b, _ = backend(sse('{"choices":[{"delta":{"content":"hi"}}]}',
                        '{"choices":[{"delta":{},"finish_reason":"stop"}]}'))
     r = b.complete("s", "u", None, 64, 0.0)
@@ -134,9 +110,6 @@ def test_a_json_schema_is_sent_as_response_format():
 
 
 def test_tool_schemas_are_converted_to_the_openai_function_shape():
-    """ToolRegistry.schemas() emits the Anthropic shape. Sending that as-is is
-    a 400 on every OpenAI-compatible server, so the conversion has to happen
-    here rather than at eight call sites."""
     got = to_openai_tools([{"name": "read_file", "description": "read",
                             "input_schema": {"type": "object"}}])
     assert got == [{"type": "function",
@@ -154,8 +127,6 @@ def test_temperature_is_omitted_when_the_model_rejects_it():
 
 
 def test_the_max_tokens_field_is_declared_not_guessed():
-    """Newer OpenAI models reject `max_tokens`. Which field to send is config,
-    because sniffing it means a silent retry that changes the request."""
     c = FakeClient(TEXT_STREAM)
     b = OpenAICompatibleBackend(
         "t", cfg(max_tokens_field="max_completion_tokens"), client=c)
@@ -165,8 +136,6 @@ def test_the_max_tokens_field_is_declared_not_guessed():
 
 
 def test_an_http_error_carries_the_servers_own_message():
-    """The reason a request was rejected is in the body. A bare status turns a
-    five-second fix into a guessing game."""
     b, _ = backend(TEXT_STREAM, status=400,
                    body='{"error":{"message":"response_format unsupported"}}')
     with pytest.raises(BackendError, match="response_format unsupported"):
@@ -197,10 +166,6 @@ def test_a_backend_with_no_url_fails_at_construction_not_at_first_call():
         build_backend("t", BackendConfig(kind="openai", model="m"))
 
 
-# --------------------------------------------------------------------------
-# 1.3 — the profile gate follows the property, not the class name
-# --------------------------------------------------------------------------
-
 class _Cfg:
     def __init__(self, backends):
         self.backends = backends
@@ -214,9 +179,6 @@ def test_profile_local_refuses_a_cloud_backend():
 
 
 def test_profile_local_refuses_a_remote_openai_endpoint_labelled_local():
-    """The one that mattered. `trust_tier` is a line a human types; the URL is
-    what the socket obeys. One careless copy of a working local entry and a
-    --profile local run would have measured a hosted model and said local."""
     c = _Cfg({"exec": BackendConfig(kind="openai", model="gpt-4o",
                                     base_url="https://api.openai.com/v1",
                                     trust_tier="local")})
@@ -226,7 +188,6 @@ def test_profile_local_refuses_a_remote_openai_endpoint_labelled_local():
 
 
 def test_a_genuinely_local_openai_endpoint_is_allowed_under_profile_local():
-    """The gate has to let the real case through, or it is just a ban."""
     c = _Cfg({"exec": cfg()})
     assert reaches_a_remote_provider(c.backends["exec"]) is False
     prov = enforce(c, "local", env={})
@@ -238,28 +199,19 @@ def test_a_genuinely_local_openai_endpoint_is_allowed_under_profile_local():
     ("http://127.0.0.1:8000/v1", False),
     ("http://192.168.1.50:8000/v1", False),
     ("https://api.openai.com/v1", True),
-    ("https://oai.example.invalid/v1", True),   # unresolvable = unknown = remote
+    ("https://oai.example.invalid/v1", True),
 ])
 def test_locality_is_decided_by_the_host(url, remote):
     assert reaches_a_remote_provider(cfg(base_url=url)) is remote
 
 
 def test_a_key_env_named_by_a_backend_is_watched_even_if_unlisted(monkeypatch):
-    """PROVIDER_CREDENTIALS cannot enumerate providers that do not exist yet.
-    A backend that names its own credential variable adds it to the watch."""
     c = _Cfg({"exec": cfg(api_key_env="SOME_NEW_PROVIDER_KEY")})
     with pytest.raises(ProfileViolation, match="SOME_NEW_PROVIDER_KEY"):
         enforce(c, "local", env={"SOME_NEW_PROVIDER_KEY": "sk-x"})
 
 
-# --------------------------------------------------------------------------
-# The other class-name check phase 1 replaced
-# --------------------------------------------------------------------------
-
 def test_the_action_envelope_follows_the_tier_not_the_adapter():
-    """Same server, same weights, two adapters. Under `kind == "ollama"` the
-    schema silently stopped being sent when the config switched — the model
-    would be asked a different question and the run would not say so."""
     assert cfg(kind="ollama", endpoint="http://localhost:11435").needs_action_envelope
     assert cfg(kind="openai").needs_action_envelope
     assert not cfg(kind="anthropic", trust_tier="cloud",
@@ -279,8 +231,6 @@ def test_the_stall_switch_is_shared_so_an_injected_index_survives_the_switch():
 
 
 def test_an_injected_stall_on_the_new_adapter_is_a_model_stall(monkeypatch):
-    """Acceptance: the machine-fault path works identically on the new
-    adapter. Injected, not waited for."""
     monkeypatch.setenv("ALPHA_INJECT_STALL", "1")
     stall_mod.reset_injection_counter()
     b, c = backend()
@@ -291,9 +241,6 @@ def test_an_injected_stall_on_the_new_adapter_is_a_model_stall(monkeypatch):
 
 
 def test_the_configs_differ_only_where_they_are_meant_to():
-    """config.openai.yaml is config.local.yaml with the adapter swapped. If it
-    drifts anywhere else, "same run through a different protocol" stops being
-    true and the parity measurement stops meaning anything."""
     import yaml
     a = yaml.safe_load((ROOT / "config.local.yaml").read_text(encoding="utf-8"))
     b = yaml.safe_load((ROOT / "config.openai.yaml").read_text(encoding="utf-8"))
@@ -302,10 +249,6 @@ def test_the_configs_differ_only_where_they_are_meant_to():
         ba, bb = dict(a["backends"][name]), dict(b["backends"][name])
         assert ba.pop("kind") == "ollama" and bb.pop("kind") == "openai"
         assert bb.pop("base_url") == ba.pop("endpoint") + "/v1"
-        # The one further difference that is a FINDING rather than drift:
-        # /v1 reports prompt-cache accounting and the native API does not.
-        # Asserted explicitly so that if it ever stops being true the test
-        # says so, instead of the field quietly joining the ignored set.
         assert bb.pop("reports_prompt_cache") is True
         assert "reports_prompt_cache" not in ba
         assert ba == bb, f"backend {name!r} differs beyond the adapter swap"

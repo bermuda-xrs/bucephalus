@@ -1,15 +1,3 @@
-"""B1 - lineage, the memory flush, and the boundary between sessions.
-
-The boundary sits at the deletion-compaction point that already existed, and
-compaction itself is unchanged (9.1). What is new: one flush call before
-anything is deleted, the session row closed and a child opened with a FRESH
-tier-1 snapshot, and the prefix rebuilt from it. No summarizer - the Phase 9
-design STOP explains why.
-
-Each test was run against the code without the behaviour it checks and goes
-red there.
-"""
-
 from __future__ import annotations
 
 import json
@@ -53,10 +41,10 @@ def _mk(ctx, goal):
 
 @pytest.fixture
 def sctx(ctx, tmp_path):
-    ctx.memory = MemoryStore(tmp_path / "memory")   # never the user's memory
+    ctx.memory = MemoryStore(tmp_path / "memory")
     ctx.config.autonomy.auto_review = False
     ctx.config.autonomy.approve_scoped_writes = True
-    ctx.backends["cloud"].cfg.usable_context_window = 3000   # compact keeps ~600
+    ctx.backends["cloud"].cfg.usable_context_window = 3000
     work = Path(ctx.config.root) / "work"
     for name in "abcde":
         body = f"File {name}. " + " ".join(
@@ -69,7 +57,6 @@ def sctx(ctx, tmp_path):
 
 @pytest.fixture
 def boundary(monkeypatch):
-    """Fire the compaction boundary exactly once, on the Nth step."""
     def at(n):
         seen = {"k": 0}
 
@@ -103,8 +90,6 @@ def _events(ctx, task, etype):
         (task.id, etype))]
 
 
-# -- 9.3: the boundary, the chain, the lineage -----------------------------
-
 def test_a_long_task_crosses_a_session_boundary_with_the_chain_intact(
         sctx, task, boundary):
     r = _run(sctx, task, "NOTHING", boundary)
@@ -130,8 +115,6 @@ def test_one_open_session_per_task(ctx):
         sessions.open_session(ctx.conn, ctx.log, a.id, {})
 
 
-# -- 9.4: the flush --------------------------------------------------------
-
 def test_a_fact_flushed_before_compaction_is_in_the_next_prefix(
         sctx, task, boundary):
     assert _run(sctx, task, REMEMBER(FACT), boundary).status == "done", (
@@ -147,9 +130,6 @@ def test_a_fact_flushed_before_compaction_is_in_the_next_prefix(
 
 
 def test_a_flush_blocked_by_taint_is_visible_not_silent(sctx, task, boundary):
-    """The fact is copied verbatim from a file the task read - untrusted - so
-    tier 1 refuses it. Refused is correct. Silently refused is a fact that
-    vanished at compression with no record of why."""
     _run(sctx, task, REMEMBER(SECRET), boundary)
 
     refused = _events(sctx, task, "memory.flush_refused")
@@ -168,8 +148,6 @@ def test_the_flush_is_skipped_visibly_under_isolation(sctx, task, boundary):
     assert child["flush"] == "skipped" and "isolation" in child["why"]
 
 
-# -- 9.6 offline: the block cache, P5 of the committed prediction ----------
-
 def test_a_changed_prefix_is_a_full_miss_at_the_boundary(sctx, task, boundary):
     _run(sctx, task, REMEMBER(FACT), boundary)
     rows = _calls(sctx, task)
@@ -181,14 +159,10 @@ def test_a_changed_prefix_is_a_full_miss_at_the_boundary(sctx, task, boundary):
 
 
 def test_an_unchanged_prefix_is_a_full_hit_at_the_boundary(sctx, task, boundary):
-    """The control. A rebuild that changes no bytes must NOT miss: a miss here
-    would mean the rebuild changed prefix bytes it had no reason to change."""
     _run(sctx, task, "NOTHING", boundary)
     first_after = _calls(sctx, task)[5]
     assert first_after[1] > 0 and first_after[2] == 0
 
-
-# -- DR1 lifetime: the snapshot belongs to the session ----------------------
 
 def test_a_resumed_task_keeps_its_sessions_memory_snapshot(sctx, task):
     sctx.memory.write("memory", "fact one", Taint.USER)
@@ -215,8 +189,6 @@ def test_a_resumed_task_keeps_its_sessions_memory_snapshot(sctx, task):
         second.close()
 
 
-# -- 9.7: a boundary never crosses an attempt --------------------------------
-
 def test_a_session_cannot_descend_from_another_attempt(ctx):
     a, b = _mk(ctx, "attempt A"), _mk(ctx, "attempt B")
     sa = sessions.open_session(ctx.conn, ctx.log, a.id, {})
@@ -242,23 +214,15 @@ def test_what_a_boundary_left_cannot_be_read_from_another_attempt(
     assert owners == {task.id}
 
 
-# -- 9.5, as it applies to this architecture --------------------------------
-
 def test_every_reference_a_boundary_leaves_expands_within_its_attempt(
         sctx, task, boundary):
-    """Calls never enter this loop's tail - only their results do - so a
-    compaction cannot split a call from its result. What compaction CAN leave
-    behind is a reference: a tombstone pointing at an artifact. Each one must
-    expand for the attempt that holds it, under isolation included."""
     _run(sctx, task, None, boundary, isolated=True)
-    after = sctx.backends["cloud"].prompts[4]     # isolated: no flush call
+    after = sctx.backends["cloud"].prompts[4]
     refs = re.findall(r'expand_artifact\("([^"]+)"\)', after)
     assert refs, "the boundary left references"
     for aid in refs:
         assert tool_expand_artifact(sctx, task, aid)["ok"] is True, aid
 
-
-# -- 9.3: what search reports as a session ---------------------------------
 
 def test_search_names_a_hit_by_its_lineage_not_a_rotated_session(
         sctx, task, boundary):
@@ -277,9 +241,7 @@ def test_search_names_a_hit_by_its_lineage_not_a_rotated_session(
 
 def test_a_flush_that_would_need_a_human_is_refused_not_parked(
         sctx, task, boundary):
-    """A boundary is not a place to wait. A parked flush would park the task in
-    the middle of compacting it; the flush is one chance, not a conversation."""
-    sctx.config.autonomy.approve_scoped_writes = False   # memory_write needs a human
+    sctx.config.autonomy.approve_scoped_writes = False
     r = _run(sctx, task, REMEMBER(FACT), boundary)
     assert r.status == "done", "the task stopped at its own boundary"
     refused = _events(sctx, task, "memory.flush_refused")

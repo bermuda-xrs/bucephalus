@@ -1,5 +1,3 @@
-"""M1 acceptance — chain, idempotency, and a real kill-and-resume."""
-
 from __future__ import annotations
 
 import json
@@ -55,8 +53,6 @@ def test_idempotency_survives_replay(ctx, task):
 def test_anchor_mismatch_halts(ctx, task):
     ctx.log.append(task.id, "task.status_changed", {"a": 1})
     checkpoint(ctx.log, ctx.anchor, task.id)
-    # Someone rewrites the whole log and recomputes every hash: internally
-    # consistent, but the anchor remembers a head that no longer exists.
     ctx.conn.execute("DELETE FROM events WHERE task_id=?", (task.id,))
     ctx.conn.commit()
     ctx.log.append(task.id, "task.created", {"rewritten": True})
@@ -76,12 +72,6 @@ def test_unknown_event_type_is_rejected(ctx, task):
 
 
 def test_chain_survives_concurrent_appends(ctx, task):
-    """The control plane serves on a threadpool, so appends race.
-
-    Without a lock around the read-head/write-successor section, two threads
-    read the same prev_hash and fork the chain — which verify() then reports
-    as tampering, on a database nobody tampered with.
-    """
     import threading
 
     errors: list[str] = []
@@ -112,7 +102,6 @@ def test_chain_survives_concurrent_appends(ctx, task):
 
 
 def test_execute_once_is_atomic_under_threads(ctx, task):
-    """Two threads hitting the same idempotency key must not both send."""
     import threading
 
     performed: list[int] = []
@@ -134,7 +123,6 @@ def test_execute_once_is_atomic_under_threads(ctx, task):
 
 
 def test_db_connection_is_usable_across_threads(ctx):
-    """M12 runs on a threadpool; a thread-bound connection 500s every endpoint."""
     import threading
 
     err: dict[str, str] = {}
@@ -152,11 +140,6 @@ def test_db_connection_is_usable_across_threads(ctx):
 
 
 def test_kill_and_resume(tmp_path: Path):
-    """Start a task, SIGKILL mid-run, resume, verify no duplicate side effects.
-
-    A real kill (TerminateProcess / SIGKILL), not a mocked exception — the
-    whole point is that no `finally` block gets to run.
-    """
     child = Path(__file__).parent / "_crash_child.py"
     marker = tmp_path / "marker.txt"
     db = tmp_path / "crash.db"
@@ -167,18 +150,12 @@ def test_kill_and_resume(tmp_path: Path):
         stderr=subprocess.PIPE,
         text=True,
     )
-    # Wait for the side effect to land, then kill without warning.
     deadline = time.time() + 30
     while time.time() < deadline and not marker.exists():
         time.sleep(0.05)
     assert marker.exists(), "child never performed the side effect"
     time.sleep(0.2)
 
-    # Kill the REAL interpreter, not the venv trampoline. On Windows a venv's
-    # python.exe is a wrapper: Popen returns its pid while the interpreter
-    # runs as a child. proc.kill() alone therefore left the worker alive, and
-    # this test's claim of "a real kill, no finally block runs" was false -
-    # it passed on the marker file regardless. Found via test_runlock.
     kill_tree(proc.pid)
     proc.kill()
     proc.wait(timeout=10)
@@ -186,7 +163,6 @@ def test_kill_and_resume(tmp_path: Path):
 
     assert marker.read_text(encoding="utf-8").count("\n") == 1
 
-    # Resume: same task, same step, same args -> the receipt short-circuits it.
     out = subprocess.run(  # noqa: S603
         [sys.executable, str(child), str(db), str(marker), "resume"],
         capture_output=True, text=True, timeout=60,
@@ -199,12 +175,7 @@ def test_kill_and_resume(tmp_path: Path):
     )
 
 
-# D27: claim-then-execute. The receipt is CLAIMED before the side effect runs
-# and filled in after, and the chain lock is not held in between.
 def test_a_run_that_died_mid_effect_does_not_repeat_it(tmp_path: Path):
-    """Killed inside the effect - after it happened, before its receipt - a
-    replay repeated it: a second send. Now the claim says it was started, and
-    the replay reports the outcome as unknown instead of sending again."""
     child = Path(__file__).parent / "_crash_child.py"
     marker, db = tmp_path / "marker.txt", tmp_path / "crash.db"
     first = subprocess.run([sys.executable, str(child), str(db), str(marker), "die-mid-effect"],
@@ -220,9 +191,6 @@ def test_a_run_that_died_mid_effect_does_not_repeat_it(tmp_path: Path):
 
 
 def test_a_slow_effect_does_not_hold_the_chain(ctx, task):
-    """The chain lock was held for the whole side effect, so a slow one - a
-    push, a send - froze every event append in the process: the console's
-    approvals, other tasks' steps."""
     import threading
 
     started, release = threading.Event(), threading.Event()
@@ -248,8 +216,6 @@ def test_a_slow_effect_does_not_hold_the_chain(ctx, task):
 
 
 def test_a_failed_effect_can_be_retried(ctx, task):
-    """An effect that raised left no receipt and could be tried again; the
-    claim must not change that."""
     key = idempotency_key(task.id, 0, "send_message", {"to": "a@b.c"})
     calls = []
 
@@ -265,13 +231,7 @@ def test_a_failed_effect_can_be_retried(ctx, task):
     assert len(calls) == 2
 
 
-# AUDIT-ITERATION-3B, M2: the fill-in after the effect was not exception-safe.
-# A commit that failed (another writer past busy_timeout) left the claim, a
-# stale in-flight Event nothing would ever set, and a same-key retry that
-# waited on it forever - while the effect HAD happened.
 class _FillInFails:
-    """A connection whose post-effect UPDATE of the receipt fails."""
-
     def __init__(self, conn):
         self._c = conn
 
@@ -296,8 +256,6 @@ def test_3B_M2_a_failed_fill_in_keeps_the_result_and_releases_the_waiters(ctx, t
                           lambda: (ran.append(1), {"ok": True})[1])
     assert result == {"ok": True}, "the effect happened; the caller is told so"
     assert key not in receipts._inflight, "a stale in-flight entry outlived the call"
-    # The row still says CLAIMED - honest: its outcome was never recorded - and
-    # a replay must answer at once, not wait on an Event nothing will set.
     out = []
     t = threading.Thread(target=lambda: out.append(
         execute_once(ctx.conn, key, "send_message", {"to": "a@b.c"}, lambda: ran.append(2))))
@@ -316,7 +274,7 @@ def test_3B_M2_a_waiter_gives_up_on_an_owner_that_never_finishes(ctx, task, monk
     ctx.conn.execute("INSERT INTO receipts(idempotency_key, tool_name, args_hash, result_json, "
                      "created_at) VALUES (?,?,?,?,?)", (key, "send_message", "h", receipts._CLAIM, 0.0))
     ctx.conn.commit()
-    monkeypatch.setitem(receipts._inflight, key, threading.Event())     # never set
+    monkeypatch.setitem(receipts._inflight, key, threading.Event())
     monkeypatch.setattr(receipts, "WAIT_S", 0.5)
     out = []
     t = threading.Thread(target=lambda: out.append(

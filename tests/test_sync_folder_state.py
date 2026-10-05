@@ -1,12 +1,3 @@
-"""State never lives inside a synced folder (iteration 3, part 1.1).
-
-A checkout kept state beside the source - the database with every task's
-goals, answers and tool output, and the anchor that authenticates it. This
-checkout sits in OneDrive, so all of it was uploaded. The token moved out in
-D41; this moves the rest of the RUNTIME state. Tracked content (graders, seed
-skills) and the task workspace stay where a developer expects them.
-"""
-
 from __future__ import annotations
 
 from pathlib import Path
@@ -53,9 +44,7 @@ def test_a_checkout_in_a_synced_folder_keeps_its_state_outside_it(tmp_path, appd
         for p in (db, anchor):
             assert tmp_path / sync not in p.parents, f"{p} is inside {sync}"
             assert appdata in p.parents
-        # Content that is tracked beside the source stays there.
         assert Path(cfg.root) == root
-        # The gate protects the state where it now is.
         for p in (db, anchor, Path(str(db) + "-wal")):
             assert is_protected(str(p), cfg.root, state_paths(ctx)), p
     finally:
@@ -89,10 +78,6 @@ def test_an_ordinary_checkout_is_unchanged(tmp_path, appdata):
         ctx.close()
 
 
-# D76 (audit S7): Box, Nextcloud, MEGA, Proton Drive, Sync.com and Synology
-# Drive checkouts kept syncing their database. A false match only moves state
-# into the user data dir; a miss uploads every goal and answer - so by name
-# AND by the marker a client leaves in the folder it syncs.
 @pytest.mark.parametrize("name", ["Box", "Nextcloud", "ownCloud", "MEGA", "MEGAsync",
                                   "Proton Drive", "Sync", "SynologyDrive", "Tresorit"])
 def test_D76_more_sync_clients_by_folder_name(tmp_path, monkeypatch, name):

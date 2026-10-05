@@ -1,16 +1,3 @@
-"""A directory junction is a link out of the workspace (iteration 3, found
-building the file browser, 4.4).
-
-Two halves, each shown red first:
-
-  * The sandbox fenced `os.symlink` - both ends must be in scope - but not the
-    audit event `_winapi.CreateJunction`, which needs no privilege on
-    Windows. Model-written code could make work/gj point at grading/.
-  * The gate judged tool paths by `abspath`, never following links, so
-    `read_file("work/gj/t1/verify.py")` was inside scope and named nothing
-    protected - and read a grader. However the link came to exist.
-"""
-
 from __future__ import annotations
 
 import os
@@ -60,9 +47,6 @@ def test_a_junction_that_stays_inside_the_workspace_is_fine(ctx, task, workspace
 
 
 def test_a_walk_does_not_descend_through_a_junction(ctx, task, workspace):
-    """DR5 sweep: grep and glob are allowed on `work` and then walk it
-    themselves - through a junction, on Python 3.11, where a junction is not
-    a symlink. Each file they touch is judged like any other path."""
     import _winapi
 
     root = Path(ctx.config.root)
@@ -77,11 +61,7 @@ def test_a_walk_does_not_descend_through_a_junction(ctx, task, workspace):
     assert not any("verify.py" in h for h in hits), hits
 
 
-# AUDIT-ITERATION-3 S1, swept into the sandbox: an NTFS stream name.
 def test_S1_sweep_sandboxed_code_cannot_plant_a_protected_file_through_a_stream(tmp_path):
-    """DR5: the sandbox's own write fence judged realpath against the protected
-    paths too, and `.env::$DATA` is not `.env` to realpath while it does not
-    exist."""
     from agent.execute.sandbox import run_sandboxed
 
     target = tmp_path / ".env"
@@ -92,10 +72,6 @@ def test_S1_sweep_sandboxed_code_cannot_plant_a_protected_file_through_a_stream(
     assert r["returncode"] != 0
 
 
-# Mutation testing (2.3) found each of these checks unpinned: the tests above
-# all point a junction at the graders, which are PROTECTED - so the scope
-# check's real-path half and the protected check's real-path half each hid
-# behind the other.
 def test_a_junction_to_an_unprotected_place_outside_scope_is_refused(ctx, task, workspace):
     import _winapi
 
@@ -118,8 +94,6 @@ def test_a_junction_to_protected_state_inside_scope_is_refused(ctx, task, worksp
 
 
 def test_a_swapped_link_is_seen_once_the_two_second_bucket_turns(workspace, monkeypatch):
-    """The resolution cache promises a swapped link is seen within 2 s. A
-    bucket that never turns - or turns every 3 s - breaks that promise."""
     import _winapi
 
     from agent.security import capabilities as cap
@@ -135,13 +109,10 @@ def test_a_swapped_link_is_seen_once_the_two_second_bucket_turns(workspace, monk
     (workspace / "alias" / "s.md").unlink()
     (workspace / "alias").rmdir()
     _winapi.CreateJunction(str(workspace / "skills_store"), str(workspace / "alias"))
-    clock[0] = 5.0                                   # 2 s later: a new bucket
+    clock[0] = 5.0
     assert cap.is_protected("work/alias/s.md", root)
 
 
-# D70 (audit S3). A hard link is the same file under another name, and
-# realpath shows only the name it was asked about: a hard link in the
-# workspace to a grader read as an ordinary in-scope file to every check.
 def _grader_and_link(ctx, workspace, name="innocent.txt"):
     root = Path(ctx.config.root)
     (root / "grading" / "t1").mkdir(parents=True)
@@ -184,7 +155,7 @@ def test_D70_sandboxed_code_cannot_read_it(ctx, workspace, monkeypatch, copy_mod
     import agent.execute.sandbox as sb
 
     grader, _ = _grader_and_link(ctx, workspace)
-    if copy_mode:              # where symlinks are not allowed, entries are copied
+    if copy_mode:
         monkeypatch.setattr(sb.os, "symlink", lambda *a, **k: (_ for _ in ()).throw(OSError("no")))
     code = ("try:\n    print(open('work/innocent.txt').read())\n"
             "except OSError as e:\n    print('REFUSED', type(e).__name__)\n")

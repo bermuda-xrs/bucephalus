@@ -1,15 +1,3 @@
-"""A1 acceptance, through the real loop rather than against the store.
-
-The unit tests in test_memory.py hold the rules. This file holds the two
-claims a reader would actually check:
-
-  * a fact written in session 1 is in the PROMPT in session 2
-  * the hash chain still verifies with memory files present and written
-
-Both go through `run_task` with a scripted backend, so the prefix is the one
-the loop really builds and the events are the ones it really appends.
-"""
-
 from __future__ import annotations
 
 import json
@@ -60,7 +48,6 @@ def new_task(ctx, goal="remember something"):
 def test_a_fact_written_in_session_one_is_in_the_prompt_in_session_two(tmp_path):
     memory_dir = tmp_path / "memory"
 
-    # --- session 1: the agent decides the fact is worth keeping
     s1 = tmp_path / "s1"
     s1.mkdir()
     ctx1 = make_ctx(s1, memory_dir)
@@ -74,10 +61,6 @@ def test_a_fact_written_in_session_one_is_in_the_prompt_in_session_two(tmp_path)
 
     assert FACT in (memory_dir / "MEMORY.md").read_text(encoding="utf-8"), (
         "the write must reach disk during the task")
-    # The fact IS in session 1's prompts, because the model typed it into its
-    # own action and the ledger echoes that back. What matters is that it
-    # never enters the PREFIX, which is the part frozen at task start and the
-    # part prompt caching depends on being byte-identical.
     assert not any(FACT in c["prefix"] for c in ctx1.backends["cloud"].calls), (
         "a mid-task write must not reach the stable prefix; it becomes "
         "visible at the next session or compression boundary")
@@ -85,7 +68,6 @@ def test_a_fact_written_in_session_one_is_in_the_prompt_in_session_two(tmp_path)
         "sanity: the fact really was in play this session, in the tail")
     ctx1.close()
 
-    # --- session 2: a brand new process would build its prefix like this
     s2 = tmp_path / "s2"
     s2.mkdir()
     ctx2 = make_ctx(s2, memory_dir)
@@ -130,9 +112,6 @@ def test_the_chain_verifies_with_memory_present_and_written(tmp_path):
 
 
 def test_a_tampered_memory_file_no_longer_matches_the_chained_fingerprint(tmp_path):
-    """3.3 bullet 3, stated as the property a reader cares about: editing
-    MEMORY.md behind the agent's back is detectable, because the chain holds
-    what the file hashed to when it was written."""
     memory_dir = tmp_path / "memory"
     ctx = make_ctx(tmp_path / "s", memory_dir)
     (tmp_path / "s").mkdir(exist_ok=True)
@@ -160,8 +139,6 @@ def test_a_tampered_memory_file_no_longer_matches_the_chained_fingerprint(tmp_pa
 
 
 def test_a_measurement_run_writes_no_memory_at_all(tmp_path):
-    """The contamination control, end to end. A fact the control arm tried to
-    keep must not exist for the skill arm to inherit."""
     memory_dir = tmp_path / "memory"
     ctx = make_ctx(tmp_path / "s", memory_dir, isolate=True)
     (tmp_path / "s").mkdir(exist_ok=True)

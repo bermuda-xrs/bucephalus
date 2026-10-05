@@ -1,7 +1,3 @@
-"""The SSE stream replays the record, then tails the live bus (iteration 3,
-2.4: the live half had no in-process test, and the console streams from it).
-"""
-
 from __future__ import annotations
 
 from agent import stream as bus
@@ -17,14 +13,13 @@ def test_the_stream_replays_then_delivers_live_output_in_order(ctx):
     gen = stream_events(ctx, t.id, live=True, idle_timeout_s=0.2)
     replayed = next(gen)
     assert "event: tool.called" in replayed
-    rest = next(gen)                                  # nothing live yet: a keepalive comment
+    rest = next(gen)
     assert rest.startswith(":")
     bus.publish(t.id, "waiting", {"step": 0, "backend": "cloud"})
     bus.publish(t.id, "token", {"text": "hello"})
     a, b = next(gen), next(gen)
     assert "event: live.waiting" in a
     assert "event: live.token" in b and '"hello"' in b
-    # Ephemeral ids sit past any chain seq, so a resume never confuses them.
     assert int(b.split("\n")[0].split(": ")[1]) > 10**9
     gen.close()
 

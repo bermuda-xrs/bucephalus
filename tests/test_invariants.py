@@ -1,11 +1,3 @@
-"""Invariants that are checked by reading the source, not by running it.
-
-These catch a whole class of regression that behavioural tests miss: someone
-adds a plausible-looking line that quietly voids a guarantee. M1.7's
-determinism rules in particular cannot be tested by execution — a replayable
-function that calls time.time() only misbehaves on the replay you never ran.
-"""
-
 from __future__ import annotations
 
 import ast
@@ -16,9 +8,6 @@ import pytest
 
 SRC = Path(__file__).resolve().parents[1] / "src" / "agent"
 
-# M1.7: no wall-clock, randomness, or fresh identity inside code that replays.
-# The kernel is allowed to CREATE these values — it records them as events —
-# so the rule applies to the modules that re-execute during a replay.
 REPLAYABLE_MODULES = [
     SRC / "execute" / "loop.py",
     SRC / "ledger" / "compact.py",
@@ -59,7 +48,6 @@ def test_replayable_code_is_deterministic(path: Path):
 
 
 def test_prefix_builder_never_reads_the_clock():
-    """A timestamp anywhere in the prefix voids the cache discount silently."""
     from agent.ledger import prefix
 
     src = inspect.getsource(prefix)
@@ -68,7 +56,6 @@ def test_prefix_builder_never_reads_the_clock():
 
 
 def test_monitor_is_not_imported_by_prompt_builders():
-    """M8.3 hard boundary — nothing that assembles a prompt may read monitor_flags."""
     prompt_builders = [
         SRC / "ledger" / "prefix.py",
         SRC / "execute" / "loop.py",
@@ -82,7 +69,6 @@ def test_monitor_is_not_imported_by_prompt_builders():
 
 
 def test_events_table_is_append_only():
-    """Nothing anywhere may UPDATE or DELETE from events."""
     offenders = []
     for path in SRC.rglob("*.py"):
         text = path.read_text(encoding="utf-8").lower()
@@ -93,7 +79,6 @@ def test_events_table_is_append_only():
 
 
 def test_side_effecting_tools_route_through_execute_once():
-    """Invariant 7 — audit every side_effecting=True tool."""
     from agent.execute.tools import default_registry
 
     reg = default_registry()
@@ -102,9 +87,5 @@ def test_side_effecting_tools_route_through_execute_once():
 
     loop_src = (SRC / "execute" / "loop.py").read_text(encoding="utf-8")
     code_src = (SRC / "execute" / "codeact.py").read_text(encoding="utf-8")
-    # Both call sites — the direct action path and the sandbox bridge — must
-    # go through execute_once.
     assert "execute_once(" in loop_src
     assert "execute_once(" in code_src
-
-

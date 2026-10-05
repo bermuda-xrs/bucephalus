@@ -1,12 +1,3 @@
-"""The gate's McNemar p-value without scipy (Phase F, build size).
-
-scipy - with numpy, ~95 MB of the desktop build - was imported for one call:
-`binomtest(b, n, 0.5, alternative="greater")`. At p = 0.5 that is an exact
-tail sum of binomial coefficients, which the standard library computes in
-integers. Equivalence is checked against scipy itself for every (b, n) up to
-n = 60, when scipy is installed, and against exact fractions always.
-"""
-
 from __future__ import annotations
 
 from fractions import Fraction

@@ -1,29 +1,3 @@
-"""D17 — an alarm with a permanent backlog is not an alarm.
-
-19 of 283 tasks in the live database reported `severity: critical — head does
-not match anchor` while every chain verified and nothing had been tampered
-with. They had run past their last checkpoint, because bench runs do not
-checkpoint per task. That is DEFERRED D10, still open, and the disease of
-which this is the symptom.
-
-Why it had to be fixed before Phase 3: memory files come under this same
-chain, so a memory-tampering alert would have arrived as the twentieth
-critical in a list nobody reads.
-
-THE DISCRIMINATOR, and why the downgrade is safe: the anchored hash is either
-still IN the chain or it is not.
-
-  * still present -> the chain extended past the checkpoint. Nothing was
-    rewritten, because the exact hash we anchored is still where we left it.
-  * absent -> the history containing it is gone. Rewrite or fork, which is
-    the condition the anchor exists to catch.
-
-A tampered chain cannot reach the quieter branch, because tampering is what
-removes the hash that would qualify it. That is the property this file
-exists to hold, and it is tested by injecting the tampering rather than by
-asserting the logic reads correctly.
-"""
-
 from __future__ import annotations
 
 import sys
@@ -75,7 +49,7 @@ def test_an_anchor_that_is_merely_behind_is_not_critical(rig):
     conn, log, anchor = rig
     advance(log, 2)
     checkpoint(log, anchor, "t1")
-    advance(log, 3)                      # ran on without checkpointing
+    advance(log, 3)
 
     assert classify_anchor(conn, log, anchor, "t1") == ANCHOR_BEHIND
     findings = verify_all(conn, log, anchor)
@@ -86,9 +60,6 @@ def test_an_anchor_that_is_merely_behind_is_not_critical(rig):
 
 
 def test_a_rewritten_history_is_still_critical(rig):
-    """Injected, not reasoned about. Delete the events that came after the
-    checkpoint and rebuild a different tail: the anchored hash disappears,
-    which is exactly what the anchor exists to notice."""
     conn, log, anchor = rig
     advance(log, 2)
     checkpoint(log, anchor, "t1")
@@ -97,12 +68,11 @@ def test_a_rewritten_history_is_still_critical(rig):
         "SELECT 1 FROM events WHERE task_id='t1' AND hash=?", (anchored,)
     ).fetchone(), "the anchored hash must start out present"
 
-    # Tamper: excise the anchored event and everything after it.
     seq = conn.execute("SELECT seq FROM events WHERE task_id='t1' AND hash=?",
                        (anchored,)).fetchone()[0]
     conn.execute("DELETE FROM events WHERE task_id='t1' AND seq >= ?", (seq,))
     conn.commit()
-    advance(log, 2)                      # a different history in its place
+    advance(log, 2)
 
     assert classify_anchor(conn, log, anchor, "t1") == ANCHOR_REWRITTEN
     findings = verify_all(conn, log, anchor)
@@ -113,13 +83,11 @@ def test_a_rewritten_history_is_still_critical(rig):
 
 
 def test_resume_refuses_a_rewrite_but_allows_a_behind_anchor(rig):
-    """Halting on a merely-behind anchor would make every un-checkpointed task
-    unresumable — a denial of service built out of a bookkeeping gap."""
     conn, log, anchor = rig
     advance(log, 2)
     checkpoint(log, anchor, "t1")
     advance(log, 3)
-    resume(conn, "t1", log, anchor)      # must not raise
+    resume(conn, "t1", log, anchor)
 
     anchored = anchor.latest("t1")
     seq = conn.execute("SELECT seq FROM events WHERE task_id='t1' AND hash=?",
@@ -154,8 +122,6 @@ def test_an_agreeing_anchor_reports_nothing(rig):
 
 
 def test_the_live_database_has_an_empty_critical_channel():
-    """The point of the whole exercise: memory arrives in Phase 3 under this
-    same chain, and it must not arrive into a backlog."""
     db = ROOT / "agent.local.db"
     if not db.exists():
         pytest.skip("no local database in this checkout")
@@ -165,7 +131,6 @@ def test_the_live_database_has_an_empty_critical_channel():
 
 
 def _live_findings(db, anchor_path):
-    # Read-only: open_db migrates, and this is the record, not a scratch copy.
     import sqlite3
 
     conn = sqlite3.connect(Path(db).resolve().as_uri() + "?mode=ro", uri=True)
@@ -176,10 +141,6 @@ def _live_findings(db, anchor_path):
 
 
 def test_checking_the_live_record_does_not_change_it(tmp_path):
-    """Iteration 3. The check above opened the 283-task measurement record
-    READ-WRITE, so every schema change this project made was migrated into
-    the record by the next suite run (it gained two empty conversation
-    tables on 2026-09-28). A copy of an older record stands in for it."""
     import hashlib
     import shutil
 

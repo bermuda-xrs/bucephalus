@@ -1,11 +1,3 @@
-"""B3 — "the tool exists" is not "this agent may call it". Plus D18.
-
-Until Phase 5 every agent saw one registry, and the capability gate was the
-only thing between a model and any tool in it. A child opened to summarise a
-document could call `git_push`; nothing but the gate's taint arithmetic stood
-in the way, and taint arithmetic is about ARGUMENTS, not authority.
-"""
-
 from __future__ import annotations
 
 import ast
@@ -64,10 +56,6 @@ def new_task(ctx, goal="parent goal", scope=("work",), parent=None):
         Budget(usd=1.0, seconds=120), parent_id=parent)
 
 
-# ==========================================================================
-# 5.1 / 5.3 — refused at dispatch, and logged
-# ==========================================================================
-
 def test_a_denied_tool_is_refused_at_dispatch_and_recorded(tmp_path):
     ctx = make_ctx(tmp_path)
     t = new_task(ctx)
@@ -88,8 +76,6 @@ def test_a_denied_tool_is_refused_at_dispatch_and_recorded(tmp_path):
 
 
 def test_the_tool_stays_in_the_manual_so_the_refusal_is_observable(tmp_path):
-    """An agent that cannot SEE a tool works around its absence silently. An
-    agent that is refused leaves a record of what it tried."""
     ctx = make_ctx(tmp_path)
     t = new_task(ctx)
     ctx.restrict_tools(t.id, ToolPolicy(frozenset({"git_push"}), "test"))
@@ -99,9 +85,6 @@ def test_the_tool_stays_in_the_manual_so_the_refusal_is_observable(tmp_path):
 
 
 def test_exposure_is_checked_before_the_capability_gate(tmp_path):
-    """Different questions, and the order decides what gets recorded. A child
-    denied a tool should be refused for not being allowed it, not for whatever
-    its arguments happened to be tainted with."""
     src = (ROOT / "src" / "agent" / "execute" / "loop.py").read_text(
         encoding="utf-8")
     i = src.index("exposure_check(")
@@ -122,10 +105,6 @@ def test_an_unrestricted_agent_is_unaffected(tmp_path):
     ctx.close()
 
 
-# ==========================================================================
-# 5.2 — what a child loses, and the direction restrictions compose in
-# ==========================================================================
-
 def test_restrictions_compose_by_union_of_denials(tmp_path):
     parent = ToolPolicy(frozenset({"git_push"}), "parent")
     child = child_policy(parent)
@@ -137,8 +116,6 @@ def test_restrictions_compose_by_union_of_denials(tmp_path):
 
 
 def test_a_policy_cannot_be_widened(tmp_path):
-    """If a policy could be replaced rather than narrowed, an agent could
-    delegate to itself and come back with more authority."""
     ctx = make_ctx(tmp_path)
     t = new_task(ctx)
     ctx.restrict_tools(t.id, ToolPolicy(frozenset({"git_push", "run_code"}), "x"))
@@ -150,8 +127,6 @@ def test_a_policy_cannot_be_widened(tmp_path):
 
 
 def test_a_child_cannot_delegate_further(tmp_path):
-    """Leaves cannot spawn. Checked from the TASK TREE rather than a flag, so
-    it cannot be bypassed by constructing a context differently."""
     ctx = make_ctx(tmp_path)
     parent = new_task(ctx)
     child = new_task(ctx, "child goal", parent=parent.id)
@@ -190,14 +165,9 @@ def test_a_child_cannot_widen_its_artifact_scope(tmp_path):
 
 
 def test_scope_containment_is_by_path_not_by_string_prefix():
-    """`work_other` is not inside `work`, though it starts with it."""
     assert scope_widens(["work"], ["work/sub"]) == []
     assert scope_widens(["work"], ["work_other"]) == ["work_other"]
     assert scope_widens(["work"], ["anchor"]) == ["anchor"]
-    # Inverted by D29's sweep. This line pinned the fail-open reading - "no
-    # parent scope means no limit" - which let a parent that declared nothing
-    # hand a child any scope. A parent with no scope permits no path, so every
-    # entry a child asks for widens.
     assert scope_widens([], ["anything"]) == ["anything"], "empty means nothing"
 
 
@@ -226,9 +196,6 @@ def test_a_real_delegated_child_gets_the_narrowed_policy(tmp_path):
 
 
 def test_a_child_shares_its_parents_isolation_by_construction(tmp_path):
-    """Isolation needs no separate inheritance: `visible_tasks` scopes to the
-    TASK TREE and a child shares its parent's root, so it sees exactly what
-    the parent sees and cannot widen it by existing."""
     ctx = make_ctx(tmp_path)
     ctx.config.isolate_retrieval = True
     parent = new_task(ctx)
@@ -264,10 +231,6 @@ def test_a_child_cannot_write_tier_one_memory(tmp_path):
     ctx.close()
 
 
-# ==========================================================================
-# 5.4 — D18: one door, and it will not open without a declared isolation
-# ==========================================================================
-
 def test_a_measurement_cannot_be_opened_without_declaring_isolation():
     from measurement import open_measurement
 
@@ -291,17 +254,11 @@ def test_an_undeclared_context_is_refused(tmp_path):
         assert_isolation_declared(ctx)
 
     ctx.config.isolate_retrieval = False
-    assert_isolation_declared(ctx)      # declared, and legitimately off
+    assert_isolation_declared(ctx)
     ctx.close()
 
 
 def test_no_measurement_module_opens_a_context_for_itself():
-    """The other half of making it structural rather than currently-true.
-
-    D18 was that `ladder.py` and the calibration path declared no isolation
-    while `noise.py` did. Three call sites remembering a flag is not a fix;
-    one door that will not open without the declaration is.
-    """
     offenders = []
     for f in sorted((ROOT / "bench").glob("*.py")):
         if f.name == "measurement.py":
@@ -318,8 +275,6 @@ def test_no_measurement_module_opens_a_context_for_itself():
 
 
 def test_every_measurement_entry_point_declares_one():
-    """And declares it explicitly, so a reader can tell 'considered and not
-    needed' from 'nobody thought about it'."""
     seen = {}
     for name in ("noise.py", "ladder.py", "run.py"):
         src = (ROOT / "bench" / name).read_text(encoding="utf-8")

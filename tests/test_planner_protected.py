@@ -1,12 +1,3 @@
-"""The planner's read-only survey respects the protected-path fence
-(AUDIT-2026-09 F5, D43).
-
-`gate_tool_call` refuses `read_file` of the agent's own state - secrets,
-databases, graders. The planner's survey read each artifact_scope entry
-directly, and pasted the first 2000 bytes into the planning prompt: the one
-file route the gate did not cover (DR3). Read-only is not unrestricted.
-"""
-
 from __future__ import annotations
 
 from agent.kernel.tasks import create_task
@@ -31,8 +22,6 @@ def test_a_protected_file_in_scope_is_not_read_into_the_prompt(ctx, workspace):
 
 
 def test_a_scope_that_contains_protected_state_is_not_listed(ctx, workspace):
-    """The gate refuses list_dir('.') because it walks into the database;
-    the survey must not list it either."""
     prompt = _draft(ctx, ["."])
     assert "agent.db" not in prompt, prompt[-600:]
 

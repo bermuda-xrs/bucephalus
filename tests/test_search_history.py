@@ -1,10 +1,3 @@
-"""B4 — FTS5 search over prior sessions.
-
-The acceptance properties, plus the two that would make this a liability
-rather than a feature: results that arrive TRUSTED, and results that arrive
-unbounded.
-"""
-
 from __future__ import annotations
 
 import sys
@@ -28,9 +21,6 @@ def conn(tmp_path):
 
 
 class _Cfg:
-    """Normal use: isolation off. A ctx with no config at all raises rather
-    than defaulting to unrestricted — see kernel/scope.py. Cross-arm isolation
-    has its own file, tests/test_cross_arm_retrieval_blocked.py."""
     isolate_retrieval = False
 
 
@@ -67,10 +57,6 @@ def add_artifact(conn, aid, tid, kind, content, taint="trusted"):
     conn.commit()
 
 
-# --------------------------------------------------------------------------
-# Acceptance
-# --------------------------------------------------------------------------
-
 def test_search_finds_content_from_a_prior_session(conn):
     add_task(conn, "t_old", "Calculate the escape velocity of Titan")
     add_artifact(conn, "a1", "t_old", "answer", "escape velocity is 2639 m/s")
@@ -83,9 +69,6 @@ def test_search_finds_content_from_a_prior_session(conn):
 
 
 def test_results_carry_untrusted_even_when_the_artifact_is_trusted(conn):
-    """THE security property. `answer` artifacts are stored taint=trusted, and
-    propagating that would hand a later session trusted text that may quote a
-    web page. Search is a read of old content, not a memory."""
     add_task(conn, "t1", "goal about widgets")
     add_artifact(conn, "a1", "t1", "answer", "widgets are made of tungsten",
                  taint="trusted")
@@ -99,7 +82,6 @@ def test_results_carry_untrusted_even_when_the_artifact_is_trusted(conn):
 
 
 def test_the_chain_still_verifies_after_indexing(conn):
-    """The index is derived data and must not touch the hash chain."""
     from agent.kernel.events import EventLog
 
     add_task(conn, "t1", "a goal worth indexing")
@@ -120,8 +102,6 @@ def test_the_chain_still_verifies_after_indexing(conn):
 
 
 def test_a_rebuild_reproduces_the_index_exactly(conn):
-    """Compares a trigger-built index against a from-scratch rebuild over the
-    same rows. If they differ, one of the two write paths is lying."""
     add_task(conn, "t1", "first goal about turbines")
     add_task(conn, "t2", "second goal about gearboxes", parent="t1")
     add_artifact(conn, "a1", "t1", "answer", "turbine answer")
@@ -139,9 +119,6 @@ def test_a_rebuild_reproduces_the_index_exactly(conn):
 
 
 def test_tool_output_is_never_indexed(conn):
-    """2.1: high volume, low signal. 76% of artifact rows in the live database
-    are tool_output, and indexing them would bury the two sentences a person
-    actually wrote."""
     add_task(conn, "t1", "a goal")
     add_artifact(conn, "a1", "t1", "tool_output",
                  "drwxr-xr-x listing noise everywhere", taint="untrusted")
@@ -176,13 +153,7 @@ def test_a_snippet_never_returns_a_whole_artifact(conn):
     assert len(hit.snippet) <= search_mod.MAX_BODY_CHARS
 
 
-# --------------------------------------------------------------------------
-# Sessions, and the failure modes
-# --------------------------------------------------------------------------
-
 def test_a_subtask_reports_its_root_as_the_session(conn):
-    """No sessions table exists until Phase 9; the root of the task tree is
-    the session today. A delegated child must not look like its own session."""
     add_task(conn, "root", "the parent goal")
     add_task(conn, "child", "delegated subgoal about flanges", parent="root")
     add_task(conn, "grand", "deeper subgoal about flanges", parent="child")
@@ -200,8 +171,6 @@ def test_a_malformed_query_is_a_bad_argument_not_a_crash(conn):
 
 
 def test_the_tool_returns_the_error_rather_than_raising(conn):
-    """The loop hands a bad tool argument back to the model. A raise here
-    would end the task instead."""
     from agent.execute.tools import tool_search_history
 
     ctx = _ctx(conn)
@@ -238,7 +207,6 @@ def test_a_contract_hit_renders_the_goal_not_raw_json(conn):
 
 
 def test_the_registered_tool_is_read_only_and_untrusted():
-    """Every new tool gets a taint-table row before registration."""
     from agent.execute.tools import default_registry
 
     spec = default_registry().get("search_history")
@@ -249,23 +217,10 @@ def test_the_registered_tool_is_read_only_and_untrusted():
 
 
 def test_search_output_taint_reaches_the_tracker_by_the_shared_path():
-    """Declaring UNTRUSTED is only half of it — the loop has to stamp it.
-
-    There is exactly ONE site that reads `tool.output_taint`, and it both
-    writes the artifact and feeds `taint_tracker.observe()`, which is what
-    the capability gate reads. So search results raise the task's taint
-    ceiling by the same path `web_fetch` does, and a second site would be a
-    way to special-case a tool out of the gate.
-    """
     src = (ROOT / "src" / "agent" / "execute" / "loop.py").read_text(
         encoding="utf-8")
     assert src.count("tool.output_taint") == 1, (
         "more than one taint-stamping site means a tool can be exempted")
-    # Bounded by the FUNCTION rather than by a character count. The window
-    # was 700 characters and a comment pushed `write_artifact` past it, which
-    # made the test fail for a reason that had nothing to do with the
-    # property - a check whose result depends on how much prose sits between
-    # two statements is measuring the prose.
     i = src.index("taint = tool.output_taint")
     end = src.index(chr(10) + "def ", i)
     window = src[i:end]

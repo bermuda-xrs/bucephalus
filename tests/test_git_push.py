@@ -1,11 +1,3 @@
-"""git_push against a real repository and a real remote.
-
-It is the only tool that can change something outside this machine's working
-copy, and it had never been run — the previous version returned a canned
-error. A trusted-tier tool that has never executed is not a safe tool, it is
-an untested one that happens not to have fired yet.
-"""
-
 from __future__ import annotations
 
 import shutil
@@ -26,7 +18,6 @@ def _git(cwd, *args):
 
 @pytest.fixture
 def repo(ctx, tmp_path):
-    """A working repo whose origin is a bare repo on disk. No network."""
     root = ctx.config.resolve(".")
     remote = tmp_path / "remote.git"
     _git(tmp_path, "init", "--bare", "-q", str(remote))
@@ -65,19 +56,16 @@ def test_push_outside_a_repository_is_refused(ctx, task, tmp_path):
 
 
 def test_push_always_parks_for_a_human(ctx, task, repo):
-    """Reaching the tool at all requires an approval; the gate never allows it."""
     tool = ctx.tools.get("git_push")
 
     parked = gate_tool_call(ctx, task, tool, {})
     assert parked.verdict == "needs_approval" and "human" in parked.reason
 
-    # Model-supplied arguments carry USER taint, above this tool's ceiling.
     supplied = gate_tool_call(ctx, task, tool, {"remote": "origin"})
     assert supplied.verdict == "deny"
 
 
 def test_push_is_receipted_so_a_crash_cannot_double_push(ctx, task, repo):
-    """Invariant 7: side effects run at most once across replays."""
     from agent.kernel.receipts import execute_once, idempotency_key
 
     calls = []

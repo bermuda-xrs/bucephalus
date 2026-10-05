@@ -1,35 +1,3 @@
-"""D39 - the 25 rooms behind `alpha --help`, actually entered.
-
-`test_entry_points.py` proves the CLI *starts*: it imports the module and
-builds the parser. Nothing then walked through any of the doors it built.
-That is the entry-point defect class one level down - coverage accumulating
-underneath a front door that is itself never opened - and this layer is not
-hypothetical: five subcommands run by hand for one hour found two defects no
-test had (DEFERRED D39, FINDINGS 1.28).
-
-Each test here runs ONE subcommand in a SUBPROCESS, through `agent.cli`, the
-same module the `alpha` console script installs, and asserts its exit code
-plus one fact about what it did. A subprocess and not an in-process call to
-`main()`, because `main()` catches every exception and turns it into exit 1:
-called in process the difference between "worked" and "raised" is invisible
-unless you also read the return value, and out of process the exit code is
-all there is.
-
-THE SCRATCH DATABASE. Every path a subcommand touches is redirected by
-`ALPHA_DATA_DIR`, which `paths.state_root` honours ahead of both its modes,
-so the run's database, anchor, skills, `runs/`, `work/` AND the operator's
-persistent memory land under one temporary directory. Without that last one
-`alpha memory --forget` would delete out of the real memory files.
-
-The fixture seeds what the read-only commands need in order to have anything
-to read - a task that ran to completion, a drafted and approved plan, a
-pending approval, a memory entry, a skill and a schedule - through the same
-APIs the system uses, so a seed that stops matching the code fails here
-rather than producing an empty-table pass. `test_the_fixture_seeded_something`
-is that check: DR4, empty means nothing, and a green sweep over an empty
-database is exactly the correct-but-unusual result C1 says to ask about.
-"""
-
 from __future__ import annotations
 
 import argparse
@@ -54,7 +22,6 @@ def _mock(model: str, **kw) -> dict:
 
 @pytest.fixture(scope="module")
 def cli(tmp_path_factory):
-    """A whole installation in a temporary directory, plus a runner."""
     import yaml
 
     from agent import schedule as sched
@@ -88,9 +55,6 @@ def cli(tmp_path_factory):
                        cache_write_per_mtok=6.25),
         "review": _mock("mock-review", input_cost_per_mtok=3.0,
                         output_cost_per_mtok=15.0),
-        # `bench-local` reads exactly these two names and renders nothing
-        # without them, so without them its test would assert over an empty
-        # table and pass on a command that did nothing.
         "local": _mock("mock-local", trust_tier="local", context_window=120000,
                        usable_context_window=120000),
         "laptop": _mock("mock-laptop", trust_tier="local", context_window=32768,
@@ -113,7 +77,6 @@ def cli(tmp_path_factory):
     config_path = root / "config.yaml"
     config_path.write_text(yaml.safe_dump(raw), encoding="utf-8")
 
-    # -- seed, through the real APIs --------------------------------------
     cfg = Config(
         db_path=str(db), anchor_path=str(anchor), skills_path=str(skills),
         root=str(root),
@@ -130,9 +93,9 @@ def cli(tmp_path_factory):
         ctx.conn, ctx.log,
         TaskContract(goal="seeded task for the CLI sweep", artifact_scope=["work"]),
         Budget(usd=1.0, seconds=600))
-    plan = draft_plan(ctx, seeded)          # unqueued mock -> a zero-step plan
+    plan = draft_plan(ctx, seeded)
     approve_plan(ctx, seeded, plan)
-    run_task(ctx, seeded.id)                # -> calls, sessions, events, done
+    run_task(ctx, seeded.id)
 
     approval_id = ctx.request_approval(
         seeded, ctx.tools.get("write_file"),
@@ -160,8 +123,6 @@ def cli(tmp_path_factory):
     env.update({"PYTHONPATH": str(ROOT / "src"), "PYTHONUTF8": "1",
                 "PYTHONDONTWRITEBYTECODE": "1", "ALPHA_DATA_DIR": str(root),
                 "ALPHA_CONFIG_DIR": str(root),
-                # rich reads these. A fixed, wide, plain terminal keeps the
-                # assertions below about CONTENT rather than about wrapping.
                 "COLUMNS": "200", "TERM": "dumb", "NO_COLOR": "1"})
 
     class Runner:
@@ -209,17 +170,12 @@ def cli(tmp_path_factory):
 
 
 def test_the_fixture_seeded_something(cli):
-    """DR4. Every read-only assertion below is meaningless over empty tables,
-    and an empty table is what a broken seed produces silently."""
     c = cli.conn()
     counts = {t: c.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0]
               for t in ("tasks", "plans", "approvals", "skills", "schedules",
                         "calls", "sessions", "events")}
     c.close()
     assert all(n > 0 for n in counts.values()), counts
-
-
-# -- the rooms --------------------------------------------------------------
 
 
 def test_new(cli):
@@ -231,8 +187,6 @@ def test_new(cli):
 
 
 def test_new_without_scope_says_an_empty_scope_permits_nothing(cli):
-    """D29's lesson on the way in: empty means nothing, and the operator is
-    told so at the one moment they can still fix it."""
     r = cli("new", "a task with no scope")
     assert "empty scope permits nothing" in r.stdout
 
@@ -260,8 +214,6 @@ def test_approve_pins_the_plan_to_the_anchor(cli):
 
 
 def test_approve_refuses_a_stale_plan_hash(cli):
-    """Human touch #1 is a decision about specific bytes. Approving a hash
-    that is no longer the current draft must not approve the draft."""
     tid = cli.new_task("approve the wrong hash")
     cli("plan", tid)
     r = cli("approve", tid, "0" * 64, expect=1)
@@ -285,9 +237,6 @@ def test_reject(cli):
 
 
 def test_run(cli):
-    """The whole loop, scripted model. Exit 0 means it also reached the END of
-    `_print_budget`, which runs after the answer is already on screen - the
-    line that exited 1 on a finished task for ten days."""
     tid = cli.new_task("run me")
     r = cli("run", tid)
     assert "paid" in r.stdout and "cache hit" in r.stdout, r.stdout[-400:]
@@ -298,11 +247,6 @@ def test_run(cli):
 
 
 def test_run_prints_n_a_when_the_backend_reports_no_cache(cli, tmp_path):
-    """C58's defect exactly: `:.0%` of None. Every backend in this module's
-    config DOES report cache accounting, which is the condition under which
-    the defect is invisible - and was, across 769 tests - so this one turns
-    the reporting off. Invariant 36: unmeasured is null, and null prints n/a,
-    never 0%, which would be the different and false claim "nothing cached"."""
     import yaml
 
     raw = yaml.safe_load(cli.config_path.read_text(encoding="utf-8"))
@@ -320,7 +264,6 @@ def test_run_prints_n_a_when_the_backend_reports_no_cache(cli, tmp_path):
 
 
 def test_run_refuses_when_a_plan_is_required_and_none_is_approved(cli, tmp_path):
-    """The one branch in `run` that is a control rather than a step."""
     import yaml
 
     raw = yaml.safe_load(cli.config_path.read_text(encoding="utf-8"))
@@ -347,7 +290,6 @@ def test_approvals_lists_what_is_pending(cli):
 
 
 def test_approvals_decide_is_final(cli):
-    """A4.3's defect: the second press must not flip a decided row."""
     tid = cli.new_task("decide me")
     c = cli.conn()
     c.execute(
@@ -359,7 +301,7 @@ def test_approvals_decide_is_final(cli):
     c.commit()
     c.close()
     cli("approvals", "--decide", "a_twice", "--yes")
-    cli("approvals", "--decide", "a_twice")          # deny, after approving
+    cli("approvals", "--decide", "a_twice")
     c = cli.conn()
     status = c.execute("SELECT status FROM approvals WHERE id=?",
                        ("a_twice",)).fetchone()[0]
@@ -373,16 +315,10 @@ def test_alerts(cli):
 
 
 def test_verify(cli):
-    """`verify` is `alerts` under another name; exit 1 would mean a break."""
     assert cli("verify").stdout == cli("alerts").stdout
 
 
 def test_tui_starts_and_keeps_running(cli):
-    """The TUI never returns on its own, so "it exited" is the failure. It
-    gets a moment to pass import, context wiring and first render - where any
-    defect this sweep is hunting would show - and is then killed through
-    `kill_tree`, because a venv `python.exe` is a trampoline and the pid
-    `Popen` returns is not the interpreter (DEFERRED's process class)."""
     pytest.importorskip("textual")
     from agent.proc import kill_tree
 
@@ -418,8 +354,6 @@ def test_memory_forget_removes_and_says_so(cli):
 
 
 def test_memory_accept_re_blesses_the_files(cli):
-    """Without this the only legitimate hand edit leaves a permanent critical
-    standing, which is how a real alert becomes background noise (D17)."""
     from agent.memory.store import MemoryStore, check_fingerprint
 
     path = MemoryStore(cli.root / "memory").path("user")
@@ -569,8 +503,6 @@ def test_lineage_of_a_task_with_no_sessions_is_exit_1(cli):
 
 
 def test_snapshot_is_wal_safe(cli):
-    """A file copy of a live WAL database drops the newest rows silently
-    (C41), so this must go through the backup API and carry them."""
     import sqlite3
 
     dest = cli.root / "evidence.db"
@@ -588,8 +520,6 @@ def test_channel_refuses_while_disabled(cli):
 
 
 def test_serve_binds_and_answers_health(cli):
-    """The control plane's front door, started the way an operator starts it.
-    `/health` is the one open path; everything else needs the bearer token."""
     import socket
     import urllib.request
 
@@ -612,7 +542,7 @@ def test_serve_binds_and_answers_health(cli):
                         f"http://127.0.0.1:{port}/health", timeout=2) as resp:
                     body = json.loads(resp.read().decode())
                 break
-            except Exception:  # noqa: BLE001 - not up yet
+            except Exception:  # noqa: BLE001
                 time.sleep(0.5)
         assert body is not None, "`alpha serve` never answered /health"
         assert body.get("ok") is True and "backends" in body, body
@@ -625,17 +555,12 @@ def test_serve_binds_and_answers_health(cli):
 
 
 def test_every_subcommand_is_entered_by_a_test_here():
-    """The sweep is part of the fix (DR5). A subcommand added later without a
-    test lands here rather than in the next hand-run hour."""
     from agent.cli import build_parser
 
     subparsers = [a for a in build_parser()._actions  # noqa: SLF001
                   if isinstance(a, argparse._SubParsersAction)]  # noqa: SLF001
     declared = set(subparsers[0].choices)
     source = Path(__file__).read_text(encoding="utf-8")
-    # A command counts as entered only where it appears as the FIRST argument
-    # of a runner call - `cli("verify")`, `cli.spawn("tui", ...)` - never
-    # merely mentioned in prose or passed as a later argument.
     entered = {c for c in declared
                if f'cli("{c}"' in source or f'cli.spawn("{c}"' in source
                or f'"-m", "agent.cli", "--config", str(strict), "{c}"' in source}

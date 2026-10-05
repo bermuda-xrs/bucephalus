@@ -1,13 +1,3 @@
-"""D25 - the Anthropic adapter streams. Against a fake client, because there is
-no key: this path is UNVERIFIED against the live API, filed beside D26.
-
-What these tests can establish without a key is the adapter's side of the
-contract: that it calls the SDK's streaming helper, forwards text deltas as
-they arrive, leaves thinking out of the answer, and treats the final message
-exactly as the non-streaming path treated `create()`'s return value. What they
-cannot establish is that the live API accepts the request.
-"""
-
 from __future__ import annotations
 
 from types import SimpleNamespace as NS
@@ -75,8 +65,6 @@ def test_text_reaches_the_surface_while_the_turn_is_running():
 
 
 def test_there_is_one_path_even_with_no_listener():
-    """The SDK refuses a non-streaming request whose max_tokens implies more
-    than about ten minutes. One streaming path means that cannot happen."""
     b, client = backend(["ok"], final("ok"))
     assert b.complete("PREFIX", "tail").text == "ok"
     assert client.messages.kwargs is not None

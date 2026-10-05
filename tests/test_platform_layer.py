@@ -1,12 +1,3 @@
-"""Cross-platform preparation (4D): the platform layer is the ONLY place that
-asks which OS this is, and every platform module fills in the whole contract.
-
-A port to a new OS is then a new module that passes the first test, not a
-hunt for conditionals - the second test keeps them from growing back.
-Parsed, not imported: posix.py cannot be imported on Windows and must still
-be held to the contract here.
-"""
-
 from __future__ import annotations
 
 import ast
@@ -21,8 +12,6 @@ MODULES = [p for p in PLATFORM.glob("*.py") if p.name != "__init__.py"]
 
 
 def _defined(path: Path) -> set[str]:
-    """Functions defined here, or imported by name from a sibling module
-    (darwin shares most of posix, explicitly)."""
     out = set()
     for n in ast.parse(path.read_text(encoding="utf-8")).body:
         if isinstance(n, ast.FunctionDef):
@@ -46,8 +35,6 @@ _CONDITIONAL = re.compile(r"sys\.platform|os\.name\s*[!=]=|IS_POSIX|IS_WINDOWS")
 
 
 def test_no_platform_conditional_outside_the_layer():
-    """The scattered form this replaced: seven `sys.platform` splits in
-    proc.py, two in runlock.py, four `IS_POSIX` in the sandbox."""
     found = []
     for f in SRC.rglob("*.py"):
         if PLATFORM in f.parents:

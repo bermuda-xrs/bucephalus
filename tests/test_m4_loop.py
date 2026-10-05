@@ -1,5 +1,3 @@
-"""M4 acceptance — the first end-to-end, and the budget stop."""
-
 from __future__ import annotations
 
 import json
@@ -22,11 +20,6 @@ def test_parse_action_shapes():
 
 
 def test_parse_action_accepts_constrained_json():
-    """M5.4 — the local tier answers as JSON under constrained decoding.
-
-    Both shapes must parse, because the cloud tier keeps the tag protocol
-    while ollama backends are given a schema.
-    """
     a = parse_action('{"kind": "action", "tool": "read_file", "args": {"path": "x.py"}}')
     assert a.kind == "action" and a.tool == "read_file" and a.args == {"path": "x.py"}
 
@@ -41,26 +34,21 @@ def test_parse_action_accepts_constrained_json():
 
 
 def test_parse_error_shows_the_expected_format():
-    """A 3B model that gets the syntax wrong needs the shape, not a scolding."""
     n = parse_action('<action>\nlist_dir("work")\n</action>')
     assert n.kind == "none"
     assert 'tool="read_file"' in n.error and '"kind": "action"' in n.error
 
 
 def test_schema_only_constrains_ollama_backends(ctx, task, scripted):
-    """Forcing a schema on the cloud tier would fight extended thinking."""
     from agent.execute.loop import ACTION_SCHEMA, run_task
 
     scripted("cloud", '<final>{"answer": "ok"}</final>')
     run_task(ctx, task.id)
-    # The mock cloud backend is kind="mock", so no schema should be passed and
-    # the tag protocol is what gets used.
     assert ctx.backends["cloud"].cfg.kind != "ollama"
     assert ACTION_SCHEMA["required"] == ["kind"]
 
 
 def test_end_to_end_trivial_task(ctx, workspace, scripted):
-    """Write a function, save it, verify the file exists and the chain verifies."""
     from agent.kernel.tasks import create_task
     from agent.kernel.types import Budget, TaskContract
 
@@ -82,7 +70,6 @@ def test_end_to_end_trivial_task(ctx, workspace, scripted):
         + "</action>",
         '<final>{"answer": "wrote work/out.py"}</final>',
     )
-    # write_file is side-effecting with USER-taint args -> the reviewer decides.
     ctx.backends["review"].queue("VERDICT: approve\nBECAUSE: write inside artifact_scope")
 
     result = run_task(ctx, task.id)
@@ -91,7 +78,7 @@ def test_end_to_end_trivial_task(ctx, workspace, scripted):
     out = workspace / "out.py"
     assert out.exists()
     ns: dict = {}
-    exec(out.read_text(encoding="utf-8"), ns)  # noqa: S102 - it is our own fixture
+    exec(out.read_text(encoding="utf-8"), ns)  # noqa: S102
     assert ns["reverse"]("abc") == "cba"
 
     assert ctx.conn.execute(
@@ -115,17 +102,6 @@ def test_budget_stops_execution(ctx, workspace, scripted):
     assert result.status == "budget_exhausted"
     m = ctx.telemetry.metrics(task.id)
 
-    # The property is the MECHANISM, not a dollar figure. Budget is checked
-    # between steps, so the smallest possible overshoot is one step's cost -
-    # and one step got more expensive as tools were added (16 of them, a
-    # 1,606-character manual in the prefix). This assertion used to read
-    # `cost_usd < 0.01`, which was a proxy for "it did not run away" and was
-    # overtaken by a legitimate change in step cost, not by a regression.
-    #
-    # Tuning the number up would have hidden exactly the thing worth knowing:
-    # at a budget near one step's cost the overshoot factor is large. It does
-    # not bite in practice - default_task_budget_usd is 0.50, two orders above
-    # a step - but a caller passing a very small budget gets one step anyway.
     assert m.n_calls == 1, (
         f"the budget must stop the task after ONE step, not {m.n_calls}; six "
         "actions were scripted")
@@ -133,7 +109,6 @@ def test_budget_stops_execution(ctx, workspace, scripted):
 
 
 def test_failed_verification_appends_an_external_observation(ctx, workspace, scripted):
-    """Invariant #2, enforced structurally: no revision without a new observation."""
     from agent.kernel.tasks import create_task
     from agent.kernel.types import Budget, TaskContract
 
@@ -157,7 +132,6 @@ def test_failed_verification_appends_an_external_observation(ctx, workspace, scr
     result = run_task(ctx, task.id)
     assert result.status == "done" and result.answer == {"value": 7}
 
-    # The second turn saw the verifier's actual complaint, not "try again".
     second_prompt = ctx.backends["cloud"].prompts[1]
     assert "Verification failed" in second_prompt
     assert "missing required key" in second_prompt

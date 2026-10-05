@@ -1,17 +1,3 @@
-"""Machinery with green tests and zero call sites. It grew back.
-
-An audit early in this project found seven pieces of spec machinery that were
-unit-tested and never called by the running agent. `test_wired_invariants.py`
-exists because of it. A fresh audit on 2026-08-27 found nine more, so the
-pattern is not a one-off — it is what happens by default when a milestone is
-implemented, tested, and then not plugged in.
-
-This test freezes the known set. A NEW unreferenced function fails it. The
-existing ones are listed with why they are tolerated, so the list is a record
-rather than a suppression.
-
-"""
-
 from __future__ import annotations
 
 import ast
@@ -20,13 +6,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src" / "agent"
 
-# name -> why it is unreferenced and whether that is acceptable
 KNOWN_INERT = {
-    # --- not yet reached in the build order -------------------------------
     "import_external_skill":
         "External skills go through the same gate; none imported yet.",
 
-    # --- test-only hooks, unreachable from a real run BY DESIGN -----------
     "reset":
         "test-only hook clearing net/politeness.py's robots and rate-limit "
         "caches, which are module-level and would otherwise leak between "
@@ -37,9 +20,6 @@ KNOWN_INERT = {
         "Production has no call site BY DESIGN - a reset reachable from a "
         "real run is one more way for injection to affect a measurement.",
 
-    # --- METHODS, visible since D22 was closed 2026-09-16 -----------------
-    # Invoked by a framework, not by this project. False positives, named
-    # so the list stays a record rather than a filter.
     "AccessGuard.dispatch": "ASGI middleware; Starlette calls it.",
     "AlphaTUI.compose": "Textual lifecycle hook.",
     "AlphaTUI.on_mount": "Textual lifecycle hook.",
@@ -47,8 +27,6 @@ KNOWN_INERT = {
     "AlphaTUI.on_button_pressed": "Textual event handler, dispatched by name.",
     "AlphaTUI.on_input_submitted": "Textual event handler, dispatched by name.",
     "AlphaTUI.on_list_view_selected": "Textual event handler, dispatched by name.",
-    # The TUI's two touches (iteration 3, 4.5): Textual resolves a binding's
-    # action "sign" to the method `action_sign`; nothing names it in full.
     "AlphaTUI.action_sign": "Textual action, bound to `s` in BINDINGS.",
     "AlphaTUI.action_send_back": "Textual action, bound to `b` in BINDINGS.",
     "AlphaTUI.action_allow": "Textual action, bound to `a` in BINDINGS.",
@@ -58,11 +36,9 @@ KNOWN_INERT = {
     "_Text.handle_starttag": "HTMLParser callback, invoked by the stdlib.",
     "_Text.handle_endtag": "HTMLParser callback, invoked by the stdlib.",
 
-    # Interface with no implementation, by design (A1 3.5).
     "ExternalMemoryProvider.recall": "tier 3 is an interface; nothing implements it.",
     "NoExternalProvider.recall": "the null implementation of that interface.",
 
-    # Genuinely uncalled. Each is small, and each is a decision to leave it.
 }
 
 
@@ -75,16 +51,9 @@ def _unreferenced() -> dict[str, Path]:
             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 if node.name.startswith("_") or node.name == "main":
                     continue
-                if node.decorator_list:          # framework-registered
+                if node.decorator_list:
                     continue
                 defs[node.name] = (f, node.lineno)
-            # D22. The audit read module level only, so 128 public METHODS were
-            # invisible to it - and a one-off sweep found 14 with no production
-            # reference. A method is judged by NAME here: `x.name` anywhere in
-            # production counts, whatever `x` is. That is weaker than the
-            # receiver-aware rule above and deliberately so - the alternative
-            # is every `self.x` call reading as dead. It still catches the case
-            # this exists for: a method nothing ever names.
             elif isinstance(node, ast.ClassDef):
                 for sub in node.body:
                     if not isinstance(sub, (ast.FunctionDef, ast.AsyncFunctionDef)):
@@ -96,18 +65,6 @@ def _unreferenced() -> dict[str, Path]:
     prod = list(SRC.rglob("*.py")) + list((ROOT / "bench").glob("*.py"))
     prod += [ROOT / "demo.py"]
 
-    # References are collected from the AST, not by grepping lines.
-    #
-    # The regex version counted any line CONTAINING the name, so a mention in
-    # a comment or a docstring registered as a call site. It was caught when a
-    # docstring reading "does NOT kill live children of a running server"
-    # made the unused `children` helper look wired.
-    #
-    # That is this project's own instrument-bug pattern, in the test written
-    # to prevent it: the check measured "the token appears in a line", not
-    # "the system calls it". Ask what it scores for code that did the work
-    # perfectly but behaved slightly unusually - here, code that merely
-    # NAMES a function in prose - and the answer was "wired".
     refs: set[str] = set()
     attr_refs: set[str] = set()
     for f in prod:
@@ -115,8 +72,6 @@ def _unreferenced() -> dict[str, Path]:
             continue
         tree = ast.parse(f.read_text(encoding="utf-8"))
 
-        # Names bound by an import in THIS file. Used to decide whether an
-        # attribute access is a module-qualified call or a method call.
         module_names: set[str] = set()
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
@@ -130,38 +85,17 @@ def _unreferenced() -> dict[str, Path]:
             if isinstance(node, ast.Name):
                 refs.add(node.id)
             elif isinstance(node, ast.Attribute):
-                # RECEIVER-AWARE, and this is the second bug fixed in this
-                # function rather than the first.
-                #
-                # Crediting every `X.name` as a reference to a module-level
-                # `name` means one METHOD anywhere can make an unrelated dead
-                # function look wired. It happened: `ToolPolicy.describe()`
-                # arrived in Phase 5 and `profiles.describe`, which still has
-                # no caller, silently left the unreferenced set.
-                #
-                # A false NEGATIVE, which is the dangerous direction for this
-                # test: dead code looking wired is exactly what it exists to
-                # catch. Same shape as the docstring bug this function was
-                # already fixed for once - the check measured "the token
-                # appears", not "the system calls it".
-                #
-                # So an attribute counts only when its receiver is a name an
-                # import bound in this file, which is what a module-qualified
-                # call looks like. `self.x` and `policy.x` no longer count.
                 recv = node.value
                 if isinstance(recv, ast.Name) and recv.id in module_names:
                     refs.add(node.attr)
-            elif isinstance(node, ast.alias):        # from x import y [as z]
+            elif isinstance(node, ast.alias):
                 refs.add(node.name.split(".")[-1])
                 if node.asname:
                     refs.add(node.asname)
             elif isinstance(node, ast.Constant) and isinstance(node.value, str):
-                # getattr(obj, "name") and registry tables key off strings.
-                # Kept deliberately: a string reference is a real one, and
-                # dropping it would flag registered handlers as dead.
                 refs.add(node.value)
             if isinstance(node, ast.Attribute):
-                attr_refs.add(node.attr)          # D22: any receiver counts
+                attr_refs.add(node.attr)
 
     out = {name: home for name, (home, _l) in defs.items() if name not in refs}
     for qual, (home, _l) in methods.items():
@@ -171,7 +105,6 @@ def _unreferenced() -> dict[str, Path]:
 
 
 def test_no_newly_unreferenced_machinery():
-    """A new function with no call site is the failure this project repeats."""
     found = _unreferenced()
     new = sorted(set(found) - set(KNOWN_INERT))
     assert not new, (
@@ -183,8 +116,6 @@ def test_no_newly_unreferenced_machinery():
 
 
 def test_the_known_list_does_not_rot():
-    """An entry that got wired should leave the list, or it stops meaning
-    anything."""
     found = _unreferenced()
     stale = sorted(set(KNOWN_INERT) - set(found))
     assert not stale, (
@@ -192,10 +123,6 @@ def test_the_known_list_does_not_rot():
 
 
 def test_every_source_file_parses_cleanly():
-    """Audits like this one read source with `ast`. A file with a UTF-8 BOM
-    did not parse from text, so every such audit skipped it in silence; an
-    invalid escape (a regex's backslash-w in a plain string) is a SyntaxWarning on 3.12 and
-    an error in a later Python. Neither is allowed back."""
     import warnings
 
     skip = {".git", "build", "dist", ".venv", "node_modules", "__pycache__"}

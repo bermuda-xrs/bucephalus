@@ -1,11 +1,3 @@
-"""The console's file browser is a new READER, and drag-and-drop a new WRITER
-(iteration 3, 4.4). Both go through the same scope and protected-path checks
-as every other reader and writer (DR3).
-
-Written first and shown red against a naive route that read whatever path it
-was given under the project root.
-"""
-
 from __future__ import annotations
 
 import base64
@@ -126,8 +118,6 @@ def test_a_drop_never_writes_outside_the_workspace_or_over_anything(world, targe
 
 
 def test_a_junction_out_of_the_workspace_is_not_followed(world):
-    """A directory junction needs no privilege on Windows - the link a
-    sandboxed program could actually make here."""
     client, tid, root, *_ = world
     try:
         import _winapi

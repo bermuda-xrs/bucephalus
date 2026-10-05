@@ -1,13 +1,3 @@
-"""The console token lives outside the checkout, in every mode (AUDIT F2
-second half, D41).
-
-In checkout mode the state root is the repository - here under a OneDrive
-folder - so `.alpha_token` was synced to a third party's servers. `.gitignore`
-does not stop OneDrive. The token now lives under platformdirs' user config
-directory (local, not roaming) whatever the mode, and one found in the
-checkout is RETIRED, not migrated: it has already been off the machine.
-"""
-
 from __future__ import annotations
 
 from pathlib import Path

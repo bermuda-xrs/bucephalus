@@ -1,5 +1,3 @@
-"""M10 acceptance — five gates, and a parent context that stays bounded."""
-
 from __future__ import annotations
 
 import pytest
@@ -22,7 +20,6 @@ def _full(ctx) -> SubtaskPlan:
 
 
 def test_delegation_rejects_incomplete_contract(ctx, task):
-    """Each of the five gates independently blocks delegation."""
     assert may_delegate(ctx, task, _full(ctx))[0] is True
 
     cases = {
@@ -41,7 +38,6 @@ def test_delegation_rejects_incomplete_contract(ctx, task):
 
 
 def test_parent_context_bounded(ctx, task, workspace, scripted):
-    """Child produces 50k tokens; the parent's context grows by < 500 tokens."""
     from agent.tokens import count_tokens
 
     huge = "irrelevant detail. " * 12_000
@@ -74,8 +70,6 @@ def test_refused_delegation_raises_rather_than_degrading(ctx, task):
 
 
 def test_overflow_falls_back_to_compaction_when_gates_fail(ctx, task, workspace):
-    """M3.4 says overflow delegates; M10 says most delegations are refused.
-    The overflow path must still terminate, not thrash."""
     from agent.kernel.types import Taint
     from agent.ledger.entries import LedgerEntry
 

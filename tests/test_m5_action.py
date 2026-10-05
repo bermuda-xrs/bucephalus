@@ -1,5 +1,3 @@
-"""M5 acceptance — the action substrate, the sandbox boundary, and the bridge."""
-
 from __future__ import annotations
 
 import json
@@ -16,8 +14,6 @@ def test_sandbox_runs_and_reports():
 
 
 def test_the_bridge_closes_every_pipe_it_opened():
-    """The bridge drained the child's stderr and never closed it: one open
-    handle per code action until the collector found it (ResourceWarning)."""
     import gc
     import warnings
 
@@ -37,7 +33,6 @@ def test_sandbox_timeout():
 
 
 def test_sandbox_denies_anchor_write(ctx, task, workspace):
-    """Code attempting to write anchor_path fails, and the anchor is untouched."""
     anchor_path = Path(ctx.config.resolve(ctx.config.anchor_path))
     ctx.anchor.record(task.id, "deadbeef")
     before = anchor_path.read_bytes()
@@ -48,7 +43,6 @@ def test_sandbox_denies_anchor_write(ctx, task, workspace):
         "p.write_text('rewritten by the agent')\n"
         "print('WROTE')\n"
     )
-    # The gate refuses before the sandbox ever sees it.
     from agent.security.capabilities import gate_tool_call
 
     tool = ctx.tools.get("write_file")
@@ -58,7 +52,6 @@ def test_sandbox_denies_anchor_write(ctx, task, workspace):
     assert decision.verdict == "deny"
     assert "protected path" in decision.reason or "artifact_scope" in decision.reason
 
-    # And the audit hook inside the child refuses the direct write too.
     r = run_sandboxed(code, allowed_paths=[str(workspace)], timeout_s=15)
     assert r["returncode"] != 0
     assert "write denied outside scope" in r["stderr"]
@@ -89,7 +82,6 @@ def test_sandbox_exposes_only_scoped_paths(workspace, tmp_path):
 
 
 def test_code_bridge_services_tool_calls(ctx, task, workspace):
-    """call_tool round-trips to the parent and comes back with a real result."""
     (workspace / "hello.txt").write_text("contents here", encoding="utf-8")
     code = (
         "r = call_tool('read_file', path='work/hello.txt')\n"
@@ -102,7 +94,6 @@ def test_code_bridge_services_tool_calls(ctx, task, workspace):
 
 
 def test_code_bridge_enforces_the_gate(ctx, task, workspace):
-    """A call the gate refuses raises inside the sandbox, it does not run."""
     code = (
         "try:\n"
         "    call_tool('read_file', path='../../etc/passwd')\n"
@@ -116,8 +107,6 @@ def test_code_bridge_enforces_the_gate(ctx, task, workspace):
 
 
 def test_code_mode_collapses_turns(ctx, workspace, scripted):
-    """Task touching 20 files: direct mode needs >=15 turns, code mode <=3,
-    and both produce the same answer."""
     from agent.execute.loop import run_task
     from agent.kernel.tasks import create_task
     from agent.kernel.types import Budget, TaskContract
@@ -135,7 +124,6 @@ def test_code_mode_collapses_turns(ctx, workspace, scripted):
             Budget(usd=5.0, seconds=600),
         )
 
-    # --- code mode: one turn does all twenty reads through the bridge
     ctx.config.limits.max_steps = 24
     code_task = make_task("sum the twenty files [code]")
     scripted(
@@ -154,7 +142,6 @@ def test_code_mode_collapses_turns(ctx, workspace, scripted):
         "SELECT COUNT(*) FROM calls WHERE task_id=? AND purpose='step'", (code_task.id,)
     ).fetchone()[0]
 
-    # --- direct mode: one read per turn
     direct_task = make_task("sum the twenty files [direct]")
     ctx.backends["cloud"].queue(
         *[

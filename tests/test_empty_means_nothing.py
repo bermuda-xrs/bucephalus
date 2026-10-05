@@ -1,13 +1,3 @@
-"""D29 and its siblings: EMPTY MEANS NOTHING.
-
-An empty artifact_scope returned "allowed" before looking at a single path -
-the fail-open shape Phase 8 refused for the channel allowlist. It is a
-sub-pattern of the adjacency family with its own signature: the control
-exists, is consulted, and - because its list is empty or its input missing -
-permits everything. Each test names one instance, and each was run against the
-code before the fix.
-"""
-
 from __future__ import annotations
 
 import asyncio
@@ -43,10 +33,6 @@ def notes(ctx):
     return ctx
 
 
-# -- D29 ---------------------------------------------------------------------
-
-# Paths that are neither protected nor ancestors of protected state, so D29 is
-# the only thing that can refuse them.
 UNDECLARED = {
     "read": ("read_file", {"path": "work/notes.txt"}),
     "write": ("write_file", {"path": "work/new.txt", "content": "x"}),
@@ -70,11 +56,8 @@ def test_a_declared_scope_is_unaffected(notes):
                           {"path": "work/notes.txt"}).allowed
 
 
-# -- D29 for code: the sandbox's reads -------------------------------------
-
 @pytest.fixture
 def outside(tmp_path):
-    """A file outside the project root entirely - nobody declared it."""
     p = tmp_path.parent / f"outside-{tmp_path.name}.txt"
     p.write_text("zq-outside-marker", encoding="utf-8")
     yield p
@@ -99,25 +82,18 @@ def test_code_still_reads_its_scope_and_imports(notes):
     assert "ordinary work 3.142 2" in res["stdout"], res
 
 
-# -- siblings ---------------------------------------------------------------
-
 def test_a_parent_that_declared_no_scope_can_give_a_child_none():
     assert scope_widens([], ["work"]) == ["work"]
     assert scope_widens(["work"], ["work/sub"]) == []
 
 
 def test_the_trusted_tier_is_human_only_whatever_the_config(notes):
-    """With `human_only_tiers` empty, a trusted-tier call reached the deputy -
-    and "trusted always parks" rested on one tool's taint ceiling."""
     notes.config.autonomy.auto_review = True
     notes.config.autonomy.human_only_tiers = []
     notes.backends["review"].queue(json.dumps({"verdict": "approve",
                                                "rationale": "looks fine"}))
     ran = _launch_tool(notes)
     t = _task(notes, ["work"])
-    # `service`, not `target`: "target" is a PATH key, and the first draft of
-    # this test was refused by the scope check before the tier was ever asked -
-    # red before the fix and red after it, for a reason unrelated to either.
     notes.backends["cloud"].queue('<action tool="launch">{"service": "prod"}</action>',
                                   FINAL)
     r = run_task(notes, t.id)
@@ -140,8 +116,6 @@ def _launch_tool(ctx) -> list:
 
 
 def test_the_reviewer_itself_escalates_the_trusted_tier(notes):
-    """The second layer: were `_adjudicate` ever to route one to the deputy,
-    the deputy's own check must not approve it on an empty config either."""
     from agent.plan.review import ReviewRequest, auto_review
 
     notes.config.autonomy.human_only_tiers = []
@@ -212,12 +186,6 @@ def test_a_request_with_no_host_header_is_refused():
     assert _status(app, []) == 403, "an absent Host skipped the rebinding check"
 
 
-# -- the classification that keeps the path checks from failing open ---------
-
-# Parameters that are NOT paths, by tool. The path checks are keyed on argument
-# NAMES, so an unclassified name is never checked: fail-open by default. A new
-# tool, or a new parameter, fails here until someone says which it is - the
-# taint-table rule ("a row before registration") applied to arguments.
 NOT_PATHS = {
     "append_to_outbox": {"to", "body"}, "edit_file": {"old", "new", "count"},
     "expand_artifact": {"id"}, "git_push": {"remote", "branch"},
@@ -241,8 +209,6 @@ def test_every_tool_argument_is_classified(ctx):
             "it ships, or the path checks never see it.")
 
 
-# -- declaring a drafting set: the only way past the contamination check -----
-
 def test_a_drafting_set_is_declared_once_and_never_rewritten(ctx):
     sid = _skill(ctx, "Declared later.\n", {"drafted_by": "human"})
     with pytest.raises(ContaminationError, match="--declare-drafted-from"):
@@ -258,8 +224,6 @@ def test_a_drafting_set_is_declared_once_and_never_rewritten(ctx):
 
 
 def test_a_declaration_after_trials_says_so(ctx):
-    """Declaring after results exist is how contamination gets laundered, so
-    the count of trials already recorded is written beside the declaration."""
     sid = _skill(ctx, "Trials first.\n", {"drafted_by": "human"})
     ctx.conn.execute(
         "INSERT INTO skill_trials(skill_id, task_key, arm, success, paid_tokens,"

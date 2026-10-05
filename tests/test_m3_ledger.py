@@ -1,5 +1,3 @@
-"""M3 acceptance — prefix stability, deletion-based compaction, taint-safe cache."""
-
 from __future__ import annotations
 
 import pytest
@@ -18,7 +16,6 @@ CONTRACT = {"goal": "g", "artifact_scope": ["work"], "success_criterion": "alway
 
 
 def test_prefix_byte_stable_across_20_turns():
-    """Build the prefix 20 times with the same inputs in shuffled order."""
     import random
 
     fps = set()
@@ -39,18 +36,6 @@ def test_prefix_guard_catches_mutation():
 
 
 def test_prefix_rejects_a_timestamp_in_the_contract():
-    """The classic way to lose the discount: a date in the stable section.
-
-    The timestamp goes in `goal`, a field the model actually sees. This test
-    injected `{"now": ...}` as a bare contract key until 2026-09-22, and
-    stopped firing when the prefix moved to an ALLOWLIST of contract fields
-    (the grader leak, HARNESS_VERSION 4): an unrecognised key cannot reach the
-    prefix now, so it cannot move it either.
-
-    That is one route closing, not the invariant weakening - anything varying
-    inside a visible field still voids the discount and still raises. The
-    companion below pins the closed route so the two cannot be confused.
-    """
     guard = PrefixGuard()
     guard.check(PrefixBuilder(SYSTEM_CONTRACT, SKILLS,
                               {**CONTRACT, "goal": "report at 10:00"}), "t")
@@ -60,10 +45,6 @@ def test_prefix_rejects_a_timestamp_in_the_contract():
 
 
 def test_an_unrecognised_contract_key_cannot_reach_the_prefix_at_all():
-    """Why the test above changed route. An arbitrary key is not rendered, so
-    it can neither leak nor move the prefix. See
-    `tests/test_grader_is_not_in_the_prompt.py` for the defect that bought
-    this and the allowlist it has to maintain."""
     a = PrefixBuilder(SYSTEM_CONTRACT, SKILLS, {**CONTRACT, "now": "10:00"})
     b = PrefixBuilder(SYSTEM_CONTRACT, SKILLS, {**CONTRACT, "now": "10:01"})
     assert a.fingerprint() == b.fingerprint()
@@ -109,15 +90,12 @@ def test_extract_exact_strings_finds_identifiers():
 
 
 def test_ceiling_triggers_delegation_not_squeeze():
-    # Small tail, huge prefix: the work itself is too big -> delegate.
     assert enforce_ceiling(60_000, 1_000, 200_000, 0.28) == "delegate"
-    # Fat tail -> compact.
     assert enforce_ceiling(1_000, 60_000, 200_000, 0.28) == "compact"
     assert enforce_ceiling(1_000, 1_000, 200_000, 0.28) == "ok"
 
 
 def test_cache_hit_ratio_above_threshold(ctx, task, scripted):
-    """Run a multi-turn task; most input tokens should be served from cache."""
     from agent.execute.loop import run_task
 
     scripted(
@@ -134,7 +112,6 @@ def test_cache_hit_ratio_above_threshold(ctx, task, scripted):
 
 
 def test_cache_does_not_launder_taint(ctx):
-    """Store an untrusted result, request it in a trusted context, assert miss."""
     calls = []
 
     def fn():
@@ -153,9 +130,6 @@ def test_cache_does_not_launder_taint(ctx):
 
 
 def test_the_mock_cache_has_an_opinion_about_the_bytes(ctx):
-    """The mock stands in for the server whose cache_hit_ratio is the
-    independent check on prefix stability. Keyed on the bytes, or it checks
-    nothing - see MockBackend.complete."""
     b = ctx.backends["cloud"]
     first = b.complete("PREFIX-A", "t1").usage
     again = b.complete("PREFIX-A", "t2").usage

@@ -1,12 +1,3 @@
-"""No test touches the operator's real user directories.
-
-FOUND 2026-09-28: the operator's real tier-1 memory held
-"- [user] injected instruction", written 2026-09-25 by the audit's probe of
-F6. `AgentContext` keeps memory in `user_data_dir()/memory`, and the suite
-redirected only the CONFIG dir, so any in-process context wrote the real
-memory - which goes into the prefix of every real session afterwards.
-"""
-
 from __future__ import annotations
 
 from pathlib import Path

@@ -1,23 +1,3 @@
-"""Two measurement processes must not run at once.
-
-This is not tidiness. On 2026-08-27 two `noise.py` passes overlapped for 36
-minutes because a process that looked dead was not. The duplicated ledger
-rows were harmless — they collapse on resume. The damage was:
-
-  * three tasks were measured while two models competed for one CPU, so their
-    wall clock is not comparable to the rest of the run, and
-  * `budget_exhausted` is a TIME limit, so contention can MANUFACTURE that
-    outcome on a task that would otherwise have finished. The suite reads as
-    harder than it is, for reasons unrelated to the tasks.
-
-It also breaks the documented single-process invariant: the hash-chain lock is
-process-wide, so a second process cannot see it. Chains verified that time
-only because they are per-task — luck, not design.
-
-The lock must be released by the OS on process death, because these processes
-are routinely killed rather than exiting cleanly.
-"""
-
 from __future__ import annotations
 
 import subprocess
@@ -44,7 +24,6 @@ def test_a_second_holder_in_this_process_is_refused(tmp_path):
 
 
 def test_the_refusal_explains_the_damage_not_just_the_conflict(tmp_path):
-    """An operator who does not know WHY will just delete the lock file."""
     lock = RunLock(tmp_path / "m.lock").acquire()
     try:
         with pytest.raises(RunLockBusy) as e:
@@ -64,7 +43,6 @@ def test_releasing_lets_the_next_process_in(tmp_path):
 
 
 def test_a_real_second_process_is_refused(tmp_path):
-    """The case that actually bit: a separate OS process, not a second object."""
     lockfile = tmp_path / "m.lock"
     held = RunLock(lockfile, "noise floor").acquire()
     try:
@@ -87,18 +65,6 @@ def test_a_real_second_process_is_refused(tmp_path):
 
 
 def test_the_lock_is_released_when_a_process_is_killed(tmp_path):
-    """The property that matters most here.
-
-    These runs are routinely killed rather than exited. A lock needing tidy
-    shutdown would strand every later run behind a file nobody owns.
-
-    NOTE ON WHICH PID TO KILL. On Windows a venv's python.exe is a
-    TRAMPOLINE: Popen returns the wrapper's pid while the real interpreter
-    runs as its child. Killing the Popen handle leaves the interpreter alive,
-    still holding the lock - which is how this test first failed. The lock
-    file records os.getpid() from INSIDE the holder, so that is the pid to
-    kill, and it is what `measure.ps1 stop` uses.
-    """
     lockfile = tmp_path / "m.lock"
     script = textwrap.dedent(f"""
         import sys, time
@@ -114,23 +80,20 @@ def test_the_lock_is_released_when_a_process_is_killed(tmp_path):
     try:
         line = proc.stdout.readline().split()
         assert line[0] == "HELD"
-        holder = int(line[1])                     # the real interpreter
+        holder = int(line[1])
         with pytest.raises(RunLockBusy):
             RunLock(lockfile).acquire()
 
         if holder == proc.pid:
-            # not every interpreter is a trampoline; only assert the hazard
-            # where it exists, rather than pinning an environment detail.
             pass
     finally:
-        # kill the real holder, then the wrapper
-        kill_tree(proc.pid)      # the trampoline AND the interpreter
+        kill_tree(proc.pid)
         proc.kill()
         proc.wait(timeout=10)
         proc.stdout.close()
 
     deadline = time.time() + 15
-    while time.time() < deadline:                 # the OS releases lazily
+    while time.time() < deadline:
         try:
             RunLock(lockfile, "next run").acquire().release()
             break
@@ -141,30 +104,17 @@ def test_the_lock_is_released_when_a_process_is_killed(tmp_path):
 
 
 def test_both_harnesses_share_one_lock_file():
-    """A calibration racing a noise floor is the same failure.
-
-    They compete for the same CPU and the same database, so one lock covers
-    both rather than each guarding only itself.
-    """
     noise = (ROOT / "bench" / "noise.py").read_text(encoding="utf-8")
     run = (ROOT / "bench" / "run.py").read_text(encoding="utf-8")
     for src, name in ((noise, "noise.py"), (run, "run.py")):
         assert "RunLock(" in src, f"{name} does not take the measurement lock"
-        # D34: the ONE project lock, not a file beside the run's output.
         assert "RunLock(measurement_lock_path(" in src, f"{name} uses a different lock file"
 
 
 def test_an_unbound_lock_is_not_silently_released(tmp_path):
-    """`RunLock(p).acquire()` with the result discarded must still hold.
-
-    Without a module-level reference the object is collected immediately, its
-    file is closed, and the lock evaporates with no error anywhere — a silent
-    unlock, which is the worst failure available to a guard whose only job is
-    to refuse. Found by the kill test: the child held nothing.
-    """
     import gc
 
-    RunLock(tmp_path / "m.lock", "unbound").acquire()   # deliberately unbound
+    RunLock(tmp_path / "m.lock", "unbound").acquire()
     gc.collect()
 
     with pytest.raises(RunLockBusy):
@@ -172,12 +122,6 @@ def test_an_unbound_lock_is_not_silently_released(tmp_path):
 
 
 def test_the_lockfile_names_exactly_one_pid(tmp_path):
-    """The error message names the holder, so it must not be a stale list.
-
-    In "a+" mode writes ignore seek(), so each acquire appended another PID
-    and the file read back as "31380 31380 16048" — an error that would send
-    an operator chasing a process that exited hours ago.
-    """
     lf = tmp_path / "m.lock"
     for _ in range(3):
         RunLock(lf, "serial").acquire().release()
@@ -186,22 +130,10 @@ def test_the_lockfile_names_exactly_one_pid(tmp_path):
     assert body.isdigit()
 
 
-# ---------------------------------------------------------------------------
-# 1.7 - parent dies, child survives. Two instances in two days is a class.
-# ---------------------------------------------------------------------------
-
-
 def test_kill_tree_kills_the_child_not_just_the_parent(tmp_path):
-    """The bug, twice: a venv trampoline, then Ollama's llama-server.
-
-    A parent that spawns a worker and is killed leaves the worker holding
-    whatever it held - a lock, or 5.9 GB of RAM.
-    """
     from agent.proc import _alive, kill_tree
 
     marker = tmp_path / "grandchild.pid"
-    # as_posix(): a Windows path embedded in a doubly-nested string is read
-    # as unicode escapes and fails to compile.
     inner = ("import time,os,pathlib;"
              "pathlib.Path(" + repr(marker.as_posix()) + ")"
              ".write_text(str(os.getpid()));"
@@ -238,7 +170,6 @@ def test_kill_tree_kills_the_child_not_just_the_parent(tmp_path):
 
 
 def test_kill_tree_on_a_dead_pid_is_success():
-    """Idempotent: the caller's intent is 'ensure not running'."""
     from agent.proc import kill_tree
 
     assert kill_tree(999999) is True
@@ -246,7 +177,6 @@ def test_kill_tree_on_a_dead_pid_is_success():
 
 
 def test_free_memory_is_readable():
-    """The cost axis is seconds, so paging must be observable."""
     from agent.proc import free_memory_gb
 
     gb = free_memory_gb()

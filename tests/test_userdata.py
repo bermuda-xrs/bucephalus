@@ -1,10 +1,3 @@
-"""User-authored content: suites, policy, grounding.
-
-The point of this layer is that a person enters their own material through the
-UI rather than editing repo files. These check the rules that protect them
-from entering something that measures nothing.
-"""
-
 from __future__ import annotations
 
 import pytest
@@ -23,11 +16,7 @@ def _task(**kw) -> SuiteTask:
     return SuiteTask(**base)
 
 
-# ------------------------------------------------------------- validation
-
-
 def test_always_pass_is_refused():
-    """A suite scored by always_pass measures nothing and promotes noise."""
     problems = validate_task(_task(success_criterion="always_pass"), VERIFIERS)
     assert any("always_pass" in p for p in problems)
 
@@ -50,9 +39,6 @@ def test_unknown_verifier_is_named_with_the_alternatives():
 
 def test_a_well_formed_task_has_no_problems():
     assert validate_task(_task(), VERIFIERS) == []
-
-
-# ------------------------------------------------------------------ CRUD
 
 
 def test_suite_round_trip(ctx):
@@ -106,7 +92,6 @@ def test_suite_reports_readiness_against_the_gate(ctx):
 
 
 def test_import_from_folder(ctx):
-    """Existing file suites are not stranded."""
     folder = ctx.config.resolve("bench_import")
     folder.mkdir(parents=True, exist_ok=True)
     (folder / "a.json").write_text(
@@ -119,11 +104,7 @@ def test_import_from_folder(ctx):
     assert s.tasks[0].fixtures == {"work/x": "hi"}
 
 
-# ---------------------------------------------------------------- policy
-
-
 def test_policy_defaults_to_deny_when_nothing_is_stored(ctx):
-    """An empty database must not be more permissive than a missing file."""
     from agent.plan.review import load_policy
 
     ctx.config.autonomy.auto_review_policy = "./does-not-exist.md"
@@ -146,5 +127,3 @@ def test_empty_policy_is_refused(ctx):
 def test_grounding_notes_are_gone(ctx):
     with pytest.raises(ValidationError):
         ctx.userdata.put_document("grounding", "tps", "thermal protection notes about tiles")
-
-

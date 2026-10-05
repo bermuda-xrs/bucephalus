@@ -1,11 +1,3 @@
-"""The desktop shell's rules (agent/desktop.py): loopback only, state in
-platformdirs, and closing the window stops every process it started.
-
-No window is opened here: `main()` is start_server -> webview -> shutdown,
-and the two halves that carry the rules are tested directly. The frozen
-build's end-to-end close is in docs/evidence (step 3).
-"""
-
 from __future__ import annotations
 
 import json
@@ -28,16 +20,12 @@ def test_loopback_unless_remote_is_opted_in(monkeypatch):
 
 
 def test_state_goes_to_platformdirs_even_from_inside_a_checkout(tmp_path, monkeypatch):
-    """Launched from the project directory, `state_root()` would pick the
-    checkout - the developer's database. The app must not."""
     from pathlib import Path
 
     import agent.paths as paths
 
     checkout = Path(__file__).resolve().parents[1]
     monkeypatch.chdir(checkout)
-    # set-then-delete, so teardown restores it: resolve_state() writes the
-    # variable, and a bare delenv of an unset one records nothing to undo.
     monkeypatch.setenv("ALPHA_DATA_DIR", "placeholder")
     monkeypatch.delenv("ALPHA_DATA_DIR")
     monkeypatch.setenv("ALPHA_CONFIG_DIR", str(tmp_path / "config"))
@@ -54,9 +42,6 @@ def _pythons_below() -> list[int]:
 
 
 def test_closing_the_window_kills_everything_it_started(ctx, workspace):
-    """A sandboxed run mid-flight, its grandchild, and a plain child: all gone
-    after shutdown, and the server stopped. The orphan is the grandchild -
-    the process a bare terminate of the child would leave behind."""
     from agent.execute.sandbox import run_sandboxed
 
     server, thread, port = desktop.start_server(ctx, "127.0.0.1")
@@ -85,7 +70,6 @@ def test_closing_the_window_kills_everything_it_started(ctx, workspace):
 
 
 def test_the_console_answers_only_with_the_token(ctx, workspace):
-    """The shell must not open a hole the guard closes elsewhere."""
     server, thread, port = desktop.start_server(ctx, "127.0.0.1")
     try:
         req = urllib.request.Request(f"http://127.0.0.1:{port}/approvals")
@@ -102,12 +86,9 @@ def test_the_console_answers_only_with_the_token(ctx, workspace):
 
 
 def test_a_windowed_build_without_streams_still_starts(tmp_path, monkeypatch, ctx, workspace):
-    """--windowed gives sys.stdout = sys.stderr = None, and uvicorn writes to
-    them: the first frozen build died before its window opened."""
     monkeypatch.setattr(sys, "stdout", None)
     monkeypatch.setattr(sys, "stderr", None)
     desktop._streams_to_log(tmp_path)
-    # Without the fix this raises: "Unable to configure formatter 'default'".
     server, thread, port = desktop.start_server(ctx, "127.0.0.1")
     try:
         with urllib.request.urlopen(f"http://127.0.0.1:{port}/health", timeout=10) as r:
@@ -119,10 +100,6 @@ def test_a_windowed_build_without_streams_still_starts(tmp_path, monkeypatch, ct
 
 
 def test_the_tree_stops_when_the_window_closes_not_after_its_teardown(monkeypatch, tmp_path):
-    """Iteration 3, 3.2. pywebview's close, in private mode, waits up to 3 s
-    for WebView2's browser process to exit on its own before `start()`
-    returns - 2.2 s of the 3.6 s close. The tree is stopped on the window's
-    `closed` event, so that wait ends in the kill it would end in anyway."""
     import types
 
     order = []
@@ -136,9 +113,6 @@ def test_the_tree_stops_when_the_window_closes_not_after_its_teardown(monkeypatc
             return self
 
         def set(self):
-            # As pywebview's Event.set does: return values go in a SET, so a
-            # handler returning a list raised there - found in the frozen
-            # app's desktop.log, not by a test.
             values = set()
             for fn in self.handlers:
                 values.add(fn())
@@ -146,8 +120,8 @@ def test_the_tree_stops_when_the_window_closes_not_after_its_teardown(monkeypatc
     window = types.SimpleNamespace(events=types.SimpleNamespace(closed=Event()))
 
     def start(**_kw):
-        window.events.closed.set()        # the person closes the window...
-        order.append("webview teardown")  # ...and pywebview's wait follows
+        window.events.closed.set()
+        order.append("webview teardown")
 
     monkeypatch.setitem(sys.modules, "webview", types.SimpleNamespace(
         create_window=lambda *a, **k: window, start=start))
@@ -161,8 +135,6 @@ def test_the_tree_stops_when_the_window_closes_not_after_its_teardown(monkeypatc
 
 
 def test_only_a_private_profile_is_deleted(monkeypatch, tmp_path):
-    """The early stop can win pywebview's race and leave its private profile
-    behind; it is removed then - and never a persistent one."""
     import types
 
     for private, kept in ((True, False), (False, True)):
@@ -177,10 +149,6 @@ def test_only_a_private_profile_is_deleted(monkeypatch, tmp_path):
 
 
 def test_the_final_stop_waits_for_the_early_one(monkeypatch):
-    """The early stop runs on pywebview's event thread, and the app leaves by
-    os._exit right after its own final stop. The final stop's snapshot cannot
-    see a WebView2 child whose browser the early stop already killed, so if it
-    did not wait, the exit could cut the early stop off mid-kill."""
     import types
 
     events, calls = [], []
@@ -207,10 +175,6 @@ def test_the_final_stop_waits_for_the_early_one(monkeypatch):
 
 
 def test_an_open_console_stream_does_not_hold_the_close(ctx, workspace):
-    """Found in the frozen app, 3.2/4.8: after a task had run, closing the
-    window took 22 s instead of 2.6. The console keeps the task's stream open,
-    uvicorn's shutdown waits for open connections with no limit, and the stop
-    joined the server for up to 10 s - twice, early stop and final stop."""
     import socket
 
     from agent.kernel.tasks import create_task
@@ -244,8 +208,6 @@ def _unbounded_servers(source: str) -> list[int]:
 
 
 def test_every_server_bounds_its_shutdown():
-    """DR5 sweep of the fix above: `alpha serve` had the same unbounded wait -
-    a Ctrl+C with a console open waited for the tab to close."""
     from pathlib import Path
 
     src = Path(desktop.__file__).resolve().parent

@@ -1,19 +1,9 @@
-"""M8.3 monitor behaviour, the local fetcher, and the correctness verifiers.
-
-The monitor had no behavioural coverage at all: the only test touching it
-asserted that *other* modules do not import it, which says nothing about
-whether it works.
-"""
-
 from __future__ import annotations
 
 import pytest
 
 from agent.assure.monitor import flags, parse_findings, run_monitor
 from agent.kernel.types import TaskContract
-
-
-# ---------------------------------------------------------------- monitor
 
 
 def test_parse_findings_shapes():
@@ -24,7 +14,6 @@ def test_parse_findings_shapes():
 
 
 def test_monitor_writes_flags_and_touches_nothing_else(ctx, task, scripted):
-    """Findings land in monitor_flags — and nowhere the agent can read."""
     from agent.execute.loop import run_task
 
     scripted("cloud", '<final>{"answer": "ok"}</final>')
@@ -62,13 +51,6 @@ def test_monitor_clean_writes_nothing(ctx, task, scripted):
     assert flags(ctx.conn, task.id) == []
 
 
-# ---------------------------------------------------------------- fetcher
-
-
-# Against `fetch_with_provenance` - the function `web_fetch` calls. These used
-# to test `fetch_url`, a wrapper no production path called.
-
-
 def test_fetcher_refuses_non_http_schemes():
     from agent.net.fetch import FetchError, fetch_with_provenance
 
@@ -78,7 +60,6 @@ def test_fetcher_refuses_non_http_schemes():
 
 
 def test_fetcher_refuses_private_addresses():
-    """A fetched page names the next URL. Without this it is one hop to the router."""
     from agent.net.fetch import FetchError, fetch_with_provenance
 
     for bad in ("http://127.0.0.1/admin", "http://localhost:8080/",
@@ -99,7 +80,6 @@ def test_html_is_reduced_to_text():
 
 
 def test_web_fetch_output_is_untrusted(ctx, workspace, scripted):
-    """Whatever the fetcher returns must land in the ledger as untrusted."""
     from agent.execute.loop import run_task
     from agent.kernel.tasks import create_task
     from agent.kernel.types import Budget
@@ -118,9 +98,6 @@ def test_web_fetch_output_is_untrusted(ctx, workspace, scripted):
     assert "untrusted" in taints
 
 
-# ---------------------------------------------------- correctness verifiers
-
-
 def _contract(expected=None, contains=None, exact=False) -> TaskContract:
     schema: dict = {"type": "object", "required": ["total"],
                     "properties": {"total": {"type": "integer"}}}
@@ -134,7 +111,6 @@ def _contract(expected=None, contains=None, exact=False) -> TaskContract:
 
 
 def test_expected_value_catches_a_right_shaped_wrong_answer(ctx):
-    """The whole point: json_schema passes this, expected_value must not."""
     from agent.assure.verifiers import ExpectedValueVerifier, JsonSchemaVerifier
 
     c = _contract(expected={"total": 4825})
@@ -168,8 +144,6 @@ def test_string_comparison_is_forgiving_unless_exact(ctx):
                   "x-expected": {"name": "Drive Belt"}}
         if exact:
             schema["x-exact"] = True
-        # Rebuild rather than mutate: pydantic copies the dict on validation,
-        # so editing the original afterwards does not reach the contract.
         return TaskContract(goal="g", output_schema=schema,
                             success_criterion="expected_value")
 

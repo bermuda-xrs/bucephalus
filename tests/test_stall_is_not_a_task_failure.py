@@ -1,26 +1,3 @@
-"""A stalled model call must not be scored as a task failure.
-
-The detector was added, fired correctly, and was thrown away. `run_task`
-catches every exception, records `task.crashed` and returns a status the
-suite scores as FAILED - so `ModelStall` never reached the handler written to
-re-run the task. Two tasks in a Phase 2A run were mis-scored that way before
-the run was aborted:
-
-    H23  ModelStall: 0.59 tok/s against a median of 5.97  -> "crashed"
-    H30  transport timeout after ~1728 s                  -> "crashed"
-
-The detector was correct at both ends and useless in the middle, because it
-was caught one level too low. That is why these tests assert the PROPAGATION
-and not the detection: a test that ModelStall is raised would have passed
-throughout the whole defect.
-
-Why it matters beyond bookkeeping: the budget is wall clock and
-`budget_exhausted` is a failure, so a machine stall silently converts a task
-that would have passed into one that failed. In a paired trial that
-manufactures a discordant pair out of a machine event, and interleaving the
-arms cannot help, because one stalled call lands on exactly one arm.
-"""
-
 from __future__ import annotations
 
 import sys
@@ -36,7 +13,6 @@ from agent.models.ollama import ModelStall  # noqa: E402
 
 
 def test_the_handler_sits_ahead_of_the_generic_catch():
-    """Order is the entire defect. Behind it, the handler never runs."""
     src = (ROOT / "src" / "agent" / "execute" / "loop.py").read_text(encoding="utf-8")
     stall = src.index("    except ModelStall as e:")
     generic = src.index("    except Exception as e:", src.index("def run_task"))
@@ -52,20 +28,6 @@ def test_the_handler_sits_ahead_of_the_generic_catch():
 ])
 def test_a_timeout_is_raised_as_a_stall_not_a_generic_backend_error(
         monkeypatch, kind, extra):
-    """A transport timeout is the same machine event, caught by a different
-    layer. If it arrives as a plain BackendError it lands in the generic
-    branch and is scored as a failure - which is what happened to H30.
-
-    This used to read ollama.py and look for `raise ModelStall` between the
-    timeout handler and the generic one. That check was about SPELLING: it
-    passed for any code that contained the phrase and, more to the point, it
-    could say nothing at all about a second adapter. So it is now the
-    property, exercised: inject a real httpx.ReadTimeout into the request path
-    and require ModelStall out the other side, for EVERY adapter that streams.
-
-    No server is involved - the injected timeout is raised inside the try
-    block, which is the whole point of where the injection sits.
-    """
     from agent.config import BackendConfig
     from agent.models import stall as stall_mod
     from agent.models.registry import build_backend
@@ -85,23 +47,15 @@ def test_a_timeout_is_raised_as_a_stall_not_a_generic_backend_error(
 
 
 def test_model_stall_propagates_out_of_run_task(monkeypatch):
-    """The regression, stated as the property that was actually broken."""
     calls = {"n": 0}
 
     def boom(*a, **k):
         calls["n"] += 1
         raise ModelStall("stalled", 0.2, 2.5, 30, 150.0)
 
-    # _step is where a model call happens; any raise from inside the loop body
-    # must reach the caller rather than becoming `crashed`.
     assert hasattr(loop_mod, "run_task")
     src = (ROOT / "src" / "agent" / "execute" / "loop.py").read_text(encoding="utf-8")
 
-    # The sweep must be attempted BEFORE re-raising: a stall can land on a
-    # call made after the answer was already written, and re-running would
-    # discard a correct artifact. Because generation is not byte-deterministic
-    # here, discarding a verified artifact can turn a pass into a fail, which
-    # makes it a correctness problem rather than wasted compute.
     stall_branch = src[src.index("    except ModelStall as e:"):
                        src.index("    except Exception as e:",
                                  src.index("def run_task"))]
@@ -115,7 +69,6 @@ def test_model_stall_propagates_out_of_run_task(monkeypatch):
 
 
 def test_noise_treats_a_stall_as_machine_fault_and_excludes_on_the_second():
-    """Excluded is reported as excluded: never a failure, never dropped."""
     src = (ROOT / "bench" / "noise.py").read_text(encoding="utf-8")
     assert "except ModelStall as e:" in src
     assert "excluded_machine_fault" in src
@@ -128,7 +81,6 @@ def test_noise_treats_a_stall_as_machine_fault_and_excludes_on_the_second():
 
 
 def test_an_excluded_task_is_not_counted_as_a_failure():
-    """`unmeasured` is what keeps it out of the pass rate."""
     src = (ROOT / "bench" / "noise.py").read_text(encoding="utf-8")
     i = src.index("excluded_machine_fault")
     branch = src[i - 200:i + 800]
@@ -136,22 +88,6 @@ def test_an_excluded_task_is_not_counted_as_a_failure():
         "an excluded task must be unmeasured, or a machine fault still "
         "depresses the pass rate")
 
-
-# ---------------------------------------------------------------------------
-# Path (b): a stall that lands AFTER the work is already done.
-#
-# Proved deterministically with the mock backend rather than on real hardware.
-# Two attempts to provoke it with an injected stall on a live model failed for
-# an unrelated reason - `run_code` errored on the first call, so there was no
-# artifact for the sweep to find - and chasing a specific branch through model
-# non-determinism is the wrong instrument. The sweep is the branch under test,
-# so the test controls what is on disk.
-#
-# Why the branch matters: re-running a task whose answer is already correct
-# can turn a pass into a fail, because generation here is NOT
-# byte-deterministic (SPEC-DELTA C18). Discarding a verified artifact is a
-# correctness problem, not wasted compute.
-# ---------------------------------------------------------------------------
 
 VERIFY_B = """\
 import json, pathlib
@@ -167,7 +103,6 @@ def check():
 
 def test_a_stall_after_the_answer_is_written_returns_the_swept_pass(
         ctx, workspace, tmp_path, monkeypatch):
-    """The correctness case: sweep first, do not discard a correct artifact."""
     import json as _json
 
     from agent.execute.loop import run_task
@@ -202,7 +137,7 @@ def test_a_stall_after_the_answer_is_written_returns_the_swept_pass(
     def responder(prefix, tail):
         calls["n"] += 1
         if calls["n"] == 1:
-            return write            # the work gets done
+            return write
         raise ModelStall("stall AFTER the artifact was written", 0.1, 2.5, 5, 60.0)
 
     for name in ("cloud", "local", "review"):
@@ -213,7 +148,6 @@ def test_a_stall_after_the_answer_is_written_returns_the_swept_pass(
         artifact_scope=spec.artifact_scope, grader_dir=spec.grader_dir),
         Budget(usd=1.0, seconds=600))
 
-    # It must NOT raise: the work is complete, so there is nothing to re-run.
     res = run_task(ctx, t.id)
     assert res.status == "done_unannounced", (
         f"a stall landing after the answer was written must return the swept "
@@ -227,7 +161,6 @@ def test_a_stall_after_the_answer_is_written_returns_the_swept_pass(
 
 def test_a_stall_before_any_answer_re_raises_for_the_caller(
         ctx, workspace, tmp_path, monkeypatch):
-    """The other half: nothing on disk, so the caller must get the stall."""
     from agent.execute.loop import run_task
     from agent.kernel.tasks import create_task
     from agent.kernel.types import Budget, TaskContract

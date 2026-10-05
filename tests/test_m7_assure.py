@@ -1,5 +1,3 @@
-"""M7 acceptance — the ratchet, the observation invariant, and the leak test."""
-
 from __future__ import annotations
 
 

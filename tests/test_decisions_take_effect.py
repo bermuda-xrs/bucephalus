@@ -1,15 +1,3 @@
-"""A human decision must CHANGE what happens. Found 2026-09-13.
-
-Until this file existed, nothing read an approval once it was decided. A task
-parked; a human approved; the decision was finalised, re-verified, anchored
-and logged; the task resumed from its goal, re-issued the call, and parked
-again under a NEW approval. The approved action never happened.
-
-Every earlier test of the approval path asserted that a decision was
-RECORDED. None asserted that it had an EFFECT. These do, and each one was run
-against the code without `_release_decided` to confirm it goes red.
-"""
-
 from __future__ import annotations
 
 import json
@@ -31,7 +19,6 @@ FINAL = '<final>{"answer": "done"}</final>'
 
 @pytest.fixture
 def hctx(ctx):
-    """A human in the loop: no deputy, no scoped auto-approval."""
     ctx.config.autonomy.auto_review = False
     ctx.config.autonomy.approve_scoped_writes = False
     ctx.config.autonomy.plan_required = False
@@ -96,9 +83,6 @@ def test_a_denial_reaches_the_model(hctx):
 
 
 def test_a_released_action_is_performed_at_most_once(hctx):
-    """A crash between performing and marking consumed must not perform it
-    twice. Simulated by clearing consumed_at and resuming again; the receipt
-    keyed on the parked step is what holds."""
     t, approval_id = _park(hctx, OUTBOX)
     hctx.resolve_approval(approval_id, True)
     hctx.backends["cloud"].queue(FINAL)
@@ -117,8 +101,6 @@ def test_a_released_action_is_performed_at_most_once(hctx):
 
 
 def test_policy_narrowed_while_parked_voids_the_approval(hctx):
-    """The human approved under the old policy. That does not bring the old
-    authority back."""
     t, approval_id = _park(hctx)
     hctx.resolve_approval(approval_id, True)
     hctx.restrict_tools(t.id, ToolPolicy(frozenset({"write_file"}), "narrowed"))

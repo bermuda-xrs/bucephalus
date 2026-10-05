@@ -1,16 +1,3 @@
-"""A5 — parallel execution for non-model tool calls.
-
-The win being claimed is narrow and the exclusions are the interesting part.
-Model calls are never parallelised at any pool size: one Ollama instance on
-CPU inference, and wall clock is the only cost axis this project has, so
-concurrent generation would not make the system faster — it would make the
-measurement meaningless.
-
-10.5 is the security half. Concurrency is a new way for a check to be skipped
-for one call in a batch while passing for another, so every call is gated
-BEFORE any call runs and one refusal means nothing executes.
-"""
-
 from __future__ import annotations
 
 import sys
@@ -67,10 +54,6 @@ def five_files(tmp_path):
             for i in range(5)]
 
 
-# ==========================================================================
-# 10.1 — it actually runs them at once
-# ==========================================================================
-
 def test_five_reads_complete_and_all_results_come_back(tmp_path):
     ctx = make_ctx(tmp_path)
     out = tool_parallel(ctx, new_task(ctx), five_files(tmp_path))
@@ -81,9 +64,6 @@ def test_five_reads_complete_and_all_results_come_back(tmp_path):
 
 
 def test_results_stay_in_the_order_they_were_requested(tmp_path):
-    """Concurrency must not reorder the answer. A model that asked for three
-    files in an order and got them back shuffled would have to correlate them
-    itself, which is a new way to be wrong."""
     ctx = make_ctx(tmp_path)
     out = tool_parallel(ctx, new_task(ctx), five_files(tmp_path))
     assert [r["args"]["path"] for r in out["results"]] == [
@@ -92,11 +72,6 @@ def test_results_stay_in_the_order_they_were_requested(tmp_path):
 
 
 def test_a_batch_really_runs_at_once(tmp_path):
-    """The acceptance claim, proven rather than timed. Each call waits at a
-    barrier for all five: only five calls in flight at the same moment get
-    past it. It used to compare wall clocks (concurrent < sequential / 2),
-    which a loaded machine failed - and whose failures, under the mutation
-    runner, read as kills of mutants it had nothing to do with (U13)."""
     ctx = make_ctx(tmp_path, width=5)
     t = new_task(ctx)
 
@@ -105,7 +80,7 @@ def test_a_batch_really_runs_at_once(tmp_path):
     barrier = threading.Barrier(5, timeout=60)
 
     def meet(c, task, **kw):
-        barrier.wait()                  # BrokenBarrierError unless all five run at once
+        barrier.wait()
         return {"ok": True}
 
     ctx.tools.register(ToolSpec("meet", meet, {"type": "object", "properties": {}},
@@ -119,8 +94,6 @@ def test_a_batch_really_runs_at_once(tmp_path):
 
 
 def test_width_one_is_genuinely_sequential(tmp_path):
-    """What a measurement run gets. Not 'a pool of one' — no pool at all, so
-    there is no scheduler in the path a benchmark times."""
     ctx = make_ctx(tmp_path, width=1)
     seen: list[int] = []
     lock = threading.Lock()
@@ -143,15 +116,9 @@ def test_width_one_is_genuinely_sequential(tmp_path):
     ctx.close()
 
 
-# ==========================================================================
-# 10.2 / 10.4 — what may never go in a batch
-# ==========================================================================
-
 @pytest.mark.parametrize("name", ["write_file", "run_code", "memory_write",
                                   "edit_file", "append_to_outbox", "git_push"])
 def test_a_side_effecting_tool_is_refused_for_the_whole_batch(tmp_path, name):
-    """Idempotency receipts assume ordered execution, and two writes racing
-    for one receipt key is a corrupt state rather than a slow one."""
     ctx = make_ctx(tmp_path)
     out = tool_parallel(ctx, new_task(ctx), [
         {"tool": "read_file", "args": {"path": "work/f0.txt"}},
@@ -163,9 +130,6 @@ def test_a_side_effecting_tool_is_refused_for_the_whole_batch(tmp_path, name):
 
 
 def test_no_model_call_can_enter_a_batch():
-    """10.2 stated structurally: every batchable tool is non-side-effecting,
-    and no tool in the registry calls the model. The batch cannot contain one
-    because there is nothing in the registry to put there."""
     r = default_registry()
     for name in r.names():
         spec = r.get(name)
@@ -193,17 +157,10 @@ def test_a_batch_is_bounded(tmp_path):
     ctx.close()
 
 
-# ==========================================================================
-# 10.5 — one denied call, and the batch does not partially apply
-# ==========================================================================
-
 def test_a_denied_call_refuses_the_whole_batch_and_nothing_runs(tmp_path):
-    """THE 10.5 PROPERTY. A batch that partially applied would be worse than
-    one that failed: the model would see some results and no clear signal
-    that the rest were refused."""
     ctx = make_ctx(tmp_path)
     t = new_task(ctx)
-    five_files(tmp_path)                          # the work/ that grep would read
+    five_files(tmp_path)
 
     ran: list[str] = []
     from agent.execute.tools import ToolSpec
@@ -240,30 +197,22 @@ def test_a_denied_call_refuses_the_whole_batch_and_nothing_runs(tmp_path):
 
 
 def test_the_capability_gate_also_refuses_the_whole_batch(tmp_path):
-    """The other check. Exposure asks whether this agent may call the tool;
-    the gate asks whether these ARGUMENTS are safe. Both are per call, and
-    both must stop the batch."""
     ctx = make_ctx(tmp_path)
     t = new_task(ctx)
     ctx.taint_tracker(t.id).observe("secrets from a web page /etc/shadow",
                                     Taint.UNTRUSTED)
-    ctx.phase = "plan"          # planning is read-only; a write tool is denied
+    ctx.phase = "plan"
 
     out = tool_parallel(ctx, t, [
         {"tool": "read_file", "args": {"path": "work/f0.txt"}},
         {"tool": "expand_artifact", "args": {"id": "nope"}},
     ])
-    # Both are read tools, so the plan phase does not deny them: the batch
-    # runs, and the missing artifact is a RESULT rather than a refusal.
     assert out["ok"] is True
     assert out["results"][1]["result"]["ok"] is False
     ctx.close()
 
 
 def test_every_call_is_gated_before_any_call_runs(tmp_path):
-    """Stated as source structure as well as behaviour, because the ORDER is
-    the property: gating interleaved with execution would let earlier calls
-    land before a later refusal."""
     src = (ROOT / "src" / "agent" / "execute" / "tools.py").read_text(
         encoding="utf-8")
     i = src.index("def tool_parallel")
@@ -273,10 +222,6 @@ def test_every_call_is_gated_before_any_call_runs(tmp_path):
     assert gate_at < run_at, "every call must be gated before any call runs"
     assert body.index("planned.append") < run_at
 
-
-# ==========================================================================
-# 10.3 — a measurement run is sequential, and says so
-# ==========================================================================
 
 def test_a_measurement_run_is_sequential_and_records_it():
     import inspect
@@ -292,15 +237,7 @@ def test_a_measurement_run_is_sequential_and_records_it():
         "and the run record must state it rather than leave it inferred")
 
 
-# ==========================================================================
-# 10.6 — shared keyspaces under concurrency
-# ==========================================================================
-
 def test_the_search_index_is_written_by_triggers_inside_the_same_transaction():
-    """10.6. The index cannot interleave into a corrupt state because it is
-    not written by application code at all — SQLite triggers insert it in the
-    same statement as the row it derives from. Last-write-wins does not arise;
-    there is one writer per source row."""
     schema = (ROOT / "src" / "agent" / "kernel" / "db.py").read_text(
         encoding="utf-8")
     assert "CREATE TRIGGER IF NOT EXISTS trg_search_artifact_ai" in schema
@@ -308,12 +245,6 @@ def test_the_search_index_is_written_by_triggers_inside_the_same_transaction():
 
 
 def test_no_batchable_tool_writes_to_a_shared_keyspace(tmp_path):
-    """The semantic cache is written by `condense_observation`, which runs
-    ONCE per action at the ledger level — after the batch returns, on the
-    calling thread. So concurrency never reaches it.
-
-    Asserted by running a batch and confirming it added no cache rows.
-    """
     ctx = make_ctx(tmp_path)
     before = ctx.conn.execute("SELECT COUNT(*) FROM semantic_cache").fetchone()[0]
     tool_parallel(ctx, new_task(ctx), five_files(tmp_path))
@@ -325,9 +256,6 @@ def test_no_batchable_tool_writes_to_a_shared_keyspace(tmp_path):
 
 
 def test_concurrent_reads_of_the_shared_connection_do_not_corrupt(tmp_path):
-    """`check_same_thread=False` means the pool shares one connection. Reads
-    are what a batch does, so this drives many of them at once and asserts
-    every result is intact."""
     ctx = make_ctx(tmp_path, width=8)
     t = new_task(ctx)
     for i in range(8):

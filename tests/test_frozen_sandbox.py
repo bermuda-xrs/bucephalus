@@ -1,11 +1,3 @@
-"""D13 - the sandbox survives a freeze: it starts an interpreter, never the app.
-
-The unfrozen half runs everywhere. The frozen half runs only inside the probe
-build (`packaging/build.py --probe`), which bundles pytest and this suite and
-runs it FROM the frozen binary - so `sys.executable` below is the application,
-exactly the condition that made every run_sandboxed() a fork bomb (C26).
-"""
-
 from __future__ import annotations
 
 import os
@@ -49,8 +41,6 @@ def test_frozen_the_sandbox_starts_the_binary_as_an_interpreter():
 
 @frozen_only
 def test_frozen_a_grandchild_of_the_sandbox_is_an_interpreter_not_the_app():
-    """Model code spawning sys.executable - the APP's binary - gets a Python.
-    Without rule 2 this line relaunched the whole application."""
     code = ("import subprocess, sys\n"
             "p = subprocess.run([sys.executable, '-c', 'print(6 * 7)'],\n"
             "                   capture_output=True, text=True, timeout=60)\n"
@@ -75,9 +65,6 @@ def _descendants(root: int) -> list[tuple[int, str]]:
 
 @frozen_only
 def test_frozen_no_recursive_spawn_by_process_tree():
-    """While a sandboxed child runs: exactly one copy of this binary below
-    us, and it is the child. After: none. And no nested sandbox directory -
-    C26's signature was alpha_sbx_ inside alpha_sbx_, eleven deep."""
     exe = os.path.basename(sys.executable).lower()
     before = {p for p, _ in _descendants(os.getpid())}
     code = ("import os, time, glob\n"

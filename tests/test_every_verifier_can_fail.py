@@ -1,24 +1,3 @@
-"""DR7: a check must be shown able to fail before its passes mean anything.
-
-The same defect, four times over: `check_contamination` certified ten pairs
-by having nothing to check; `execution` ran the answer as Python and passed
-"{}"; `ruff` passed when it was not installed, and otherwise linted the
-harness; `json_schema` passed anything under an empty schema. Each check
-existed, was consulted, and could not return false. `self_consistency`, found
-by this test, never read the answer at all.
-
-So this is a PROPERTY over the registry, not a list of the four. Every kind
-is discovered, not named, and must FAIL on an empty answer, on "{}", and on a
-wrong answer carrying a unique sentinel - under a contract with real keys,
-one whose keys are all empty, and one whose structure accepts {} (DR4). A kind
-that declares it inspects the WORKSPACE is held to the same three answers
-against an empty workspace, with a decoy that would pass sitting in the
-process working directory - which is where pytest and ruff used to look.
-
-A verifier added later is discovered here and has no failing case until it
-earns one: it fails on arrival.
-"""
-
 from __future__ import annotations
 
 import inspect as pyinspect
@@ -38,16 +17,12 @@ ANSWERS = {"empty": "", "braces": "{}",
 REAL = {"type": "object", "required": ["total"],
         "properties": {"total": {"type": "integer"}},
         "x-expected": {"total": 4825}, "x-contains": ["4825"]}
-EMPTY = {"x-expected": {}, "x-contains": [""]}   # every key present, all empty
-# Structure that accepts {}. Under EMPTY, json_schema's refusal masked
-# expected_value's empty key; this contract is the one that exposed it.
+EMPTY = {"x-expected": {}, "x-contains": [""]}
 HOLLOW = {"type": "object", "x-expected": {}, "x-contains": [""]}
 CONTRACTS = {"real": REAL, "empty": EMPTY, "hollow": HOLLOW}
 
 
 def _scripted_ctx():
-    """A consistent model: every sample says the right answer. A verifier
-    that measures the samples and not the answer passes everything here."""
     return SimpleNamespace(
         backends={"cloud": None}, active_local_tier=lambda: None,
         call_model=lambda *a, **k: SimpleNamespace(text='{"total": 4825}'))
@@ -63,8 +38,6 @@ def _kinds():
 
 @pytest.fixture
 def places(tmp_path, monkeypatch):
-    """An empty task workspace, and a DECOY process cwd holding things that
-    pass: a green test suite, lint-clean code, a permissive verify.py."""
     root = tmp_path / "root"
     (root / "work").mkdir(parents=True)
     decoy = tmp_path / "decoy"
@@ -78,7 +51,6 @@ def places(tmp_path, monkeypatch):
 
 
 def test_every_verifier_class_is_registered():
-    """A class the registry does not hold would dodge the property below."""
     classes = {obj.kind for _, obj in pyinspect.getmembers(V, pyinspect.isclass)
                if obj.__module__ == V.__name__ and isinstance(getattr(obj, "kind", None), str)
                and callable(getattr(obj, "check", None))}
@@ -92,8 +64,6 @@ def test_every_kind_declares_what_it_inspects():
 
 
 def test_only_always_pass_inspects_nothing():
-    """Inspecting nothing is not a verifier, it is the absence of one. Exactly
-    one name may say so, and the mesh refuses it under measurement."""
     nothing = [n for n, v in _registry().items() if V.inspects(v) == "nothing"]
     assert nothing == ["always_pass"], nothing
 
@@ -117,8 +87,6 @@ def test_every_verifier_can_fail(kind, answer, schema_name, places):
 
 
 def test_under_measurement_a_check_of_nothing_is_not_a_pass(ctx, workspace):
-    """bench/run.py gives a task with no criterion `always_pass`. Counted,
-    that is a free pass per task in the pass rate."""
     from agent.kernel.tasks import create_task
     from agent.kernel.types import Budget
 
@@ -126,19 +94,12 @@ def test_under_measurement_a_check_of_nothing_is_not_a_pass(ctx, workspace):
                        TaskContract(goal="g", artifact_scope=["work"]),
                        Budget(usd=1.0, seconds=600))
     assert task.contract.success_criterion == "always_pass"
-    assert ctx.mesh.verify(task, "anything").passed        # the product
-    ctx.config.grader_held_out = True                       # measurement
+    assert ctx.mesh.verify(task, "anything").passed
+    ctx.config.grader_held_out = True
     assert not ctx.mesh.verify(task, "anything").passed
 
 
-# ---------------------------------------------------------------------------
-# The final sweep: no answer means an answer kind has nothing to judge.
-# ---------------------------------------------------------------------------
-
-
 class _Spy:
-    """Passes anything it is asked - so if the sweep asks, the task passes."""
-
     kind = "spy"
 
     def __init__(self, what):
@@ -170,8 +131,6 @@ def _run_without_an_answer(ctx, scripted, spy):
 
 
 def test_the_sweep_does_not_grade_an_answer_that_was_never_given(ctx, workspace, scripted):
-    """The v5 defect: the sweep graded "{}", and `execution` passed it -
-    write-function-002 scored done_unannounced in all five arms."""
     spy = _Spy("answer")
     status = _run_without_an_answer(ctx, scripted, spy)
     assert spy.seen == [], f"the sweep graded {spy.seen!r} - no answer was given"
@@ -179,18 +138,11 @@ def test_the_sweep_does_not_grade_an_answer_that_was_never_given(ctx, workspace,
 
 
 def test_the_sweep_still_grades_the_workspace(ctx, workspace, scripted):
-    """The sweep exists for work left on disk; that must survive the fix."""
     spy = _Spy("workspace")
     status = _run_without_an_answer(ctx, scripted, spy)
     assert spy.seen, "a workspace verifier was not consulted by the sweep"
     assert status == "done_unannounced", status
 
-
-# ---------------------------------------------------------------------------
-# The same property per TASK: a bench task's own grader, its own contract,
-# its own provisioned inputs. A weak contract is a task-level defect that no
-# kind-level test can see - a schema accepting {}, an empty x-contains.
-# ---------------------------------------------------------------------------
 
 from pathlib import Path  # noqa: E402
 
@@ -232,8 +184,6 @@ SLUGIFY_WRONG = "def slugify(s):\n    return s.lower().replace(' ', '-')\n"
 
 @pytest.mark.parametrize("code,want", [(SLUGIFY_RIGHT, True), (SLUGIFY_WRONG, False)])
 def test_write_function_002_grader_tells_right_from_wrong(code, want, tmp_path, monkeypatch):
-    """The other half of DR7: a grader that could not PASS would satisfy the
-    property above vacuously."""
     spec = json.loads((PROJECT / "bench/tasks/002_write_function.json").read_text(encoding="utf-8"))
     (tmp_path / "work").mkdir()
     (tmp_path / "work" / "strings.py").write_text(code, encoding="utf-8")
@@ -247,9 +197,6 @@ def test_write_function_002_grader_tells_right_from_wrong(code, want, tmp_path, 
 
 
 def test_ruff_installed_still_fails_an_empty_workspace(places, tmp_path, monkeypatch):
-    """ruff is not installed here, so the property above only reaches its
-    'not installed' refusal. A fake ruff that always reports clean reaches the
-    rest - and the old code, linting the process cwd, passed with it."""
     import os
     import sys
 

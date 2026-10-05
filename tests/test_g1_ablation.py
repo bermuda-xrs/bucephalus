@@ -1,17 +1,3 @@
-"""G1's ablation arms: each mechanism actually absent when its flag is off.
-
-RELEASE's G1 section names the blocker: ">=10x reduction in paid tokens" is a
-comparison against the same work done WITHOUT the mechanisms, and there was
-nothing to compare against - compaction, the semantic cache, prefix stability
-and code-as-action were structural in `execute/loop.py` with no switches.
-
-Every test here asserts a DIFFERENCE between the arm and the shipped system,
-never merely that a flag was read. A switch that flips a boolean the loop then
-ignores would pass a test written the other way round, and the arm would
-silently measure the shipped system twice - which is the adjacency class
-(C3) landing inside the one measurement built to detect it.
-"""
-
 from __future__ import annotations
 
 import json
@@ -45,7 +31,7 @@ def _ctx(tmp_path, **mechanisms):
     for k, v in mechanisms.items():
         setattr(cfg.mechanisms, k, v)
     ctx = AgentContext(cfg)
-    ctx.memory = MemoryStore(tmp_path / "memory")   # never the operator's own
+    ctx.memory = MemoryStore(tmp_path / "memory")
     record_fingerprint(ctx.memory)
     ctx.config.autonomy.auto_review = False
     ctx.config.autonomy.approve_scoped_writes = True
@@ -73,10 +59,6 @@ def _events(ctx, task_id, etype):
 
 @pytest.fixture
 def boundary(monkeypatch):
-    """Fire the ceiling exactly once, on the Nth step - the same injection
-    `test_sessions.py` uses. C1: inject the condition rather than wait for it.
-    Waiting for a real overflow costs a long run and proves nothing when the
-    overflow does not come."""
     def at(n):
         seen = {"k": 0}
 
@@ -85,9 +67,6 @@ def boundary(monkeypatch):
             return "compact" if seen["k"] == n else "ok"
         monkeypatch.setattr(loop, "enforce_ceiling", fake)
     return at
-
-
-# -- the default is the shipped system --------------------------------------
 
 
 def test_every_mechanism_is_on_unless_a_config_says_otherwise(tmp_path):
@@ -100,9 +79,6 @@ def test_every_mechanism_is_on_unless_a_config_says_otherwise(tmp_path):
 
 
 def test_the_arm_travels_in_the_run_record(tmp_path):
-    """A number produced with a mechanism removed must not be able to arrive
-    anywhere labelled like a number produced without - the same argument that
-    makes the PROFILE declared and enforced rather than inferred."""
     import yaml
 
     from agent.config import load_config
@@ -120,9 +96,6 @@ def test_the_arm_travels_in_the_run_record(tmp_path):
     assert cfg.mechanisms.prefix_stability is True
     assert cfg.profile_provenance["ablated"] == ["compaction", "semantic_cache"]
     assert cfg.profile_provenance["mechanisms"]["code_as_action"] is True
-
-
-# -- compaction -------------------------------------------------------------
 
 
 def _run_to_boundary(ctx, boundary):
@@ -144,9 +117,6 @@ def test_compaction_on_tombstones_at_the_boundary(tmp_path, boundary):
 
 
 def test_a_real_crossing_brings_the_context_under_the_ceiling(tmp_path):
-    """The REAL ceiling, no injection, on a window where the prefix is over 8%
-    of it. The compaction target ignored the prefix, so it deleted nothing and
-    the ceiling fired on every later step, each paying a flush call."""
     from agent.tokens import count_tokens
 
     ctx = _ctx(tmp_path)
@@ -161,21 +131,12 @@ def test_a_real_crossing_brings_the_context_under_the_ceiling(tmp_path):
     ctx.backends["cloud"].cfg.usable_context_window = window
 
     task = _task(ctx)
-    # A responder, not the queue: the boundary's flush is a model call, and
-    # from the queue it would eat a scripted read - so a thrashing boundary
-    # would shorten the very run that is meant to expose it.
     turns = iter([READ(f"{n}.txt") for n in "abcde"] + [READ("a.txt")] * 3)
     ctx.backends["cloud"]._responder = lambda p, t: (  # noqa: SLF001
         "NOTHING" if "reply with the single word NOTHING" in t else next(turns, FINAL))
     run_task(ctx, task.id)
     rotations = [e for e in _events(ctx, task.id, "session.opened") if e.get("parent_id")]
     assert rotations, "the real ceiling was never crossed"
-    # Several boundaries are fine - each read here nearly fills the headroom.
-    # The defect is a boundary that leaves the context OVER the ceiling it
-    # fired on: then it fires again next step, paying a flush call each time.
-    # So: the step call after EVERY flush must fit under the ceiling. (This
-    # checked only the first while tombstones were never evicted and each
-    # boundary started higher; they fold into an index now - compact.py.)
     ceiling = int(window * ctx.config.limits.context_fill_ratio)
     calls = ctx.backends["cloud"].calls
     after = [count_tokens(nxt["prefix"]) + count_tokens(nxt["tail"])
@@ -188,10 +149,6 @@ def test_a_real_crossing_brings_the_context_under_the_ceiling(tmp_path):
 
 
 def test_compaction_off_crosses_the_ceiling_and_drops_nothing(tmp_path, boundary):
-    """The ceiling is still measured and the crossing is still on the chain.
-    "nothing to compact" and "compaction off" are different facts (DR4), and a
-    run that silently grew past its window would be indistinguishable from one
-    that never reached it."""
     ctx = _ctx(tmp_path, compaction=False)
     task = _run_to_boundary(ctx, boundary)
     skipped = _events(ctx, task.id, "compaction.skipped")
@@ -209,17 +166,11 @@ def test_compaction_off_crosses_the_ceiling_and_drops_nothing(tmp_path, boundary
 
 
 def test_compaction_off_also_stops_the_refused_delegation_route(tmp_path):
-    """DR3: guard the bytes, not one route to them. This second `compact()`
-    call site would otherwise go on tombstoning while the record said the arm
-    ran without compaction."""
     from agent.ledger.entries import LedgerEntry
 
     ctx = _ctx(tmp_path, compaction=False)
     task = _task(ctx)
-    # TWO bulky observations: `may_delegate` refuses a tightly-coupled
-    # subtask (<=2), which is the branch that falls back to compacting. With
-    # four it delegates instead and this route is never reached at all.
-    ctx.backends["cloud"].cfg.usable_context_window = 3000   # target ~540
+    ctx.backends["cloud"].cfg.usable_context_window = 3000
     entries = [LedgerEntry.note("pinned objective", pinned=True)] + [
         LedgerEntry.observation("x " * 4000, label=f"obs{i}") for i in range(2)]
     out = ctx.handle_overflow_by_delegation(task, entries)
@@ -235,10 +186,7 @@ def test_compaction_on_keeps_the_refused_delegation_route(tmp_path):
 
     ctx = _ctx(tmp_path)
     task = _task(ctx)
-    # TWO bulky observations: `may_delegate` refuses a tightly-coupled
-    # subtask (<=2), which is the branch that falls back to compacting. With
-    # four it delegates instead and this route is never reached at all.
-    ctx.backends["cloud"].cfg.usable_context_window = 3000   # target ~540
+    ctx.backends["cloud"].cfg.usable_context_window = 3000
     entries = [LedgerEntry.note("pinned objective", pinned=True)] + [
         LedgerEntry.observation("x " * 4000, label=f"obs{i}") for i in range(2)]
     out = ctx.handle_overflow_by_delegation(task, entries)
@@ -247,15 +195,8 @@ def test_compaction_on_keeps_the_refused_delegation_route(tmp_path):
     ctx.close()
 
 
-# -- semantic cache ---------------------------------------------------------
-
-
 def _run_two_identical_compressions(ctx):
-    """Both tests take `routing_only`: compression runs on the LOCAL tier, and
-    `Router.choose` refuses to select it while M6.3 escalation has no call
-    site. These are about the CACHE, not about escalation, so they say so
-    explicitly rather than the guard being softened for everyone."""
-    ctx.config.compress_observations_over_tokens = 50   # force the summarizer
+    ctx.config.compress_observations_over_tokens = 50
     task = _task(ctx, "read the same file twice")
     ctx.backends["cloud"].queue(READ("a.txt"), READ("a.txt"), FINAL)
     run_task(ctx, task.id)
@@ -273,17 +214,11 @@ def test_semantic_cache_on_serves_the_second_identical_compression(
 
 
 def test_semantic_cache_off_neither_reads_nor_writes(tmp_path):
-    """Not merely bypassed on read. A bypass that still FILLED the store would
-    leave a warm cache for whatever ran next, which in a paired trial is the
-    ablated arm paying for the other one's hits."""
     ctx = _ctx(tmp_path, semantic_cache=False)
     _run_two_identical_compressions(ctx)
     rows = ctx.conn.execute("SELECT COUNT(*) FROM semantic_cache").fetchone()[0]
     assert rows == 0, f"{rows} cache rows written by the arm that has no cache"
     ctx.close()
-
-
-# -- prefix stability -------------------------------------------------------
 
 
 def _prefix_fingerprints(ctx, task_id):
@@ -301,8 +236,6 @@ def _run_with_a_mid_task_memory_write(ctx):
 
 
 def test_prefix_stability_on_holds_the_prefix_across_a_memory_write(tmp_path):
-    """The SNAPSHOT is the mechanism: tier 1 is taken at task start, so a
-    write during step 2 cannot move the prefix at step 3."""
     ctx = _ctx(tmp_path)
     task = _run_with_a_mid_task_memory_write(ctx)
     fps = _prefix_fingerprints(ctx, task.id)
@@ -312,9 +245,6 @@ def test_prefix_stability_on_holds_the_prefix_across_a_memory_write(tmp_path):
 
 
 def test_prefix_stability_off_lets_a_memory_write_move_the_prefix(tmp_path):
-    """And the arm must not raise. Disarming the guard alone would change no
-    byte and measure nothing - the guard DETECTS stability, the snapshots
-    CREATE it - so this checks that the bytes actually moved."""
     ctx = _ctx(tmp_path, prefix_stability=False)
     task = _run_with_a_mid_task_memory_write(ctx)
     fps = _prefix_fingerprints(ctx, task.id)
@@ -323,9 +253,6 @@ def test_prefix_stability_off_lets_a_memory_write_move_the_prefix(tmp_path):
         "the prefix held even with stability ablated: the arm is measuring "
         "the shipped system under another name")
     ctx.close()
-
-
-# -- code as action ---------------------------------------------------------
 
 
 def test_code_as_action_on_offers_run_code_everywhere(tmp_path):
@@ -339,9 +266,6 @@ def test_code_as_action_on_offers_run_code_everywhere(tmp_path):
 
 
 def test_code_as_action_off_removes_the_tool_and_its_instruction(tmp_path):
-    """The instruction leaves with the tool. A model still told to emit
-    `<code>` and then refused would measure a model arguing with a denial,
-    which is ADJACENT to "the same work without code-as-action", not it."""
     from agent.ledger.prefix import system_contract
 
     ctx = _ctx(tmp_path, code_as_action=False)
@@ -367,8 +291,6 @@ def test_code_as_action_off_refuses_a_code_block_that_arrives_anyway(tmp_path):
 
 
 def test_the_ablated_registry_does_not_mutate_the_shared_default(tmp_path):
-    """`default_registry()` may be shared. An arm that stripped a tool out of
-    it would silently disarm every context built afterwards in the process."""
     from agent.execute.tools import default_registry
 
     ablated = _ctx(tmp_path / "a", code_as_action=False)
@@ -379,20 +301,7 @@ def test_the_ablated_registry_does_not_mutate_the_shared_default(tmp_path):
     shipped.close()
 
 
-# -- the synthetic compaction boundary --------------------------------------
-#
-# The real ceiling (0.28 * 16384 = 4587 tokens) is essentially never reached
-# on granite4.1:3b. Four pilot task designs failed to trigger it: the model
-# answers from nothing rather than reading, and when it does act it reaches
-# for run_code, which reads the file inside the sandbox so the bytes never
-# enter the context. Waiting measures the model's reluctance; injecting
-# measures the mechanism. C1's rule, and the price is that the trigger has to
-# be declared - `profile_provenance["compaction_boundary"]` says so.
-
-
 def test_without_the_probe_nothing_is_forced(tmp_path):
-    """DR4 again: the probe must be OFF unless a config asks for it, or every
-    ordinary run silently becomes a compacting one."""
     ctx = _ctx(tmp_path)
     assert ctx.config.compaction_probe_step is None
     task = _task(ctx)
@@ -424,9 +333,6 @@ def test_the_probe_forces_a_boundary_the_fill_would_not(tmp_path):
 
 
 def test_the_probe_and_the_ablation_arm_agree(tmp_path):
-    """Forced in the ablated arm too, or the arms would differ by WHETHER the
-    boundary happened rather than by what compaction did with it - which is
-    the comparison the whole run exists to make."""
     ctx = _ctx(tmp_path, compaction=False)
     ctx.config.compaction_probe_step = 2
     task = _task(ctx)
@@ -441,7 +347,6 @@ def test_the_probe_and_the_ablation_arm_agree(tmp_path):
 
 
 def test_a_synthetic_boundary_is_declared_in_the_record(tmp_path):
-    """A forced trigger nobody can see in the record is a lie about the run."""
     import yaml
 
     from agent.config import load_config

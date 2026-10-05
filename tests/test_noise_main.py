@@ -1,15 +1,3 @@
-"""bench/noise.py `main`, driven to its first decision with the machine left alone.
-
-No test ran `main`. A line added 2026-09-06 read `ctx.config` forty-five lines
-before `ctx` was assigned, so every noise-floor run since died with
-UnboundLocalError before its first task - step 1 of the README's measurement
-flow, unrunnable, with every test green. And its measurement lock was released
-on two of its four exits, the same leak `cmd_paired` had.
-
-The preflight calls that touch the machine - the orphan reaper, the memory
-probes - are stubbed. A test must never kill a worker.
-"""
-
 from __future__ import annotations
 
 import importlib.util
@@ -18,9 +6,6 @@ from pathlib import Path
 
 import pytest
 
-# These take the REAL checkout's measurement lock (bench/run.py and noise.py
-# lock beside --config config.local.yaml). One worker at a time, or xdist
-# workers contend on it and read "lock busy" (iteration 3, 2.2).
 pytestmark = pytest.mark.xdist_group("real-measurement-lock")
 
 

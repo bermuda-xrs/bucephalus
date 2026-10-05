@@ -1,19 +1,3 @@
-"""A task that did the work is graded, even if it never said it was done.
-
-Verification used to run only inside the `<final>` branch. A task that wrote
-a correct `output/answer.json` and then ran out of steps was recorded as a
-failure and never graded at all.
-
-Measured on granite4.1:8b, E01: the file on disk held 7672.598648385013
-against an expected 7672.6 - correct to eleven significant figures - after
-nine steps with no `<final>`, scored `budget_exhausted`. The suite was
-measuring whether the model announces completion, not whether the work is
-done.
-
-This RAISES pass rates, so the change is deliberately visible: a pass found
-this way is `done_unannounced`, never plain `done`.
-"""
-
 from __future__ import annotations
 
 import json
@@ -52,14 +36,12 @@ def _write_code(key):
 
 
 def test_correct_work_without_a_final_still_passes(ctx, workspace, tmp_path, monkeypatch):
-    """The defect: the model does the work and never announces it."""
     monkeypatch.chdir(tmp_path)
-    ctx.config.autonomy.auto_review = False          # as noise.py runs
+    ctx.config.autonomy.auto_review = False
     ctx.config.autonomy.approve_scoped_writes = True
     ctx.config.limits.max_steps = 3
     spec = _spec("S1")
 
-    # never emits <final>: writes the answer, then keeps making tool calls
     code = json.dumps({"kind": "code", "code": _write_code("S1")})
     for name in ("cloud", "local", "review"):
         ctx.backends[name]._responder = lambda p, t: code  # noqa: SLF001
@@ -75,15 +57,13 @@ def test_correct_work_without_a_final_still_passes(ctx, workspace, tmp_path, mon
 
 
 def test_the_unannounced_pass_is_labelled_not_disguised(ctx, workspace, tmp_path, monkeypatch):
-    """It must be countable separately: failing to terminate is a real
-    deficiency even when the artifact is right."""
     from agent.execute.loop import run_task
     from agent.kernel.tasks import create_task
     from agent.kernel.types import Budget, TaskContract
     from agent.workspace import reset_workspace
 
     monkeypatch.chdir(tmp_path)
-    ctx.config.autonomy.auto_review = False          # as noise.py runs
+    ctx.config.autonomy.auto_review = False
     ctx.config.autonomy.approve_scoped_writes = True
     ctx.config.limits.max_steps = 3
     spec = _spec("S2")
@@ -106,14 +86,13 @@ def test_the_unannounced_pass_is_labelled_not_disguised(ctx, workspace, tmp_path
 
 
 def test_wrong_work_without_a_final_still_fails(ctx, workspace, tmp_path, monkeypatch):
-    """The sweep grades the artifact - it does not hand out passes."""
     from agent.execute.loop import run_task
     from agent.kernel.tasks import create_task
     from agent.kernel.types import Budget, TaskContract
     from agent.workspace import reset_workspace
 
     monkeypatch.chdir(tmp_path)
-    ctx.config.autonomy.auto_review = False          # as noise.py runs
+    ctx.config.autonomy.auto_review = False
     ctx.config.autonomy.approve_scoped_writes = True
     ctx.config.limits.max_steps = 2
     spec = _spec("S3")
@@ -141,7 +120,7 @@ def test_a_task_that_produced_nothing_still_fails(ctx, workspace, tmp_path, monk
     from agent.workspace import reset_workspace
 
     monkeypatch.chdir(tmp_path)
-    ctx.config.autonomy.auto_review = False          # as noise.py runs
+    ctx.config.autonomy.auto_review = False
     ctx.config.autonomy.approve_scoped_writes = True
     ctx.config.limits.max_steps = 2
     spec = _spec("S4")
@@ -158,8 +137,6 @@ def test_a_task_that_produced_nothing_still_fails(ctx, workspace, tmp_path, monk
 
 
 def test_the_sweep_does_not_credit_a_verifier_that_cannot_fail(ctx, workspace, scripted):
-    """`always_pass` grades nothing, so sweeping it would turn every budget
-    exhaustion into a pass - exactly the free credit this must not create."""
     from agent.execute.loop import run_task
     from agent.kernel.tasks import create_task
     from agent.kernel.types import Budget, TaskContract
@@ -172,27 +149,16 @@ def test_the_sweep_does_not_credit_a_verifier_that_cannot_fail(ctx, workspace, s
     assert run_task(ctx, task.id).status == "budget_exhausted"
 
 
-# ---------------------------------------------------------------------------
-# S2 - the sweep must fire on every terminal path, or say why it must not.
-# ---------------------------------------------------------------------------
-
-
 def _ctx_for_sweep(ctx):
     ctx.config.autonomy.auto_review = False
     ctx.config.autonomy.approve_scoped_writes = True
 
 
 def test_sweep_fires_on_max_steps(ctx, workspace, tmp_path, monkeypatch):
-    """Covered above by test_the_unannounced_pass_is_labelled_not_disguised."""
     assert "max_steps" in (ctx and "max_steps")
 
 
 def test_sweep_fires_on_an_unhandled_exception(ctx, workspace, tmp_path, monkeypatch):
-    """A crash used to leave the task RUNNING forever, artifact ungraded.
-
-    The work may be complete - a crash can come from anywhere in the loop -
-    so the artifact is graded and the failure recorded either way.
-    """
     from agent.execute import loop as loop_mod
     from agent.execute.loop import run_task
     from agent.kernel.tasks import create_task
@@ -204,7 +170,6 @@ def test_sweep_fires_on_an_unhandled_exception(ctx, workspace, tmp_path, monkeyp
     ctx.config.limits.max_steps = 4
     spec = _spec("X1")
     reset_workspace(ctx.config.root, spec.artifact_scope, spec.fixtures)
-    # the answer is already correct on disk; the loop then explodes
     (tmp_path / "work" / "X1" / "output").mkdir(parents=True, exist_ok=True)
     (tmp_path / "work" / "X1" / "output" / "answer.json").write_text(
         json.dumps({"x": 42}), encoding="utf-8")
@@ -235,12 +200,6 @@ def test_sweep_fires_on_an_unhandled_exception(ctx, workspace, tmp_path, monkeyp
 
 
 def test_an_integrity_halt_is_deliberately_not_swept(ctx, workspace, tmp_path, monkeypatch):
-    """The one path that must NOT grade.
-
-    The hash chain is what makes any record of a task trustworthy. If it is
-    broken, a pass graded from the workspace rests on evidence that failed
-    its own integrity check.
-    """
     from agent.execute import loop as loop_mod
     from agent.execute.loop import run_task
     from agent.kernel.integrity import IntegrityError
@@ -255,7 +214,7 @@ def test_an_integrity_halt_is_deliberately_not_swept(ctx, workspace, tmp_path, m
     reset_workspace(ctx.config.root, spec.artifact_scope, spec.fixtures)
     (tmp_path / "work" / "X2" / "output").mkdir(parents=True, exist_ok=True)
     (tmp_path / "work" / "X2" / "output" / "answer.json").write_text(
-        json.dumps({"x": 42}), encoding="utf-8")   # correct, but untrustworthy
+        json.dumps({"x": 42}), encoding="utf-8")
 
     swept = {"n": 0}
     real = loop_mod._final_sweep
@@ -280,22 +239,6 @@ def test_an_integrity_halt_is_deliberately_not_swept(ctx, workspace, tmp_path, m
 
 
 def test_a_human_park_is_not_swept(ctx, workspace, tmp_path, monkeypatch):
-    """TaskPaused means a human must decide. The task is not finished, so
-    grading it now would score work that was never authorised to complete."""
-
-    # Scan the TaskPaused branch ONLY - to the next handler at the same
-    # indent, not to the next `except Exception` anywhere below it. The
-    # earlier version measured the text between two markers and assumed no
-    # other handler could sit between them; adding a ModelStall handler that
-    # legitimately DOES sweep then failed this test for its position rather
-    # than for its behaviour. The claim is about one branch, so the scan is.
-    # Scan the TaskPaused branch ONLY - to the next handler at the same
-    # indent, not to the next `except Exception` anywhere below it. The
-    # earlier version measured the text between two markers and assumed
-    # no other handler could sit between them; adding a ModelStall
-    # handler that legitimately DOES sweep then failed this test for its
-    # position rather than for its behaviour. The claim is about one
-    # branch, so the scan is about one branch.
     src = (ROOT_SRC / "loop.py").read_text(encoding="utf-8")
     marker = "    except TaskPaused as p:"
     paused = src.index(marker)

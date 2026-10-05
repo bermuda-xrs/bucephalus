@@ -1,20 +1,3 @@
-"""A model-server failure must not be counted as task difficulty.
-
-An ollama ReadTimeout on H27 killed a ten-task pass outright: one slow call,
-and every remaining task was lost. In a five-hour calibration that is the
-difference between a result and a wasted night.
-
-The fix must not be to swallow it either. Recording a backend error as
-`passed=False` would let a network problem masquerade as evidence the model
-cannot do the task — the same silent-0% trap as a verifier that cannot find
-its script. So a backend error:
-
-  * is retried once,
-  * then recorded with its own status and `unmeasured: True`,
-  * is EXCLUDED from the pass-rate denominator,
-  * and is reported loudly enough that it cannot be mistaken for a result.
-"""
-
 from __future__ import annotations
 
 import importlib.util
@@ -61,7 +44,6 @@ def test_a_transient_backend_error_is_retried_once(monkeypatch):
 
 
 def test_a_persistent_backend_error_is_unmeasured_not_failed(monkeypatch):
-    """The important one. `passed=False` alone would be a silent lie."""
     def always(ctx, spec, run_ix):
         raise BackendError("ollama call failed: timed out")
 
@@ -74,19 +56,16 @@ def test_a_persistent_backend_error_is_unmeasured_not_failed(monkeypatch):
 
 
 def test_one_slow_call_does_not_abort_the_whole_pass(monkeypatch):
-    """The failure that cost ten tasks: BackendError propagated out of main."""
     def always(ctx, spec, run_ix):
         raise BackendError("boom")
 
     monkeypatch.setattr(noise, "run_once", always)
     monkeypatch.setattr(noise.time, "sleep", lambda s: None)
-    # must return a row rather than raise, so the loop continues
     out = noise.run_with_backend_retry(None, _spec(), 0, "H27")
     assert isinstance(out, dict)
 
 
 def test_unmeasured_runs_are_excluded_from_the_pass_rate():
-    """A task the server never answered is not a task the model failed."""
     runs = [{"passed": False, "unmeasured": True, "status": "backend_error"},
             {"passed": True, "status": "done"}]
     measured = [r for r in runs if not r.get("unmeasured")]
@@ -96,7 +75,6 @@ def test_unmeasured_runs_are_excluded_from_the_pass_rate():
 
 
 def test_the_classification_has_a_place_for_unmeasured():
-    """stable_fail would be wrong: nothing was observed."""
     body = (ROOT / "bench" / "noise.py").read_text(encoding="utf-8")
     assert '"unmeasured"' in body
     assert "unmeasured_keys" in body, "the report must name them for re-running"

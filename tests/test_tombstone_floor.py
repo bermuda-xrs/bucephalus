@@ -1,12 +1,3 @@
-"""A long session's compaction floor is bounded (ledger/compact.py).
-
-Tombstones were never dropped, so every boundary started higher: ~28 tokens
-per dropped observation. At the shipped window the floor alone crossed the
-ceiling by step ~60 and the context reached 14,060 tokens by step 400 - a
-correctness failure of compaction, not an efficiency one: it fired every step
-and could not get under the ceiling it fired on.
-"""
-
 from __future__ import annotations
 
 from agent.kernel.types import Taint
@@ -43,8 +34,6 @@ def test_a_long_session_compacts_back_under_the_ceiling_every_time():
 
 
 def test_folding_loses_no_observation():
-    """Every dropped observation is either its own tombstone or counted in
-    the index, and the index names the newest ids."""
     entries, _ = _session(200)
     index = [e for e in entries if e.label == INDEX_LABEL]
     assert len(index) == 1, "expected one index"
@@ -58,8 +47,6 @@ def test_folding_loses_no_observation():
 
 
 def test_folding_does_not_launder_taint():
-    """An untrusted observation folded among trusted ones: the index is
-    untrusted. Otherwise folding is a way to wash provenance."""
     entries, _ = _session(120, taint_at=3)
     index = [e for e in entries if e.label == INDEX_LABEL][0]
     assert index.taint == Taint.UNTRUSTED, index.taint

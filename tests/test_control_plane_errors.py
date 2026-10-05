@@ -1,9 +1,3 @@
-"""The control plane's error paths: the audits' open lows, each red first
-(2026-09-30). A 500 is where the security headers went missing, where a
-credential crashed the guard, and where an unknown id said "server error"
-instead of "not found".
-"""
-
 from __future__ import annotations
 
 import base64
@@ -26,8 +20,6 @@ def _client(ctx, **kw):
 
 def test_D47_a_non_ascii_credential_is_refused_not_a_crash(ctx):
     c = _client(ctx, raise_server_exceptions=False)
-    # Bytes: the client library refuses a non-ASCII str header; a browser or
-    # curl sends the bytes anyway, and the server reads them as latin-1.
     r = c.get("/approvals", headers={"Authorization": "Bearer café".encode()})
     assert r.status_code == 401, r.status_code
     r = c.get("/approvals", headers={"Authorization": b"", "X-Alpha-Token": "été".encode()})
@@ -46,7 +38,7 @@ def test_D74_a_crashing_route_still_carries_the_security_headers(ctx, monkeypatc
     assert r.status_code == 500
     for k, v in SECURITY_HEADERS.items():
         assert r.headers.get(k) == v, (k, dict(r.headers))
-    assert "a route crashed" not in r.text          # no traceback to the client
+    assert "a route crashed" not in r.text
 
 
 @pytest.mark.parametrize("method,path,body", [
@@ -71,17 +63,13 @@ def test_D77_a_path_the_filesystem_cannot_create_is_a_400(ctx, workspace):
     t = create_task(ctx.conn, ctx.log, TaskContract(goal="g", artifact_scope=["work"]),
                     Budget(usd=1.0, seconds=60))
     c = _client(ctx, raise_server_exceptions=False)
-    long_name = "work/" + "a" * 300 + ".txt"                   # past any file name limit
+    long_name = "work/" + "a" * 300 + ".txt"
     r = c.post(f"/tasks/{t.id}/files", json={"path": long_name,
                                               "content_b64": base64.b64encode(b"x").decode()})
     assert r.status_code == 400, (r.status_code, r.text[:200])
 
 
-# AUDIT-ITERATION-3B, M1: D70's os.stat raised ValueError (not OSError) on an
-# over-long path on Windows, so the gate crashed instead of deciding, and the
-# browser and the drop route answered 500. A path the filesystem cannot hold
-# is a 400 at the routes and an ordinary decision at the gate.
-LONG = "work/" + "a/" * 20000                       # ~40 KB, past Windows' 32,767
+LONG = "work/" + "a/" * 20000
 
 
 def test_3B_M1_the_gate_decides_on_an_overlong_path(ctx, task, workspace):
@@ -101,16 +89,12 @@ def test_3B_M1_the_routes_answer_400_for_an_overlong_path(ctx, workspace):
     r = c.post(f"/tasks/{t.id}/files", json={"path": LONG,
                                               "content_b64": base64.b64encode(b"x").decode()})
     assert r.status_code == 400, (r.status_code, r.text[:200])
-    # The browse route takes the path in the query string, which the client
-    # library refuses at this length; the function is what the route calls.
     from agent.control import files
 
-    with pytest.raises(files.Missing):        # nothing can exist at that path: a 404
+    with pytest.raises(files.Missing):
         files.browse(ctx, ctx_task(ctx, t.id), LONG)
 
 
-# AUDIT-ITERATION-3B, L3: D75 swept /tasks/{id}/* and missed the routes that
-# take a task id elsewhere.
 @pytest.mark.parametrize("method,path", [
     ("get", "/metrics/t_nope"),
     ("get", "/reviews/t_nope"),

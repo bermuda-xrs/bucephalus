@@ -1,15 +1,3 @@
-"""B5 + A8 — streaming, and the terminal surface.
-
-The properties here are the ones a display can get wrong in a way that
-matters: showing the wrong thing in the reserved alert colour, letting
-decoration reach a prompt, or reporting a budget that averages away the axis
-about to bind.
-
-Driving a terminal is not how they are tested. `tui/model.py` holds every
-rule as a pure function of events, precisely so a test can check them without
-a display — a test that needed one is a test nobody runs.
-"""
-
 from __future__ import annotations
 
 import sys
@@ -68,13 +56,7 @@ def new_task(ctx, goal="do a thing"):
         TaskBudget(usd=1.0, seconds=120))
 
 
-# ==========================================================================
-# 7.1 — output streams token by token
-# ==========================================================================
-
 def test_tokens_arrive_during_the_call_not_after_it(tmp_path):
-    """The whole of B5. The adapters have streamed since the stall-detector
-    rewrite; every surface waited for the joined string."""
     ctx = make_ctx(tmp_path)
     t = new_task(ctx)
     seen: list[str] = []
@@ -93,7 +75,6 @@ def test_tokens_arrive_during_the_call_not_after_it(tmp_path):
 
 
 def test_a_listener_that_raises_cannot_fail_the_task(tmp_path):
-    """A broken display must never be able to fail a task."""
     ctx = make_ctx(tmp_path)
     t = new_task(ctx)
     bus.subscribe(t.id, lambda kind, d: (_ for _ in ()).throw(RuntimeError("ui bug")))
@@ -104,8 +85,6 @@ def test_a_listener_that_raises_cannot_fail_the_task(tmp_path):
 
 
 def test_two_surfaces_both_receive(tmp_path):
-    """A single callback slot means the second surface to attach silently
-    replaces the first — the shadowing-default shape (DR2)."""
     ctx = make_ctx(tmp_path)
     t = new_task(ctx)
     a, b = [], []
@@ -134,21 +113,12 @@ def test_the_backlog_is_bounded(tmp_path):
 
 
 def test_the_bus_is_not_the_record(tmp_path):
-    """Nothing on the bus may be read back to claim what happened. It is
-    dropped the moment nobody is watching; the chain is the record."""
-    # And it is bounded in BOTH directions: per task, and in how many tasks
-    # are retained. A dict keyed by task id with no ceiling is a leak that
-    # only shows up after a long day in a control-plane process.
     for i in range(bus.BACKLOG_TASKS + 10):
         bus.publish(f"task{i}", "token", {"text": "x"})
     assert len(bus._backlog) == bus.BACKLOG_TASKS  # noqa: SLF001
     assert bus.backlog("task0") == [], "the oldest task was dropped"
     assert bus.backlog(f"task{bus.BACKLOG_TASKS + 9}"), "the newest was kept"
 
-
-# ==========================================================================
-# 7.4 — alerts are not approvals
-# ==========================================================================
 
 def test_an_integrity_alert_lands_in_a_separate_list_in_the_reserved_colour():
     st = RunState()
@@ -165,7 +135,6 @@ def test_an_integrity_alert_lands_in_a_separate_list_in_the_reserved_colour():
 
 
 def test_the_alert_colour_is_used_for_nothing_else():
-    """Reserved means reserved. Greps the surface for the role name."""
     for f in (ROOT / "src" / "agent" / "tui").glob("*.py"):
         text = f.read_text(encoding="utf-8")
         for line in text.splitlines():
@@ -183,10 +152,6 @@ def test_alerts_are_counted_where_they_are_visible_without_switching_tabs():
         "the alert count belongs on the always-visible bar, not only in the "
         "tab a reader has to think to open")
 
-
-# ==========================================================================
-# 7.4 — the tool trail, budget bar, and the monitor staying invisible
-# ==========================================================================
 
 def test_a_delegated_child_is_shown_nested():
     st = RunState()
@@ -210,8 +175,6 @@ def test_the_trail_degrades_without_glyphs():
 
 
 def test_the_budget_bar_reports_the_worst_axis_not_the_average():
-    """A task at 5% of its money and 99% of its clock is about to stop, and
-    52% would describe neither thing that is true."""
     b = Budget(spent_usd=0.05, limit_usd=1.0,
                spent_seconds=99.0, limit_seconds=100.0)
     assert b.fraction() == pytest.approx(0.99)
@@ -224,9 +187,6 @@ def test_a_zero_budget_does_not_divide_by_zero():
 
 
 def test_the_monitor_is_invisible_to_this_surface():
-    """M8.3. Inherited from `to_client_event` rather than reimplemented — a
-    surface reading the raw log would have had to remember, and forgetting is
-    how the rule gets undone."""
     st = RunState()
     shown = st.apply_event({"type": "monitor.flagged", "seq": 1,
                             "payload": {"finding": "something"}})
@@ -235,8 +195,6 @@ def test_the_monitor_is_invisible_to_this_surface():
 
 
 def test_the_surface_renders_through_the_shared_vocabulary():
-    """7.3. The contract is the event schema, not the transport, so the TUI
-    and the web console cannot drift on what an event means."""
     src = (ROOT / "src" / "agent" / "tui" / "model.py").read_text(encoding="utf-8")
     assert "from ..control.events import" in src and "to_client_event" in src
 
@@ -253,17 +211,7 @@ def test_live_events_fold_into_the_same_state():
     assert st.budget.fraction() == pytest.approx(0.5)
 
 
-# ==========================================================================
-# 7.5 — the banner is display-only
-# ==========================================================================
-
 def test_the_banner_never_appears_in_any_prompt(tmp_path):
-    """Greps EVERY prompt sent during a real task.
-
-    Not paranoia about ASCII art: the banner is the most obviously decorative
-    thing in the system, so if it can reach a prompt then anything can, and
-    the stable prefix would be carrying bytes nobody thinks of as content.
-    """
     ctx = make_ctx(tmp_path)
     theme = load(ctx.config.ui.theme, ROOT)
     art = banner_text(theme, ROOT, glyphs=True)
@@ -286,7 +234,6 @@ def test_the_banner_never_appears_in_any_prompt(tmp_path):
 
 
 def test_no_prompt_building_module_imports_the_theme():
-    """Structural, so it stays true for prompts this test never sends."""
     for rel in ("ledger/prefix.py", "execute/loop.py", "plan/planner.py",
                 "security/taint.py"):
         text = (ROOT / "src" / "agent" / rel).read_text(encoding="utf-8")
@@ -294,14 +241,10 @@ def test_no_prompt_building_module_imports_the_theme():
             f"{rel} imports something from the surface layer")
 
 
-# ==========================================================================
-# 7.6 — degradation
-# ==========================================================================
-
 def test_without_glyph_support_the_banner_falls_back_to_plain_ascii():
     theme = load(ROOT / "themes" / "default.toml", ROOT)
     assert banner_text(theme, ROOT, glyphs=False) == PLAIN_BANNER
-    PLAIN_BANNER.encode("ascii")          # must survive an ascii-only terminal
+    PLAIN_BANNER.encode("ascii")
 
 
 def test_glyph_support_is_decided_by_the_encoding_not_the_platform():
@@ -344,15 +287,6 @@ def test_the_theme_is_swappable(tmp_path):
 
 
 def test_the_surface_knows_a_call_started_not_only_that_tokens_arrived(tmp_path):
-    """MEASURED 2026-09-07 against granite4.1:3b on Ollama /v1: time to first
-    token is a roughly FIXED ~2.4s of prompt evaluation, independent of how
-    much is generated — 63% of a 3.8s turn and 71% of a 3.4s one was silent
-    even with streaming on.
-
-    So "output streams token by token" is true and insufficient. A surface
-    that reacts only to tokens shows nothing for most of a short turn and
-    looks hung, which is the problem streaming was added to solve.
-    """
     ctx = make_ctx(tmp_path)
     t = new_task(ctx)
     order: list[str] = []
@@ -377,9 +311,6 @@ def test_the_waiting_state_clears_on_the_first_token():
 
 
 def test_the_spinner_frames_come_from_the_theme_and_degrade():
-    """They were loaded and unused until the prefill measurement gave them a
-    job. Either a theme value is used or it should not be read."""
     src = (ROOT / "src" / "agent" / "tui" / "app.py").read_text(encoding="utf-8")
     assert 'self.theme_data["spinner"]' in src
     assert load(ROOT / "themes" / "default.toml", ROOT)["spinner"]
-

@@ -1,17 +1,3 @@
-"""D36 - a model call is on the record from the moment it starts.
-
-Invariant 12 was false twice over. `calls` was written from a RETURNED
-response, so the 32 calls in the measurement record that stalled, crashed or
-were cut off by a kill have no row - the slowest calls, missing from every
-figure drawn from `calls`. And five call sites never wrote a row at all: the
-deputy (15 reviews in the record, none in `calls`), the quarantined
-summarizer, the monitor, the self-consistency verifier and the generator.
-
-Every task-bound call now goes through `AgentContext.call_model`, which writes
-the row BEFORE the call with null usage and completes it on return. A row
-that never completes is the record of a call that never returned.
-"""
-
 from __future__ import annotations
 
 import json
@@ -58,8 +44,6 @@ def test_a_stalled_call_keeps_its_row_and_its_time(ctx, task):
                          tokens=1, elapsed=0.25)
 
     ctx.backends["cloud"]._responder = stall  # noqa: SLF001
-    # The loop hands an unfinished stall to its caller (loop.py, `except
-    # ModelStall`), which re-runs once. The row must survive that exit.
     with pytest.raises(ModelStall):
         run_task(ctx, task.id)
     rows = _rows(ctx, task.id)
@@ -70,7 +54,6 @@ def test_a_stalled_call_keeps_its_row_and_its_time(ctx, task):
 
 
 def test_a_call_that_never_returns_stays_open_and_is_counted(ctx, task):
-    """What a killed process leaves behind: a row begun and never completed."""
     from agent.instrument.telemetry import begin_call
 
     begin_call(ctx.conn, task.id, "cloud", "step")
@@ -96,11 +79,6 @@ def test_the_deputy_is_on_the_record(ctx, workspace):
 
 
 def test_router_inputs_ignore_calls_that_never_returned(ctx, task):
-    """The router predicts from work done. An open row's NULL sorts first and
-    would become the median; a stall's seconds with no tokens would read as a
-    crawl. A stall is a machine fault - the same rule the reference
-    measurement excludes it by - so it stays on the record and out of the
-    router's estimate."""
     from agent.instrument.telemetry import abort_call, begin_call, complete_call
     from agent.kernel.types import TokenUsage
 
@@ -113,9 +91,6 @@ def test_router_inputs_ignore_calls_that_never_returned(ctx, task):
     assert ctx.telemetry.observed_tokens_per_sec("local", "summarize") == 100.0
 
 
-# The structural half. A new call site that calls `.complete()` directly is a
-# row that will never be written. These are the only exceptions, each a probe
-# of a backend with no task behind it.
 PROBES = {
     "context.py": "AgentContext.call_model - the one place a task's call is made",
     "models/base.py": "measure_throughput - a probe of the backend, no task",
@@ -172,6 +147,6 @@ def test_the_calls_table_migrates_without_losing_a_row(tmp_path):
     assert conn.execute("SELECT 1 FROM sqlite_master WHERE type='index' "
                         "AND name='idx_calls_task'").fetchone()
     conn.close()
-    conn = open_db(db)            # idempotent: a second open changes nothing
+    conn = open_db(db)
     assert conn.execute(f"SELECT {COLS} FROM calls ORDER BY id").fetchall() == before
     conn.close()
