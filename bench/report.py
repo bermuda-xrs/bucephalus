@@ -303,7 +303,7 @@ def render(noise: dict | None, cal: dict | None) -> str:
 
 _DEFAULT_CAVEATS = [
     "Token usage is the model server's own count. Only in-loop context "
-    "budgeting uses a local estimate, whose error is unmeasured (DEFERRED D6).",
+    "budgeting uses a local estimate, fitted to each backend once it has 30 measured calls.",
     "Published agent costs have been misestimated by up to 100%. These numbers "
     "are cost-controlled but single-run unless n is stated.",
 ]

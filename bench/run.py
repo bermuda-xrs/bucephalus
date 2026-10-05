@@ -25,7 +25,7 @@ from agent.skills.gate import TaskSpec, evaluate_skill, run_paired_trial  # noqa
 
 CAVEATS = [
     "Token usage is the model server's own count. Only in-loop context "
-    "budgeting uses a local estimate, whose error is unmeasured (DEFERRED D6).",
+    "budgeting uses a local estimate, fitted to each backend once it has 30 measured calls.",
     "Public coding benchmarks are contamination-inflated by roughly 5-15 points, "
     "and an audit found ~59% of the hardest SWE-bench Verified tasks have tests "
     "that would not catch the intended bug. A reported 90% is realistically 75-80%.",

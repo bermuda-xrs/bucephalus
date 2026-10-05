@@ -10,6 +10,17 @@
 Dates are commit dates. `0.1.0` is not released yet — see "Unreleased" for
 what still stands between here and a first iteration.
 
+## Iteration 4 - 2026-10-05/06 (HARNESS_VERSION 7)
+
+- P5: a graded program cannot write its own verdict; code graders run the answer in a child.
+- P6: the context ceiling budgets against a per-backend fit of the token estimator.
+- P3: a follow-up task is given its conversation's earlier exchanges, untrusted, in the tail.
+- Deleted: escalation-by-disagreement (never ran), grounding notes (never read), 20 helpers with no caller.
+- P1, P4 rejected; P2 dropped by its own measurement.
+- Two pipe leaks in the sandbox fixed; ruff (bug rules) in CI.
+- Code, tests and scripts carry no docstrings and almost no comments; HANDOVER is state and next step;
+  DEFERRED holds open issues only.
+
 ## Section E, worked: the CLI sweep, D24, G1's ablation arms, and the inventory as a command - 2026-09-17
 
 HANDOVER E3, in its stated order. Four of its five items; the fifth (E3e, the

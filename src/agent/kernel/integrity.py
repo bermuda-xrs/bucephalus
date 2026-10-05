@@ -176,7 +176,7 @@ def verify_all(conn: sqlite3.Connection, log: EventLog, anchor: Anchor,
                     "detail": ("anchor is behind the head; the anchored hash "
                                "is still in the chain, so nothing was "
                                "rewritten. The task ran past its last "
-                               "checkpoint — DEFERRED D10"),
+                               "checkpoint"),
                 }
             )
     return findings

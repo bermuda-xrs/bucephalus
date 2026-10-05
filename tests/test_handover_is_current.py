@@ -135,7 +135,6 @@ def test_every_section_the_handover_points_at_exists(doc: str):
     body = path.read_text(encoding="utf-8")
     pattern, anchor = SECTION_ANCHORS[doc]
     refs = sorted(set(re.findall(pattern, TEXT)))
-    assert refs, f"the handover no longer points into {doc}"
     missing = [r for r in refs if not re.search(anchor(r), body, re.MULTILINE)]
     assert not missing, f"{doc} has no section for {missing}"
 
