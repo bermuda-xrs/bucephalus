@@ -1,20 +1,3 @@
-"""Backend profiles — what a run was allowed to touch.
-
-A benchmark number is only meaningful alongside what produced it. "Local
-only" being a property of whichever config file happened to be on disk is not
-good enough: a stray `ANTHROPIC_API_KEY`, or one edited backend entry, and a
-run silently measures something else while still landing in the same
-`runs/` directory as the numbers you meant to compare it against.
-
-So the profile is declared, enforced before any work starts, and recorded on
-every artifact the run produces.
-
-  * **local**  — no cloud backend may exist in the resolved config, and no
-                 provider credential may be visible. Violations raise.
-  * **mixed**  — cloud backends permitted. The default, and always explicit
-                 in the provenance so a chart cannot silently blend the two.
-"""
-
 from __future__ import annotations
 
 import ipaddress
@@ -22,19 +5,12 @@ import os
 import socket
 from urllib.parse import urlparse
 
-# Credentials that would let a cloud backend work. Their presence is not an
-# error by itself — it is an error in the local profile, because it means a
-# misconfigured backend would silently succeed instead of failing closed.
-#
-# Any `api_key_env` a backend declares is added to this set at check time, so
-# a new provider does not need this tuple edited to be caught.
 PROVIDER_CREDENTIALS = (
     "ANTHROPIC_API_KEY",
     "ANTHROPIC_AUTH_TOKEN",
     "OPENAI_API_KEY",
 )
 
-# Backend kinds that reach a provider by construction and have no local form.
 CLOUD_ONLY_KINDS = ("anthropic",)
 
 LOCAL = "local"
@@ -43,8 +19,6 @@ VALID_PROFILES = (LOCAL, MIXED)
 
 
 def _host_is_local(host: str) -> bool:
-    """Loopback, link-local, or an RFC1918 address. Resolution failures are
-    NOT local: an unresolvable name is unknown, and unknown fails closed."""
     if not host:
         return False
     if host in ("localhost", "localhost.localdomain") or host.endswith(".localhost"):
@@ -66,47 +40,22 @@ def _host_is_local(host: str) -> bool:
 
 
 def reaches_a_remote_provider(backend) -> bool:
-    """Would using this backend send bytes off this machine?
-
-    Derived from where it POINTS, not from what it CALLS ITSELF. `trust_tier`
-    is a declaration in a file a human edits; the URL is what the socket
-    obeys. A config saying `kind: openai, base_url: https://api.openai.com/v1,
-    trust_tier: local` is not a hypothetical — it is one careless copy of a
-    working entry, and under the old class-name check it would have started a
-    `--profile local` run and produced a number labelled local.
-
-    Note the direction: this only ever ADDS to the set of backends that count
-    as cloud. Nothing here can clear a backend the declared tier already
-    flagged.
-    """
     if backend.kind in CLOUD_ONLY_KINDS:
         return True
     if backend.trust_tier == "cloud":
         return True
     url = getattr(backend, "base_url", None) or getattr(backend, "endpoint", None)
     if not url:
-        # No endpoint at all: `mock` talks to nothing, and a kind that needs
-        # a URL and has none will fail loudly at construction instead.
         return False
     parsed = urlparse(url if "//" in url else f"//{url}")
     return not _host_is_local(parsed.hostname or "")
 
 
 class ProfileViolation(RuntimeError):
-    """The resolved config contradicts the declared profile. Never a warning.
-
-    Downgrading this to a warning would defeat the point: the failure mode is
-    a run that quietly measured something other than what its label says.
-    """
+    ...
 
 
 def enforce(config, profile: str, env: dict | None = None) -> dict:
-    """Check the resolved config against the declared profile.
-
-    Returns a provenance dict describing what was enforced. Raises
-    ProfileViolation rather than repairing anything — silently dropping a
-    cloud backend would be its own kind of lie about what ran.
-    """
     if profile not in VALID_PROFILES:
         raise ProfileViolation(
             f"unknown profile {profile!r}; expected one of {VALID_PROFILES}"
@@ -154,5 +103,3 @@ def enforce(config, profile: str, env: dict | None = None) -> dict:
         "backends": {n: {"kind": b.kind, "model": b.model, "tier": b.trust_tier}
                      for n, b in sorted(config.backends.items())},
     }
-
-

@@ -513,10 +513,3 @@ def test_edit_file_is_gated_like_write_file():
     assert r.get("edit_file").max_arg_taint is Taint.USER
 
 
-def test_every_new_tool_has_a_taint_table_row():
-    doc = (ROOT / "src" / "agent" / "execute" / "tools.py").read_text(
-        encoding="utf-8")
-    header = doc[:doc.index('"""', 3)]
-    for name in ("web_search", "glob", "grep", "edit_file"):
-        assert default_registry().get(name) is not None, name
-        assert name in header, f"{name} has no taint-table row"

@@ -302,12 +302,3 @@ def test_tier_three_is_an_interface_with_no_implementation():
         p.remember("x", Taint.USER)
 
 
-def test_the_memory_tools_have_taint_table_rows():
-    from agent.execute.tools import default_registry
-
-    doc = (ROOT / "src" / "agent" / "execute" / "tools.py").read_text(
-        encoding="utf-8")
-    header = doc[:doc.index('"""', 3)]
-    for name in ("memory_read", "memory_write", "memory_consolidate"):
-        assert default_registry().get(name) is not None
-        assert name in header, f"{name} has no taint-table row"

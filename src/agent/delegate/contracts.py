@@ -1,14 +1,3 @@
-"""M10 — delegation, reluctantly.
-
-The evidence is discouraging: across 1,600+ recorded runs on 7 frameworks,
-failure rates ran 41-87%, with gains over a strong single agent often minimal
-and failures concentrated in specification and coordination. One team's
-multi-agent research system did win big — while using roughly 15x the tokens.
-
-So: all five gates must pass. Fail any one, do it inline. If you cannot fill in
-the contract, you do not understand the subtask well enough to hand it off.
-"""
-
 from __future__ import annotations
 
 import json
@@ -30,19 +19,10 @@ class SubtaskPlan:
 
 
 def scope_widens(parent_scope: list[str], child_scope: list[str]) -> list[str]:
-    """Entries the child asked for that the parent does not already cover.
-
-    Path containment, not string equality: a parent scoped to `work` covers a
-    child asking for `work/sub`, and does not cover `work_other` — which a
-    prefix comparison on strings would wrongly allow.
-    """
     import os
     from pathlib import Path
 
     if not parent_scope:
-        # EMPTY MEANS NOTHING (D29's sweep). This returned "nothing widens",
-        # so a parent that declared no scope could hand a child any scope at
-        # all. A parent permitted no path; every entry a child asks for widens.
         return list(child_scope)
     roots = [Path(os.path.abspath(x)) for x in parent_scope]
     out = []
@@ -64,21 +44,10 @@ def scope_widens(parent_scope: list[str], child_scope: list[str]) -> list[str]:
 
 
 def may_delegate(ctx, task, subtask_plan: SubtaskPlan) -> tuple[bool, str]:
-    """All five, plus the two structural refusals B3 adds.
-
-    The five original gates ask whether delegating is WORTH it. The two below
-    ask whether it is ALLOWED, and they come first because a refusal on
-    authority should not depend on whether the estimate happened to clear a
-    token threshold.
-    """
-    # LEAVES CANNOT SPAWN. Checked from the task tree rather than from a flag,
-    # so it cannot be bypassed by constructing a context differently: if this
-    # task has a parent, it is already a child.
     if getattr(task, "parent_id", None):
         return False, ("a delegated child may not delegate further; "
                        "unbounded depth is how a coordination failure becomes "
                        "a fork bomb")
-    # ARTIFACT SCOPE IS INHERITED, NEVER WIDENED.
     widened = scope_widens(task.contract.artifact_scope,
                            subtask_plan.artifact_scope or [])
     if widened:
@@ -100,13 +69,11 @@ def may_delegate(ctx, task, subtask_plan: SubtaskPlan) -> tuple[bool, str]:
 
 @dataclass
 class DelegationResult:
-    artifact_id: str  # written to the ledger by the child
-    summary: str  # <=200 tokens, bounded
+    artifact_id: str
+    summary: str
     verified: bool
     tokens_used: int
     child_task_id: str = ""
-    # NO transcript. Not optional. The transcript is the thing you delegated
-    # to avoid reading.
 
     def render(self) -> str:
         status = "verified" if self.verified else "UNVERIFIED"
@@ -120,10 +87,6 @@ SUMMARY_TOKEN_CAP = 200
 
 
 def run_delegated(ctx, parent_task, subtask_plan: SubtaskPlan) -> DelegationResult:
-    """Open a child task, run it, and bring back a reference plus a bounded summary.
-
-    Children write to the ledger; parents receive references, never transcripts.
-    """
     from ..execute.loop import run_task
     from ..kernel.tasks import create_task
     from ..kernel.types import Taint
@@ -143,13 +106,6 @@ def run_delegated(ctx, parent_task, subtask_plan: SubtaskPlan) -> DelegationResu
         ctx.conn, ctx.log, contract, subtask_plan.budget, parent_id=parent_task.id
     )
 
-    # B3. The child's authority is the parent's, narrowed. Union of denials,
-    # so a chain of delegations can only ever get smaller.
-    #
-    # Isolation needs no separate inheritance: `visible_tasks` scopes to the
-    # TASK TREE, and a child shares its parent's root by construction, so it
-    # sees exactly what the parent sees and cannot widen it by existing.
-    # Asserted in tests/test_tool_exposure.py rather than assumed.
     policy = child_policy(ctx.tool_policy(parent_task.id))
     ctx.restrict_tools(child.id, policy)
 
@@ -198,6 +154,5 @@ def _bound(text: str, max_tokens: int) -> str:
 
     if count_tokens(text) <= max_tokens:
         return text
-    # Cut on a character budget derived from the token cap, then say so.
     approx_chars = int(max_tokens * 3.4)
     return text[:approx_chars].rstrip() + f"\n[... bounded to {max_tokens} tokens ...]"

@@ -30,7 +30,7 @@ from agent.delegate.contracts import (  # noqa: E402
 from agent.execute.loop import run_task  # noqa: E402
 from agent.kernel.scope import task_tree, visible_tasks  # noqa: E402
 from agent.kernel.tasks import create_task  # noqa: E402
-from agent.kernel.types import Budget, TaskContract  # noqa: E402
+from agent.kernel.types import Budget, TaskContract, Taint  # noqa: E402
 from agent.security.exposure import (  # noqa: E402
     CHILD_DENIED,
     UNRESTRICTED,
@@ -328,3 +328,33 @@ def test_every_measurement_entry_point_declares_one():
         assert seen[name], f"{name} calls the door without stating isolation"
     assert "isolate=True" in (ROOT / "bench" / "noise.py").read_text(
         encoding="utf-8"), "paired trials must be isolated"
+
+
+TAINT_TABLE = {
+    "append_to_outbox": (True, Taint.USER, Taint.TRUSTED),
+    "edit_file": (True, Taint.USER, Taint.TRUSTED),
+    "expand_artifact": (False, Taint.UNTRUSTED, Taint.UNTRUSTED),
+    "git_push": (True, Taint.TRUSTED, Taint.TRUSTED),
+    "glob": (False, Taint.UNTRUSTED, Taint.UNTRUSTED),
+    "grep": (False, Taint.UNTRUSTED, Taint.UNTRUSTED),
+    "list_dir": (False, Taint.UNTRUSTED, Taint.UNTRUSTED),
+    "memory_consolidate": (True, Taint.USER, Taint.TRUSTED),
+    "memory_read": (False, Taint.UNTRUSTED, Taint.TRUSTED),
+    "memory_write": (True, Taint.USER, Taint.TRUSTED),
+    "parallel": (False, Taint.UNTRUSTED, Taint.UNTRUSTED),
+    "read_file": (False, Taint.UNTRUSTED, Taint.UNTRUSTED),
+    "run_code": (True, Taint.USER, Taint.UNTRUSTED),
+    "search_history": (False, Taint.UNTRUSTED, Taint.UNTRUSTED),
+    "web_fetch": (False, Taint.UNTRUSTED, Taint.UNTRUSTED),
+    "web_search": (False, Taint.UNTRUSTED, Taint.UNTRUSTED),
+    "write_file": (True, Taint.USER, Taint.TRUSTED),
+}
+
+
+def test_every_registered_tool_has_a_taint_row():
+    from agent.execute.tools import default_registry
+
+    reg = default_registry()
+    got = {n: (reg.get(n).side_effecting, reg.get(n).max_arg_taint, reg.get(n).output_taint)
+           for n in reg.names()}
+    assert got == TAINT_TABLE

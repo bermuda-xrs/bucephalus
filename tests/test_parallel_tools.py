@@ -344,10 +344,6 @@ def test_concurrent_reads_of_the_shared_connection_do_not_corrupt(tmp_path):
 
 
 def test_parallel_has_a_taint_table_row():
-    doc = (ROOT / "src" / "agent" / "execute" / "tools.py").read_text(
-        encoding="utf-8")
-    header = doc[:doc.index('"""', 3)]
-    assert "parallel" in header
     spec = default_registry().get("parallel")
     assert spec.output_taint is Taint.UNTRUSTED, (
         "the batch carries whatever its members return; anything lower would "

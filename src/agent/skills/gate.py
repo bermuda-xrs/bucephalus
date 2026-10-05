@@ -1,18 +1,3 @@
-"""M9 — THE SKILL GATE. Built before M11. This ordering is not negotiable.
-
-The evidence: measured across thousands of trajectories, human-curated skills
-improved pass rates substantially (roughly +16 points), while self-generated
-skills averaged slightly NEGATIVE (about -1 point). Even curated skills made
-things worse on a fifth of tasks.
-
-Build a generator without a gate and you ship a library that quietly degrades
-the system while looking like progress.
-
-Paired, not independent: run the SAME task both ways. This controls for task
-difficulty and gives far more statistical power at small n, which matters when
-each trial costs money.
-"""
-
 from __future__ import annotations
 
 import json
@@ -27,13 +12,6 @@ from ..workspace import reset_workspace
 
 
 def binom_greater(b: int, n: int) -> float:
-    """McNemar's one-sided exact p: P(X >= b) for X ~ Binomial(n, 1/2).
-
-    Exactly scipy's `binomtest(b, n, 0.5, alternative="greater").pvalue`
-    (tests/test_gate_binomial.py checks every b for n <= 60), computed in
-    integers. scipy, and the numpy it brings, were ~95 MB of the desktop build
-    for this one call.
-    """
     if n <= 0:
         return 1.0
     return sum(comb(n, k) for k in range(max(b, 0), n + 1)) / 2 ** n
@@ -41,46 +19,28 @@ def binom_greater(b: int, n: int) -> float:
 
 @dataclass
 class TaskSpec:
-    """One paired-trial task. `key` identifies the pair, not the arm."""
-
     key: str
     goal: str
     success_criterion: str = "always_pass"
     output_schema: dict = field(default_factory=dict)
     artifact_scope: list[str] = field(default_factory=list)
-    catastrophic: bool = False  # a regression here is a veto, not a data point
-    # The task's declared input files. Both arms are rebuilt from these before
-    # they run: the two arms of a pair share one workspace, so without a reset
-    # the CONTROL arm can be graded against the answer the SKILL arm just
-    # wrote — manufacturing precisely the lift this gate exists to detect.
+    catastrophic: bool = False
     fixtures: dict = field(default_factory=dict)
-    # Outside artifact_scope. See TaskContract.grader_dir.
     grader_dir: str | None = None
 
 
 class ContaminationError(RuntimeError):
-    """A trial task was one the skill was drafted from. That is a fake positive."""
+    ...
 
 
-# What every promotion records in place of M7.4 rule 4, the gaming veto,
-# retired with M11 on 2026-09-15 (FINDINGS 1.27).
 GAMING_CHECK = ("not applicable - every check is held out, the grader is "
                 "unreachable (SPEC-DELTA C1)")
 
 
 def check_contamination(ctx, skill_id: str, task_key: str) -> None:
-    """Never reuse a task the skill was drafted from.
-
-    Enforced here rather than left as advice, because a contaminated suite
-    produces a confident, significant, entirely fake lift.
-    """
     row = ctx.conn.execute(
         "SELECT provenance_json FROM skills WHERE id=?", (skill_id,)
     ).fetchone()
-    # EMPTY MEANS NOTHING (D29's sweep). A missing row and a missing drafting
-    # set both returned "clean", so an unknown drafting set certified every
-    # trial - and neither skill in the measurement record declares one.
-    # Unknown is not "drafted from nothing": nothing can be certified.
     if not row:
         raise ContaminationError(
             f"no such skill {skill_id[:12]}: its drafting set is unknown")
@@ -100,7 +60,6 @@ def check_contamination(ctx, skill_id: str, task_key: str) -> None:
 
 
 def run_paired_trial(ctx, skill_id: str, task_spec: TaskSpec, seed: int | None = None) -> None:
-    """Run the same task with and without the skill. Randomize arm order."""
     check_contamination(ctx, skill_id, task_spec.key)
     arms = ["control", "skill"]
     random.Random(seed).shuffle(arms)
@@ -137,12 +96,9 @@ class TrialOutcome:
 
 
 def run_task_isolated(ctx, task_spec: TaskSpec, skills: list[dict]) -> TrialOutcome:
-    """One arm of one pair, in its own task with its own frozen skill set."""
     from ..execute.loop import run_task
     from ..kernel.tasks import create_task
 
-    # Identical bytes for both arms. Must happen INSIDE the arm, not once per
-    # pair, or the second arm inherits the first arm's output.
     reset_workspace(ctx.config.root, task_spec.artifact_scope, task_spec.fixtures)
 
     contract = TaskContract(
@@ -174,19 +130,6 @@ def run_task_isolated(ctx, task_spec: TaskSpec, skills: list[dict]) -> TrialOutc
 def fetch_paired_outcomes(
     conn, skill_id: str, task_keys: set[str] | None = None
 ) -> list[tuple[str, int, int]]:
-    """[(task_key, control_success, skill_success)] for complete pairs only.
-
-    `task_keys` restricts to a subset of the trials ALREADY RUN. That is how
-    a contamination-clean sub-analysis is reported without spending the
-    compute twice: the eval tasks are a subset of the full suite, so the same
-    stored trials answer both questions.
-
-    Note what this does NOT do: it never counts one task twice. Rows are
-    collapsed by task_key, so re-running a task under another seed replaces
-    its outcome rather than adding a pair. Two runs of one task share its
-    underlying difficulty; counting them as two pairs would inflate n without
-    adding information and make the p-value anti-conservative.
-    """
     rows = conn.execute(
         """SELECT task_key, arm, success FROM skill_trials
            WHERE skill_id=? ORDER BY task_key""",
@@ -210,22 +153,13 @@ def evaluate_skill(
     catastrophic_keys: set[str] | None = None,
     task_keys: set[str] | None = None,
 ) -> GateDecision:
-    """All four conditions must hold: enough pairs, enough discordant pairs,
-    lift above threshold, and significance.
-
-    Statistical significance alone is not enough — a +0.5pp result that is
-    significant is not worth the context tokens the skill occupies.
-    """
     pairs = fetch_paired_outcomes(ctx.conn, skill_id, task_keys)
     n = len(pairs)
     cfg = ctx.config.gate
     catastrophic_keys = catastrophic_keys or set()
 
-    # Computed before any early return. A verdict of "insufficient" that
-    # reports nothing but n leaves the reader unable to see WHICH way an
-    # underpowered result pointed, which is most of its remaining value.
-    b = sum(1 for _, c, s in pairs if s == 1 and c == 0)   # skill wins
-    c_ = sum(1 for _, c, s in pairs if s == 0 and c == 1)  # control wins
+    b = sum(1 for _, c, s in pairs if s == 1 and c == 0)
+    c_ = sum(1 for _, c, s in pairs if s == 0 and c == 1)
     discordant = b + c_
     lift_pp = 100.0 * (b - c_) / n if n else 0.0
     p = binom_greater(b, discordant) if discordant else 1.0
@@ -244,8 +178,6 @@ def evaluate_skill(
             **stats,
         )
 
-    # A task the control passed and the skill failed is worse than a task
-    # neither passed. Veto on any severe case.
     for key, cc, ss in pairs:
         if cc == 1 and ss == 0 and key in catastrophic_keys:
             return GateDecision.reject(
@@ -253,13 +185,6 @@ def evaluate_skill(
             )
 
     if lift_pp >= cfg.min_lift_pp and p < cfg.max_p_value:
-        # M7.4 rule 4, the gaming veto, is RETIRED with M11 (FINDINGS 1.27).
-        # Removing it removed NO protection: it read a visible/held-out gap
-        # that nothing ever recorded, so it could not fire. And here the gap
-        # is undefined, not unmeasured - every check is held out, because the
-        # grader lives outside artifact_scope where the agent cannot read it
-        # (SPEC-DELTA C1, test_grader_isolation). Only a generated skill,
-        # writing visible checks of its own, ever had a visible half to fit.
         return GateDecision.promote(gaming_check=GAMING_CHECK, **stats)
 
     return GateDecision.reject(
@@ -268,11 +193,6 @@ def evaluate_skill(
 
 
 def promotion_rate(conn) -> dict:
-    """Track this. 10-30% is the system working; >60% means check contamination.
-
-    Moved here from the retired generator (M11): the gate is what promotes, so
-    the gate is what reports how often.
-    """
     row = conn.execute(
         """SELECT
              SUM(CASE WHEN status='promoted' THEN 1 ELSE 0 END),
@@ -298,11 +218,6 @@ def promotion_rate(conn) -> dict:
 
 
 def promote(ctx, skill_id: str, decision: GateDecision, human_approved: bool) -> None:
-    """M8.4 rule 6 — promotion is a TRUSTED capability requiring human approval.
-
-    Only the gate promotes, and only with a human saying yes. The generator
-    (M11) cannot reach this function.
-    """
     if decision.verdict != "promote":
         raise ValueError(f"gate did not promote: {decision.reason}")
     if not human_approved:
@@ -314,18 +229,7 @@ def promote(ctx, skill_id: str, decision: GateDecision, human_approved: bool) ->
     ctx.record_promotion(skill_id, decision.detail | {"name": meta["name"]})
 
 
-# -- M9.4 retrieval precision: WITHDRAWN 2026-09-15 -------------------------
-# `retrieve` returns promoted skills only, and none has ever been promoted, so
-# a precision measured today is 0.0 by construction. Below MAX_SKILLS_IN_PREFIX
-# promoted skills it would measure the threshold alone. Rebuild it when the
-# promoted library outgrows the prefix (SPEC-DELTA C61).
-
-
-# -- M9.5 decay and pruning -------------------------------------------------
-
-
 def decay_pass(ctx, days: int = 30, drop: float = 0.10) -> list[dict]:
-    """A shrinking library is healthy. Demoted skills leave the prefix immediately."""
     actions = []
     cutoff = time.time() - days * 86400
     for s in ctx.skills.promoted():

@@ -1,20 +1,3 @@
-"""The Textual app. Thin on purpose - the rules live in `model.py`.
-
-Iteration 3 (4.5): the console's layout in terminal form, and its flow. The
-TUI used to create a task and run it at once; it is plan-first now, like
-every surface: a message drafts a plan, `s` signs it and only then does
-anything run, `b` sends it back with a reason. Conversations down the side,
-the thread with the live plan panel under the message that asked for it, a
-tool trail tree with delegated children nested, and one status bar with the
-model, the context meter against its compaction ceiling, the budget and
-the integrity count. Ctrl+K is Textual's command palette.
-
-ALERTS ARE NOT APPROVALS. They live in a separate tab, in a colour used
-nowhere else, and they are counted on the status bar so the count is visible
-without switching to it. A broken hash chain arriving in the same list as
-"may I write this file" is how you approve one by muscle memory.
-"""
-
 from __future__ import annotations
 
 import threading
@@ -43,8 +26,6 @@ from .theme import banner_text, load, supports_glyphs
 
 
 class AlphaTUI(App):
-    """Reads the kernel in-process; renders through the shared vocabulary."""
-
     TITLE = "alpha"
     COMMAND_PALETTE_BINDING = "ctrl+k"
     CSS = """
@@ -74,8 +55,8 @@ class AlphaTUI(App):
         self.ctx = ctx
         self.task_id = task_id
         self.conv_id: str | None = None
-        self.plan = None                     # the drafted plan awaiting a signature
-        self.mode = "ask"                    # or "sendback": the input is the reason
+        self.plan = None
+        self.mode = "ask"
         self.state = RunState()
         self.glyphs = supports_glyphs()
         self.theme_data = load(ctx.config.ui.theme, ctx.config.root)
@@ -87,12 +68,8 @@ class AlphaTUI(App):
         b = self.ctx.backends.get("cloud") or next(iter(self.ctx.backends.values()), None)
         return b.cfg.model if b else "?"
 
-    # -- layout -----------------------------------------------------------
-
     def compose(self) -> ComposeResult:
         yield Header()
-        # DISPLAY ONLY. See tui/theme.py - no prompt-building code imports
-        # this module, and a test greps every prompt sent to prove it.
         yield Static(banner_text(self.theme_data, self.ctx.config.root,
                                  self.glyphs), id="banner")
         with Horizontal():
@@ -121,8 +98,6 @@ class AlphaTUI(App):
         yield Footer()
 
     def on_mount(self) -> None:
-        # Only to animate the spinner during prompt evaluation. Slow on
-        # purpose: this is a progress hint, not a frame budget.
         self.set_interval(0.12, self._spin)
         self.set_interval(5.0, self.refresh_side)
         self.refresh_side()
@@ -131,8 +106,6 @@ class AlphaTUI(App):
         self.query_one("#goal", Input).focus()
         if self.task_id:
             self.attach(self.task_id)
-
-    # -- the side -----------------------------------------------------------
 
     def refresh_side(self) -> None:
         from ..control import conversations as conv
@@ -180,10 +153,7 @@ class AlphaTUI(App):
                 t.append(f"  {it['status']}\n", style="dim")
         self.query_one("#thread", Static).update(t)
 
-    # -- wiring -----------------------------------------------------------
-
     def attach(self, task_id: str) -> None:
-        """Replay the chain, then tail the bus."""
         from ..plan.planner import load_plan
 
         self.task_id = task_id
@@ -205,10 +175,6 @@ class AlphaTUI(App):
         self._unsubscribe = bus.subscribe(task_id, self._on_live)
 
     def _on_live(self, kind: str, data: dict) -> None:
-        # The bus fires on the worker thread. Textual widgets are not thread
-        # safe, so hop back rather than touching them here - a display that
-        # corrupts under concurrency is the same class of bug Phase 10 spent
-        # its time on.
         self.call_from_thread(self._apply_live, kind, data)
 
     def _apply_live(self, kind: str, data: dict) -> None:
@@ -247,7 +213,6 @@ class AlphaTUI(App):
         self.refresh_budget()
 
     def show_plan(self, plan, status: str | None) -> None:
-        """The live plan panel, under the message that asked for it."""
         panel = self.query_one("#plan", Static)
         if plan is None:
             panel.display = False
@@ -299,8 +264,6 @@ class AlphaTUI(App):
             f"   budget [{glyph * filled}{empty * (bar_w - filled)}] {b.render()}"
             f"   status={self.state.status}{flag}")
 
-    # -- the two touches ----------------------------------------------------
-
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "start":
             self.submit(self.query_one("#goal", Input).value)
@@ -320,8 +283,6 @@ class AlphaTUI(App):
         self.ask(text)
 
     def ask(self, text: str) -> None:
-        """Touch zero: a message becomes a task in this conversation, and a
-        plan is drafted for it. Nothing runs."""
         from ..control import conversations as conv
 
         if self.conv_id is None:
@@ -332,7 +293,7 @@ class AlphaTUI(App):
         self.query_one("#plan", Static).update(Text("Drafting a plan. It reads, and changes nothing.",
                                                     style="dim"))
         self.query_one("#plan", Static).display = True
-        self.query_one("#trail", Tree).focus()           # keys, not typing, from here
+        self.query_one("#trail", Tree).focus()
         tid = m["task_id"]
         threading.Thread(target=self._draft, args=(tid,), daemon=True, name="tui-plan").start()
 
@@ -342,7 +303,7 @@ class AlphaTUI(App):
 
         try:
             draft_plan(self.ctx, load_task(self.ctx.conn, tid))
-        except Exception as e:  # noqa: BLE001 - surfaced, never swallowed
+        except Exception as e:  # noqa: BLE001
             self.call_from_thread(self.notify, f"drafting failed: {e}", severity="error")
         self.call_from_thread(self._after_change, tid)
 
@@ -353,7 +314,6 @@ class AlphaTUI(App):
         self.refresh_side()
 
     def action_sign(self) -> None:
-        """Touch one: pin the plan's hash, then run."""
         from ..kernel.tasks import load_task
         from ..plan.planner import approve_plan
 
@@ -392,10 +352,6 @@ class AlphaTUI(App):
         self._decide(False)
 
     def _decide(self, approve: bool) -> None:
-        # Only an approval of the task ON SCREEN, whose preview the approvals
-        # tab shows. Falling back to any task's approval decided - and ran -
-        # something nobody was shown (AUDIT-ITERATION-3 S2). Pick the other
-        # task from Needs you first.
         pending = self.ctx.pending_approvals(self.task_id) if self.task_id else []
         if not pending:
             self.notify("Nothing on this task is waiting. Open the one under Needs you.")
@@ -407,8 +363,6 @@ class AlphaTUI(App):
         self._resume(a["task_id"])
 
     def _resume(self, tid: str) -> None:
-        """A decided, parked task resumes - under the same rule the server's
-        /run applies: with plans required, only on a signed plan."""
         from ..kernel.tasks import load_task
 
         if (self.ctx.config.autonomy.plan_required
@@ -432,7 +386,7 @@ class AlphaTUI(App):
             from ..execute.loop import run_task
             try:
                 run_task(self.ctx, tid)
-            except Exception as e:  # noqa: BLE001 - surfaced, never swallowed
+            except Exception as e:  # noqa: BLE001
                 bus.publish(tid, "token",
                             {"text": f"{chr(10)}[{type(e).__name__}] {e}{chr(10)}"})
             self.call_from_thread(self._after_change, tid)

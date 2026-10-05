@@ -1,5 +1,3 @@
-"""The unit of working context. One entry per thing that happened."""
-
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -64,7 +62,6 @@ class LedgerEntry:
 
 
 def render_tail(entries: list[LedgerEntry]) -> str:
-    """Everything volatile lives here, after the cache breakpoint."""
     return "\n\n".join(e.render() for e in entries)
 
 

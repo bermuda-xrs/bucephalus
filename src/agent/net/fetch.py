@@ -1,28 +1,3 @@
-"""A local HTTP fetcher.
-
-Why this exists rather than a provider's server-side fetch tool:
-
-Anthropic ships `web_fetch` and `web_search` as server tools, and they work
-well. But their results arrive *inside the model's reply*, as tool-result
-blocks. Content that arrives that way never passes through `write_artifact`,
-never gets `taint=UNTRUSTED` stamped on it, and never reaches
-`TaintTracker.observe()` — so the capability gate has no idea those bytes came
-from the open internet. Every defense in M8 keys off provenance the agent's
-own tool path establishes. Adopting a server-side fetcher would quietly delete
-that, which is the one guarantee this build actually demonstrates.
-
-So the bytes come in through here, and go straight into the ledger as
-untrusted, like any other tool output.
-
-This is a fetcher for a personal agent, not a crawler:
-  * plain http/https only — no file://, no ftp://, no data:
-  * private and loopback addresses refused, so a page cannot walk the agent
-    into the local network
-  * hard byte cap, enforced while streaming rather than after
-  * text-ish content types only
-  * HTML reduced to text, because the agent reads prose and tags are tokens
-"""
-
 from __future__ import annotations
 
 import ipaddress
@@ -51,8 +26,6 @@ class FetchError(RuntimeError):
 
 
 class _Text(HTMLParser):
-    """Tags out, text and link targets in. No dependency for this."""
-
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
         self.parts: list[str] = []
@@ -79,11 +52,6 @@ class _Text(HTMLParser):
 
 
 def _is_public(host: str) -> bool:
-    """Refuse loopback, link-local, and RFC1918 targets.
-
-    A fetched page can name the next URL. Without this, 'summarize this page'
-    is one hop away from reading the router's admin console.
-    """
     try:
         infos = socket.getaddrinfo(host, None)
     except socket.gaierror as e:
@@ -95,27 +63,10 @@ def _is_public(host: str) -> bool:
     return True
 
 
-# `fetch_url`, a text-only wrapper over the function below, left with its last
-# caller (`default_fetcher`, retired with M11's grounding, 2026-09-15). The
-# `web_fetch` tool calls `fetch_with_provenance`; so do the refusal tests now.
-
-
 def fetch_with_provenance(url: str, *, max_bytes: int = MAX_BYTES,
                           timeout_s: float = TIMEOUT_S,
                           allow_private: bool = False,
                           polite: bool = True) -> dict:
-    """Text plus where it came from: URL, fetch time, content hash.
-
-    A4.3. Provenance is produced HERE rather than at the tool, because the
-    fetcher is the only layer that knows what was actually retrieved — the
-    final URL after redirects, and the hash of the bytes as decoded. A tool
-    reconstructing that from its own arguments would record what it ASKED
-    for, which is a different thing and the one that is wrong exactly when it
-    matters.
-
-    G4's skill provenance needs this: a skill generated from a page is only
-    checkable if the page it came from can be named and re-fetched.
-    """
     parsed = urlparse(url)
     if parsed.scheme not in ALLOWED_SCHEMES:
         raise FetchError(f"scheme {parsed.scheme!r} not allowed; use http or https")
@@ -163,24 +114,17 @@ def fetch_with_provenance(url: str, *, max_bytes: int = MAX_BYTES,
         try:
             p.feed(raw)
             text = p.text()
-        except Exception:  # noqa: BLE001 - malformed HTML still yields its text
+        except Exception:  # noqa: BLE001
             text = raw
     return {
         "text": text,
         "provenance": {
             "url": url,
-            # After redirects. A page fetched from a shortener is provenanced
-            # to where it actually came from, not to the shortener.
             "final_url": final_url,
             "fetched_at": fetched_at,
-            # Hash of the RAW bytes as decoded, before HTML was reduced to
-            # text: the extraction is ours and could change between versions,
-            # so hashing its output would make the same page hash differently
-            # after an unrelated edit here.
             "content_sha256": sha256_hex(raw),
             "bytes": len(raw.encode("utf-8")),
             "content_type": ctype,
             "rate_limit_waited_s": round(waited, 3),
         },
     }
-

@@ -1,57 +1,14 @@
-"""Sandbox libraries — what model-written code may import.
-
-TWO EXTENSION SURFACES, DELIBERATELY SEPARATE
----------------------------------------------
-
-  * a **TOOL** is a `ToolSpec` the agent loop dispatches. The model asks for
-    it by name, the gate checks the arguments' taint, a receipt is written.
-    That surface is `execute/tools.py`.
-
-  * a **SANDBOX LIBRARY** is something model-written code may `import` inside
-    `run_code`. The loop never sees it. The gate never sees it. It is not
-    dispatched, it is simply *available*.
-
-Conflating them would be a security error, not a taxonomy quibble: a tool call
-passes through the capability gate and a library import does not. Anything
-reachable by import is reachable without a gate decision, which is why the
-declarations below exist.
-
-WHAT A LIBRARY MUST DECLARE
----------------------------
-
-The sandbox currently makes three promises: no network, no writes outside
-`artifact_scope`, no subprocesses. A library that breaks any of them widens
-the sandbox for every task that follows, silently, forever after.
-
-So each entry declares all three explicitly. `register()` REFUSES anything
-answering yes, and `tests/test_sandbox_libraries.py` holds that line — the
-point is that the next addition cannot quietly widen the sandbox, which is
-exactly the kind of drift this project keeps finding after the fact.
-
-The declarations are claims by the registrar, not proofs. A library that lied
-would still get in. What the refusal buys is that widening the sandbox has to
-be *deliberate and visible in a diff*, rather than a side effect of adding a
-convenient package.
-"""
-
 from __future__ import annotations
 
 from dataclasses import dataclass
 
 
 class LibraryRefused(ValueError):
-    """A library declaring a capability the sandbox does not grant."""
+    ...
 
 
 @dataclass(frozen=True)
 class SandboxLibrary:
-    """One importable library, with its capability declaration.
-
-    `version` is PINNED. An unpinned library means two runs can import
-    different code while reporting the same TOOLSET_VERSION, which is the
-    comparison hazard TOOLSET_VERSION exists to prevent.
-    """
-
     name: str
     version: str
     purpose: str
@@ -72,13 +29,6 @@ class LibraryRegistry:
         self._libs: dict[str, SandboxLibrary] = {}
 
     def register(self, lib: SandboxLibrary) -> SandboxLibrary:
-        """Add a library, or refuse it.
-
-        Refusal is the whole point. The three checks below are the sandbox's
-        stated guarantees; a library that needs one of them relaxed is a
-        decision someone has to make explicitly, not something that arrives
-        with a convenient package.
-        """
         broken = [
             n for n, v in (
                 ("network access", lib.uses_network),
@@ -107,7 +57,6 @@ class LibraryRegistry:
         return sorted(self._libs)
 
     def manual(self) -> str:
-        """Lines for the tool manual the model sees. Must be deterministic."""
         out = []
         for lib in self.all():
             note = f" {lib.manual_note}" if lib.manual_note else ""
@@ -117,10 +66,6 @@ class LibraryRegistry:
     def provenance(self) -> list[str]:
         return [lib.declaration() for lib in self.all()]
 
-
-# ---------------------------------------------------------------------------
-# The registered set. Adding an entry here changes TOOLSET_VERSION.
-# ---------------------------------------------------------------------------
 
 REGISTRY = LibraryRegistry()
 

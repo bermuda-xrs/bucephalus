@@ -1,18 +1,8 @@
 "use strict";
-// alpha console (iteration 3). No framework, no build step: served as
-// /ui.js under a CSP that allows no inline script, so every control is a
-// data-action looked up in ACTIONS below - the whole list of what a click,
-// a key or the command palette can do.
 
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
 
-// The token arrives in the URL FRAGMENT from whoever launched the console
-// (the desktop app, or the link `alpha serve` prints) - never in this page,
-// which any local process can fetch (AUDIT-2026-09 F2). Kept for this tab
-// only, and taken out of the address bar so it is not in a screenshot.
-// The fragment may also name where to open: conv, task, pane, theme. A link
-// the desktop app can hand over; never sent to the server either.
 const OPEN = Object.fromEntries(new URLSearchParams(location.hash.slice(1)));
 const TOKEN = (() => {
   const fromHash = OPEN.token;
@@ -22,8 +12,6 @@ const TOKEN = (() => {
     return fromHash || sessionStorage.getItem("alpha-token") || "";
   } catch { return fromHash || ""; }
 })();
-// A token pasted into an open page's address bar is a same-page navigation,
-// not a load: start over so the session picks it up.
 window.addEventListener("hashchange", () => {
   if (new URLSearchParams(location.hash.slice(1)).get("token")) location.reload();
 });
@@ -33,7 +21,6 @@ const S = {conv: null, thread: null, loose: null, archived: false, streams: new 
            drafting: new Set(), filesTask: null, filesPath: "", pane: "memory",
            settings: null, lastSide: ""};
 
-// ------------------------------------------------------------- basics
 function toast(msg, bad) {
   const t = $("#toast"); t.textContent = msg; t.className = "show" + (bad ? " bad" : "");
   clearTimeout(t._h); t._h = setTimeout(() => { t.className = ""; }, bad ? 7000 : 2800);
@@ -67,7 +54,6 @@ function statusWord(s) {
 }
 const TERMINAL = s => !["pending", "running", "paused"].includes(s);
 
-// ------------------------------------------------------------- theme
 async function applyTheme() {
   try {
     const t = await api("/theme");
@@ -85,7 +71,6 @@ function setTheme(mode) {
 function toggleTheme() { setTheme(document.documentElement.dataset.theme === "light" ? "dark" : "light"); }
 try { const m = localStorage.getItem("alpha-theme"); if (m) document.documentElement.dataset.theme = m; } catch { /* dark */ }
 
-// ------------------------------------------------------------- integrity
 async function loadAlerts() {
   try {
     const a = await api("/alerts");
@@ -100,7 +85,6 @@ async function loadAlerts() {
   } catch { /* health shows reachability */ }
 }
 
-// ------------------------------------------------------------- sidebar
 async function loadSide() {
   let convs = [], gates = [];
   try {
@@ -131,7 +115,6 @@ let searchTimer = null;
 $("#convSearch").addEventListener("input", () => { clearTimeout(searchTimer);
   searchTimer = setTimeout(() => { S.lastSide = ""; loadSide(); }, 200); });
 
-// ------------------------------------------------------------- conversations
 async function newConversation() {
   closeStreams(); S.conv = null; S.thread = null; S.loose = null;
   $("#convTitle").textContent = "New conversation";
@@ -178,7 +161,6 @@ async function archiveConversation() {
   S.lastSide = ""; loadSide(); refreshThread();
 }
 
-// ------------------------------------------------------------- the thread
 function renderItems(items) {
   if (!items.length) return renderWelcome();
   $("#items").innerHTML = items.map(renderItem).join("");
@@ -276,7 +258,6 @@ function approvalCard(g) {
     </div></section>`;
 }
 
-// ------------------------------------------------------------- composing
 $("#composer").addEventListener("submit", e => { e.preventDefault(); send(); });
 $("#ask").addEventListener("keydown", e => {
   if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); send(); }
@@ -322,8 +303,6 @@ async function sendBack(taskId, planId) {
 async function decide(id, d, taskId) {
   try {
     await post("/approvals/" + id, {decision: d});
-    // A decision only records itself; the parked run resumes when it is
-    // started again, and that is what "it carries on" has to mean.
     try { await post(`/tasks/${taskId}/run`); } catch (e) { if (e.status !== 409) throw e; }
     toast(d === "approve" ? "Allowed once. It carries on." : "Refused. It carries on without it.");
     afterChange(); if (S.conv) setTimeout(() => openStream(taskId), 400);
@@ -335,7 +314,6 @@ async function afterChange() {
   if (S.loose) return openTaskAlone(S.loose);
 }
 
-// ------------------------------------------------------------- tasks outside conversations
 async function openTaskOf(taskId) {
   const t = await api("/tasks/" + taskId).catch(e => { toast(e.message, true); return null; });
   if (!t) return;
@@ -371,7 +349,6 @@ async function openLooseList() {
   closeSideOnPhone();
 }
 
-// ------------------------------------------------------------- live output
 function closeStreams() { for (const c of S.streams.values()) c.abort(); S.streams.clear(); }
 async function openStream(taskId) {
   if (S.streams.has(taskId)) return;
@@ -400,8 +377,6 @@ async function openStream(taskId) {
   } catch (e) { if (e.name !== "AbortError") toast("Live output stopped: " + e.message, true); }
   S.streams.delete(taskId);
 }
-// Each task's live trail lives HERE, not only in the DOM: a thread refresh
-// re-renders the cards from it, so nothing the stream delivered is lost.
 function trail(taskId) {
   if (!S.trails.has(taskId)) S.trails.set(taskId, {tools: [], live: "", waiting: false, step: null});
   return S.trails.get(taskId);
@@ -443,7 +418,6 @@ function onEvent(taskId, name, d) {
   }
 }
 
-// ------------------------------------------------------------- the context ring
 async function updateRing(taskId) {
   let m;
   try { m = await api("/context" + (taskId ? "?task_id=" + taskId : "")); } catch { return; }
@@ -457,7 +431,6 @@ async function updateRing(taskId) {
 ${m.ceiling.toLocaleString()} tokens (${Math.round(m.fill_ratio * 100)}% of the ${m.window.toLocaleString()}-token window). The tick marks the ceiling.`;
 }
 
-// ------------------------------------------------------------- files
 function toggleFiles() { $("#app").classList.toggle("files-closed"); }
 function toggleSide() { $("#app").classList.toggle("side-open"); }
 function closeSideOnPhone() { $("#app").classList.remove("side-open"); }
@@ -501,7 +474,6 @@ const drop = $("#drop");
 drop.addEventListener("drop", e => { e.preventDefault(); [...e.dataTransfer.files].forEach(upload); });
 drop.addEventListener("paste", e => { [...(e.clipboardData || {}).files || []].forEach(upload); });
 
-// ------------------------------------------------------------- Control Center
 function openControl(pane) {
   if ($("#control").hidden) RETURN_FOCUS = document.activeElement;
   $("#control").hidden = false; openPane(pane || S.pane);
@@ -660,7 +632,6 @@ async function acceptMemory() {
   catch (e) { toast(e.message, true); }
 }
 
-// The suite editor, carried over from the workshop.
 let SUITE = null;
 async function loadSuites() {
   const d = await api("/suites");
@@ -700,8 +671,6 @@ function critChanged() {
   $("#tExpLabel").textContent = c === "contains_all" ? "Strings that must appear (JSON list)" : "Expected answer (JSON)";
   if (c === "contains_all" && $("#tExp").value.trim().startsWith("{")) $("#tExp").value = '["compressor", "filter"]';
 }
-// Which checks look at the answer at all. `execution` refuses without a
-// script and `json_schema` checks shape only (DR7), so neither counts.
 function checksCorrectness(t) {
   const s = t.output_schema || {};
   return !!(s["x-expected"] || s["x-contains"] || ["verify_program", "pytest"].includes(t.success_criterion));
@@ -759,9 +728,6 @@ async function savePolicy() {
         toast("Policy saved. It applies from the next review."); openPane("policy"); }
   catch (e) { toast(e.message, true); }
 }
-// ------------------------------------------------------------- command palette
-// Existing actions only: each entry names a key of ACTIONS. The palette is a
-// faster way to click, never a new thing a click could not do.
 const COMMANDS = [
   ["New conversation", "newConversation"], ["Search conversations", "focusSearch"],
   ["Show or hide archived conversations", "toggleArchived"], ["Tasks started elsewhere", "openLooseList"],
@@ -798,7 +764,6 @@ $("#palInput").addEventListener("keydown", e => {
 $("#palList").addEventListener("click", e => { const li = e.target.closest("[data-pal]"); if (li) runPalette(Number(li.dataset.pal)); });
 function focusSearch() { $("#app").classList.add("side-open"); $("#convSearch").focus(); }
 
-// An open dialog keeps Tab inside it (aria-modal is a promise, not a behaviour).
 function trapTab(e) {
   const box = !$("#palette").hidden ? $("#palette") : !$("#control").hidden ? $("#control") : null;
   if (!box || e.key !== "Tab") return;
@@ -823,9 +788,6 @@ for (const id of ["#palette", "#control"]) $(id).addEventListener("click", e => 
   if (e.target === $(id)) { $(id).hidden = true; restoreFocus(); }
 });
 
-// ------------------------------------------------------------- dispatch
-// Every button names its action; this is the whole list (iteration 3, 1.5).
-// A map, not window[name]: nothing outside it can be dispatched.
 const ACTIONS = {newConversation, selectConversation, renameConversation, archiveConversation,
   toggleArchived, openLooseList, openTaskAlone, openTaskOf, draft, showSendBack, sign, sendBack, decide,
   toggleFiles, toggleSide, openFile, openControl, closeControl, openPane, openPalette, focusSearch,
@@ -839,12 +801,10 @@ document.addEventListener("click", e => {
 document.addEventListener("change", e => {
   if (e.target.dataset.change === "critChanged") critChanged();
 });
-// Widths through the CSSOM, which the CSP allows, never a style attribute.
 new MutationObserver(() => document.querySelectorAll("i[data-pct]").forEach(i => {
   i.style.width = i.dataset.pct + "%";
 })).observe(document.body, {childList: true, subtree: true});
 
-// ------------------------------------------------------------- start
 (async () => {
   applyTheme(); renderWelcome();
   if (window.innerWidth < 1100) $("#app").classList.add("files-closed");   // a drawer there

@@ -1,18 +1,3 @@
-"""M8.3 — the out-of-band monitor, with a rule that is easy to break.
-
-THE CRITICAL FINDING: an agent knowing it is monitored degrades the monitor
-more than the monitor gains from knowing about the agent.
-
-HARD BOUNDARY.
-  monitor_flags is written by the monitor and read ONLY by the control plane.
-  It MUST NOT be joined into any query that builds agent context.
-  It MUST NOT be logged into the events table.
-  Violating this silently degrades your monitor.
-
-Contrast with M13.3 auto-review, which is deliberately visible to the agent.
-Two tables, two read paths, no joins between them. Merging them breaks both.
-"""
-
 from __future__ import annotations
 
 import json
@@ -56,7 +41,6 @@ def parse_findings(text: str) -> list[MonitorFinding]:
 
 
 def load_trace_readonly(conn: sqlite3.Connection, task_id: str) -> list[dict]:
-    """Read-only projection of what the agent did. Never writes."""
     rows = conn.execute(
         """SELECT seq, type, payload_json FROM events
            WHERE task_id=? ORDER BY seq ASC""",
@@ -74,11 +58,8 @@ def render(trace: list[dict], limit: int = 200) -> str:
 
 
 def run_monitor(ctx, task_id: str, backend_name: str = "review") -> int:
-    """Runs out of band. Reads the trace read-only, writes only monitor_flags."""
     trace = load_trace_readonly(ctx.conn, task_id)
     backend = ctx.backends.get(backend_name) or ctx.backends["cloud"]
-    # On the record under the task it watched, and charged to nobody: it runs
-    # out of band, after the task. `calls` is telemetry, never agent context.
     resp = ctx.call_model(task_id, backend, "monitor", prefix=MONITOR_PREFIX,
                           tail=render(trace), tools=None, max_tokens=1024,
                           temperature=0.0)
@@ -91,12 +72,10 @@ def run_monitor(ctx, task_id: str, backend_name: str = "review") -> int:
             (task_id, f.severity, f.text, time.time()),
         )
     ctx.conn.commit()
-    # Deliberately NOT logged to `events`: the events table feeds agent context.
     return len(findings)
 
 
 def flags(conn: sqlite3.Connection, task_id: str | None = None) -> list[dict]:
-    """The control plane's read path. Nothing that builds a prompt may call this."""
     q = "SELECT task_id, severity, finding, created_at FROM monitor_flags"
     args: tuple = ()
     if task_id:

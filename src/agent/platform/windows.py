@@ -1,10 +1,3 @@
-"""Windows. Everything here has run, on Windows 11, in this project's record.
-
-Moved verbatim from agent/proc.py, agent/runlock.py and
-agent/execute/sandbox.py (2026-09-25); the reasons for each choice stay in
-those modules' docstrings, which describe behaviour, not platform.
-"""
-
 from __future__ import annotations
 
 import ctypes
@@ -15,19 +8,13 @@ from ctypes import wintypes
 from . import LimitsRefused
 
 
-# ---------------------------------------------------------------- processes
-
 def _terminate(pid: int, expect_start: int | None = None) -> None:
-    """Terminate `pid` - if it is still the process that started at
-    `expect_start`. Checked through the handle the kill goes through: a
-    handle pins one process, so the pid cannot change hands between the check
-    and TerminateProcess (iteration 3, 1.2)."""
     k32 = ctypes.WinDLL("kernel32", use_last_error=True)
     k32.OpenProcess.restype = ctypes.c_void_p
     k32.OpenProcess.argtypes = [ctypes.c_uint32, ctypes.c_int, ctypes.c_uint32]
     k32.TerminateProcess.argtypes = [ctypes.c_void_p, ctypes.c_uint]
     k32.CloseHandle.argtypes = [ctypes.c_void_p]
-    h = k32.OpenProcess(0x0001 | 0x1000, False, pid)   # TERMINATE | QUERY_LIMITED
+    h = k32.OpenProcess(0x0001 | 0x1000, False, pid)
     if h:
         try:
             if expect_start is None or _creation_time(h) == expect_start:
@@ -37,11 +24,6 @@ def _terminate(pid: int, expect_start: int | None = None) -> None:
 
 
 def kill_tree_signal(pid: int, timeout_s: float, expect_start: int | None = None) -> None:
-    """The whole tree - without it the venv trampoline's child survives - but
-    the tree as `proc.descendants` validates it. `taskkill /T` followed parent
-    ids blindly and would take a process adopted through a recycled pid
-    (D42). Leaves first, so nothing is re-parented mid-kill. Each kill is
-    pinned to the start time seen when the tree was listed."""
     from ..proc import descendants, process_start_time
 
     kids = descendants(pid)
@@ -53,23 +35,19 @@ def kill_tree_signal(pid: int, timeout_s: float, expect_start: int | None = None
 
 
 def alive(pid: int) -> bool:
-    """Asked of the kernel, not of `tasklist`: a subprocess per call was
-    0.52 s, and kill_tree polls this for every pid it kills - most of the
-    window-close time (Phase F, measured). A process we may not open still
-    exists (access denied); one that is gone cannot be opened at all."""
     k32 = ctypes.WinDLL("kernel32", use_last_error=True)
     k32.OpenProcess.restype = ctypes.c_void_p
     k32.OpenProcess.argtypes = [ctypes.c_uint32, ctypes.c_int, ctypes.c_uint32]
     k32.GetExitCodeProcess.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_uint32)]
     k32.CloseHandle.argtypes = [ctypes.c_void_p]
-    h = k32.OpenProcess(0x1000, False, pid)         # QUERY_LIMITED_INFORMATION
+    h = k32.OpenProcess(0x1000, False, pid)
     if not h:
-        return ctypes.get_last_error() == 5         # ERROR_ACCESS_DENIED: exists
+        return ctypes.get_last_error() == 5
     try:
         code = ctypes.c_uint32()
         if not k32.GetExitCodeProcess(h, ctypes.byref(code)):
             return True
-        return code.value == 259                    # STILL_ACTIVE
+        return code.value == 259
     finally:
         k32.CloseHandle(h)
 
@@ -119,7 +97,7 @@ def _creation_time(h) -> int | None:
 
 def process_start_time(pid: int) -> int | None:
     k32 = ctypes.windll.kernel32
-    h = k32.OpenProcess(0x1000, False, pid)  # QUERY_LIMITED_INFORMATION
+    h = k32.OpenProcess(0x1000, False, pid)
     if not h:
         return None
     try:
@@ -142,9 +120,8 @@ class _PMC(ctypes.Structure):
 
 
 def process_memory_bytes(pid: int, field: str = "WorkingSetSize") -> int | None:
-    """WorkingSetSize, or PagefileUsage for private commit (D1)."""
     k32, psapi = ctypes.windll.kernel32, ctypes.windll.psapi
-    h = k32.OpenProcess(0x1000 | 0x0010, False, pid)  # QUERY|VM_READ
+    h = k32.OpenProcess(0x1000 | 0x0010, False, pid)
     if not h:
         return None
     try:
@@ -192,8 +169,6 @@ def free_memory_gb() -> float | None:
     return _mem_status().ullAvailPhys / 1024 ** 3
 
 
-# ---------------------------------------------------------------- limits (D37)
-
 def limits_note(timeout_s: int, memory_bytes: int, max_processes: int) -> str:
     return (f"job object: memory {memory_bytes // 2**20} MB per process, CPU "
             f"{timeout_s} s, {max_processes} processes; file size not limited on "
@@ -201,10 +176,6 @@ def limits_note(timeout_s: int, memory_bytes: int, max_processes: int) -> str:
 
 
 class _JobRef:
-    """A job handle closed exactly once, from whichever thread gets there
-    first - the timeout timer or the caller. Closing it ends every process
-    inside, the interpreter the venv launcher started included."""
-
     def __init__(self, job) -> None:
         self._job = job
         self._lock = threading.Lock()
@@ -220,8 +191,6 @@ class _JobRef:
 
 def spawn_limited(argv: list[str], *, timeout_s: int, memory_bytes: int,
                   max_processes: int, fsize_bytes: int, **popen):
-    """Created suspended, assigned to a Job Object, then resumed. File size is
-    the one limit Windows cannot give per process, so `fsize_bytes` is unused."""
     from ..execute.winjob import JobError, JobLimits, spawn_in_job
 
     try:
@@ -241,17 +210,10 @@ def exit_note(proc, timeout_s: int) -> str:
 
 
 def adopted(pid: int, ppid: int) -> bool:
-    """Windows never re-parents: an orphan's parent pid is simply gone (or
-    recycled, which the start-time rule catches)."""
     return False
 
 
 def spawn_denied_processes() -> int:
-    """The interpreter's own processes: the venv launcher and the interpreter
-    it starts, or the one frozen executable. Agent code gets exactly these in
-    its Job Object, so a spawn by any route is refused by the kernel -
-    `_winapi.CreateProcess` raises no audit event, and ctypes none at all
-    (D49)."""
     import os
     import sys
 
@@ -265,12 +227,7 @@ def spawn_denied_processes() -> int:
     return 1 if same else 2
 
 
-# ---------------------------------------------------------------- paths
-
 def link_names(path: str) -> list[str] | None:
-    """Every name of the file, through FindFirstFileNameW: a hard link is the
-    same file under another name, and realpath reports only the name it was
-    asked about (D70, audit S3). None if the names cannot be listed."""
     import os
 
     k32 = ctypes.WinDLL("kernel32", use_last_error=True)
@@ -282,7 +239,6 @@ def link_names(path: str) -> list[str] | None:
     nxt.argtypes = [wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD), wintypes.LPWSTR]
     nxt.restype = wintypes.BOOL
     k32.FindClose.argtypes = [wintypes.HANDLE]
-    # The names come back relative to the volume root: "\\Users\\...".
     volume = os.path.splitdrive(os.path.abspath(path))[0]
     buf = ctypes.create_unicode_buffer(32768)
     size = wintypes.DWORD(len(buf))
@@ -302,21 +258,14 @@ def link_names(path: str) -> list[str] | None:
 
 
 def has_data_streams() -> bool:
-    """NTFS: `.env::$DATA` IS `.env`, and `name:hidden` is a second stream on
-    `name` (AUDIT-ITERATION-3 S1)."""
     return True
 
 
-# ---------------------------------------------------------------- file locks
-
 def lock_file(fh) -> None:
-    # msvcrt locks a byte RANGE from the current position, and "a+" leaves
-    # that position at EOF. Without this seek every opener locked a different
-    # byte and the lock silently did nothing.
     fh.seek(0)
     msvcrt.locking(fh.fileno(), msvcrt.LK_NBLCK, 1)
 
 
 def unlock_file(fh) -> None:
-    fh.seek(0)          # same byte we locked
+    fh.seek(0)
     msvcrt.locking(fh.fileno(), msvcrt.LK_UNLCK, 1)

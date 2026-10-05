@@ -1,24 +1,3 @@
-"""B1 - sessions: one context-window lifetime of one task attempt.
-
-A long task reaches a BOUNDARY where its tail is compacted. At that boundary
-its session row is closed and a child opens, with a fresh tier-1 snapshot and
-a record of what seeded it. A lineage chain, never a transcript rewritten in
-place: the parent row keeps what the parent had, the child starts from what
-the boundary left.
-
-WHAT A SESSION IS NOT. It is not a conversation spanning tasks, and it never
-spans ATTEMPTS. A child's task is its parent's task, enforced by a trigger in
-the schema so that no code path, present or future, can seed one attempt's
-session from another's (9.7). Delegated subtasks are separate tasks with their
-own sessions.
-
-WHAT A SESSION HOLDS THAT A PROCESS USED TO. The tier-1 snapshot its prefix is
-built from. That was a dict entry on the context, so a task resumed in another
-process re-read memory as it stood NOW - writes made after the task started,
-which Phase 3 promised would stay invisible until the next boundary, appeared
-early. On the row, the snapshot lives exactly as long as its session.
-"""
-
 from __future__ import annotations
 
 import json
@@ -42,7 +21,6 @@ def _sha(memory: dict) -> str:
 
 
 def current(conn: sqlite3.Connection, task_id: str) -> dict | None:
-    """The task's open session. The schema allows at most one."""
     r = conn.execute(
         f"SELECT {_COLS} FROM sessions WHERE task_id=? AND status='open'",
         (task_id,)).fetchone()
@@ -80,12 +58,6 @@ def close(conn: sqlite3.Connection, log, session_id: str, reason: str) -> None:
 
 
 def lineage(conn: sqlite3.Connection, session_id: str) -> list[str]:
-    """Root first, this session last.
-
-    Never crosses a task: the schema will not let a parent live in another.
-    Cannot cycle either - a parent must exist before its child is inserted,
-    and nothing updates `parent_id`.
-    """
     out, sid = [], session_id
     while sid:
         out.append(sid)
@@ -103,7 +75,6 @@ def for_task(conn: sqlite3.Connection, task_id: str) -> list[dict]:
 
 
 def root_session(conn: sqlite3.Connection, task_id: str) -> str | None:
-    """A task's first session: the stable name of its whole lineage."""
     r = conn.execute(
         """SELECT id FROM sessions WHERE task_id=? AND parent_id IS NULL
            ORDER BY created_at, id LIMIT 1""", (task_id,)).fetchone()

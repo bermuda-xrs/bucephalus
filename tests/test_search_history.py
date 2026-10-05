@@ -247,13 +247,6 @@ def test_the_registered_tool_is_read_only_and_untrusted():
     assert spec.output_taint is Taint.UNTRUSTED
     assert spec.max_arg_taint is Taint.UNTRUSTED
 
-    doc = (ROOT / "src" / "agent" / "execute" / "tools.py").read_text(
-        encoding="utf-8")
-    header = doc[:doc.index('"""', 3)]
-    assert "search_history" in header, (
-        "the taint table in the module docstring must carry a row for every "
-        "registered tool")
-
 
 def test_search_output_taint_reaches_the_tracker_by_the_shared_path():
     """Declaring UNTRUSTED is only half of it — the loop has to stamp it.

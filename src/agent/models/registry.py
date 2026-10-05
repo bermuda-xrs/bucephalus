@@ -1,5 +1,3 @@
-"""Cost vectors and backend construction. M6.1."""
-
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -18,7 +16,7 @@ class CostVector:
     output_cost_per_mtok: float
     cache_read_per_mtok: float
     cache_write_per_mtok: float
-    tokens_per_sec: float  # MEASURED, not configured
+    tokens_per_sec: float
     context_window: int
     can_parallel: bool
     trust_tier: str
@@ -41,11 +39,6 @@ def build_backends(config: Config) -> dict[str, Backend]:
 
 
 def cost_vector(backend: Backend, probe: bool = False) -> CostVector:
-    """Describe a backend. `probe=True` measures throughput for real.
-
-    Off by default: building a cost vector should not cost a model call, and
-    on a CPU tier that call is a cold load measured in tens of seconds.
-    """
     cfg = backend.cfg
     if probe:
         backend.probe_throughput()  # type: ignore[attr-defined]
@@ -66,10 +59,4 @@ def cloud_backend_names(config: Config) -> set[str]:
 
 
 def cache_reporting_backend_names(config: Config) -> set[str]:
-    """Backends that report prompt-cache accounting.
-
-    A declared capability (`reports_prompt_cache`), never inferred from the
-    adapter class. The same server behind two protocols reports it on one and
-    not the other, so the adapter type is the wrong question.
-    """
     return {n for n, c in config.backends.items() if c.reports_prompt_cache}

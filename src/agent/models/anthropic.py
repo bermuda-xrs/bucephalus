@@ -1,33 +1,3 @@
-"""M4.2 — the Anthropic adapter.
-
-    ┌──────────────────────────────────────────────────────────────────┐
-    │  UNVERIFIED. This adapter has NEVER been exercised against the   │
-    │  live API. It is written and unit-tested against a mock; not one │
-    │  request has left this machine.                                  │
-    │                                                                  │
-    │  Do not describe it as working. Do not publish a number produced │
-    │  through it without first making a real call and saying so.      │
-    │  The request shape below follows the current API contract as     │
-    │  documented, which is a different claim from "this works".       │
-    │                                                                  │
-    │  To verify: set ANTHROPIC_API_KEY, run one trivial task with     │
-    │  --profile mixed, and confirm the temperature omission and the   │
-    │  thinking/effort handling are accepted rather than 400'd, AND    │
-    │  that tokens reach a surface while the turn is still running.    │
-    │  Streaming (D25, 2026-09-13) is part of the unverified path.     │
-    └──────────────────────────────────────────────────────────────────┘
-
-
-The cache breakpoint goes on the last system block, and nothing else. The tail
-goes in the user turn, after it.
-
-Two API facts that the build spec predates and that will 400 if ignored:
-  * `temperature` is rejected on Opus 5 / Sonnet 5 / Opus 4.7+. The adapter
-    omits it unless the backend config says the model accepts it.
-  * thinking is configured as {"type": "adaptive"} with depth controlled by
-    output_config.effort. `budget_tokens` is gone.
-"""
-
 from __future__ import annotations
 
 import os
@@ -52,7 +22,6 @@ class AnthropicBackend(BackendBase):
             except ImportError as e:  # pragma: no cover
                 raise BackendError("pip install anthropic") from e
             if not os.environ.get("ANTHROPIC_API_KEY"):
-                # The SDK also resolves `ant auth login` profiles; only warn.
                 pass
             self._client = anthropic.Anthropic()
         return self._client
@@ -76,7 +45,7 @@ class AnthropicBackend(BackendBase):
                 {
                     "type": "text",
                     "text": prefix,
-                    "cache_control": {"type": "ephemeral"},  # breakpoint HERE
+                    "cache_control": {"type": "ephemeral"},
                 }
             ],
             "messages": [{"role": "user", "content": tail}],
@@ -94,32 +63,14 @@ class AnthropicBackend(BackendBase):
         if self.cfg.thinking == "adaptive":
             kwargs["thinking"] = {"type": "adaptive"}
         elif self.cfg.effort in ("low", "medium", "high"):
-            # disabling thinking is rejected above `high` effort
             kwargs["thinking"] = {"type": "disabled"}
 
-        # D25 - ALWAYS STREAM, on one path. Two reasons, either sufficient:
-        #   * a surface needs tokens as they arrive. The non-streaming call
-        #     showed a `--profile mixed` user nothing until a turn completed,
-        #     where Phase 7 measured 63-71% of a SHORT local turn as silent.
-        #   * the SDK REFUSES a non-streaming request whose max_tokens implies
-        #     more than about ten minutes - ValueError, before anything is
-        #     sent - and this adapter sends max(max_tokens, max_output_tokens).
-        #     The old path would have been refused outright at large output
-        #     ceilings, and nothing here could have noticed without a key.
-        # `text_stream` yields text deltas only; thinking deltas are not the
-        # answer, matching `extract_text`. The final message carries content,
-        # usage and stop_reason exactly as `create()` returned them, so nothing
-        # after this block changes.
         with self.client.messages.stream(**kwargs) as stream:
             for text in stream.text_stream:
                 if on_chunk is not None and text:
                     on_chunk(text)
             resp = stream.get_final_message()
 
-        # Server-side refusal FALLBACKS are deliberately not enabled. A refusal
-        # answered by a different model would be recorded under this backend's
-        # model name, and the run record's claim about which model produced
-        # the output would be false. A refusal is reported, not rerouted.
         if getattr(resp, "stop_reason", None) == "refusal":
             details = getattr(resp, "stop_details", None)
             cat = getattr(details, "category", None) if details else None
@@ -141,7 +92,6 @@ class AnthropicBackend(BackendBase):
 
 
 def extract_text(resp) -> str:
-    """Text blocks only. Thinking blocks are not the answer."""
     out = []
     for block in getattr(resp, "content", []) or []:
         if getattr(block, "type", None) == "text":

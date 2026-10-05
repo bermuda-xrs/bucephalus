@@ -1,19 +1,3 @@
-"""M5.3 — the sandbox.
-
-Honesty first: a subprocess sandbox is a safety measure against MISTAKES, not
-a security boundary against an adversary. If you ever run untrusted code, use
-Docker with --network=none, a read-only root, a non-root user, and dropped
-capabilities. What follows is the minimum for a local prototype.
-
-The spec's version uses `resource` and `preexec_fn`, which are POSIX-only.
-This build runs on Windows too, so limits are applied where the platform
-supports them and the gaps are reported in the result rather than hidden.
-
-Two things beyond the spec's snippet, both required by its own M5 acceptance
-tests: an audit hook that confines writes to scope, and a live tool bridge so
-`call_tool` inside sandboxed code round-trips through the capability gate.
-"""
-
 from __future__ import annotations
 
 import json
@@ -31,8 +15,6 @@ from ..platform import current as _platform
 
 MEM_LIMIT_BYTES = 512 * 1024 * 1024
 FSIZE_LIMIT_BYTES = 64 * 1024 * 1024
-# Enforced by the OS on both platforms: rlimits on POSIX, a Job Object on
-# Windows (D37). File size is the one limit Windows cannot give per process.
 MAX_PROCESSES = 32
 OUTPUT_CAP = 16000
 TOOLCALL_MARKER = "\x01TOOLCALL"
@@ -40,35 +22,21 @@ TOOLCALL_MARKER = "\x01TOOLCALL"
 ToolHandler = Callable[[str, dict], dict]
 
 
-# The same numbers on every platform; how they are enforced is the
-# platform layer's (agent/platform: a Job Object on Windows, rlimits on POSIX).
 _LIMITS = dict(memory_bytes=MEM_LIMIT_BYTES, max_processes=MAX_PROCESSES,
                fsize_bytes=FSIZE_LIMIT_BYTES)
 
 
 def _limits_refused(error: Exception) -> dict:
-    """Fail closed: a child whose limits could not be applied never ran."""
     return {"stdout": "", "returncode": -1,
             "stderr": ("sandbox: resource limits could not be applied, so the "
                        f"code was not run: {error}")}
 
 
-# SQLite files that carry CONTENT beside a database. The newest rows of a WAL
-# database are in `-wal`, so a file copied on its own arrives without them -
-# C41's shape, in the one place this project copies user files. `-shm` is left
-# out on purpose: it is an index SQLite rebuilds, and a copied one can carry
-# another process's lock state.
 CARRIED_SIDECARS = ("-wal", "-journal")
 
 
 def _mirror_sidecars(sandbox_main: Path, original_main: Path,
                      changed: list[str]) -> None:
-    """Make the original's sidecars match the sandbox's, exactly.
-
-    Copy back what exists; REMOVE what the sandbox no longer has. A main file
-    copied back beside the original's older `-wal` would let SQLite replay
-    stale frames onto newer pages on the next open.
-    """
     for s in CARRIED_SIDECARS:
         a = sandbox_main.with_name(sandbox_main.name + s)
         b = original_main.with_name(original_main.name + s)
@@ -83,16 +51,6 @@ def _mirror_sidecars(sandbox_main: Path, original_main: Path,
 
 def link_into(workdir: str, path: str, rel: str | None = None,
               skip_multilinked: bool = False) -> dict | None:
-    """Expose one allowed path inside the sandbox workdir.
-
-    `rel` preserves the path the agent was told to use. Flattening
-    `work/E01` to `E01` means code written against the documented path finds
-    nothing, writes its answer into a directory that is never copied back, and
-    the task fails for a reason that has nothing to do with the task.
-
-    Symlink where the platform allows it; copy otherwise, recording the copy so
-    changes can be written back. Only artifact_scope paths ever get here.
-    """
     src = Path(path).resolve()
     if not src.exists():
         return None
@@ -102,9 +60,6 @@ def link_into(workdir: str, path: str, rel: str | None = None,
         os.symlink(src, dest, target_is_directory=src.is_dir())
         return {"mode": "symlink", "src": str(src), "dest": str(dest)}
     except (OSError, NotImplementedError, AttributeError):
-        # A copy of a hard link is a one-name file, which the fence inside
-        # cannot tell from any other: for agent code a file with several
-        # names is not carried in (D70).
         def several_names(d, names):
             return [n for n in names if skip_multilinked and os.path.isfile(os.path.join(d, n))
                     and os.stat(os.path.join(d, n)).st_nlink > 1]
@@ -149,11 +104,6 @@ def _copy_back(entries: list[dict]) -> list[str]:
     return changed
 
 
-# Writes are confined to the workdir and the paths explicitly linked into it,
-# enforced inside the child with an audit hook. This is a real guard against
-# an agent mistakenly writing somewhere it should not — including anchor/ and
-# skills_store/, which M5.3 requires. It is NOT a guard against an adversary
-# with code execution: an audit hook lives in the same process it polices.
 _GUARD_TEMPLATE = '''\
 import sys as _sys, os as _os
 
@@ -513,18 +463,10 @@ _sys.addaudithook(_audit)
 '''
 
 
-# A2-4: how many touched-path entries a receipt keeps; the rest are counted.
 MAX_TOUCHED = 200
 
 
 def _read_touched(log_path: str, workdir: str, links: list[dict]) -> dict | None:
-    """The child's touch log, as the receipt records it.
-
-    None when there is no log: unmeasured is null, never an empty list
-    (invariant 36). Paths inside a COPIED scope entry are mapped back to the
-    file they stand for, and other work-directory paths are shown under
-    `<sandbox>`, so a receipt names what a task would recognise.
-    """
     try:
         lines = Path(log_path).read_text(encoding="utf-8",
                                          errors="replace").splitlines()
@@ -567,8 +509,6 @@ def _build_env(workdir: str) -> dict:
         "PYTHONIOENCODING": "utf-8",
         "PYTHONUNBUFFERED": "1",
         "SYSTEMROOT": os.environ.get("SYSTEMROOT", ""),
-        # D13: in a frozen build, anything started from inside the sandbox
-        # runs as an interpreter and never as the application (agent.frozen).
         CHILD_ENV: "1",
     }
 
@@ -581,18 +521,8 @@ def run_sandboxed(
     tool_handler: ToolHandler | None = None,
     protected_paths=(),
 ) -> dict:
-    """Run python in an isolated working directory.
-
-    If `tool_handler` is given, `call_tool(...)` inside the code is serviced
-    LIVE: each request is handed to the handler (which gates it) and the
-    result is written back to the child. Without a handler the child's
-    requests are collected and reported instead of silently no-oping.
-    """
     allowed_paths = allowed_paths or []
     notes: list[str] = []
-    # Agent code may not spawn: where the platform can make that the kernel's
-    # rule, its process limit is the interpreter's own (D49). The note below
-    # names the limit APPLIED - it said 32 for a cap of 2 (audit 3B L1).
     limits = dict(_LIMITS)
     if protected_paths:
         limits["max_processes"] = _platform.spawn_denied_processes() or MAX_PROCESSES
@@ -602,15 +532,12 @@ def run_sandboxed(
 
     with tempfile.TemporaryDirectory(prefix="alpha_sbx_") as workdir:
         links = []
-        for p in allowed_paths:  # artifact_scope only
-            # Accept either a bare path or (absolute, relative-name) so the
-            # caller can preserve the layout the agent was told to expect.
+        for p in allowed_paths:
             src, rel = p if isinstance(p, (tuple, list)) else (p, None)
             entry = link_into(workdir, src, rel, skip_multilinked=bool(protected_paths))
             if entry:
                 links.append(entry)
 
-        # A2-4: agent code keeps a touch log, outside the work directory.
         touch_path = None
         if protected_paths:
             fd, touch_path = tempfile.mkstemp(prefix="alpha_touch_", suffix=".log")
@@ -629,8 +556,6 @@ def run_sandboxed(
         script.write_text(guard + "\n" + preamble + "\n" + code, encoding="utf-8")
 
         env = _build_env(workdir)
-        # D13: an interpreter, frozen or not - never sys.executable bare,
-        # which in a frozen build is the application itself.
         argv = [*interpreter_argv(), str(script)]
 
         if tool_handler is None:
@@ -652,18 +577,9 @@ def run_sandboxed(
 
 def _run_batch(argv: list[str], workdir: str, env: dict, timeout_s: int,
                limits: dict = _LIMITS) -> dict:
-    """D37 - one run with the platform's kernel-enforced limits.
-
-    On a timeout the whole JOB is closed (Windows), not only the process Popen
-    started: that is the venv launcher, and killing it alone left the real
-    interpreter running with the pipes open.
-    """
     try:
         proc, close = _platform.spawn_limited(
             argv, timeout_s=timeout_s, **limits, cwd=workdir, env=env,
-            # Never the app's stdin. Inherited, it is a handle the child has
-            # no business reading - and in a frozen or windowed build it is
-            # not a valid handle at all, so every run failed to start (D13).
             stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
             encoding="utf-8", errors="replace")
@@ -690,11 +606,6 @@ def _run_with_bridge(
     argv: list[str], workdir: str, env: dict, timeout_s: int, handler: ToolHandler,
     limits: dict = _LIMITS,
 ) -> dict:
-    """Pump the child's stdout, servicing tool requests as they arrive.
-
-    stderr is drained on its own thread so a chatty child cannot deadlock by
-    filling the stderr pipe while we are blocked reading stdout.
-    """
     popen = dict(cwd=workdir, env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                  stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace",
                  bufsize=1)
@@ -706,10 +617,8 @@ def _run_with_bridge(
     stderr_parts: list[str] = []
 
     def _drain() -> None:
-        # Closed by the thread that read it to EOF: closing it from the main
-        # thread under a blocked read would wait on the stream's lock.
         try:
-            with proc.stderr:
+            with proc.stderr:  # closed by its reader: from another thread a close waits on a blocked read
                 stderr_parts.append(proc.stderr.read() or "")
         except Exception:  # noqa: BLE001
             pass
@@ -721,7 +630,7 @@ def _run_with_bridge(
 
     def _kill() -> None:
         timed_out["v"] = True
-        close()                         # the whole job, launcher's child included
+        close()
         try:
             proc.kill()
         except Exception:  # noqa: BLE001
@@ -741,7 +650,7 @@ def _run_with_bridge(
                     req = json.loads(line[len(TOOLCALL_MARKER):])
                     result = handler(req["tool"], req.get("args", {}) or {})
                     reply = {"ok": True, "result": result}
-                except Exception as e:  # noqa: BLE001 - reported into the child
+                except Exception as e:  # noqa: BLE001
                     reply = {"ok": False, "error": f"{type(e).__name__}: {e}"}
                 try:
                     proc.stdin.write(json.dumps(reply, default=str) + "\n")

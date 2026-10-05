@@ -1,9 +1,3 @@
-"""Core types. Spec 1.2.
-
-Everything that crosses a module boundary is defined here so there is exactly
-one definition of taint, budget, and the model-call result shape.
-"""
-
 from __future__ import annotations
 
 from enum import Enum
@@ -13,9 +7,9 @@ from pydantic import BaseModel, Field
 
 
 class Taint(str, Enum):
-    TRUSTED = "trusted"  # system-authored
-    USER = "user"  # from the human
-    UNTRUSTED = "untrusted"  # web, files, tool output
+    TRUSTED = "trusted"
+    USER = "user"
+    UNTRUSTED = "untrusted"
 
     @property
     def level(self) -> int:
@@ -23,7 +17,6 @@ class Taint(str, Enum):
 
 
 def join_taint(*taints: Taint) -> Taint:
-    """Combining data takes the HIGHEST taint. Monotonic, never decreases."""
     return max(taints, key=lambda t: t.level) if taints else Taint.TRUSTED
 
 
@@ -49,13 +42,6 @@ class Budget(BaseModel):
         return max(0.0, self.seconds - self.spent_seconds)
 
     def exhausted(self) -> bool:
-        """Out of money or out of time.
-
-        A budget of exactly 0 USD means "free backends only" — not "cannot
-        run". Without that case a fully local task, which costs nothing by
-        construction, would be declared exhausted before its first step.
-        Any actual spend against a zero budget still stops it immediately.
-        """
         if self.usd > 0:
             money_gone = self.spent_usd >= self.usd
         else:
@@ -64,24 +50,10 @@ class Budget(BaseModel):
 
 
 class TaskContract(BaseModel):
-    """MUST be fully specifiable before a task runs. See M10 for why."""
-
     goal: str
-    output_schema: dict[str, Any] = Field(default_factory=dict)  # JSON Schema
-    success_criterion: str = "always_pass"  # names a registered verifier
-    artifact_scope: list[str] = Field(default_factory=list)  # readable paths
-    # `max_taint_in` WAS HERE, and left with HARNESS_VERSION 3 (D38, C60).
-    # No check could give it a meaning - every observation tool is UNTRUSTED,
-    # so a ceiling below the default forbids reading and the default permits
-    # everything - and it was dead in code from 2026-09-15, kept only because
-    # the whole contract renders into every prompt prefix and removing it
-    # changes those bytes. Contracts stored before the bump still carry the
-    # key on disk; pydantic ignores unknown fields, so they load unchanged.
-    #
-    # Where the grader lives. MUST be outside artifact_scope: a verify.py the
-    # agent can read is a verify.py it can copy the expected value out of, and
-    # a generated skill that said "read verify.py" would score 100% and look
-    # like success. None keeps the legacy in-scope search for older suites.
+    output_schema: dict[str, Any] = Field(default_factory=dict)
+    success_criterion: str = "always_pass"
+    artifact_scope: list[str] = Field(default_factory=list)
     grader_dir: str | None = None
 
 
@@ -111,8 +83,8 @@ class ModelResponse(BaseModel):
 
 class VerifyResult(BaseModel):
     passed: bool
-    score: float = 0.0  # 0..1, for the ratchet
-    observation: str = ""  # THE external signal fed back
+    score: float = 0.0
+    observation: str = ""
     verifier_id: str = ""
 
 
@@ -122,8 +94,6 @@ GateVerdict = Literal[
 
 
 class GateDecision(BaseModel):
-    """Used by both the capability gate (M8) and the skill gate (M9)."""
-
     verdict: GateVerdict
     reason: str = ""
     preview: str | None = None

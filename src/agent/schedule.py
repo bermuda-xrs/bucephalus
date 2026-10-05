@@ -1,45 +1,3 @@
-"""A3 - cron. A scheduled task is a task whose trigger is a timer.
-
-THE SCHEDULE IS A FACT; THE NEXT FIRE IS DERIVED (11.5).
-
-A schedule exists precisely to survive the process that runs it, which makes
-it the purest case of DR1's lifetime axis: anything about it held in memory is
-wrong the first time the supervisor restarts. Two tables, and nothing else:
-
-  schedules          the spec, and the task each firing creates
-  schedule_firings   one row per occurrence DEALT WITH - fired, or missed
-
-The next fire time is never stored. Every wake derives it: the first
-occurrence of the spec after the latest recorded one. A stored next-fire time
-- in memory or in a row - is a cached rule, and a restart after a missed window
-turns it into a double fire (recomputed from the start) or a schedule that
-never fires again (a stale timestamp nobody advances).
-
-CLAIM BEFORE ACTING. An occurrence is written to `schedule_firings` before its
-task exists; the primary key refuses a second claim, so two supervisors, or one
-restarted mid-wake, cannot both fire it. The failure is at-most-once: a crash
-between claim and task leaves a claimed occurrence with no task - visible in
-its row - rather than a second run.
-
-NO BACKLOG (11.3). Occurrences that passed while nothing watched are recorded
-as ONE missed row per wake - the span and a count - and never run. The latest
-due occurrence fires only within GRACE_S of now; otherwise it is missed too and
-the next one fires on time. A run still pending or parked when its next
-occurrence arrives is not joined by a second copy: that occurrence is missed,
-with the reason.
-
-UNATTENDED (11.2, 11.6). A scheduled task has origin `schedule`: it never
-auto-proceeds, and it has its own tool floor (security/origin.py). One that
-reaches a boundary parks and raises a notification; once a human decides, the
-next wake resumes it and the decision is acted on (since f11be4d, it is).
-
-CRON. Five fields - minute hour day-of-month month day-of-week - in LOCAL time:
-`*`, lists, ranges, steps, 7 as Sunday. When both day fields are restricted a
-day matches either (the Vixie rule). Across a daylight-saving fall-back an hour
-repeats locally and a schedule inside it can fire twice; occurrences are epochs
-and strictly increasing, so that is two occurrences, never one fired twice.
-"""
-
 from __future__ import annotations
 
 import json
@@ -53,14 +11,8 @@ from .kernel.tasks import create_task
 from .kernel.types import Budget, TaskContract
 from .security.origin import SCHEDULE
 
-# How late an occurrence may be and still fire. Longer than a supervisor tick,
-# so a wake a few seconds after an occurrence is not a miss.
 GRACE_S = 120
-# How many missed occurrences one wake will count. A schedule dark for years
-# is reported, not replayed.
 MAX_SCAN = 10_000
-# How far ahead to look for a next occurrence. A Feb-29 schedule can be four
-# years apart; eight is safe.
 HORIZON_DAYS = 366 * 8
 
 
@@ -124,7 +76,6 @@ class Cron:
         return dom or dow
 
     def next_after(self, t: float) -> float:
-        """The first occurrence STRICTLY after epoch t."""
         d = (datetime.fromtimestamp(t).replace(second=0, microsecond=0)
              + timedelta(minutes=1))
         end = d + timedelta(days=HORIZON_DAYS)
@@ -142,11 +93,10 @@ class Cron:
                 e = d.timestamp()
                 if e > t:
                     return e
-                d += timedelta(minutes=1)      # a local time DST skipped
+                d += timedelta(minutes=1)
         raise CronError(f"{self.spec!r} never fires")
 
     def last_at_or_before(self, t: float, floor: float) -> float | None:
-        """The latest occurrence in [floor, t], or None."""
         d = datetime.fromtimestamp(t).replace(second=0, microsecond=0)
         stop = datetime.fromtimestamp(floor).replace(second=0, microsecond=0)
         while d >= stop:
@@ -166,14 +116,12 @@ class Cron:
         return None
 
 
-# -- the facts ---------------------------------------------------------------
-
 _SCOLS = ("id", "spec", "contract_json", "budget_json", "created_at")
 
 
 def add(conn: sqlite3.Connection, spec: str, contract: TaskContract,
         budget: Budget, now: float | None = None) -> str:
-    Cron.parse(spec)                        # a bad spec is refused at the door
+    Cron.parse(spec)
     sid = "c_" + uuid.uuid4().hex[:12]
     conn.execute(
         """INSERT INTO schedules(id, spec, contract_json, budget_json,
@@ -214,14 +162,11 @@ def _last(conn: sqlite3.Connection, s: dict) -> float:
 
 
 def next_fire(conn: sqlite3.Connection, s: dict) -> float:
-    """DERIVED on every read - the first occurrence after the latest recorded
-    one. There is nowhere it is stored, by design."""
     return Cron.parse(s["spec"]).next_after(_last(conn, s))
 
 
 def claim(conn: sqlite3.Connection, sid: str, occurrence: float, outcome: str,
           detail: dict | None = None) -> bool:
-    """True the first time an occurrence is dealt with; False after that."""
     try:
         conn.execute(
             """INSERT INTO schedule_firings(schedule_id, occurrence, outcome,
@@ -251,10 +196,7 @@ def _count(cron: Cron, a: float, b: float) -> int:
     return n
 
 
-# -- one wake -------------------------------------------------------------
-
 def _measuring(ctx) -> dict | None:
-    """The measurement lock's holder, if a live one exists (D34)."""
     from .runlock import lock_status, measurement_lock_path
 
     st = lock_status(measurement_lock_path(ctx.config.root))
@@ -262,11 +204,8 @@ def _measuring(ctx) -> dict | None:
 
 
 def tick(ctx, now: float | None = None) -> list[dict]:
-    """Derive what is due for every schedule, claim it, act on it."""
     now = time.time() if now is None else now
     out: list[dict] = []
-    # D34: nothing fires while a measurement runs. A scheduled task competing
-    # for the CPU corrupts the one cost axis the measurement exists to record.
     busy = _measuring(ctx)
     for s in active(ctx.conn):
         cron = Cron.parse(s["spec"])
@@ -316,8 +255,6 @@ def _fire(ctx, s: dict, occurrence: float, now: float) -> dict:
 
 
 def runnable(conn: sqlite3.Connection) -> list[str]:
-    """Scheduled tasks with work to do: fresh ones, and parked ones a human
-    has since decided. DERIVED from rows - the supervisor keeps no queue."""
     rows = conn.execute(
         """SELECT id, created_at FROM tasks WHERE origin=? AND status='pending'
            UNION
@@ -330,16 +267,15 @@ def runnable(conn: sqlite3.Connection) -> list[str]:
 
 
 def run_due(ctx) -> list[dict]:
-    """Run what `runnable` derives. A run that parks raises a notification."""
     from .execute.loop import run_task
 
     if _measuring(ctx):
-        return []        # D34: nothing runs while a measurement does
+        return []
     out = []
     for tid in runnable(ctx.conn):
         try:
             r = run_task(ctx, tid)
-        except Exception as e:  # noqa: BLE001 - one bad run, not the supervisor
+        except Exception as e:  # noqa: BLE001
             out.append({"task_id": tid, "status": "error",
                         "error": f"{type(e).__name__}: {e}"})
             continue
@@ -350,15 +286,7 @@ def run_due(ctx) -> list[dict]:
     return out
 
 
-# -- notification ------------------------------------------------------------
-
 def notify_parked(ctx, task_id: str, approval_id: str) -> str:
-    """11.2: park AND notify. One notification per approval.
-
-    The row is the fact a delivery channel reads; `alpha notifications` shows
-    it, and `alpha approvals` (and the console, and the TUI) already list the
-    approval it points at, which is where a human acts on it.
-    """
     r = ctx.conn.execute(
         """SELECT id FROM notifications
            WHERE kind='parked' AND json_extract(detail_json,'$.approval_id')=?""",
@@ -396,7 +324,6 @@ def mark_seen(conn: sqlite3.Connection, ids: list[str]) -> None:
 
 
 def supervise(ctx, tick_s: float = 30.0, once: bool = False, report=print) -> None:
-    """Wake, derive, fire, run. Holds nothing between wakes."""
     while True:
         for r in tick(ctx):
             report(r)

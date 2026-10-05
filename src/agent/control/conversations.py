@@ -1,13 +1,3 @@
-"""Conversations: the console's threads, each spanning tasks (iteration 3, 4.2).
-
-DEFERRED D30 recommended a session that SPANS tasks, where the conversation is
-the sequence of (goal, answer) exchanges and each task's own trajectory stays
-untouched. This is the grouping half of that: a message sent into a
-conversation creates a new task in it, and the thread renders them in order.
-The other half - handing earlier exchanges to the next task's model - changes
-the prompt, so it is a proposal (docs/PROPOSALS.md P3), not built.
-"""
-
 from __future__ import annotations
 
 import json
@@ -37,7 +27,6 @@ def get_row(conn, cid: str) -> dict:
 
 
 def listing(conn, q: str = "", archived: bool = False) -> list[dict]:
-    """Newest activity first. `q` matches the title or any goal in the thread."""
     like = f"%{q.strip()}%"
     rows = conn.execute(
         """SELECT c.id, c.title, c.updated_at, c.archived,
@@ -71,8 +60,6 @@ def update(conn, cid: str, title: str | None = None, archived: bool | None = Non
 
 def add_message(ctx, cid: str, text: str, scope: list[str], budget_usd: float | None,
                 budget_seconds: int | None) -> dict:
-    """A message is a new task in this conversation. It is not run: the
-    console drafts a plan next, and nothing happens until a human signs it."""
     get_row(ctx.conn, cid)
     contract = TaskContract(goal=text, artifact_scope=scope)
     budget = Budget(usd=budget_usd if budget_usd is not None else ctx.config.limits.default_task_budget_usd,
@@ -93,8 +80,6 @@ def add_message(ctx, cid: str, text: str, scope: list[str], budget_usd: float | 
 
 
 def thread(ctx, cid: str) -> dict:
-    """Everything the thread renders, one request: each task with its plan,
-    its pending approvals and its answer, in the order they were asked."""
     from ..plan.planner import load_plan
 
     conv = get_row(ctx.conn, cid)

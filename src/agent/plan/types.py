@@ -1,15 +1,3 @@
-"""M13.1 — the Plan artifact.
-
-A plan is a typed, reviewable, editable artifact — not prose. It is written to
-the ledger, hashed, and referenced by the execution phase.
-
-Two fields carry more weight than the rest:
-  * human_approvals_expected — if the job will park four times, you should see
-    that before approving, not discover it at 2am.
-  * open_questions — every ambiguity gets asked during plan review, the one
-    moment you are already looking. This is what makes two-touch work.
-"""
-
 from __future__ import annotations
 
 from typing import Literal
@@ -24,21 +12,21 @@ ActionMode = Literal["code", "direct", "delegate"]
 
 class PlanStep(BaseModel):
     id: str
-    intent: str  # human-readable, one line
+    intent: str
     action_mode: ActionMode = "direct"
     tools: list[str] = Field(default_factory=list)
-    artifact_scope: list[str] = Field(default_factory=list)  # paths this step may touch
+    artifact_scope: list[str] = Field(default_factory=list)
     max_taint_out: Taint = Taint.USER
     est_tokens: int = 0
     est_seconds: float = 0.0
     est_cost_usd: float = 0.0
-    success_criterion: str = "always_pass"  # MUST name a registered verifier
+    success_criterion: str = "always_pass"
     reversible: bool = True
     depends_on: list[str] = Field(default_factory=list)
 
 
 class Plan(BaseModel):
-    id: str = ""  # content hash, filled by seal()
+    id: str = ""
     objective: str
     steps: list[PlanStep] = Field(default_factory=list)
     total_est_cost_usd: float = 0.0
@@ -56,7 +44,6 @@ class Plan(BaseModel):
         return sha256_hex(canonical(self.body()))
 
     def seal(self) -> "Plan":
-        """Recompute totals and the id. Call after every edit."""
         self.total_est_cost_usd = round(sum(s.est_cost_usd for s in self.steps), 6)
         self.total_est_seconds = round(sum(s.est_seconds for s in self.steps), 3)
         self.id = self.content_hash()

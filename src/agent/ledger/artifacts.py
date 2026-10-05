@@ -1,10 +1,3 @@
-"""M3.1 — content is written once and referenced by hash.
-
-What enters a prompt is a projection, chosen per step. Default is `summary`;
-the agent can pull the full thing back with expand_artifact. On tool-heavy
-tasks this single change typically halves context.
-"""
-
 from __future__ import annotations
 
 import json
@@ -66,10 +59,6 @@ def read_artifact(conn: sqlite3.Connection, aid: str) -> dict | None:
 def project(
     conn: sqlite3.Connection, aid: str, mode: str = "summary", max_tokens: int = 400
 ) -> str:
-    """Render an artifact for inclusion in a prompt.
-
-    modes: 'ref' (id + size only) | 'summary' (head/tail) | 'full'
-    """
     art = read_artifact(conn, aid)
     if art is None:
         return f"[artifact {aid} · missing]"
@@ -83,8 +72,6 @@ def project(
     if mode == "full":
         return art["content"]
 
-    # summary: head and tail, verbatim, with the middle removed. Never a
-    # paraphrase — a paraphrase of a stack trace loses the line number.
     content: str = art["content"]
     if art["n_tokens"] <= max_tokens:
         return content
@@ -102,5 +89,3 @@ def project(
         f'expand_artifact("{aid}") ...]\n'
         f"{tail}"
     )
-
-

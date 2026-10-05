@@ -1,15 +1,3 @@
-"""M13.4 — deviation handling.
-
-The agent will discover things the plan did not anticipate. Three responses by
-magnitude: note it and carry on, revise this step, or park and come back to
-the human. That last one is a third touch — but only when the job genuinely
-changed, which is exactly when you would want to know.
-
-Log every deviation. A high deviation rate means the planner is
-under-informed, which is fixable — usually too little read-only exploration
-before planning.
-"""
-
 from __future__ import annotations
 
 import time
@@ -39,11 +27,6 @@ class Deviation:
 
 
 def estimate_plan_drift(plan, step_id: str, discovery: str) -> float:
-    """How far execution has departed from the approved plan, 0..1.
-
-    Heuristic and deliberately legible: a discovery that names tools or paths
-    the plan never mentioned is a bigger departure than one that does not.
-    """
     step = plan.step(step_id) if plan else None
     if step is None:
         return 1.0
@@ -104,5 +87,3 @@ def on_deviation(ctx, task, plan, step_id: str, discovery: str) -> Deviation:
         {"step_id": step_id, "drift": drift, "action": dev.action},
     )
     return dev
-
-

@@ -1,17 +1,3 @@
-"""M9.3 / M8.4 — content-addressed skill storage and the supply chain rules.
-
-Audits of shared agent skills have found flaw rates around a third with
-confirmed malicious entries; lab work shows poisoning a few percent of a
-library succeeds nearly always. So:
-
-  1. Skills are content-addressed. The ID IS the hash of the body.
-  2. Version-pinned. No auto-update, ever.
-  3. Externally-sourced skills are UNTRUSTED and go through the SAME gate.
-  4. Skill bodies never enter the prefix without a hash check against the store.
-  5. skills_store/ is not writable from the sandbox.
-  6. Promoting a skill is a TRUSTED capability requiring human approval.
-"""
-
 from __future__ import annotations
 
 import json
@@ -25,23 +11,14 @@ MAX_MODULES = 3
 
 
 class SkillSetChanged(RuntimeError):
-    """A resumed task's recorded skill set cannot be loaded byte-for-byte.
-
-    Running it under a different set would silently turn one arm of a paired
-    trial into the other, so the task does not run.
-    """
+    ...
 
 
 class SkillIntegrityError(RuntimeError):
-    """A skill body on disk does not match its content hash."""
+    ...
 
 
 def count_modules(body: str) -> int:
-    """A module is a top-level `## ` section. Three or fewer, always.
-
-    Focused skills of three modules or fewer worked best in the literature;
-    "comprehensive" ones measurably hurt.
-    """
     return sum(1 for line in body.splitlines() if line.startswith("## "))
 
 
@@ -50,8 +27,6 @@ class SkillStore:
         self.conn = conn
         self.root = Path(root)
         self.root.mkdir(parents=True, exist_ok=True)
-
-    # -- writing -----------------------------------------------------------
 
     def store(
         self,
@@ -71,8 +46,6 @@ class SkillStore:
         version = version if version is not None else self._next_version(name)
 
         d = self.root / skill_id
-        # No `tests/visible` or `tests/holdout` any more: their only writer was
-        # the skill generator, retired with M11 on 2026-09-15 (FINDINGS 1.27).
         d.mkdir(parents=True, exist_ok=True)
         (d / "SKILL.md").write_text(body, encoding="utf-8")
         (d / "contract.json").write_text(json.dumps(contract, indent=2), encoding="utf-8")
@@ -104,15 +77,6 @@ class SkillStore:
         return int(row[0]) + 1
 
     def declare_drafted_from(self, skill_id: str, keys: list[str]) -> dict:
-        """Record a skill's drafting set, ONCE (D29's sweep).
-
-        An undeclared drafting set certifies no paired trial, so a skill stored
-        without one - every `alpha skills --add` before this - needs a way to
-        get one. It never overwrites: a drafting set rewritten after results
-        exist is contamination laundered by declaration. The first declaration
-        stands, and the number of trials already recorded when it was made is
-        written beside it, so a late declaration is visible as one.
-        """
         row = self.conn.execute(
             "SELECT provenance_json FROM skills WHERE id=?", (skill_id,)).fetchone()
         if row is None:
@@ -134,8 +98,6 @@ class SkillStore:
             disk.write_text(json.dumps(prov, indent=2), encoding="utf-8")
         return prov
 
-    # -- reading -----------------------------------------------------------
-
     def load(self, skill_id: str, verify: bool = True) -> dict:
         row = self.conn.execute(
             """SELECT id, name, version, body, contract_json, provenance_json, status
@@ -150,7 +112,6 @@ class SkillStore:
         if disk.exists():
             on_disk = disk.read_text(encoding="utf-8")
             if verify and sha256_hex(on_disk) != skill_id:
-                # Rule 4: never let a body into the prefix without this check.
                 raise SkillIntegrityError(
                     f"skill {skill_id[:12]} on disk does not match its content hash "
                     f"(got {sha256_hex(on_disk)[:12]}) — refusing to load"
@@ -170,8 +131,6 @@ class SkillStore:
             "SELECT id FROM skills WHERE status='promoted' ORDER BY name, version"
         ).fetchall()
         return [self.load(r[0]) for r in rows]
-
-    # -- lifecycle ---------------------------------------------------------
 
     def set_status(self, skill_id: str, status: str, log=None, task_id: str | None = None) -> None:
         self.conn.execute("UPDATE skills SET status=? WHERE id=?", (status, skill_id))
@@ -195,10 +154,6 @@ class SkillStore:
 
 
 def import_external_skill(store: SkillStore, name: str, body: str, source: str) -> str:
-    """Rule 3 — anything from elsewhere is UNTRUSTED and starts as a candidate.
-
-    It goes through the same paired-trial gate as something the system wrote.
-    """
     return store.store(
         name=name,
         body=body,

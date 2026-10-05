@@ -1,14 +1,3 @@
-"""M13.0-13.2 — drafting, storing, approving, and pinning a plan.
-
-Planning runs READ-ONLY. The planner may read files, search, and inspect, but
-every write tool is denied during the plan phase — enforced in the capability
-gate, not by prompt instruction. A planner that can edit while planning
-defeats the entire point of plan mode.
-
-The approved plan hash is written to the anchor. Execution verifies it before
-every step; a plan cannot be modified after approval.
-"""
-
 from __future__ import annotations
 
 import json
@@ -63,9 +52,8 @@ Rules:
 
 
 def draft_plan(ctx, task, backend_name: str = "cloud") -> Plan:
-    """Draft a plan with a read-only backend. The planner never writes."""
     backend = ctx.backends[backend_name]
-    ctx.phase = "plan"  # the capability gate reads this
+    ctx.phase = "plan"
     try:
         context = _read_only_survey(ctx, task)
         tail = (
@@ -87,13 +75,6 @@ def draft_plan(ctx, task, backend_name: str = "cloud") -> Plan:
 
 
 def _read_only_survey(ctx, task) -> str:
-    """What the planner is allowed to look at before planning. Reads only.
-
-    Read-only is not unrestricted (AUDIT F5, D43). This read goes around
-    `gate_tool_call`, so it applies the gate's own protected-path check: a
-    scope that is, contains, or lies inside the agent's state - secrets,
-    databases, graders - is named as refused, never read or listed.
-    """
     from ..security.capabilities import is_protected, task_state_paths
 
     state = task_state_paths(ctx, task)
@@ -124,9 +105,6 @@ def parse_plan(text: str, fallback_objective: str = "") -> Plan:
     try:
         return _plan_from(raw, fallback_objective)
     except (ValueError, TypeError, AttributeError, ArithmeticError) as e:
-        # D46 (audit F8): JSON of the wrong shape - "about 500" tokens, an
-        # unknown action mode, a step that is a sentence - raised a 500 with
-        # the model's text in the server log. It degrades like no JSON at all.
         return Plan(
             objective=fallback_objective,
             steps=[],
@@ -135,8 +113,6 @@ def parse_plan(text: str, fallback_objective: str = "") -> Plan:
 
 
 def _finite(x):
-    """An estimate is a finite number: 1e999 parses to inf, which int() cannot
-    hold and JSON cannot carry (audit 3B L2)."""
     import math
 
     if isinstance(x, (int, float)) and not math.isfinite(x):
@@ -183,7 +159,7 @@ def _extract_json(text: str) -> dict | None:
         return None
     try:
         return json.loads(candidate)
-    except (json.JSONDecodeError, RecursionError):      # a nesting json cannot hold (3B L2)
+    except (json.JSONDecodeError, RecursionError):
         return None
 
 
@@ -229,7 +205,6 @@ def load_plan(ctx, task_id: str, status: str | None = None) -> Plan | None:
 
 
 def approve_plan(ctx, task, plan: Plan, edits: list[dict] | None = None) -> Plan:
-    """Human touch #1. Pins the hash to the anchor; execution checks it per step."""
     plan.seal()
     ctx.conn.execute(
         "UPDATE plans SET status='superseded' WHERE task_id=? AND status='approved'",
@@ -247,9 +222,6 @@ def approve_plan(ctx, task, plan: Plan, edits: list[dict] | None = None) -> Plan
         "plan.approved",
         {"plan_id": plan.id, "hash": plan.id, "edits": edits or []},
     )
-    # Its OWN key. Sharing the task id with `checkpoint()` meant whichever
-    # wrote last won, which broke the resume check one way and silently
-    # disabled the check below the other way. See Anchor.latest_chain.
     ctx.anchor.record(f"plan:{task.id}", plan.id)
     return plan
 
@@ -263,11 +235,6 @@ def reject_plan(ctx, task, plan: Plan, comment: str) -> None:
 
 
 def verify_plan_pin(ctx, task) -> Plan:
-    """Invariant 17 — verify the approved hash before EVERY step.
-
-    Mutating the plan row after approval, or pointing the task at a different
-    plan, halts execution here rather than silently running the new plan.
-    """
     row = ctx.conn.execute(
         """SELECT id, body_json, approved_hash FROM plans
            WHERE task_id=? AND status='approved' ORDER BY created_at DESC LIMIT 1""",
@@ -283,9 +250,6 @@ def verify_plan_pin(ctx, task) -> Plan:
             f"approved plan was modified after approval "
             f"(stored={row[2][:12]}, recomputed={recomputed[:12]})"
         )
-    # Reads the namespaced key, so a chain checkpoint can no longer hide this
-    # check by being written after the pin. The legacy form is still accepted
-    # for anchor files written before the keys were separated.
     anchored = ctx.anchor.latest(f"plan:{task.id}")
     if anchored is None:
         legacy = ctx.anchor.latest(task.id)
@@ -294,9 +258,6 @@ def verify_plan_pin(ctx, task) -> Plan:
         raise IntegrityError(
             f"approved plan hash does not match the anchor "
             f"(anchor={anchored[:12]}, recomputed={recomputed[:12]})")
-    # A3-1: this passes in silence too, so say what it compared. "absent"
-    # means the anchor half had nothing to compare against - the half that was
-    # inert until D21 - and a record saying so is the only way to tell.
     ctx.log.append(task.id, "plan.pin_verified",
                    {"plan": recomputed[:16],
                     "anchor": "matched" if anchored else "absent"})

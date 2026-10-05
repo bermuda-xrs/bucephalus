@@ -1,21 +1,3 @@
-"""M8.1 — taint propagation.
-
-Rules:
-  1. Anything from outside is UNTRUSTED: web pages, files not authored by you,
-     tool output, API responses, skill bodies from anywhere but your own
-     validated store.
-  2. Combining artifacts takes the join (highest taint). Never decreases.
-  3. Model output inherits the join of everything in its context.
-  4. UNTRUSTED content is summarized by a QUARANTINED call — a backend with no
-     tools — and only the reference crosses back.
-
-How rule 3 is made operational: the model's output is text, so "which taint
-does this argument carry" is answered by asking where the bytes came from. A
-value that appears verbatim inside untrusted content is untrusted, whatever
-the model believes about it. That is what stops the classic injection: the
-attacker's email address is untrusted because it is quoted from their page.
-"""
-
 from __future__ import annotations
 
 import re
@@ -38,21 +20,17 @@ _TOKEN_RX = re.compile(r"[\w.@:/\\+-]{4,}")
 
 @dataclass
 class TaintTracker:
-    """Per-task provenance. Cheap, and deliberately conservative."""
-
     untrusted_blobs: list[str] = field(default_factory=list)
     untrusted_tokens: set[str] = field(default_factory=set)
     context_taint: Taint = Taint.USER
 
     def observe(self, content: str, taint: Taint) -> None:
-        """Record a new observation and raise the context taint accordingly."""
         self.context_taint = join_taint(self.context_taint, taint)
         if taint == Taint.UNTRUSTED and content:
             self.untrusted_blobs.append(content)
             self.untrusted_tokens.update(t.lower() for t in _TOKEN_RX.findall(content))
 
     def taint_of(self, value) -> Taint:
-        """Taint of a single tool argument."""
         if isinstance(value, (list, tuple)):
             return join_taint(*(self.taint_of(v) for v in value)) if value else Taint.USER
         if isinstance(value, dict):
@@ -67,11 +45,8 @@ class TaintTracker:
         for blob in self.untrusted_blobs:
             if s in blob:
                 return Taint.UNTRUSTED
-        # Model output derived from the human's own goal.
         return Taint.USER
 
     def args_taint(self, args: dict) -> Taint:
         parts = [self.taint_of(v) for v in args.values()]
         return join_taint(*parts) if parts else Taint.TRUSTED
-
-

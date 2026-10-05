@@ -136,8 +136,6 @@ def test_the_backlog_is_bounded(tmp_path):
 def test_the_bus_is_not_the_record(tmp_path):
     """Nothing on the bus may be read back to claim what happened. It is
     dropped the moment nobody is watching; the chain is the record."""
-    src = (ROOT / "src" / "agent" / "stream.py").read_text(encoding="utf-8")
-    assert "not durable" in src and "not the record" in src
     # And it is bounded in BOTH directions: per task, and in how many tasks
     # are retained. A dict keyed by task id with no ceiling is a leak that
     # only shows up after a long day in a control-plane process.

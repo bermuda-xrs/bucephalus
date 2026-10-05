@@ -1,16 +1,3 @@
-"""M3.3 / M3.4 — compaction by deletion, and the hard context ceiling.
-
-Three rules, each contradicting an obvious-seeming approach:
-
-  1. Deletion, not summarization. Drop whole low-value entries; keep survivors
-     verbatim.
-  2. NEVER token-prune a trajectory. A 2026 study found all 17 tested
-     configurations collapsed to near-zero task success while achieving
-     genuine compression — the removed tokens carry the action structure.
-     Compress documents if you like. Never the agent's own trail.
-  3. Preserve exact strings character-for-character.
-"""
-
 from __future__ import annotations
 
 import re
@@ -18,25 +5,19 @@ import re
 from .entries import LedgerEntry
 
 EXACT_PATTERNS = [
-    r"[A-Za-z]:[\\/][^\s\"']+",  # windows paths
-    # posix paths, absolute OR relative — a relative path clipped to its last
-    # segment is not "character-for-character", which is the whole rule
+    r"[A-Za-z]:[\\/][^\s\"']+",
     r"(?:\.{1,2}/)?(?:[\w.\-]+/)+[\w.\-]+",
-    r"\b[\w.]+Error\b[^\n]*",  # errors
-    r"\bline \d+\b",  # line numbers
-    r"\b[0-9a-f]{7,40}\b",  # hashes
-    r"\bv?\d+\.\d+\.\d+\b",  # versions
-    r"\b\w+\.(?:py|md|json|toml|yaml|yml|txt|sql|ts|js)\b",  # filenames
+    r"\b[\w.]+Error\b[^\n]*",
+    r"\bline \d+\b",
+    r"\b[0-9a-f]{7,40}\b",
+    r"\bv?\d+\.\d+\.\d+\b",
+    r"\b\w+\.(?:py|md|json|toml|yaml|yml|txt|sql|ts|js)\b",
 ]
 
 _COMPILED = [re.compile(p) for p in EXACT_PATTERNS]
 
 
 def extract_exact_strings(content: str, limit: int = 12) -> list[str]:
-    """File paths, error messages, identifiers, versions, line numbers, hashes.
-
-    These must survive character-for-character or the tombstone is useless.
-    """
     found: list[str] = []
     seen: set[str] = set()
     for rx in _COMPILED:
@@ -52,7 +33,6 @@ def extract_exact_strings(content: str, limit: int = 12) -> list[str]:
 
 
 def tombstone(entry: LedgerEntry, exact: list[str]) -> LedgerEntry:
-    """A placeholder preserving id, size, and exact strings. Expandable on request."""
     aid = entry.artifact_id or "inline"
     contains = ", ".join(exact) if exact else "nothing quotable"
     expand = f' · expand_artifact("{aid}")' if entry.artifact_id else ""
@@ -71,28 +51,12 @@ def tombstone(entry: LedgerEntry, exact: list[str]) -> LedgerEntry:
     )
 
 
-# Tombstones were never dropped, so each boundary started from a higher floor:
-# ~28 tokens per dropped observation, which at the shipped window put the
-# floor alone over the ceiling by step ~60 and the context near the whole 16k
-# window by step 400 - compaction firing every step and unable to get under
-# (measured 2026-09-25). Past this share of the target, the oldest fold into
-# one bounded index.
 TOMBSTONE_SHARE = 0.25
 INDEXED_IDS = 20
 INDEX_LABEL = "tombstone-index"
 
 
 def _fold_tombstones(entries: list[LedgerEntry], budget: int) -> list[LedgerEntry]:
-    """Fold the oldest tombstones into one index entry, keeping the newest
-    individually while they fit in half the budget.
-
-    Nothing becomes unreachable: an artifact is never deleted, the index
-    names the newest INDEXED_IDS ids and counts the rest, and
-    expand_artifact(id) returns any of them in full. What leaves the CONTEXT
-    is the older tombstones' quoted exact strings - one expand away, the same
-    trade a tombstone made with its observation. The index's taint is the
-    JOIN of everything folded into it: folding must not launder provenance.
-    """
     from ..kernel.types import join_taint
 
     tombs = [i for i, e in enumerate(entries) if e.kind == "tombstone"]
@@ -133,15 +97,9 @@ def _fold_tombstones(entries: list[LedgerEntry], budget: int) -> list[LedgerEntr
 
 
 def compact(entries: list[LedgerEntry], target_tokens: int) -> list[LedgerEntry]:
-    """Deletion-based. Tombstone whole entries from the tail backward.
-
-    Survivors are untouched — no paraphrase, no token pruning, no rewriting.
-    Tombstones past TOMBSTONE_SHARE of the target fold into one index, so the
-    floor a long session compacts to is bounded (_fold_tombstones).
-    """
     keep: list[LedgerEntry] = []
     running = 0
-    for e in reversed(entries):  # newest first
+    for e in reversed(entries):
         if e.kind == "tombstone":
             keep.append(e)
             running += e.n_tokens
@@ -161,14 +119,9 @@ def compact(entries: list[LedgerEntry], target_tokens: int) -> list[LedgerEntry]
 def enforce_ceiling(
     prefix_tokens: int, tail_tokens: int, window: int, fill_ratio: float
 ) -> str:
-    """Exceeding the ceiling is a delegation trigger, not a 'it still fits' situation.
-
-    Long-context degradation arrives in cliffs, not slopes. Effective usable
-    context is well below the advertised number.
-    """
     ceiling = int(window * fill_ratio)
     if prefix_tokens + tail_tokens <= ceiling:
         return "ok"
     if tail_tokens > ceiling * 0.6:
-        return "compact"  # tail is the problem
-    return "delegate"  # the work itself is too big — see M10
+        return "compact"
+    return "delegate"

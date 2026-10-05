@@ -1,5 +1,3 @@
-"""Task graph. State is projected from the event log, never written directly."""
-
 from __future__ import annotations
 
 import json
@@ -19,9 +17,6 @@ class Task:
     contract: TaskContract
     status: TaskStatus
     budget: Budget
-    # A4. 'local', or the name of the channel this arrived over. Read from the
-    # row rather than held in process memory, because the restrictions derived
-    # from it must outlive the process — see security/origin.py.
     origin: str = "local"
 
     @property
@@ -30,7 +25,6 @@ class Task:
 
 
 def new_task_id() -> str:
-    """Non-deterministic by design — recorded as an event, read back on replay."""
     return "t_" + uuid.uuid4().hex[:16]
 
 
@@ -45,9 +39,6 @@ def create_task(
 ) -> Task:
     task_id = task_id or new_task_id()
     now = time.time()
-    # A child inherits its parent's origin. A channel task that delegates must
-    # not launder its restrictions off by opening a subtask, and the union in
-    # `tool_policy` only holds if the child is a channel task too.
     if parent_id:
         row = conn.execute(
             "SELECT origin FROM tasks WHERE id=?", (parent_id,)
@@ -142,5 +133,3 @@ def spend(
             "total_usd": round(task.budget.spent_usd, 8),
         },
     )
-
-

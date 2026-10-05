@@ -1,8 +1,3 @@
-"""M2.4 — per-run JSON, a CSV of all calls, and the cost-vs-quality points.
-
-The published artifact is a Pareto frontier, not a single score (M13.2).
-"""
-
 from __future__ import annotations
 
 import csv
@@ -27,11 +22,6 @@ def run_report(conn: sqlite3.Connection, telemetry: Telemetry, task_id: str,
 
 
 def provenance(conn: sqlite3.Connection, task_id: str, config=None) -> dict:
-    """Every number gets reported with date, model version, scaffold version.
-
-    The backend profile travels with every record so no later chart can blend
-    a local-only run with a mixed-tier one and present the average.
-    """
     backends = sorted(
         {
             r[0]
@@ -52,9 +42,6 @@ def provenance(conn: sqlite3.Connection, task_id: str, config=None) -> dict:
     if config is not None:
         out["profile"] = config.profile
         out["profile_provenance"] = config.profile_provenance
-    # 11.4. Where the task came from travels with every record, so a scheduled
-    # run never averages into an interactive one - and a scheduled run says
-    # which schedule and which occurrence produced it.
     row = conn.execute("SELECT origin FROM tasks WHERE id=?", (task_id,)).fetchone()
     out["origin"] = row[0] if row and row[0] else "local"
     fired = conn.execute(
@@ -90,7 +77,7 @@ def write_calls_csv(conn: sqlite3.Connection, path: str | Path, task_id: str | N
         "thinking",
         "created_at",
     ]
-    q = f"SELECT {','.join(cols)} FROM calls"  # noqa: S608 - cols is a literal list
+    q = f"SELECT {','.join(cols)} FROM calls"  # noqa: S608
     args: tuple = ()
     if task_id:
         q += " WHERE task_id=?"
@@ -104,10 +91,6 @@ def write_calls_csv(conn: sqlite3.Connection, path: str | Path, task_id: str | N
 
 
 def pareto_points(conn: sqlite3.Connection, telemetry: Telemetry) -> list[dict]:
-    """x = mean USD/task, y = pass rate — grouped by arm label in the task goal.
-
-    Arms are whatever you tagged: baseline, skills-off, skills-on, per effort.
-    """
     groups: dict[str, list[tuple[float, int]]] = {}
     for task_id, status in conn.execute("SELECT id, status FROM tasks").fetchall():
         m = telemetry.metrics(task_id)

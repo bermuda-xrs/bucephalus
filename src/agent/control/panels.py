@@ -1,10 +1,3 @@
-"""The Control Center's panes (iteration 3, 4.3), over what already exists.
-
-Reads, and one write: blessing tier-1 memory (`alpha memory --accept`), the
-deliberate act that makes a hand edit legitimate. Every pane shows the SAME
-records the CLI shows; none is a second source of truth.
-"""
-
 from __future__ import annotations
 
 import importlib.util
@@ -49,8 +42,6 @@ def schedules(ctx) -> dict:
 
 
 def channels(ctx) -> dict:
-    """The allowlist, and the drop log as hash and length only - never a
-    stranger's text, which is untrusted and was never meant to be kept."""
     from ..channel.telegram import recent_drops
 
     tg = ctx.config.channels.telegram
@@ -58,30 +49,10 @@ def channels(ctx) -> dict:
             "drops": recent_drops(ctx.conn, limit=50)}
 
 
-SWEEP_MAX_AGE_S = 30.0       # the longest an integrity finding can be stale
+SWEEP_MAX_AGE_S = 30.0
 
 
 def integrity_findings(ctx) -> list[dict]:
-    """The console's integrity sweep, polled every few seconds (D72, audit I1).
-
-    `verify_all` walks every event of every task, and the poll re-walked an
-    unchanged database each time - 0.3 s a poll on the 283-task record, and
-    growing with it. A cached sweep is reused only while ALL of these hold:
-
-      * no other connection has committed (`PRAGMA data_version`: an
-        out-of-band edit, another process);
-      * this connection has written nothing (`total_changes`: data_version
-        never moves for a connection's own writes - a review of the first
-        version found an in-process UPDATE went unseen);
-      * the anchor file's CONTENT hash is unchanged - not size and mtime,
-        which an in-place edit can preserve (same review);
-      * the sweep is younger than SWEEP_MAX_AGE_S, so anything none of the
-        above sees is still seen within that bound.
-
-    Keyed on the chain HEADS it would not be safe: an edit of an old row
-    leaves every head alone. Memory is not in the database and is checked on
-    every poll. `alpha verify` always walks.
-    """
     import hashlib
 
     from ..kernel.integrity import verify_all, verify_memory
@@ -111,8 +82,6 @@ def integrity(ctx) -> dict:
 
 
 def measurement(ctx) -> dict:
-    """Versions, run records, and the 1.25 inventory against THIS database -
-    when bench/ is beside the source (a checkout); an installed copy has none."""
     from .. import HARNESS_VERSION, TOOLSET_VERSION
 
     runs = ctx.config.resolve_state("runs")
@@ -152,9 +121,6 @@ def logs(ctx, limit: int = 200) -> dict:
 
 
 def context_meter(ctx, task_id: str | None = None) -> dict:
-    """What the context ring shows: the model's window AND the compaction
-    ceiling, because the ceiling is what governs behaviour (enforce_ceiling
-    compacts or delegates there, well before the window is full)."""
     window = ctx.window_for("cloud")
     ratio = ctx.config.limits.context_fill_ratio
     used = 0

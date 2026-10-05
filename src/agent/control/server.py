@@ -1,22 +1,3 @@
-"""M12.1 — the API.
-
-  POST   /tasks                  create; returns task_id
-  GET    /tasks/{id}             status, budget, current step
-  GET    /tasks/{id}/stream      SSE; Last-Event-ID -> checkpoint resume
-  POST   /tasks/{id}/plan        draft a plan (read-only phase)
-  POST   /tasks/{id}/plan/approve
-  POST   /tasks/{id}/run         execute an approved plan
-  POST   /tasks/{id}/steer       inject correction; FORKS the graph
-  POST   /tasks/{id}/pause
-  GET    /approvals              pending gate decisions, batched
-  POST   /approvals/{id}         approve | deny
-  GET    /alerts                 integrity + monitor findings (SEPARATE)
-  GET    /metrics/{task_id}
-
-/alerts is deliberately separate from /approvals. An integrity break is not a
-routine permission request.
-"""
-
 from __future__ import annotations
 
 import json
@@ -40,10 +21,6 @@ from ..userdata.store import SuiteTask, ValidationError
 from .events import stream_events
 from .guard import ALLOW_REMOTE_ENV, AccessGuard, resolve_token
 
-# The console holds a task's event stream open for as long as it shows the
-# task, and uvicorn's shutdown waits for open connections with no limit: the
-# desktop app took 22 s to close after a task had run, and a stop with the
-# console open never finished. Every server here passes this (3.2 / 4.8).
 GRACEFUL_SHUTDOWN_S = 1
 
 
@@ -71,7 +48,7 @@ class Steer(BaseModel):
 
 
 class Decide(BaseModel):
-    decision: str  # "approve" | "deny"
+    decision: str
 
 
 class NewSuite(BaseModel):
@@ -134,8 +111,6 @@ def create_app(ctx: AgentContext) -> FastAPI:
     app = FastAPI(title="alpha test 1", version="0.1.0")
     app.state.ctx = ctx
 
-    # This service can rewrite the reviewer's policy and start runs. Loopback
-    # alone is not a boundary when a browser is open — see control/guard.py.
     token = resolve_token(ctx.config.root)
     allow_remote = os.environ.get(ALLOW_REMOTE_ENV, "") == "1"
     app.state.token = token
@@ -196,10 +171,8 @@ def create_app(ctx: AgentContext) -> FastAPI:
 
     @app.get("/tasks/{task_id}/stream")
     def stream(task_id: str, last_event_id: str | None = Header(default=None)) -> StreamingResponse:
-        _task(task_id)          # an unknown id answered 200 and tailed forever
+        _task(task_id)
         since = int(last_event_id) if last_event_id and last_event_id.isdigit() else -1
-        # live=True HERE and nowhere else: an SSE client wants the tail, and
-        # every in-process caller wants the history and an end.
         return StreamingResponse(
             stream_events(ctx, task_id, since_seq=since, live=True),
             media_type="text/event-stream",
@@ -222,15 +195,6 @@ def create_app(ctx: AgentContext) -> FastAPI:
 
     @app.post("/tasks/{task_id}/run")
     def post_run(task_id: str, background: bool = True) -> dict:
-        """Start a run. Returns immediately by default.
-
-        A local turn costs tens of seconds, so a synchronous run leaves the
-        caller holding an open request for minutes with nothing to show. The
-        console starts it and polls `GET /tasks/{id}` instead.
-
-        `?background=false` keeps the blocking behaviour for scripts that
-        want the answer in the response.
-        """
         task = _task(task_id)
         if ctx.config.autonomy.plan_required and ctx.approved_plan(task) is None:
             raise HTTPException(409, "autonomy.plan_required: approve a plan first")
@@ -250,7 +214,7 @@ def create_app(ctx: AgentContext) -> FastAPI:
             def _work() -> None:
                 try:
                     run_task(ctx, task_id)
-                except Exception as e:  # noqa: BLE001 - surfaced via task status
+                except Exception as e:  # noqa: BLE001
                     ctx.log.append(task_id, "task.status_changed",
                                    {"status": "failed", "reason": f"{type(e).__name__}: {e}"})
 
@@ -261,7 +225,6 @@ def create_app(ctx: AgentContext) -> FastAPI:
 
     @app.post("/tasks/{task_id}/steer")
     def post_steer(task_id: str, body: Steer) -> dict:
-        """M12.3 — never mutate a running task. Fork it."""
         parent = _task(task_id)
         ctx.log.append(task_id, "human.steered", {"correction": body.correction})
         child_contract = parent.contract.model_copy(
@@ -294,19 +257,11 @@ def create_app(ctx: AgentContext) -> FastAPI:
 
     @app.get("/alerts")
     def get_alerts() -> dict:
-        """Integrity breaks, monitor findings, and dropped channel messages.
-
-        NOT approvals, and three separate keys rather than one list with a
-        severity field. A broken chain, a monitor finding and a stranger
-        messaging the bot mean three different things, and a client that
-        received them merged would have to un-merge them to render them
-        correctly — which is how they end up rendered alike.
-        """
         from ..channel.telegram import recent_drops
         from .panels import integrity_findings
 
         return {
-            "integrity": integrity_findings(ctx),     # re-walked only on a change (D72)
+            "integrity": integrity_findings(ctx),
             "monitor": monitor_flags(ctx.conn),
             "channel_drops": recent_drops(ctx.conn, limit=25),
         }
@@ -323,8 +278,6 @@ def create_app(ctx: AgentContext) -> FastAPI:
 
     @app.get("/tasks")
     def list_tasks(limit: int = 60) -> dict:
-        """The console's queue: newest first, with each task's plan state, so
-        the list can be sorted by what needs a human rather than by time."""
         rows = ctx.conn.execute(
             """SELECT t.id, t.contract_json, t.status, t.created_at,
                       (SELECT p.status FROM plans p WHERE p.task_id = t.id
@@ -350,8 +303,6 @@ def create_app(ctx: AgentContext) -> FastAPI:
 
     @app.post("/tasks/{task_id}/plan/reject")
     def post_reject(task_id: str, body: RejectPlan) -> dict:
-        """Send a plan back. The comment goes on the chain beside the plan it
-        answers; draft again to get a new one."""
         task = _task(task_id)
         plan = load_plan(ctx, task_id)
         if plan is None or plan.id != body.plan_id:
@@ -359,8 +310,6 @@ def create_app(ctx: AgentContext) -> FastAPI:
         reject_plan(ctx, task, plan, body.comment)
         return {"plan_id": plan.id, "status": "rejected"}
 
-    # Conversations (iteration 3, 4.2): threads spanning tasks. A message is
-    # a new task in the thread; the console drafts its plan next.
     @app.get("/conversations")
     def get_conversations(q: str = "", archived: bool = False) -> dict:
         from . import conversations as conv
@@ -403,7 +352,6 @@ def create_app(ctx: AgentContext) -> FastAPI:
         except KeyError:
             raise HTTPException(404, "no such conversation") from None
 
-    # The context ring and the Control Center's panes (iteration 3, 4.2-4.3).
     @app.get("/context")
     def get_context(task_id: str | None = None) -> dict:
         from .panels import context_meter
@@ -433,9 +381,6 @@ def create_app(ctx: AgentContext) -> FastAPI:
             raise HTTPException(404, "no such panel")
         return fn(ctx)
 
-    # The file browser and drag-and-drop (iteration 3, 4.4): a reader and a
-    # writer, through the same scope and protected-path checks as every
-    # other (control/files.py).
     @app.get("/tasks/{task_id}/files")
     def get_files(task_id: str, path: str = "") -> dict:
         from . import files
@@ -466,14 +411,10 @@ def create_app(ctx: AgentContext) -> FastAPI:
 
     @app.get("/theme")
     def get_theme() -> dict:
-        """Colours and banner from themes/ (M13.7). Display only: this is the
-        one route by which the banner leaves the package, and it goes to a
-        page, never a prompt (agent.tui.theme)."""
         from ..tui.theme import banner_text, load
 
         pkg = Path(__file__).resolve().parents[1]
         t = load(pkg / "themes" / "default.toml", pkg)
-        # A browser renders the glyphs whatever the terminal could.
         return {"colors": t["colors"], "banner": banner_text(t, pkg, glyphs=True)}
 
     @app.get("/health")
@@ -482,15 +423,6 @@ def create_app(ctx: AgentContext) -> FastAPI:
             "ok": True,
             "backends": sorted(ctx.backends),
         }
-
-    # ------------------------------------------------------------------
-    # USER-AUTHORED CONTENT
-    #
-    # Suites, policy, grounding, and skills are written by a person here
-    # rather than by editing files. The suite in particular cannot ship as
-    # repo files: it differs per person and it is the denominator of every
-    # number the system reports.
-    # ------------------------------------------------------------------
 
     def _verifiers() -> set[str]:
         return set(ctx.mesh.registry)
@@ -590,7 +522,6 @@ def create_app(ctx: AgentContext) -> FastAPI:
 
     @app.get("/policy/history")
     def policy_history() -> dict:
-        """Prior versions of the rule book, so a run can be audited later."""
         return {"history": ctx.userdata.document_history("policy", "default")}
 
     @app.get("/skills")
@@ -604,7 +535,6 @@ def create_app(ctx: AgentContext) -> FastAPI:
 
     @app.post("/skills")
     def add_skill(body: SkillIn) -> dict:
-        """Paste a skill. It lands as a candidate; only the gate promotes."""
         try:
             sid = ctx.skills.store(
                 name=body.name, body=body.body,
@@ -623,19 +553,11 @@ def create_app(ctx: AgentContext) -> FastAPI:
         d = evaluate_skill(ctx, skill_id)
         return {"verdict": d.verdict, "reason": d.reason, "detail": d.detail}
 
-    # The operator console. Served from the same process as the API so there
-    # is nothing to build and nothing to deploy separately. It carries NO
-    # secret (AUDIT-2026-09 F2): the token used to be injected here, on the
-    # argument that a cross-origin page cannot read the response - true, and
-    # beside the point, because any LOCAL process could, sandboxed code
-    # included. The launcher that owns the token hands it over in the URL
-    # fragment (console_url), which is never sent to a server.
     @app.get("/", response_class=HTMLResponse)
     def index() -> HTMLResponse:
         html = (Path(__file__).parent / "ui.html").read_text(encoding="utf-8")
         return HTMLResponse(html, headers={"Cache-Control": "no-store"})
 
-    # The page's script and styles, as files: the CSP allows no inline ones.
     from fastapi.responses import Response
 
     for name, media in (("ui.js", "text/javascript"), ("ui.css", "text/css")):
@@ -648,13 +570,9 @@ def create_app(ctx: AgentContext) -> FastAPI:
 
 
 def console_url(port: int, token: str, host: str = "127.0.0.1") -> str:
-    """How the console is opened: the token in the FRAGMENT. A fragment never
-    leaves the browser, so it is in no request, no server log and no proxy."""
     return f"http://{host}:{port}/#token={token}"
 
 
-# Background runs, keyed by task. A local run takes minutes; the console
-# starts one and polls rather than holding a request open.
 _runs: dict[str, threading.Thread] = {}
 _runs_lock = threading.Lock()
 

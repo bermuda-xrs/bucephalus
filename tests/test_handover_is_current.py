@@ -225,14 +225,6 @@ def test_the_posix_claim_is_still_true():
     """B2 and C4 tell a reader where the POSIX limits have executed. If that
     changes and the handover does not, the claim becomes a lie about the
     security posture."""
-    # posix.py ran 2026-09-25 and 2026-09-30, in WSL2 only (docs/evidence/wsl-*);
-    # darwin.py has never run. Each module says which in its header, and so
-    # must the handover. A bare-metal Linux or a Mac run changes both.
-    for mod, claim in (("posix.py", "RAN IN WSL2 ONLY"), ("darwin.py", "NEVER RUN ANYWHERE")):
-        text = (ROOT / "src" / "agent" / "platform" / mod).read_text(encoding="utf-8")
-        assert claim in text.split("\n", 1)[0], (
-            f"{mod} no longer says {claim!r} - if it has now run somewhere new, "
-            "the handover's verification scope and posture need rewriting")
     assert "POSIX has run twice, in WSL2" in FLAT
     assert "darwin.py`) has never executed anywhere" in FLAT
 

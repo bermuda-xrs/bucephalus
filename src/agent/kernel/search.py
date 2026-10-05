@@ -1,37 +1,3 @@
-"""B4 — full-text search over prior sessions.
-
-The index itself lives in `db.py`'s schema, maintained by triggers. This
-module is the read path, the rebuild path, and the taint rule.
-
-THREE THINGS THAT ARE NOT NEGOTIABLE HERE:
-
-**Results are UNTRUSTED, as a floor rather than a computation.** An `answer`
-artifact carries `taint=trusted` in the artifacts table, and it would be easy
-to propagate that. It would also be wrong: an answer is trusted as the output
-of a verified run, not as input to a *later* one, and its text may quote a web
-page the agent fetched three steps earlier. Search re-injects old content into
-a fresh context, which is the same shape as reading a file. A computed join
-would return TRUSTED for exactly the rows most worth attacking, so the taint
-is a constant.
-
-**The index is derived. The log wins.** Nothing here writes to `events`, and
-`rebuild()` can drop and repopulate the whole table without touching the hash
-chain. If the two ever disagree, the fix is to rebuild the index, never to
-reconcile the log toward it.
-
-**Results are bounded.** Fifty matches pasted into context defeats the whole
-ledger discipline this project is built on - the point of storing content by
-reference is that the agent does not carry it all at once. A search returning
-more text than the compaction saves is a regression wearing a feature's hat.
-
-WHAT "SESSION" MEANS HERE. Repointed in Phase 9, deliberately. A hit names the
-FIRST session of its task tree's root task - the stable name of that whole
-lineage, so one conversation's hits are not split across the ids a boundary
-rotates to. A task with no session rows (every task before 2026-09-13, and
-any never run through the loop) still reports its tree's root task id, which is
-what a session was before rows existed. Display only: nothing scopes on it.
-"""
-
 from __future__ import annotations
 
 import json
@@ -40,28 +6,20 @@ from dataclasses import dataclass, field
 
 from .types import Taint
 
-# Bounds. A search is a lookup, not a bulk export.
 DEFAULT_LIMIT = 5
 MAX_LIMIT = 20
-SNIPPET_TOKENS = 24          # words of context around the hit
-MAX_BODY_CHARS = 400         # hard cap per result, after snippeting
+SNIPPET_TOKENS = 24
+MAX_BODY_CHARS = 400
 
-# Kinds the triggers index. Named here as well so `rebuild()` and the schema
-# cannot drift apart silently - `verify()` checks they agree.
 INDEXED_ARTIFACT_KINDS = ("answer", "plan", "doc", "skill_draft")
 
-# What a CONTRACT contributes to the index: its goal and its criterion's name,
-# nothing else. Must match `trg_search_task_ai_v2` in kernel/db.py exactly -
-# `test_a_rebuild_reproduces_the_index_exactly` holds the two together. Not
-# the whole contract_json: that carried the grader's answer key into the
-# match set (FINDINGS 1.33).
 CONTRACT_INDEX_BODY = (
     "coalesce(json_extract(contract_json, '$.goal'), '') || ' ' || "
     "coalesce(json_extract(contract_json, '$.success_criterion'), '')")
 
 
 class SearchUnavailable(RuntimeError):
-    """FTS5 is missing from this SQLite build."""
+    ...
 
 
 @dataclass
@@ -73,8 +31,6 @@ class Hit:
     ref: str
     created_at: float
     snippet: str
-    # Always UNTRUSTED. A field rather than a bare constant so a caller that
-    # forwards the whole Hit cannot lose it on the way.
     taint: Taint = field(default=Taint.UNTRUSTED)
 
     def as_dict(self) -> dict:
@@ -91,13 +47,6 @@ class Hit:
 
 
 def _session_of(conn: sqlite3.Connection, task_id: str) -> str:
-    """The lineage a hit belongs to. See the module docstring.
-
-    What reads it: `Hit.session_id`, which is DISPLAY - the CLI prints it and
-    `search_history` returns it. Nothing scopes on it: retrieval isolation
-    scopes on the task tree (kernel/scope.py), so this repoint cannot widen
-    what an attempt can read.
-    """
     from .sessions import root_session
 
     row = conn.execute(
@@ -116,23 +65,6 @@ def _session_of(conn: sqlite3.Connection, task_id: str) -> str:
 def search(conn: sqlite3.Connection, query: str, limit: int = DEFAULT_LIMIT,
            offset: int = 0,
            allowed_tasks: set[str] | None = None) -> list[Hit]:
-    """Full-text search. Raises ValueError on a malformed query.
-
-    `allowed_tasks` is retrieval isolation (kernel/scope.py). None means
-    unrestricted, which is the shipped default and the whole point of the
-    feature. A set restricts results to one task tree, which is what a
-    benchmark attempt gets so it cannot read another arm's answer.
-
-    The filter is applied IN THE QUERY rather than to the results, because
-    filtering afterwards would let an out-of-scope row consume one of the
-    LIMIT slots and silently shorten the answer — a scope check that changes
-    what an in-scope search returns is a second bug.
-
-    FTS5 has its own query grammar and a stray quote or a bare `AND` raises
-    OperationalError from deep inside sqlite. That must not reach the agent
-    loop as a crash: a bad search is a bad tool argument, which the loop
-    already knows how to hand back to the model.
-    """
     limit = max(1, min(int(limit), MAX_LIMIT))
     offset = max(0, int(offset))
     if not (query or "").strip():
@@ -169,22 +101,8 @@ def search(conn: sqlite3.Connection, query: str, limit: int = DEFAULT_LIMIT,
 
 
 def rebuild(conn: sqlite3.Connection) -> int:
-    """Drop the index and rebuild it from tasks and artifacts.
-
-    THE LOG WINS. This is what that sentence means operationally: the source
-    tables are authoritative and the index is disposable, so recovering from
-    any disagreement is a rebuild rather than an investigation.
-
-    Deterministic given the same source rows, which is what makes
-    `test_a_rebuild_reproduces_the_index_exactly` a real check rather than a
-    tautology - it compares against an index built incrementally by triggers
-    over the same data.
-    """
     with conn:
         conn.execute("DELETE FROM search_index")
-        # The same expression as `trg_search_task_ai_v2` - goal and criterion
-        # name only - or a rebuild would put the answer key back into the
-        # index the trigger was changed to keep it out of.
         conn.execute(
             f"""INSERT INTO search_index(body, source, ref, task_id, kind, created_at)
                SELECT {CONTRACT_INDEX_BODY}, 'contract', id, id, 'contract',
@@ -203,11 +121,6 @@ def rebuild(conn: sqlite3.Connection) -> int:
 
 
 def verify(conn: sqlite3.Connection) -> dict:
-    """Compare the index against its sources without changing either.
-
-    Reports rather than repairs. A count mismatch means a write path bypassed
-    the triggers, which is a defect to find, not a number to quietly correct.
-    """
     indexed = conn.execute(
         "SELECT COUNT(*) FROM search_index").fetchone()[0]
     contracts = conn.execute("SELECT COUNT(*) FROM tasks").fetchone()[0]
@@ -230,7 +143,6 @@ def verify(conn: sqlite3.Connection) -> dict:
 
 
 def summarise_contract(body: str) -> str:
-    """Contracts are stored as JSON; a raw dump is unreadable as a snippet."""
     try:
         d = json.loads(body)
     except (ValueError, TypeError):

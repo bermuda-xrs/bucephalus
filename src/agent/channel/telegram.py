@@ -1,36 +1,3 @@
-"""A4 — the Telegram bot. The strictest surface in the project.
-
-WHY LONG POLLING RATHER THAN A WEBHOOK.
-
-Telegram offers both. A webhook needs a public HTTPS endpoint, which means
-binding a non-loopback interface, terminating TLS, and putting a service that
-can rewrite the reviewer's policy and start runs on the open internet behind
-one bearer token. Long polling makes an OUTBOUND request and waits. It adds
-no listening surface, needs no certificate, works behind any NAT, and leaves
-8.4 — `ALPHA_ALLOW_REMOTE` gating non-loopback binding — untouched, because
-this file never binds anything. There is a test that greps for that.
-
-The cost is a held-open HTTP request and a few seconds of latency. On a
-machine where one model turn takes 20-40 seconds, that is not a cost.
-
-WHAT THIS FILE IS NOT ALLOWED TO DECIDE.
-
-Nothing about what a channel task may do. Every restriction — the denied
-tools, the untrusted goal, the budget ceiling, the refusal to auto-proceed —
-lives on the task's ORIGIN and is enforced where the tool call happens, not
-here. This module's only security responsibility is the allowlist, twice: at
-receipt and again at approval.
-
-That split is deliberate and it is the lesson of the phase. If the bot
-enforced the restrictions, they would hold exactly as long as this process
-does, and a parked task waiting for a human spends most of its life not being
-run by anything. See `security/origin.py`.
-
-STOP. This has never run against a live bot token. `HttpTransport` is written
-and unexercised — the same standing as the Anthropic adapter, and marked the
-same way. Everything below has been driven end to end through `FakeTransport`.
-"""
-
 from __future__ import annotations
 
 import json
@@ -49,39 +16,20 @@ from ..security.origin import TELEGRAM, clamp_budget
 
 API = "https://api.telegram.org"
 
-# What a stranger's message costs us before we drop it. Reading a bounded
-# prefix means a 4MB caption cannot be turned into a 4MB hash input, and the
-# hash is only there to recognise a repeat.
 MAX_RECORDED_BODY = 4096
 
-# How many drop records to keep. Unauthenticated senders write these, so the
-# table is the one place in the database an outsider can cause growth. Bounded
-# hard, oldest first: the recent ones are the ones anybody looks at.
 MAX_DROPS = 500
 
-# How many claimed update ids to remember. Telegram only redelivers updates it
-# has not seen confirmed - at most one batch - so this needs to cover recent
-# history, not all of it. Bounded because every update, a stranger's included,
-# is claimed here.
 MAX_SEEN_UPDATES = 1000
 
 
 class Transport(Protocol):
-    """The four Telegram calls this needs. A protocol so the tests can drive
-    the whole bot without a token, a network, or a bot."""
-
     def get_updates(self, offset: int, timeout: int) -> list[dict]: ...
     def send_message(self, chat_id, text: str, buttons: list | None = None) -> dict: ...
     def answer_callback(self, callback_id: str, text: str) -> dict: ...
 
 
 class HttpTransport:
-    """UNVERIFIED — never run against a live bot token. See the STOP above.
-
-    Stdlib only. `urllib` is enough for four JSON POSTs, and a dependency
-    added for four JSON POSTs is a dependency to keep updated forever.
-    """
-
     def __init__(self, token: str, base: str = API):
         if not token:
             raise ValueError(
@@ -93,9 +41,6 @@ class HttpTransport:
         self._base = base
 
     def _call(self, method: str, payload: dict, timeout: float = 60.0) -> dict:
-        # The token is in the URL because that is Telegram's API shape. It is
-        # therefore never in a log line here: no request logging in this
-        # module, and errors are re-raised with the METHOD name only.
         url = f"{self._base}/bot{self._token}/{method}"
         req = urllib.request.Request(
             url, data=json.dumps(payload).encode("utf-8"),
@@ -111,18 +56,11 @@ class HttpTransport:
         return body.get("result", {})
 
     def get_updates(self, offset: int, timeout: int) -> list[dict]:
-        # `timeout + 10` on the socket: the server holds the request for
-        # `timeout` seconds by design, so a socket timeout equal to it would
-        # make every idle poll look like a network failure.
         return self._call("getUpdates",
                           {"offset": offset, "timeout": timeout},
                           timeout=timeout + 10) or []
 
     def send_message(self, chat_id, text: str, buttons: list | None = None) -> dict:
-        # NO parse_mode. The text can contain a model's output, which can
-        # contain whatever a fetched web page contained. Plain text renders an
-        # asterisk as an asterisk; Markdown mode turns attacker punctuation
-        # into formatting, and a malformed entity into a delivery failure.
         payload: dict = {"chat_id": chat_id, "text": text[:4000]}
         if buttons:
             payload["reply_markup"] = {"inline_keyboard": buttons}
@@ -139,8 +77,6 @@ class TransportError(RuntimeError):
 
 @dataclass
 class FakeTransport:
-    """Records what would have been sent; replays canned updates."""
-
     updates: list[dict] = field(default_factory=list)
     sent: list[dict] = field(default_factory=list)
     answered: list[dict] = field(default_factory=list)
@@ -159,11 +95,6 @@ class FakeTransport:
 
 
 def record_drop(conn, channel: str, sender: str, reason: str, body: str) -> None:
-    """A message from someone not on the allowlist. Evidence, not a queue.
-
-    Nothing here creates a task, so there is nothing for a human to approve
-    later by mistake — which is the difference between "dropped" and "held".
-    """
     digest = sha256_hex(body[:MAX_RECORDED_BODY])
     conn.execute(
         """INSERT INTO channel_drops(channel, sender, reason, body_sha256,
@@ -190,14 +121,10 @@ def recent_drops(conn, limit: int = 50) -> list[dict]:
 
 
 class TelegramBot:
-    """One process, one database, one task at a time."""
-
     def __init__(self, ctx, transport: Transport, cfg=None):
         self.ctx = ctx
         self.tx = transport
         self.cfg = cfg or ctx.config.channels.telegram
-        # FROM THE TABLE. In memory, a restart polled from 0 and Telegram
-        # redelivered everything it had not seen confirmed.
         self.offset = self._resume_offset()
 
     def _resume_offset(self) -> int:
@@ -207,14 +134,6 @@ class TelegramBot:
         return (row[0] + 1) if row and row[0] is not None else 0
 
     def _claim(self, update_id: int) -> bool:
-        """True the first time an update is seen, False on a redelivery.
-
-        CLAIM THEN HANDLE, so the failure is at-most-once: a crash between the
-        claim and the handler loses that one message, and its sender re-sends.
-        The other order turns a crash during a 40-second run - the long window
-        in `serve_forever` - into a second task from one message, and a task
-        can have side effects where a lost message has none.
-        """
         cur = self.ctx.conn.execute(
             """INSERT OR IGNORE INTO channel_updates(channel, update_id, seen_at)
                VALUES (?,?,?)""", (TELEGRAM, int(update_id), time.time()))
@@ -227,8 +146,6 @@ class TelegramBot:
         self.ctx.conn.commit()
         return claimed
 
-    # -- routing ------------------------------------------------------------
-
     def _bind(self, task_id: str, chat_id) -> None:
         self.ctx.conn.execute(
             """INSERT OR REPLACE INTO channel_routes(task_id, channel, chat_id,
@@ -238,34 +155,13 @@ class TelegramBot:
         self.ctx.conn.commit()
 
     def _chat(self, task_id: str):
-        """Where this task's replies go. FROM THE TABLE, not from memory.
-
-        Held in a dict this fails closed rather than open — the approval stays
-        pending — but it still fails: the human is never asked, and a task
-        nobody was asked about waits forever. A channel task parks far more
-        often than a local one, and the point of parking is that waiting costs
-        nothing, so the wait routinely outlives the process that started it.
-        The same argument as `tasks.origin`, applied to routing.
-        """
         row = self.ctx.conn.execute(
             "SELECT chat_id FROM channel_routes WHERE task_id=?",
             (task_id,)).fetchone()
         return row[0] if row else None
 
-    # -- the allowlist, which is the only rule this file owns ---------------
-
     def allowed(self, sender) -> bool:
-        """EMPTY LIST MEANS NOBODY.
-
-        Written as an explicit membership test against a list of strings so
-        the empty case falls out as False rather than being special-cased —
-        the version of this that reads `if allowed and sender not in allowed`
-        is the one that hands the bot to the internet the day someone enables
-        the channel before filling in the list.
-        """
         return str(sender) in {str(x) for x in self.cfg.allowed_senders}
-
-    # -- inbound ------------------------------------------------------------
 
     def handle_update(self, update: dict) -> dict:
         if "callback_query" in update:
@@ -280,10 +176,6 @@ class TelegramBot:
         text = msg.get("text") or msg.get("caption") or ""
 
         if not self.allowed(sender):
-            # DROPPED, NOT QUEUED, and NOT ANSWERED. A bot that replies "you
-            # are not authorised" tells anyone sweeping user ids that this
-            # account is a live bot with an allowlist, which is one bit more
-            # than silence gives them.
             record_drop(self.ctx.conn, TELEGRAM, sender, "sender not allowlisted", text)
             return {"action": "dropped", "sender": str(sender)}
 
@@ -312,27 +204,11 @@ class TelegramBot:
         )
         return {"action": "created", "task_id": task.id, "chat_id": chat}
 
-    # -- running ------------------------------------------------------------
-
     def run(self, task_id: str) -> dict:
-        """Run a task to completion, a park, or a failure, and report back.
-
-        A PARK IS A RETURN VALUE, NOT AN EXCEPTION. `TaskPaused` is raised
-        deep in the gate and caught by `run_task`, which converts it into a
-        `TaskResult` with `status="paused"` and an `approval_id`. Written the
-        obvious way — `except TaskPaused` around the call — this method would
-        have been correct-looking and never once entered: the handler that
-        sends the approval buttons would have been unreachable, and the bot
-        would have reported "paused" with no way to unpause it.
-
-        That is C34's shape one phase later — a branch that reads as wired and
-        cannot execute. Caught by reading `run_task`'s handlers rather than
-        trusting its signature.
-        """
         chat = self._chat(task_id)
         try:
             result = run_task(self.ctx, task_id)
-        except Exception as e:  # noqa: BLE001 — reported, never swallowed
+        except Exception as e:  # noqa: BLE001
             if chat is not None:
                 self.tx.send_message(chat, f"{task_id} failed: {type(e).__name__}: {e}")
             return {"action": "failed", "error": f"{type(e).__name__}: {e}"}
@@ -344,7 +220,6 @@ class TelegramBot:
         return {"action": "finished", "status": result.status}
 
     def _ask(self, task_id: str, approval_id: str) -> None:
-        """The same information the TUI shows, plus two buttons."""
         chat = self._chat(task_id)
         if chat is None:
             return
@@ -363,19 +238,11 @@ class TelegramBot:
             ]],
         )
 
-    # -- approval over the channel ------------------------------------------
-
     def _handle_callback(self, cb: dict) -> dict:
         sender = (cb.get("from") or {}).get("id", "")
         data = cb.get("data") or ""
         cb_id = cb.get("id", "")
 
-        # A4.3 — RE-VERIFY AT DECISION TIME, not only at receipt. The button
-        # lives in a chat message and the message outlives the allowlist: a
-        # sender removed this morning can still see, and still press, a button
-        # sent yesterday. Checking only at receipt would make removal take
-        # effect for new requests and not for pending ones, which is the wrong
-        # way round — the pending ones are the ones with an action attached.
         if not self.allowed(sender):
             record_drop(self.ctx.conn, TELEGRAM, sender,
                         "callback from non-allowlisted sender", data)
@@ -386,12 +253,6 @@ class TelegramBot:
         if decision not in ("approve", "deny") or not approval_id:
             return {"action": "ignored", "why": "unparseable callback"}
 
-        # AUDIT-2026-09 F1 - WHICH decisions this channel owns, not only WHO
-        # may press. The allowlist check above is about the sender; nothing
-        # tied the approval to the channel, so an allowlisted - or taken-over
-        # - account could decide a LOCAL task's parked action that was never
-        # sent to any phone. A decision is the channel's only if its task is
-        # routed here, to the chat the button was pressed in.
         row = self.ctx.conn.execute(
             "SELECT task_id FROM approvals WHERE id=?", (approval_id,)).fetchone()
         if row is not None:
@@ -412,8 +273,6 @@ class TelegramBot:
 
         task_id = out["task_id"]
         if out.get("already_decided"):
-            # The button is still on screen because a chat message is
-            # permanent. The decision is not re-openable.
             self.ctx.log.append(task_id, "channel.refused",
                                 {"approval_id": approval_id, "sender": str(sender),
                                  "why": "already decided",
@@ -432,22 +291,7 @@ class TelegramBot:
             self.run(task_id)
         return {"action": decision, "task_id": task_id, "sender": str(sender)}
 
-    # -- the loop -----------------------------------------------------------
-
     def poll_once(self, timeout: int | None = None) -> list[dict]:
-        """One round of updates. Returns what each one did.
-
-        THE OFFSET ADVANCES WHETHER OR NOT THE HANDLER SUCCEEDS. Telegram
-        redelivers anything below the offset, so acknowledging only on success
-        means a message that reliably crashes the handler is re-fetched
-        forever — a denial of service available to anyone who can send the bot
-        one message, twice.
-
-        Advancing before the call rather than after it is the same behaviour
-        given the `except` below; what is load-bearing is that the update is
-        acknowledged on BOTH paths. Written before the call so that stays true
-        if someone later adds an early `continue`.
-        """
         updates = self.tx.get_updates(
             self.offset, timeout if timeout is not None else self.cfg.poll_timeout_s)
         out = []
@@ -459,21 +303,15 @@ class TelegramBot:
                 continue
             try:
                 out.append(self.handle_update(u))
-            except Exception as e:  # noqa: BLE001 — one bad update, not the bot
+            except Exception as e:  # noqa: BLE001
                 out.append({"action": "error", "error": f"{type(e).__name__}: {e}"})
         return out
 
     def resend_pending(self) -> list[str]:
-        """Re-ask for every channel approval still waiting. Called at startup.
-
-        Without this the route table has no reader and a task parked before a
-        restart is unreachable: the row is there, the approval is there, and
-        nothing puts a button in front of a human again.
-        """
         asked = []
         for a in self.ctx.pending_approvals():
             if self._chat(a["task_id"]) is None:
-                continue           # not ours; a local task parks the same way
+                continue
             self._ask(a["task_id"], a["id"])
             asked.append(a["id"])
         return asked
@@ -487,7 +325,6 @@ class TelegramBot:
 
 
 def build(ctx, transport: Transport | None = None) -> TelegramBot:
-    """Wire a bot. `transport=None` builds the real one and needs a token."""
     cfg = ctx.config.channels.telegram
     if transport is None:
         transport = HttpTransport(os.environ.get(cfg.token_env, ""))

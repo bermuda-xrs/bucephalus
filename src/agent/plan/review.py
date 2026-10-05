@@ -1,22 +1,3 @@
-"""M13.3 — the auto-review agent. This is what turns plan mode into unattended.
-
-Four rules, all load-bearing:
-
-  1. It is a REVIEWER SWAP, not a permission grant. Auto-review does not expand
-     writable paths, enable network access, or weaken protected paths. It only
-     changes WHO DECIDES on actions that already required approval.
-  2. The reviewer sees EVIDENCE, not reasoning. A compact transcript plus the
-     exact request. Hidden chain-of-thought is excluded — the reviewer judges
-     what the agent is DOING, not what it says it intends.
-  3. Denial is not an ordinary error. The rationale goes back with an explicit
-     no-circumvention instruction. A plain error string invites a retry loop
-     that eventually finds a gap.
-  4. False means REJECT, not approve. The policy default is denial.
-
-Contrast with M8.3's monitor: that one is invisible to the agent and async.
-This one is visible and blocking. Two tables, two read paths, no joins.
-"""
-
 from __future__ import annotations
 
 import json
@@ -79,24 +60,18 @@ class ReviewRequest(BaseModel):
     tool: str
     args: dict = Field(default_factory=dict)
     arg_taint: Taint = Taint.USER
-    compact_transcript: str = ""  # user msgs, surfaced updates, relevant tool
-    #                               calls and outputs. NOT hidden reasoning.
-    plan_step: PlanStep | None = None  # what the approved plan said should happen
-    # What the task is permitted to touch. Without it the reviewer cannot tell
-    # an in-scope path from an out-of-scope one, so it guesses — and rule 4
-    # turns every guess into a denial. Measured: a reviewer refusing to let a
-    # task read a file that was inside its own scope.
+    compact_transcript: str = ""
+    plan_step: PlanStep | None = None
     artifact_scope: list[str] = Field(default_factory=list)
 
 
 class ReviewDecision(BaseModel):
     verdict: Verdict
-    rationale: str  # goes BACK to the agent
+    rationale: str
     policy_rule: str | None = None
     backend: str = ""
 
     def to_agent(self) -> str:
-        """Rule 3 — a denial returns a rationale plus the no-circumvention rule."""
         if self.verdict == "approve":
             return f"Reviewer approved: {self.rationale}"
         if self.verdict == "escalate":
@@ -108,12 +83,6 @@ class ReviewDecision(BaseModel):
 
 
 def load_policy(ctx) -> str:
-    """The reviewer's rule book, authored in the UI.
-
-    Order: the active policy document, then policy.md as an import-era
-    fallback, then a refusal. Rule 4 all the way down — every miss makes the
-    reviewer more restrictive, never less.
-    """
     store = getattr(ctx, "userdata", None)
     if store is not None:
         body = store.get_active_policy()
@@ -126,7 +95,6 @@ def load_policy(ctx) -> str:
         if text.strip():
             return text
 
-    # A missing policy denies everything. It never opens the gate.
     return "NO POLICY FOUND. Deny every action and say the policy is missing."
 
 
@@ -149,7 +117,6 @@ def auto_review(ctx, req: ReviewRequest, task=None) -> ReviewDecision:
             f"(both are {reviewer_name!r}) — anti-collusion invariant"
         )
 
-    # Never auto-review TRUSTED tier. Those park for a human, always.
     if (
         req.arg_taint == Taint.TRUSTED
         or tier_of(ctx, req.tool) in {"trusted", *ctx.config.autonomy.human_only_tiers}
@@ -166,15 +133,8 @@ def auto_review(ctx, req: ReviewRequest, task=None) -> ReviewDecision:
     backend = ctx.backends[reviewer_name]
     tools = [
         s for s in ctx.tools.schemas() if s["name"] in READ_ONLY_TOOL_NAMES
-    ]  # may verify, may not act
-    # A property, not an adapter type — see BackendConfig.needs_action_envelope.
-    # The deputy losing its schema because the executor changed `kind` would be
-    # the worst place for this bug to land: a reviewer that cannot emit VERDICT
-    # is a reviewer that approves nothing, and granite4.1:8b already failed to
-    # emit one unaided across 8 tasks.
+    ]
     constrain = backend.cfg.needs_action_envelope
-    # D36: the deputy's call was never recorded - 15 reviews in the measurement
-    # record, not one row in `calls`.
     resp = ctx.call_model(
         task if task is not None else req.task_id, backend, "review",
         prefix=REVIEW_PREFIX + "\n\n<policy>\n" + load_policy(ctx) + "\n</policy>",
@@ -208,12 +168,6 @@ def render_review_request(req: ReviewRequest) -> str:
 _VERDICT_RX = re.compile(r"VERDICT:\s*(approve|deny|escalate)", re.I)
 _BECAUSE_RX = re.compile(r"BECAUSE:\s*(.+)", re.I)
 
-# M5.4 again, and it matters more here than anywhere else. A small reviewer
-# that cannot hit the text format has every reply read as unparseable, and
-# rule 4 turns each one into a denial — so the agent is refused permission for
-# everything and no task can complete. Measured: a 100% denial rate against
-# granite4.1:8b, which would have made a 7-hour benchmark run report 0% on
-# every task and look like a suite that was too hard.
 REVIEW_SCHEMA = {
     "type": "object",
     "properties": {
@@ -230,11 +184,6 @@ Answer with a single JSON object and nothing else:
 
 
 def parse_decision(text: str, backend: str = "") -> ReviewDecision:
-    """Accept the JSON shape (constrained decoding) or the tag shape.
-
-    Rule 4 still holds underneath both: anything unparseable is a denial,
-    never a default approve.
-    """
     raw = (text or "").strip()
 
     if raw.startswith("{"):

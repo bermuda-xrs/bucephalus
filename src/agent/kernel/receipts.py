@@ -1,9 +1,3 @@
-"""M1.6 — do things exactly once.
-
-A checkpoint tells you WHERE the agent was, not WHAT it already did. Every
-side-effecting tool routes through execute_once or the guarantee is void.
-"""
-
 from __future__ import annotations
 
 import json
@@ -23,13 +17,9 @@ def idempotency_key(task_id: str, step_seq: int, tool: str, args: dict) -> str:
     )
 
 
-# A receipt row whose result is this was CLAIMED - the effect was about to
-# start - and never filled in: whoever claimed it stopped somewhere inside.
-# Not JSON: every real result is stored through `canonical`, so no tool result
-# can ever equal it (a JSON sentinel could be forged by a tool returning it).
 _CLAIM = "CLAIMED"
-_inflight: dict[str, threading.Event] = {}      # keys being run by THIS process
-WAIT_S = 900.0        # the longest a same-key caller waits for the thread running it
+_inflight: dict[str, threading.Event] = {}
+WAIT_S = 900.0
 log = logging.getLogger("agent.receipts")
 
 
@@ -47,22 +37,6 @@ def execute_once(
     args: dict,
     fn: Callable[[], dict],
 ) -> dict:
-    """Run fn() at most once across all replays. Claim, execute, fill in (D27).
-
-    The receipt is CLAIMED - a row, committed and fsynced - before the effect
-    runs, and filled in after. Holding the chain lock across the effect
-    instead froze every event append in the process for as long as a push or a
-    send took, and a crash between the effect and its receipt left NO trace,
-    so a replay did it again. Now:
-
-      * a completed receipt is returned, the effect not re-run;
-      * a claim nobody in this process is running means a run stopped inside
-        the effect: the outcome is UNKNOWN and is reported as such - never
-        repeated, because a second send is worse than one that needs a look;
-      * two threads with the same key: the second waits for the first's result;
-      * an effect that RAISES releases its claim and can be tried again, as
-        before; one cut off by the process dying leaves the claim.
-    """
     with chain_lock(conn):
         row = conn.execute(
             "SELECT result_json FROM receipts WHERE idempotency_key=?", (key,)).fetchone()
@@ -77,19 +51,19 @@ def execute_once(
         else:
             mine = False
             if row[0] != _CLAIM:
-                return json.loads(row[0])                 # already done - do NOT re-run
+                return json.loads(row[0])
             done = _inflight.get(key)
     if not mine:
         if done is None:
-            return outcome_unknown(key)                   # claimed by a run that is gone
-        if not done.wait(WAIT_S):                         # never wait forever
+            return outcome_unknown(key)
+        if not done.wait(WAIT_S):
             return outcome_unknown(key)
         return execute_once(conn, key, tool_name, args, fn)
 
     try:
         result = fn()
     except Exception:
-        with chain_lock(conn):                            # it failed: free the claim
+        with chain_lock(conn):
             conn.execute("DELETE FROM receipts WHERE idempotency_key=? AND result_json=?",
                          (key, _CLAIM))
             conn.commit()
@@ -97,7 +71,7 @@ def execute_once(
         done.set()
         raise
     except BaseException:
-        _inflight.pop(key, None)                          # cut off: the claim stays
+        _inflight.pop(key, None)
         done.set()
         raise
     try:
@@ -105,16 +79,9 @@ def execute_once(
             conn.execute("UPDATE receipts SET result_json=? WHERE idempotency_key=?",
                          (canonical(result), key))
             conn.commit()
-    except Exception:  # noqa: BLE001 - the effect HAPPENED; nothing here may hide that
-        # AUDIT-ITERATION-3B M2. Another writer past busy_timeout: the row
-        # stays CLAIMED - honestly "outcome unknown" on disk - but the caller
-        # is told what happened, and the waiters are released in the finally
-        # below. It used to raise here, leaving a stale Event that a same-key
-        # retry (a resumed task's first action) waited on forever.
+    except Exception:  # noqa: BLE001
         log.exception("receipt %s: the effect ran but its result could not be recorded", key[:12])
     finally:
         _inflight.pop(key, None)
         done.set()
     return result
-
-

@@ -1,29 +1,3 @@
-"""The desktop app: the existing control-plane console in a native window.
-
-pywebview, not Tauri. The console already exists - FastAPI plus `ui.html`,
-guarded by token, Origin and Host checks - and a window only has to show it.
-Tauri would add a Rust toolchain and run this Python as a separate frozen
-SIDECAR, which is the very arrangement D13 was about; pywebview shows the same
-page from inside the one process that owns the sandbox.
-
-Four rules, each tested in tests/test_desktop.py:
-
-  * LOOPBACK ONLY. The server binds 127.0.0.1 on a port the OS picks. Another
-    interface needs ALPHA_ALLOW_REMOTE=1 and ALPHA_HOST, and the guard's Host,
-    Origin and token checks still apply.
-  * STATE IN PLATFORMDIRS. Always - even when launched from inside a
-    checkout, where `state_root()` would otherwise pick the project
-    directory. ALPHA_DATA_DIR still overrides.
-  * CLOSING THE WINDOW STOPS EVERYTHING. The server stops, then every process
-    this one started - sandbox children, their grandchildren - goes through
-    `kill_tree`, never a bare terminate (HANDOVER: the venv trampoline).
-  * NO TASK CONTENT. A first run writes the local profile's config and
-    nothing else; suites are made in the console.
-
-Module-level imports are stdlib only: in a frozen build `main()` must reach
-`child_entry()` before any application code (D13).
-"""
-
 from __future__ import annotations
 
 import os
@@ -43,11 +17,10 @@ def resolve_host() -> str:
 
 
 def resolve_state() -> tuple[Path, Path]:
-    """(config file, data dir). Creates the config on first run."""
     from .paths import user_config_dir, user_data_dir
 
     data = Path(os.environ.get("ALPHA_DATA_DIR") or user_data_dir())
-    os.environ["ALPHA_DATA_DIR"] = str(data)       # state_root() reads this
+    os.environ["ALPHA_DATA_DIR"] = str(data)
     cfg = user_config_dir() / "config.yaml"
     if not cfg.exists():
         cfg.parent.mkdir(parents=True, exist_ok=True)
@@ -56,8 +29,6 @@ def resolve_state() -> tuple[Path, Path]:
 
 
 def _default_config() -> str:
-    """The all-local profile. Frozen, bundled beside the app; in a checkout,
-    the file itself."""
     base = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parents[2]))
     for name in ("config.default.yaml", "config.local.yaml"):
         if (base / name).exists():
@@ -66,11 +37,6 @@ def _default_config() -> str:
 
 
 def _streams_to_log(data: Path) -> None:
-    """A windowed build has no console, so sys.stdout and sys.stderr are None
-    - and uvicorn's logging writes to them, which killed the first frozen
-    build with "Unhandled exception in script" before the window opened.
-    They go to a log in the data directory instead, which is also where a
-    person looking for what went wrong would look."""
     if sys.stdout is not None and sys.stderr is not None:
         return
     data.mkdir(parents=True, exist_ok=True)
@@ -80,7 +46,6 @@ def _streams_to_log(data: Path) -> None:
 
 
 def start_server(ctx, host: str):
-    """Serve the console on a free port. Returns (server, thread, port)."""
     import socket
 
     import uvicorn
@@ -101,7 +66,6 @@ def start_server(ctx, host: str):
 
 
 def descendants(root: int | None = None) -> list[int]:
-    """This process's tree, start-time validated (proc.descendants, D42)."""
     from . import proc
 
     return proc.descendants(os.getpid() if root is None else root)
@@ -111,12 +75,6 @@ _STOPPING = threading.Lock()
 
 
 def shutdown(server, thread, timeout_s: float = 10.0) -> list[int]:
-    """Stop the server, then kill every process this one started. Returns the
-    pids that were still running and had to be killed.
-
-    One at a time: the window's `closed` event starts a stop on pywebview's
-    thread, and the final stop in main() must not return - and let the app
-    exit - while that one is still killing what only it can still see."""
     with _STOPPING:
         return _shutdown(server, thread, timeout_s)
 
@@ -129,12 +87,8 @@ def _shutdown(server, thread, timeout_s: float) -> list[int]:
     left = descendants()
     started = {pid: proc.process_start_time(pid) for pid in left}
     for pid in left:
-        # Already gone with a parent's tree (leaves-first kills take the whole
-        # validated subtree); asking the kernel is microseconds.
         if not proc._alive(pid):
             continue
-        # Pinned to the process in the snapshot: by the time this runs the
-        # pid may be someone else's (D42).
         proc.kill_tree(pid, expect_start=started[pid])
     return left
 
@@ -142,7 +96,7 @@ def _shutdown(server, thread, timeout_s: float) -> list[int]:
 def main(argv: list[str] | None = None) -> int:
     from .frozen import child_entry
 
-    child_entry()                         # D13: first, before any app code
+    child_entry()
 
     import argparse
 
@@ -163,11 +117,6 @@ def main(argv: list[str] | None = None) -> int:
 
         window = webview.create_window("alpha", console_url(port, server.config.app.state.token),
                                        width=1280, height=860, min_size=(900, 600))
-        # pywebview's close, in private mode, waits up to 3 s for WebView2's
-        # browser process to exit on its own before start() returns: 2.2 s
-        # of a 3.6 s close (F1). Stopping the tree when the window closes
-        # ends that wait in the kill it would end in anyway (iteration 3, 3.2).
-        # It returns None: pywebview puts handlers' return values in a set.
         def stop_now() -> None:
             shutdown(server, thread)
 
@@ -181,10 +130,6 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _drop_private_profile() -> None:
-    """pywebview deletes its private-mode profile once WebView2 has exited;
-    when the early stop above wins that race it logs and skips the delete,
-    so the profile goes here. Only in private mode - otherwise that folder
-    is the user's persistent storage."""
     import shutil
 
     webview = sys.modules.get("webview")

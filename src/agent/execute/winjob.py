@@ -1,38 +1,3 @@
-"""D37 - the sandbox's resource limits on Windows: a Job Object.
-
-POSIX children get RLIMIT_AS, RLIMIT_CPU, RLIMIT_NPROC and RLIMIT_FSIZE.
-Windows children got none of them, so on the only platform this project has
-run on, the sandbox was advisory path confinement plus a wall-clock timeout -
-while cron and the channel both run code with nobody watching.
-
-A Job Object gives three of the four, enforced by the kernel rather than by
-the audit hook, which lives in the process it polices:
-
-  memory     JOB_OBJECT_LIMIT_PROCESS_MEMORY   an allocation past it fails
-  CPU time   JOB_OBJECT_LIMIT_JOB_TIME         user-mode time, every process
-  processes  JOB_OBJECT_LIMIT_ACTIVE_PROCESS   a start past it is refused
-
-and KILL_ON_JOB_CLOSE: whatever the child started dies when the job closes.
-File size has no per-process equivalent on Windows. It waits for Phase 6.
-
-THE TRAMPOLINE. A venv `python.exe` is a launcher that starts the real
-interpreter as its child (SPEC-DELTA C13). A job assigned after the launcher
-has run misses that child. So the launcher is created SUSPENDED, assigned,
-and only then resumed: everything it starts is born inside the job.
-
-Measured on this machine, 2026-09-15, before this module existed:
-  * 512 MB against a 256 MB limit: MemoryError, exit 1. 128 MB: allocated.
-  * a spin loop against a 2 s CPU limit: killed, exit 0xC0000044
-    (STATUS_QUOTA_EXCEEDED), 8.0 s of wall clock.
-  * five children against a limit of four: the third refused, error 1816.
-  * the process that runs the code is the launcher's child, and in the job.
-  * closing the job killed a sleeping child at once.
-
-FAIL CLOSED. If the job cannot be created, configured or assigned, the child
-is killed before it ever runs and the run is refused. A sandbox without its
-limits under a scheduler is the shape this exists to remove.
-"""
-
 from __future__ import annotations
 
 import ctypes
@@ -40,8 +5,7 @@ import subprocess
 from dataclasses import dataclass
 
 CREATE_SUSPENDED = 0x00000004
-# How a process dies when the job's CPU time runs out.
-CPU_LIMIT_EXIT = 0xC0000044                   # STATUS_QUOTA_EXCEEDED
+CPU_LIMIT_EXIT = 0xC0000044
 
 _EXTENDED_LIMIT_INFORMATION = 9
 _LIMIT_JOB_TIME = 0x00000004
@@ -51,7 +15,7 @@ _LIMIT_KILL_ON_JOB_CLOSE = 0x00002000
 
 
 class JobError(OSError):
-    """The limits could not be applied, so the child was not allowed to run."""
+    ...
 
 
 @dataclass(frozen=True)
@@ -109,7 +73,7 @@ def _create_job(k32, limits: JobLimits) -> int:
     basic = info.BasicLimitInformation
     basic.LimitFlags = (_LIMIT_PROCESS_MEMORY | _LIMIT_JOB_TIME
                         | _LIMIT_ACTIVE_PROCESS | _LIMIT_KILL_ON_JOB_CLOSE)
-    basic.PerJobUserTimeLimit = int(limits.cpu_seconds * 10_000_000)  # 100 ns units
+    basic.PerJobUserTimeLimit = int(limits.cpu_seconds * 10_000_000)
     basic.ActiveProcessLimit = limits.max_processes
     info.ProcessMemoryLimit = limits.memory_bytes
     if not k32.SetInformationJobObject(job, _EXTENDED_LIMIT_INFORMATION,
@@ -122,11 +86,6 @@ def _create_job(k32, limits: JobLimits) -> int:
 
 def spawn_in_job(argv: list[str], limits: JobLimits,
                  **popen_kwargs) -> tuple[subprocess.Popen, int]:
-    """Start `argv` inside a new job with `limits`. Returns (process, job).
-
-    The caller closes the job with `close_job` once the process is done;
-    closing it kills anything still running inside.
-    """
     k32, ntdll = _api()
     job = _create_job(k32, limits)
     flags = popen_kwargs.pop("creationflags", 0) | CREATE_SUSPENDED
@@ -135,7 +94,7 @@ def spawn_in_job(argv: list[str], limits: JobLimits,
     except BaseException:
         k32.CloseHandle(job)
         raise
-    handle = int(proc._handle)  # noqa: SLF001 - Popen owns it; we only use it
+    handle = int(proc._handle)  # noqa: SLF001
     if not k32.AssignProcessToJobObject(job, handle):
         err = ctypes.get_last_error()
         _refuse(proc, k32, job)
@@ -153,13 +112,12 @@ def _refuse(proc: subprocess.Popen, k32, job: int) -> None:
         proc.wait(timeout=5)
     finally:
         k32.CloseHandle(job)
-        for stream in (proc.stdin, proc.stdout, proc.stderr):   # the caller never sees proc
+        for stream in (proc.stdin, proc.stdout, proc.stderr):
             if stream:
                 stream.close()
 
 
 def close_job(job: int) -> None:
-    """Close the job. KILL_ON_JOB_CLOSE ends anything the child left running."""
     if job:
         k32, _ = _api()
         k32.CloseHandle(job)

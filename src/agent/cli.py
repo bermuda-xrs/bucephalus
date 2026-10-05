@@ -1,11 +1,3 @@
-"""The terminal client. A client of M12's API, not a second implementation.
-
-Rendering rule from M13.6 that matters more than it looks: integrity alerts do
-NOT share a visual treatment with approvals. `danger` is reserved for tamper
-alerts and used for nothing else, so a broken hash chain can never be approved
-by muscle memory.
-"""
-
 from __future__ import annotations
 
 import argparse
@@ -35,19 +27,12 @@ DEFAULT_THEME = {
     "accent": "#7DB4C8",
     "success": "#88C070",
     "warning": "#D9A441",
-    "danger": "#FF4B4B",  # integrity alerts ONLY — reserved
+    "danger": "#FF4B4B",
     "muted": "#7A7A7A",
 }
 
 
 def _asset(configured: str, ctx) -> Path | None:
-    """The configured file, else the copy shipped inside the package.
-
-    An installed wheel has no project directory, so `./themes/default.toml`
-    resolves to nothing and the agent would silently lose its theme and
-    banner. The package carries its own copies; the configured path still
-    wins so a user can override either.
-    """
     p = Path(ctx.config.resolve(configured))
     if p.exists():
         return p
@@ -66,7 +51,7 @@ def load_theme(ctx) -> dict:
     try:
         data = tomllib.loads(p.read_text(encoding="utf-8"))
         return {**DEFAULT_THEME, **data.get("colors", {})}
-    except Exception:  # noqa: BLE001 - a broken theme must not stop the agent
+    except Exception:  # noqa: BLE001
         return DEFAULT_THEME
 
 
@@ -76,9 +61,6 @@ def banner(ctx, console: Console) -> None:
         console.print(p.read_text(encoding="utf-8", errors="replace"))
     else:
         console.print("[bold]alpha test 1[/bold]")
-
-
-# -- commands ---------------------------------------------------------------
 
 
 def cmd_new(ctx, args, console) -> int:
@@ -184,17 +166,11 @@ def cmd_run(ctx, args, console) -> int:
 
 
 def _fmt(value, spec: str) -> str:
-    """Invariant 36 on a display: unmeasured is null, and null prints as n/a."""
     return "n/a" if value is None else format(value, spec)
 
 
 def _print_budget(ctx, console, task_id, theme) -> None:
     m = ctx.telemetry.metrics(task_id)
-    # FOUND BY THE PART 3 REAL RUN: `cache_hit_ratio` is None wherever the
-    # backend does not report cache accounting - every local run - and
-    # `:.0%` of None raised AFTER the result was printed, so `alpha run` exited
-    # 1 on a task that had finished. The test backends all report a cache, so
-    # no test ever reached this line with a null.
     console.print(
         f"[{theme['muted']}]paid {m.paid_tokens:,} tok · free {m.free_tokens:,} tok · "
         f"${_fmt(m.cost_usd, '.4f')} · cache hit {_fmt(m.cache_hit_ratio, '.0%')} · "
@@ -244,7 +220,6 @@ def cmd_approvals(ctx, args, console) -> int:
 
 
 def cmd_alerts(ctx, args, console) -> int:
-    """Integrity alerts render differently from approvals. On purpose."""
     from .channel.telegram import recent_drops
 
     theme = load_theme(ctx)
@@ -270,14 +245,6 @@ def cmd_alerts(ctx, args, console) -> int:
             t.add_row(f["task_id"][:12], f["severity"], f["finding"][:80])
         console.print(t)
 
-    # A4. Messages from senders who are not on the allowlist. A THIRD section,
-    # not merged into either of the two above: a stranger messaging the bot is
-    # neither a broken chain nor a monitor finding, and the whole reason this
-    # command renders integrity differently from approvals is that things
-    # which mean different things must not come to look alike.
-    #
-    # It is also the only reader this table has. A drop log nobody can see is
-    # a record kept for its own sake.
     drops = recent_drops(ctx.conn, limit=10)
     if drops:
         t = Table(title="dropped channel messages (no task was created)")
@@ -294,12 +261,6 @@ def cmd_verify(ctx, args, console) -> int:
 
 
 def cmd_tui(ctx, args, console) -> int:
-    """A8. Imports the kernel, renders through the control plane's vocabulary.
-
-    See src/agent/tui/__init__.py for why that is the contract worth sharing
-    rather than HTTP: making the TUI speak HTTP would mean every TUI user
-    binds a port to look at a task on their own machine.
-    """
     try:
         from .tui.app import run as run_tui
     except ImportError:
@@ -310,14 +271,6 @@ def cmd_tui(ctx, args, console) -> int:
 
 
 def cmd_memory(ctx, args, console) -> int:
-    """See and correct what the agent remembers about you.
-
-    Not decoration. Tier 1 goes into the prefix of every future session and
-    lives in the user data dir where nothing surfaces it, so without this the
-    only way to audit or remove an entry is to find the file by hand. A
-    persistent memory a person cannot read is a persistent memory they cannot
-    consent to.
-    """
     from .memory.store import (MemoryStore, _render, check_fingerprint,
                                record_fingerprint)
 
@@ -339,10 +292,6 @@ def cmd_memory(ctx, args, console) -> int:
         return 0
 
     if args.accept:
-        # Blessing a hand edit is a deliberate, visible act. Without it the
-        # only way to legitimately edit these files by hand would be to leave
-        # a permanent critical standing - which is how a real alert becomes
-        # background noise, the exact failure D17 was.
         before = check_fingerprint(ctx.memory)
         for tier in sorted(MemoryStore.FILES):
             for e in ctx.memory.entries(tier):
@@ -370,11 +319,6 @@ def cmd_memory(ctx, args, console) -> int:
 
 
 def cmd_search(ctx, args, console) -> int:
-    """B4. `--rebuild` is the recovery path required by 2.3: the index is
-    derived data, so when it disagrees with the log the log wins and the
-    index is rebuilt from it. `--verify` reports a disagreement without
-    changing either, because a count mismatch means a write path bypassed the
-    triggers - a defect to find, not a number to quietly correct."""
     from .kernel import search as search_mod
 
     if args.rebuild:
@@ -445,7 +389,6 @@ def cmd_pareto(ctx, args, console) -> int:
 
 
 def _parse_drafted_from(raw: str) -> list[str]:
-    """`none` declares the empty set; anything else is comma-separated task keys."""
     raw = raw.strip()
     if raw.lower() == "none":
         return []
@@ -470,9 +413,6 @@ def cmd_skills(ctx, args, console) -> int:
         return 0
 
     if args.add:
-        # M9 needs a hand-written skill before it can calibrate. Everything
-        # added here starts as a CANDIDATE: the gate is the only way to
-        # promote, and it needs 30 paired trials first.
         path = Path(args.add)
         if not path.exists():
             console.print(f"[red]no such file: {path}[/red]")
@@ -527,11 +467,6 @@ def cmd_skills(ctx, args, console) -> int:
 
 
 def cmd_bench_local(ctx, args, console) -> int:
-    """Measure the local tiers. Spec 0.1c: settle model choice empirically.
-
-    Reports observed tokens/sec and wall-clock per purpose so `active_local_tier`
-    is a measurement rather than a guess.
-    """
     theme = load_theme(ctx)
     t = Table(title="local tier — measured, not configured")
     for c in ("backend", "model", "reachable", "tok/s", "first call (s)", "out tokens"):
@@ -570,7 +505,6 @@ def cmd_bench_local(ctx, args, console) -> int:
 
 
 def cmd_steer(ctx, args, console) -> int:
-    """M12.3 — never mutate a running task. Fork it, keeping history replayable."""
     from .kernel.types import TaskStatus
 
     parent = load_task(ctx.conn, args.task_id)
@@ -594,8 +528,6 @@ def cmd_serve(ctx, args, console) -> int:
     from .control.guard import resolve_token
     from .control.server import GRACEFUL_SHUTDOWN_S, console_url, create_app
 
-    # The token is in the fragment; this line is the only place it is shown,
-    # on the terminal of the user who started the server (AUDIT F2).
     console.print(f"control plane: {console_url(args.port, resolve_token(ctx.config.root), args.host)}")
     uvicorn.run(create_app(ctx), host=args.host, port=args.port, log_level="warning",
                 timeout_graceful_shutdown=GRACEFUL_SHUTDOWN_S)
@@ -603,14 +535,6 @@ def cmd_serve(ctx, args, console) -> int:
 
 
 def cmd_channel(ctx, args, console) -> int:
-    """A4 — run the Telegram bot. NEVER RUN AGAINST A LIVE TOKEN IN THIS
-    PROGRAM: the phase stops here by instruction, and this command exists so
-    the stop is a decision someone makes rather than a thing left unbuilt.
-
-    Three refusals before a single byte leaves the machine, each naming what
-    to do about it, because a bot that starts half-configured is a bot
-    listening to strangers.
-    """
     from .channel.telegram import build
     from .security.origin import CHANNEL_DENIED
 
@@ -637,11 +561,6 @@ def cmd_channel(ctx, args, console) -> int:
 
 
 def cmd_snapshot(ctx, args, console) -> int:
-    """Preserve the database as evidence, including rows still in its WAL.
-
-    Use this rather than copying `agent.db`: a file copy of a live WAL
-    database drops the newest rows without any error (C41).
-    """
     from .kernel.db import snapshot
 
     out = snapshot(ctx.conn, args.dest)
@@ -650,7 +569,6 @@ def cmd_snapshot(ctx, args, console) -> int:
 
 
 def cmd_lineage(ctx, args, console) -> int:
-    """B1 - a task's sessions, parent to child."""
     from .kernel import sessions
 
     rows = sessions.for_task(ctx.conn, args.task_id)
@@ -664,7 +582,6 @@ def cmd_lineage(ctx, args, console) -> int:
 
 
 def cmd_schedule(ctx, args, console) -> int:
-    """A3 - add, list or remove a schedule. `alpha supervise` fires them."""
     from . import schedule as sched
 
     if args.action == "add":
@@ -699,7 +616,6 @@ def cmd_schedule(ctx, args, console) -> int:
 
 
 def cmd_supervise(ctx, args, console) -> int:
-    """A3 - the supervisor. Wakes, derives what is due, fires and runs it."""
     from . import schedule as sched
 
     console.print(f"supervising {len(sched.active(ctx.conn))} schedule(s), "
@@ -710,7 +626,6 @@ def cmd_supervise(ctx, args, console) -> int:
 
 
 def cmd_notifications(ctx, args, console) -> int:
-    """11.2 - what parked while nobody was watching."""
     from . import schedule as sched
 
     rows = sched.notifications(ctx.conn, unseen_only=not args.all)
@@ -734,13 +649,8 @@ def cmd_monitor(ctx, args, console) -> int:
     return 0
 
 
-# -- entrypoint -------------------------------------------------------------
-
-
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="alpha", description="alpha test 1")
-    # An installed package has no ./config.yaml to fall back on, so look in
-    # the user config dir before defaulting to a path that will not exist.
     from .paths import default_config_path
 
     p.add_argument("--config",
@@ -891,7 +801,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.cmd in ("status", "new"):
             banner(ctx, console)
         return args.fn(ctx, args, console)
-    except Exception as e:  # noqa: BLE001 - the CLI reports, it does not traceback at users
+    except Exception as e:  # noqa: BLE001
         console.print(f"[bold red]{type(e).__name__}[/bold red]: {e}")
         return 1
     finally:

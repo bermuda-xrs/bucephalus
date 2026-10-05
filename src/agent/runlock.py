@@ -1,26 +1,3 @@
-"""One measurement process at a time, enforced by the OS.
-
-Two runs of `noise.py` overlapped on 2026-08-27 because a process that looked
-dead was not, and the damage was not the duplicated ledger rows — those
-collapse on resume. It was this:
-
-  * three tasks were measured while two models competed for the same CPU, so
-    their wall clock is not comparable to anything else in the run, and
-  * `budget_exhausted` is a TIME limit, so contention can *manufacture* that
-    outcome on a task that would otherwise have finished. The suite then
-    looks harder than it is, for reasons that have nothing to do with the
-    tasks.
-
-It also breaks a documented invariant: the hash-chain lock is process-wide,
-so a second process cannot see it. Chains are per-task, which is why nothing
-forked that time — luck, not design.
-
-So: an OS-level advisory lock, which the kernel releases when the process
-dies. That property matters here specifically, because these processes are
-routinely killed rather than exiting cleanly, and a lock that needed tidy
-shutdown would strand every subsequent run.
-"""
-
 from __future__ import annotations
 
 import json
@@ -32,18 +9,9 @@ from .platform import current as _platform
 
 
 class RunLockBusy(RuntimeError):
-    """Another measurement process holds the lock."""
+    ...
 
 
-# D34. The holder, published BESIDE the lock and readable without taking it.
-#
-# The OS lock is the truth and it cannot be observed without acquiring it, so
-# every would-be reader - the scheduler, a status command - had to become a
-# writer, and a reader that takes the lock for an instant can abort the very
-# measurement it wanted to stay out of the way of. The holder writes this on
-# acquire and removes it on release; a holder that dies without releasing
-# leaves it behind, and `lock_status` recognises that by the dead PID - the
-# same shape the process reaper already uses (proc._alive).
 STATUS_SUFFIX = ".holder.json"
 
 
@@ -53,24 +21,10 @@ def status_path(lock_path) -> Path:
 
 
 def measurement_lock_path(root) -> Path:
-    """ONE measurement lock per project, whatever a run's --out says.
-
-    It lived beside each run's OUTPUT file, so two measurements writing to
-    different directories never excluded each other - a lock keyed on where
-    results go, guarding what they share: this project's database and its CPU.
-    DR1's width axis, in the one control whose whole job is exclusion.
-    """
     return Path(root) / ".measurement.lock"
 
 
 def lock_status(lock_path) -> dict:
-    """Who holds the lock, READ WITHOUT ACQUIRING ANYTHING.
-
-    {"held": False} when free; {"held": True, pid, label, started_at} when a
-    live process holds it; {"held": False, "stale": True, ...} when the
-    recorded holder is dead. A PID reused by an unrelated live process reads
-    as held - the fail-closed direction for anything deciding whether to wait.
-    """
     try:
         info = json.loads(status_path(lock_path).read_text(encoding="utf-8"))
     except (OSError, ValueError):
@@ -83,22 +37,10 @@ def lock_status(lock_path) -> dict:
     return {"held": False, "stale": True, **info}
 
 
-# Held locks, kept alive deliberately. `RunLock(p).acquire()` without binding
-# the result would otherwise be collected immediately, closing the file and
-# releasing the lock with no error anywhere - a silent unlock, which is the
-# worst possible failure for a guard whose whole job is to refuse.
 _HELD: set = set()
 
 
 class RunLock:
-    """Advisory whole-file lock, released by the OS on process death.
-
-    Usage:
-
-        with RunLock(path, "noise floor"):
-            ...
-    """
-
     def __init__(self, path: str | Path, label: str = "measurement"):
         self.path = Path(path)
         self.label = label
@@ -106,18 +48,11 @@ class RunLock:
 
     def acquire(self) -> "RunLock":
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        # "r+", not "a+": append mode ignores seek() on write, so every
-        # acquire tacked another PID onto the end and the error named a stale
-        # one. Touch-then-open keeps the previous holder's PID readable while
-        # letting us overwrite it in place once the lock is ours.
         self.path.touch(exist_ok=True)
         self._fh = open(self.path, "r+", encoding="utf-8")
         try:
             self._lock()
         except OSError:
-            # Reading the holder's PID touches the very byte they hold, so on
-            # Windows the read raises too. Naming them is a nicety; refusing
-            # to start is the point, so a failed read must not mask it.
             holder = "unknown"
             try:
                 self._fh.seek(0)
@@ -137,8 +72,6 @@ class RunLock:
                 "automatically when the process dies."
             ) from None
 
-        # Fixed width, no truncate: truncating a file whose byte 0 is locked
-        # is not portable, and the PID only has to be readable, not tidy.
         self._fh.seek(0)
         self._fh.write(f"{os.getpid():<20}")
         self._fh.flush()
@@ -167,8 +100,6 @@ class RunLock:
             self._fh.close()
             self._fh = None
             _HELD.discard(self)
-
-    # -- the platform's file lock (agent.platform) -------------------------
 
     def _lock(self) -> None:
         _platform.lock_file(self._fh)

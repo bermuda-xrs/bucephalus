@@ -1,26 +1,3 @@
-"""Where state lives: beside the source in a checkout, in user dirs once installed.
-
-A wheel that writes `agent.db` into the current working directory is a wheel
-that behaves differently depending on where you stand when you run it — the
-same class of bug as `verify_program` resolving `artifact_scope` against the
-process CWD, which produced a silent 0% on every task from the wrong
-directory.
-
-So there are exactly two modes, chosen by evidence rather than a flag:
-
-  CHECKOUT   a `config.yaml` (or the config the caller named) sits next to
-             `pyproject.toml`/`src/`. State stays project-relative, because
-             that is what a developer running `bench/` expects and what every
-             existing run record was written against.
-
-  INSTALLED  no such marker. State goes to platformdirs user data/config,
-             so two projects cannot collide and nothing is written next to
-             site-packages.
-
-`state_root()` is the one place that decides. Nothing else should call
-platformdirs directly.
-"""
-
 from __future__ import annotations
 
 import os
@@ -28,11 +5,8 @@ from pathlib import Path
 
 APP = "alpha-test-1"
 
-# Files that mark a source checkout rather than an installed package.
 _CHECKOUT_MARKERS = ("pyproject.toml", "src/agent", "bench")
 
-# State that must never ship inside a wheel and must never be written next to
-# site-packages. Ordered as they appear in config.
 STATE_DIRS = ("runs", "work", "grading", "anchor", "skills_store")
 
 
@@ -61,11 +35,6 @@ def user_data_dir() -> Path:
 
 
 def state_root(config_path: str | Path | None = None) -> Path:
-    """The directory every relative state path resolves against.
-
-    `ALPHA_DATA_DIR` overrides both modes — needed by the post-install test,
-    which must run from a directory that is deliberately not the checkout.
-    """
     if os.environ.get("ALPHA_DATA_DIR"):
         return Path(os.environ["ALPHA_DATA_DIR"])
     if config_path is not None:
@@ -76,12 +45,6 @@ def state_root(config_path: str | Path | None = None) -> Path:
     return root if root is not None else user_data_dir()
 
 
-# Folders a sync client uploads. Matched by directory NAME and by the marker a
-# client leaves in the root it syncs, because the client is not always running
-# and its settings are not always readable; the environment variables are
-# Windows' own record of where OneDrive lives. Generous on purpose: a false
-# match only moves state to the user data dir, a miss uploads every goal and
-# answer (audit S7, D76).
 _SYNC_ENV = ("OneDrive", "OneDriveConsumer", "OneDriveCommercial")
 _SYNC_NAMES = ("dropbox", "iclouddrive", "icloud drive", "google drive", "my drive",
                "mobile documents", "cloudstorage", "box", "box sync", "pcloud drive",
@@ -92,7 +55,6 @@ _SYNC_MARKERS = (".dropbox", ".nextcloudsync.log", ".owncloudsync.log",
 
 
 def sync_root(path: str | Path) -> Path | None:
-    """The synced folder `path` is inside, or None."""
     p = Path(path).resolve()
     for var in _SYNC_ENV:
         v = os.environ.get(var)
@@ -106,7 +68,7 @@ def sync_root(path: str | Path) -> Path | None:
             return cand
         try:
             if (any((cand / m).exists() for m in _SYNC_MARKERS)
-                    or any(cand.glob(".sync_*.db"))):          # Nextcloud/ownCloud journal
+                    or any(cand.glob(".sync_*.db"))):
                 return cand
         except OSError:
             continue
@@ -114,9 +76,6 @@ def sync_root(path: str | Path) -> Path | None:
 
 
 def checkout_state_dir(root: str | Path) -> Path:
-    """Where a checkout inside a synced folder keeps its runtime state: the
-    database, the anchor, the run records. One directory per checkout, so two
-    clones never share a database."""
     import hashlib
 
     r = Path(root).resolve()
@@ -125,7 +84,6 @@ def checkout_state_dir(root: str | Path) -> Path:
 
 
 def ensure_state_dirs(root: str | Path) -> list[Path]:
-    """Create the state directories. Returns the ones created."""
     made = []
     for d in STATE_DIRS:
         p = Path(root) / d
@@ -136,6 +94,5 @@ def ensure_state_dirs(root: str | Path) -> list[Path]:
 
 
 def default_config_path() -> Path | None:
-    """An installed package looks for its config in the user config dir."""
     p = user_config_dir() / "config.yaml"
     return p if p.exists() else None

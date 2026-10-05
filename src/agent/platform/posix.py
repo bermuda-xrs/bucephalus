@@ -1,32 +1,3 @@
-"""POSIX - Linux, and the base that darwin.py builds on. RAN IN WSL2 ONLY.
-
-First run 2026-09-25 in WSL2 (Debian 13, Python 3.13): the seven real-kernel
-properties held, and the run found D54-D59 (docs/evidence/wsl-2026-09-25).
-Bare-metal Linux has not run it. docs/PLATFORMS.md, section 5, is the checklist, and tests/test_posix_platform.py holds the
-properties (its POSIX half skips everywhere else).
-
-Five defects were found here by reading, before any of it had run, and are
-fixed below (2026-09-25):
-
-  1. kill_tree killed its CALLER. It signalled the target's process group,
-     and nothing gave a sandbox child a group of its own - so the group was
-     the caller's. Every child now leads its own session, and a pid that
-     shares the caller's group is killed by parentage, never by killpg.
-  2. No process table on macOS - darwin.py.
-  3. Limits were set in a preexec_fn, which Python documents as unsafe in a
-     threaded process, and the control plane is threaded. They are now set by
-     a trampoline: a fresh single-threaded interpreter that calls setrlimit
-     and then execs the real child, so no Python runs between fork and exec.
-  4. RLIMIT_NPROC counts every process the USER owns, so on a desktop with
-     more than 32 processes the sandbox could not start one. Dropped, and
-     replaced by a watchdog counting the run's OWN process group - reactive,
-     and the run record says so.
-  5. RLIMIT_AS is not enforced on macOS - darwin.py's memory watchdog.
-
-What the kernel enforces here: address space (RLIMIT_AS), CPU seconds, file
-size. What a watchdog enforces, every WATCH_INTERVAL_S: the process count.
-"""
-
 from __future__ import annotations
 
 import json
@@ -36,16 +7,13 @@ import subprocess
 import threading
 import time
 
-from . import LimitsRefused  # noqa: F401 - part of the layer's vocabulary
+from . import LimitsRefused  # noqa: F401
 
 WATCH_INTERVAL_S = 0.1
-_SIGKILL = getattr(signal, "SIGKILL", 9)   # imported on Windows by the portable tests
+_SIGKILL = getattr(signal, "SIGKILL", 9)
 REFUSED_EXIT = 126
 
 
-# Runs in a fresh interpreter, alone, before the real child exists: set the
-# limits, then become the child. A refused limit ends it here - fail closed,
-# the child never runs.
 LIMITER = """\
 import json, os, resource, sys
 L = json.loads(sys.argv[1])
@@ -63,8 +31,6 @@ os.execv(sys.argv[2], sys.argv[2:])
 """
 
 
-# ---------------------------------------------------------------- processes
-
 def _same(pid: int, expect_start: int | None) -> bool:
     from .. import proc
 
@@ -72,14 +38,6 @@ def _same(pid: int, expect_start: int | None) -> bool:
 
 
 def _sigkill(pid: int, expect_start: int | None = None, group: int | None = None) -> None:
-    """SIGKILL `pid` (or its group) - if it is still the process that started
-    at `expect_start` (iteration 3, 1.2). Where the kernel has pidfds the
-    check is made on the process the pidfd pins, and the signal goes through
-    it, so the pid cannot change hands in between. macOS has none: there it
-    is check-then-signal, a window of microseconds, stated rather than hidden.
-    A group kill cannot go through a pidfd; it is sent only after `pid`'s
-    identity is confirmed through one. Raises OSError if the group signal
-    fails, so the caller can fall back to parentage."""
     fd = None
     try:
         fd = os.pidfd_open(pid)
@@ -104,14 +62,6 @@ def _sigkill(pid: int, expect_start: int | None = None, group: int | None = None
 
 
 def kill_tree_signal(pid: int, timeout_s: float, expect_start: int | None = None) -> None:
-    """Kill pid and everything it started - never the caller.
-
-    A sandbox child leads its own session (spawn_limited), so its group is
-    exactly its tree and killpg is precise. A pid in the CALLER's group was
-    not started that way; signalling that group is how this used to kill the
-    agent itself. It is killed by parentage instead, leaves first, each pinned
-    to the start time seen when the tree was listed.
-    """
     try:
         pgid = os.getpgid(pid)
     except OSError:
@@ -122,7 +72,7 @@ def kill_tree_signal(pid: int, timeout_s: float, expect_start: int | None = None
             return
         except OSError:
             pass
-    from ..proc import descendants, process_start_time   # start-time validated (D42)
+    from ..proc import descendants, process_start_time
 
     kids = descendants(pid)
     starts = {p: process_start_time(p) for p in kids}
@@ -133,25 +83,18 @@ def kill_tree_signal(pid: int, timeout_s: float, expect_start: int | None = None
 
 
 def spawn_denied_processes() -> None:
-    """No exact limit here: the process cap is a polled watchdog over the
-    session, so a spawn is refused by the audit hook alone (fork included)."""
     return None
 
 
 def link_names(path: str) -> None:
-    """POSIX has no call that lists a file's other names; a caller that
-    needs them treats a file with several links as unknown (D70)."""
     return None
 
 
 def has_data_streams() -> bool:
-    """No alternate data streams: a colon is an ordinary filename character."""
     return False
 
 
 def _stat_fields(pid: int) -> list[str] | None:
-    """/proc/<pid>/stat after the name: state, ppid, pgrp, session, ...
-    None where there is no /proc (macOS) or the process is gone."""
     try:
         with open(f"/proc/{pid}/stat", encoding="utf-8") as fh:
             raw = fh.read()
@@ -165,16 +108,11 @@ def alive(pid: int) -> bool:
         os.kill(pid, 0)
     except OSError:
         return False
-    # D54. A zombie has exited and only waits to be reaped, and kill(pid, 0)
-    # still succeeds on it: kill_tree waited its whole timeout on its own
-    # killed child and reported failure.
     f = _stat_fields(pid)
     return not (f and f[0] == "Z")
 
 
 def process_table() -> list[tuple[int, int, str]]:
-    """Running processes. A zombie is not one (D54): it holds no memory and
-    runs nothing, and listed it made a killed parent look alive."""
     rows = []
     for entry in os.listdir("/proc"):
         if not entry.isdigit():
@@ -193,12 +131,6 @@ def process_table() -> list[tuple[int, int, str]]:
 
 
 def adopted(pid: int, ppid: int) -> bool:
-    """D55. Linux re-parents an orphan to init or a subreaper, so "its parent
-    is gone" - the Windows rule - never held here and the reaper was inert.
-    Nor is "its parent is init" the rule: a daemon's parent is init too, and
-    the reaper would kill a model server started as a service. An orphan of
-    OURS is still in this session, and the process that adopted it is not.
-    A daemon starts its own session, so it is never one."""
     mine = os.getsid(0)
     own, parent = _stat_fields(pid), _stat_fields(ppid)
     if not own or not parent:
@@ -207,8 +139,6 @@ def adopted(pid: int, ppid: int) -> bool:
 
 
 def group_members(pgid: int) -> list[int]:
-    """Every pid in process group `pgid` - a sandbox run's whole tree, the
-    orphaned-and-reparented included, which parentage alone would miss."""
     out = []
     for entry in os.listdir("/proc"):
         if not entry.isdigit():
@@ -260,8 +190,6 @@ def free_memory_gb() -> float | None:
     return None
 
 
-# ---------------------------------------------------------------- limits
-
 def limits_note(timeout_s: int, memory_bytes: int, max_processes: int) -> str:
     return (f"rlimits (kernel-enforced): address space {memory_bytes // 2**20} MB, "
             f"CPU {timeout_s} s, file size 64 MB. Processes: at most "
@@ -272,7 +200,6 @@ def limits_note(timeout_s: int, memory_bytes: int, max_processes: int) -> str:
 def over_limits(n_processes: int, max_processes: int,
                 footprint_bytes: int | None = None,
                 memory_bytes: int | None = None) -> str | None:
-    """The watchdog's decision, separated so it can be tested anywhere."""
     if n_processes > max_processes:
         return (f"process limit: {n_processes} processes in the run's group, "
                 f"limit {max_processes} (watchdog, reactive)")
@@ -285,7 +212,7 @@ def over_limits(n_processes: int, max_processes: int,
 
 
 def _watch(proc, max_processes: int, memory_bytes: int | None) -> None:
-    from . import current   # darwin on a Mac: no /proc there
+    from . import current
 
     while proc.poll() is None:
         try:
@@ -294,7 +221,7 @@ def _watch(proc, max_processes: int, memory_bytes: int | None) -> None:
             if memory_bytes is not None:
                 footprint = sum(current.process_memory_bytes(p) or 0 for p in members)
             reason = over_limits(len(members), max_processes, footprint, memory_bytes)
-        except Exception:  # noqa: BLE001 - a failed sample is not a verdict
+        except Exception:  # noqa: BLE001
             reason = None
         if reason:
             proc.alpha_limit = reason
@@ -309,13 +236,8 @@ def _watch(proc, max_processes: int, memory_bytes: int | None) -> None:
 def spawn_limited(argv: list[str], *, timeout_s: int, memory_bytes: int,
                   max_processes: int, fsize_bytes: int,
                   memory_by_rlimit: bool = True, **popen):
-    """Start argv in its OWN session with the limits in place before its first
-    instruction. Returns (proc, closer); closer kills the whole session.
-    `memory_by_rlimit=False` (darwin) caps memory by watchdog instead."""
     from ..frozen import interpreter_argv
 
-    # D57. A second above the timeout: equal, SIGXCPU raced the wall-clock
-    # timeout on Linux and a timeout reported as a CPU kill. A backstop now.
     limits = {"cpu": int(timeout_s) + 1, "fsize": int(fsize_bytes)}
     if memory_by_rlimit:
         limits["as"] = int(memory_bytes)
@@ -344,8 +266,6 @@ def exit_note(proc, timeout_s: int) -> str:
         return "\nsandbox: file size limit reached (64 MB)"
     return ""
 
-
-# ---------------------------------------------------------------- file locks
 
 def lock_file(fh) -> None:
     import fcntl

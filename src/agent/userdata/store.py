@@ -1,25 +1,3 @@
-"""CRUD for the things a person authors.
-
-Three kinds of user content, one store:
-
-  * **Suites** — the eval tasks that measure whether a skill helps. This is
-    the one the build spec is emphatic about: the suite is the denominator of
-    every number the system reports, and it is necessarily different for every
-    person, so it cannot ship as files in the repo.
-  * **Policy** — the reviewer's rule book (M13.3). Its default is DENY, and
-    that default has to survive an empty database as surely as it survives a
-    missing file.
-  * **Grounding** — notes M11 drafts skills from, so a skill is grounded in
-    something the author chose rather than in model priors.
-
-Design notes that matter later:
-
-  * `owner` is carried on every row and defaults to `"local"`. Nothing uses it
-    yet; it exists so that adding accounts does not mean migrating live data.
-  * Validation lives here, not in the API layer, so the CLI and the HTTP
-    surface cannot disagree about what a valid task is.
-"""
-
 from __future__ import annotations
 
 import json
@@ -31,8 +9,6 @@ from typing import Any
 
 DEFAULT_OWNER = "local"
 
-# Shipped when no policy has been authored. Deny-by-default, because an empty
-# database must not be more permissive than a missing file.
 DEFAULT_POLICY = """\
 # Auto-review policy
 
@@ -61,7 +37,7 @@ VALID_KINDS = ("policy",)
 
 
 class ValidationError(ValueError):
-    """A user-supplied record is not usable. The message goes to the UI."""
+    ...
 
 
 @dataclass
@@ -79,15 +55,12 @@ class SuiteTask:
     id: str = ""
 
     def to_spec(self) -> dict:
-        """The shape bench/run.py and the M9 gate already consume."""
         d: dict[str, Any] = {
             "key": self.task_key,
             "goal": self.goal,
             "success_criterion": self.success_criterion,
             "output_schema": self.output_schema,
             "artifact_scope": self.artifact_scope,
-            # Derived, not stored: the grader location is a convention
-            # (grading/<key>), and it MUST stay outside artifact_scope.
             "grader_dir": f"grading/{self.task_key}",
             "fixtures": self.fixtures,
             "catastrophic": self.catastrophic,
@@ -112,11 +85,6 @@ class Suite:
 
 
 def validate_task(t: SuiteTask, known_verifiers: set[str] | None = None) -> list[str]:
-    """Return human-readable problems. Empty list means usable.
-
-    These are the rules the spec cares about, checked at entry so the UI can
-    say what is wrong while the person is still looking at it.
-    """
     problems: list[str] = []
     if not t.task_key.strip():
         problems.append("Key is required — it identifies the paired trial.")
@@ -152,8 +120,6 @@ class UserStore:
     def __init__(self, conn, owner: str = DEFAULT_OWNER):
         self.conn = conn
         self.owner = owner
-
-    # ------------------------------------------------------------ suites
 
     def create_suite(self, name: str, description: str = "") -> Suite:
         name = name.strip()
@@ -205,8 +171,6 @@ class UserStore:
         self.conn.execute("DELETE FROM suite_tasks WHERE suite_id=?", (suite_id,))
         self.conn.execute("DELETE FROM suites WHERE id=?", (suite_id,))
         self.conn.commit()
-
-    # ------------------------------------------------------------- tasks
 
     def list_tasks(self, suite_id: str) -> list[SuiteTask]:
         rows = self.conn.execute(
@@ -280,7 +244,6 @@ class UserStore:
         return cur.rowcount > 0
 
     def import_suite_from_dir(self, name: str, folder: str | Path) -> Suite:
-        """Bring a folder of task JSON in, so existing suites are not stranded."""
         folder = Path(folder)
         if not folder.is_dir():
             raise ValidationError(f"{folder} is not a directory.")
@@ -301,8 +264,6 @@ class UserStore:
                 catastrophic=bool(spec.get("catastrophic", False)),
             ))
         return self.get_suite(suite.id)  # type: ignore[return-value]
-
-    # --------------------------------------------------------- documents
 
     def get_active_policy(self) -> str | None:
         row = self.conn.execute(
@@ -335,9 +296,6 @@ class UserStore:
         now = time.time()
         did = "d_" + uuid.uuid4().hex[:12]
 
-        # Keep the outgoing version before overwriting it. The policy governs
-        # what an unattended agent may do; being unable to reconstruct what it
-        # said during a given run would make the runs unauditable.
         prior = self.get_document(kind, name)
         if prior is not None and prior["body"] != body:
             from ..kernel.events import sha256_hex
@@ -371,7 +329,6 @@ class UserStore:
                 "active": bool(row[4]), "updated_at": row[5]}
 
     def document_history(self, kind: str, name: str, limit: int = 50) -> list[dict]:
-        """Prior versions, newest first. Append-only; nothing here is edited."""
         rows = self.conn.execute(
             "SELECT body_sha256, actor, replaced_at, length(body) FROM document_history "
             "WHERE owner=? AND kind=? AND name=? ORDER BY replaced_at DESC LIMIT ?",
@@ -379,4 +336,3 @@ class UserStore:
         ).fetchall()
         return [{"sha256": r[0][:12], "actor": r[1], "replaced_at": r[2],
                  "bytes": r[3]} for r in rows]
-

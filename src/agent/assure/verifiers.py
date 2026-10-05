@@ -1,28 +1,3 @@
-"""M7.1 — the verifier registry.
-
-The main rule: never let the agent revise its own work based purely on its own
-opinion. It needs something real to check against — run the code and read the
-actual error, look up the fact. If it could spot the mistake by thinking
-harder, it would not have made it.
-
-For non-code work, citation_check does the heavy lifting. Do not skip it
-because it is harder: a system that can only verify code cannot verify skills
-about writing. (checker_program, its partner in the spec, was built, never
-constructed by anything, and passed every answer under an empty program -
-removed 2026-09-25, SPEC-DELTA C71.)
-
-DR7: A CHECK MUST BE SHOWN ABLE TO FAIL BEFORE ITS PASSES MEAN ANYTHING.
-Every kind declares what it `inspects` - the ANSWER text, the task's
-WORKSPACE on disk, or (always_pass alone) NOTHING - and
-`tests/test_every_verifier_can_fail.py` holds each to it: an answer kind fails
-an empty answer, "{}" and a wrong answer carrying a sentinel; a workspace kind
-fails all three against an empty workspace. Four kinds could not (FINDINGS
-1.34): `execution` ran the answer as Python, `ruff` passed when not installed
-and otherwise linted the harness, `json_schema` passed anything under an
-empty schema, and `self_consistency` never read the answer at all.
-Empty means nothing (DR4): an empty key is a refusal, never a pass.
-"""
-
 from __future__ import annotations
 
 import json
@@ -38,15 +13,13 @@ from ..kernel.types import TaskContract, VerifyResult
 
 class Verifier(Protocol):
     kind: str
-    inspects: str   # "answer" | "workspace" | "nothing" - DR7, above
+    inspects: str
 
     def check(self, artifact: str, contract: TaskContract,
               root: str | None = None) -> VerifyResult: ...
 
 
 def inspects(verifier) -> str:
-    """What a verifier grades. Undeclared means the answer - the strict case,
-    so a kind added without a declaration is tested as one on arrival."""
     return getattr(verifier, "inspects", "answer")
 
 
@@ -55,18 +28,11 @@ def _refuse(kind: str, why: str) -> VerifyResult:
 
 
 def _workdir(contract: TaskContract, root: str | None) -> Path:
-    """The task's workspace: `root` joined with the first artifact_scope entry.
-    NOT the process working directory - which is where pytest and ruff looked
-    until 2026-09-25, grading the harness's own tree instead of the task's."""
     base = Path(root) if root else Path.cwd()
     return base / (contract.artifact_scope or ["."])[0]
 
 
 class AlwaysPass:
-    """Not a check: the absence of one. It inspects nothing and so cannot fail,
-    which is why the final sweep never consults it and why, under measurement,
-    `VerificationMesh.verify` refuses it rather than counting its pass."""
-
     kind = "always_pass"
     inspects = "nothing"
 
@@ -78,21 +44,6 @@ class AlwaysPass:
 
 
 class PytestVerifier:
-    """Run the tests in the task's workspace, in the sandbox.
-
-    UNTIL 2026-09-25 THIS NEVER GRADED A TASK. It ran `python -m pytest tests`
-    in the PROCESS working directory and ignored `root`, so from the project
-    root it ran the harness's own test suite - which is why an "empty
-    workspace" outran a 60 s timeout - and passed or failed on whether the
-    harness was healthy. No recorded task was ever graded by it.
-
-    Now: the tests found under the workspace, run in the sandbox because they
-    import code the model wrote. No tests collected is pytest's exit 5, a
-    failure. The tests live in the workspace, so the model can edit them:
-    this is the user's-own-tests check, not a measurement grader - under
-    measurement, grade with `verify_program`, whose grader is out of scope.
-    """
-
     kind = "pytest"
     inspects = "workspace"
 
@@ -103,8 +54,6 @@ class PytestVerifier:
         workdir = _workdir(contract, root)
         if not workdir.is_dir():
             return _refuse(self.kind, f"no workspace at {workdir}")
-        # logging and faulthandler open os.devnull for writing, which the
-        # sandbox refuses as a write outside scope. The plugins go, not the rule.
         harness = (
             f"import os, sys\nos.chdir({workdir.name!r})\n"
             "sys.dont_write_bytecode = True\nsys.path.insert(0, os.getcwd())\n"
@@ -129,16 +78,6 @@ def _pytest_score(output: str) -> float:
 
 
 class RuffVerifier:
-    """Lint the Python files in the task's workspace.
-
-    Two defects until 2026-09-25, either enough to pass anything: with ruff
-    not installed - as in this project's own venv - it PASSED, "skipped"; and
-    installed, it linted `.` in the process working directory, the harness,
-    not the task. A missing tool is now a refusal, and a workspace with no
-    Python in it is nothing to lint, so also a refusal. Lint-clean is style,
-    never correctness: it is not a task's grader on its own.
-    """
-
     kind = "ruff"
     inspects = "workspace"
 
@@ -170,9 +109,6 @@ class JsonSchemaVerifier:
     def check(self, artifact: str, contract: TaskContract,
               root: str | None = None) -> VerifyResult:
         schema = contract.output_schema or {}
-        # DR4/DR7. An empty schema passed every JSON value there is; one that
-        # accepts {} passes the final sweep's old "{}" and every hollow answer
-        # - it cannot tell an answer from its absence. Refused.
         if not _validate({}, schema):
             return _refuse(self.kind, "this output_schema accepts the empty "
                                       "object {}, so it cannot tell an answer "
@@ -194,7 +130,6 @@ class JsonSchemaVerifier:
 
 
 def _validate(data, schema: dict, path: str = "$") -> list[str]:
-    """A small structural validator. Enough for output_schema; not a full draft impl."""
     errs: list[str] = []
     if not schema:
         return errs
@@ -221,17 +156,6 @@ def _validate(data, schema: dict, path: str = "$") -> list[str]:
 
 
 class ExecutionVerifier:
-    """Run a checking script against the workspace.
-
-    WITHOUT A SCRIPT IT RAN THE ANSWER ITSELF AS PYTHON, and any valid Python
-    expression exits 0: `{"path": "work/DOES_NOT_EXIST.py"}`, `42`, `"hello"`
-    and the final sweep's `{}` all passed. That is how write-function-002
-    scored `done_unannounced` in every arm of the v5 run having submitted no
-    answer. Running the answer checks nothing about the task, so with no
-    script this refuses. The registered instance has none: grade code with
-    `verify_program`.
-    """
-
     kind = "execution"
 
     def __init__(self, script_path: str | None = None):
@@ -258,11 +182,6 @@ class ExecutionVerifier:
 
 
 class CitationCheckVerifier:
-    """Do the cited sources actually contain the claim?
-
-    Substring/overlap grounding, not a model asking itself whether it was right.
-    """
-
     kind = "citation_check"
 
     def __init__(self, sources: dict[str, str] | None = None):
@@ -307,12 +226,6 @@ def _overlaps(claim: str, body: str, threshold: float = 0.5) -> bool:
 
 
 class SelfConsistencyVerifier:
-    """Agreement across k samples. Only signal available for open prose.
-
-    Weakest verifier in the set — it measures stability, not truth. Never the
-    sole criterion for anything that matters.
-    """
-
     kind = "self_consistency"
 
     def __init__(self, ctx, k: int = 3):
@@ -337,15 +250,8 @@ class SelfConsistencyVerifier:
                 max_tokens=512, temperature=0.7).text
             for _ in range(self.k)
         ]
-        # Agreement WITH THE ANSWER. It measured agreement among the samples
-        # alone and never read `artifact`, so a consistent model passed every
-        # answer - right, wrong or empty (FINDINGS 1.34).
         mine = normalize(artifact)
         agreement = sum(normalize(s) == mine for s in samples) / self.k
-        # DEFAULT_AGREEMENT, not the literal 0.67. Two of three is 0.6667,
-        # which is LESS than 0.67, so the literal rejects exactly the case it
-        # was written to accept. CORRECTIONS.md 1.5 records this fix being
-        # made in cascade.py; this copy was missed.
         return VerifyResult(
             passed=agreement >= DEFAULT_AGREEMENT,
             score=agreement,
@@ -355,38 +261,6 @@ class SelfConsistencyVerifier:
 
 
 class ExpectedValueVerifier:
-    """Compare the answer against a known-correct value.
-
-    This is the verifier that makes a benchmark mean something. `json_schema`
-    checks that the answer has the right *shape*, so `{"total": 0}` passes for
-    an invoice totalling 4825 — the same failure the build spec cites about
-    SWE-bench, where an audit found ~59% of the hardest tasks had tests that
-    would not catch the bug they were meant to catch.
-
-    `expected` is carried on the contract's output_schema under `x-expected`,
-    so a task file declares its own right answer.
-
-    ~~"and nothing in the agent's context ever sees it."~~ **THAT SENTENCE WAS
-    FALSE FROM THE DAY IT WAS WRITTEN. Corrected 2026-09-22.** The whole
-    contract - output_schema included - was rendered into the cache-stable
-    prefix, so `x-expected` sat in the prompt of every task that declared one.
-    The model never had to read the inputs; it could read the answer.
-    Measured: on `logs-triage-005` the 3B answered correctly on turn one
-    having read no files, and across the five arms of the 2026-09-17 ablation
-    the three tasks that passed in EVERY arm were exactly the three carrying a
-    grading key, while the one with no key failed in every arm.
-
-    The sentence is also why nobody looked: it asserted the property as a fact
-    instead of naming a test that held it, and a claim with nothing behind it
-    is a comment with a runtime cost. `ledger/prefix.prompt_contract` makes it
-    true now, and `tests/test_grader_is_not_in_the_prompt.py` keeps it true -
-    by allowlist, because the next grading key will not be called
-    `x-expected`, just as this one was not called `verify.py`.
-
-    Numbers compare with a relative tolerance; strings compare case- and
-    whitespace-insensitively unless `x-exact` is set.
-    """
-
     kind = "expected_value"
 
     def check(self, artifact: str, contract: TaskContract,
@@ -406,8 +280,6 @@ class ExpectedValueVerifier:
             return VerifyResult(passed=False, score=0.0,
                                 observation=f"not JSON: {e}", verifier_id=self.kind)
 
-        # The schema's structure directly, not json_schema's VERDICT: that
-        # refuses a schema accepting {}, and here x-expected is the check.
         shape = _validate(got, schema)
         if shape:
             return VerifyResult(
@@ -428,8 +300,6 @@ class ExpectedValueVerifier:
 
 
 def _checks_something(expected) -> bool:
-    """DR4. `_compare` finds no mismatch against an empty object, so
-    `x-expected: {}` passed any object - the final sweep's "{}" included."""
     if isinstance(expected, dict):
         return any(_checks_something(v) for v in expected.values())
     return True
@@ -440,7 +310,6 @@ def _norm_text(s: str) -> str:
 
 
 def _compare(got, expected, exact: bool, path: str):
-    """Yield a description of each mismatch. Empty means correct."""
     if isinstance(expected, dict):
         if not isinstance(got, dict):
             yield f"{path}: expected an object, got {type(got).__name__}"
@@ -479,18 +348,11 @@ def _compare(got, expected, exact: bool, path: str):
 
 
 class ContainsAllVerifier:
-    """Every required substring is present. For prose with checkable facts.
-
-    Weaker than expected_value and stronger than nothing: it cannot tell you
-    the summary is good, only that it did not drop the figures it had to keep.
-    """
-
     kind = "contains_all"
 
     def check(self, artifact: str, contract: TaskContract,
               root: str | None = None) -> VerifyResult:
         needles = (contract.output_schema or {}).get("x-contains") or []
-        # An empty needle is in every haystack, so it passed everything.
         if not needles or any(not _norm_text(n) for n in needles):
             return _refuse(self.kind, "no x-contains on this task, or an empty "
                                       "entry in it - which every answer contains")
@@ -506,59 +368,24 @@ class ContainsAllVerifier:
 
 
 class VerifyProgramVerifier:
-    """Run the task's own `verify.py` against what the agent left on disk.
-
-    The strongest verifier in the set, and the one a real eval suite should
-    use. It judges files rather than the model's closing message, so an agent
-    that announces success without producing the artifact fails — and the
-    check is a deterministic program, so nothing about the grader varies
-    between arms of a paired trial.
-
-    `verify.py` prints one JSON object: {"passed": bool, "score": float}.
-    Binary `passed` feeds McNemar (M9.2); continuous `score` feeds the
-    ratchet (M7.2), which needs to know that 0.9 beat 0.4.
-    """
-
     kind = "verify_program"
     inspects = "workspace"
     SCRIPT = "verify.py"
 
     def check(self, artifact: str, contract: TaskContract,
               root: str | None = None) -> VerifyResult:
-        """
-        CWD-SENSITIVE. `artifact_scope` entries are relative, and they are
-        resolved against the PROCESS working directory rather than
-        `config.root`. The harnesses run from the project root so this is
-        correct there — but run from anywhere else and no `verify.py` is
-        found, every task fails with "no verify.py found", and the result
-        looks exactly like a suite that is simply too hard. That is a silent
-        0% rather than an error, so check the observation text before
-        concluding a model cannot do the work.
-        """
         from ..execute.sandbox import run_sandboxed
 
         base = Path(root) if root else Path.cwd()
         scope = contract.artifact_scope or ["."]
         workdir = base / scope[0]
 
-        # The grader is looked up OUTSIDE artifact_scope. A verify.py the
-        # agent can read is one it can copy EXPECTED out of, and a generated
-        # skill that said "read verify.py" would score 100% and look like a
-        # result. Only the grader's TEXT enters the sandbox below - never as
-        # a file the task could open.
-        #
-        # `base` also fixes a second bug: this used to resolve against the
-        # process working directory, so a harness run from anywhere but the
-        # project root reported "no verify.py found" on every task - a silent
-        # 0% indistinguishable from a suite that is simply too hard.
         script = None
         if contract.grader_dir:
             cand = base / contract.grader_dir / self.SCRIPT
             if cand.exists():
                 script = cand
         if script is None:
-            # Legacy suites shipping the grader beside the work. Kept so old
-            # records replay; the leak test fails for any suite relying on it.
             for s_ in scope:
                 cand = base / s_ / self.SCRIPT
                 if cand.exists():
@@ -572,10 +399,6 @@ class VerifyProgramVerifier:
                 verifier_id=self.kind,
             )
 
-        # verify.py addresses its files relatively ("output/answer.json"), but
-        # the sandbox links the task directory in under its own name and runs
-        # with the workdir as cwd — so without this chdir every check looks in
-        # the wrong place and reports a missing answer that is actually there.
         nonce = secrets.token_hex(16)
         harness = (
             "import os as _o\n"

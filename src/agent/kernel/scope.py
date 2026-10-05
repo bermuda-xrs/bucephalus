@@ -1,51 +1,9 @@
-"""Retrieval isolation: what one task attempt is allowed to read back.
-
-THE DEFECT THIS EXISTS TO PREVENT, stated as it would appear in a result:
-
-    control(E03) runs, writes an answer, the trigger indexes it
-    skill(E03)   runs, calls search_history, finds control's answer
-    -> a discordant pair produced by RETRIEVAL, not by the skill
-
-That is the grader-leak class one level up. `workspace.py` already documents
-the disk version of it in its own docstring — two arms sharing a workspace,
-so the control arm gets graded against the answer the skill arm just wrote —
-and fixes it by rebuilding the directory before **every arm of every run**.
-This is the same fix for the database, at the same granularity, and the
-granularity is the part that matters: per ATTEMPT, not per pair.
-
-Per-attempt rather than per-arm is not a detail. A per-arm namespace would
-still let run 2 of the control arm read run 1 of the control arm, and the
-noise-floor classification (3/3, 0/3, flaky) assumes those runs are
-independent draws. Scoping to the attempt fixes the paired trial and the
-noise floor with one rule.
-
-WHY SCOPING RATHER THAN DISABLING THE TOOLS. The tool manual is rendered into
-the cache-stable prefix. Removing a tool for benchmark runs would change the
-prefix, and this project's own central finding is that prefix structure moves
-pass rates substantially — the harness tax was 8 points on R0 to R5. Deleting
-a tool from the manual perturbs the very thing under study, so the measured
-system would differ from the shipped one in the way most likely to matter
-here. Under scoping the prompt is byte-identical; only what a lookup can
-reach changes, and "a search that finds nothing" is a state the shipped
-system reaches on its first session anyway.
-
-FAIL-CLOSED, AND NOT FROM A CONFIG FILE. `bench/noise.py` sets this itself
-rather than reading it from yaml, because a contaminated measurement caused
-by editing the wrong config is exactly the failure this is meant to remove.
-"""
-
 from __future__ import annotations
 
 import sqlite3
 
 
 def task_tree(conn: sqlite3.Connection, task_id: str) -> set[str]:
-    """Every task id in the same tree — root, siblings, descendants.
-
-    An attempt is one root task plus whatever it delegated, so the tree is
-    the attempt. Walk up to the root first, then down, because a delegated
-    child asking the question must get the same answer as its parent.
-    """
     root = conn.execute(
         """WITH RECURSIVE up(id, parent_id) AS (
                SELECT id, parent_id FROM tasks WHERE id = ?
@@ -69,23 +27,14 @@ def task_tree(conn: sqlite3.Connection, task_id: str) -> set[str]:
 
 
 def visible_tasks(ctx, task) -> set[str] | None:
-    """Task ids this attempt may read from. None means unrestricted.
-
-    None is the shipped default: searching earlier sessions is the entire
-    point of the feature. A benchmark turns it into a set.
-    """
     if not getattr(ctx.config, "isolate_retrieval", False):
         return None
     if task is None:
-        # Isolation is on and there is no task to scope to. Refuse rather
-        # than fall back to unrestricted: an isolation rule that opens up
-        # when it cannot identify the caller is not an isolation rule.
         return set()
     return task_tree(ctx.conn, task.id)
 
 
 def isolation_state(ctx) -> dict:
-    """What the run record reports. A reader must never have to infer this."""
     on = bool(getattr(ctx.config, "isolate_retrieval", False))
     return {
         "isolate_retrieval": on,
@@ -104,24 +53,6 @@ def isolation_state(ctx) -> dict:
 
 def wrote_artifact(conn: sqlite3.Connection, task_ids: set[str],
                    artifact_id: str) -> bool:
-    """Did any of these tasks PRODUCE this artifact?
-
-    Artifacts are content-addressed and written with INSERT OR IGNORE, so two
-    tasks that produce identical bytes share one row and the row keeps the
-    FIRST writer's task_id. Asking "who owns the row" therefore answers a
-    different question from "who produced this", and the difference is not
-    hypothetical: both arms of a paired trial run `list_dir` against an
-    identically-reset workspace and get byte-identical output, so the second
-    arm was refused access to its own artifact.
-
-    That is arm ASYMMETRY produced by the isolation rule meant to prevent
-    cross-arm contamination — one arm could expand its output and the other
-    could not, which is its own way of making the two runs incomparable.
-
-    The event log already records the right thing: `artifact.written` is
-    appended per task, on the hash chain, carrying the id. So authorship is
-    read from there rather than from a deduplicated row.
-    """
     if not task_ids:
         return False
     marks = ",".join("?" * len(task_ids))
@@ -134,4 +65,3 @@ def wrote_artifact(conn: sqlite3.Connection, task_ids: set[str],
         (*sorted(task_ids), artifact_id),
     ).fetchone()
     return row is not None
-
