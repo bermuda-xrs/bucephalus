@@ -18,6 +18,10 @@ what still stands between here and a first iteration.
 - Deleted: escalation-by-disagreement (never ran), grounding notes (never read), 20 helpers with no caller.
 - P1, P4 rejected; P2 dropped by its own measurement.
 - Two pipe leaks in the sandbox fixed; ruff (bug rules) in CI.
+- Console, after a comparison with Hermes WebUI: Markdown answers with copy, Pause/Resume (Stop never
+  stopped a running task before), ask again, pin, export, per-conversation spend, notifications,
+  memory forget, schedule add/remove, skill bodies, slash commands. Answers no longer show their
+  JSON envelope.
 - Code, tests and scripts carry no docstrings and almost no comments; HANDOVER is state and next step;
   DEFERRED holds open issues only.
 

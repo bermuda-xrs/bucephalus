@@ -46,11 +46,11 @@ One measurement process at a time (`src/agent/runlock.py`); nothing else runs du
 
 ## State
 
-Verified 2026-10-06, against commit `2602553`.
+Verified 2026-10-06, against commit `91bbd51`: Windows suite, WSL2 suite, ruff, the frozen gate on a fresh build, and a task through the rebuilt app's window.
 
 | Fact | Value | Regenerate with |
 |---|---|---|
-| Branch | `iteration-4` (from `main` at `107c847`); `main` is fast-forwarded when the suite, the frozen gate and a visual check pass; no remote | `git branch --show-current` |
+| Branch | `main`, fast-forwarded to `iteration-4` once the suite, the frozen gate and a visual check passed; no remote | `git branch --show-current` |
 | Harness version | **7**, bumped 2026-10-05 for P3, P5, P6 (`docs/PROPOSALS.md`); numbers from 6 and earlier do not compare | `grep HARNESS_VERSION src/agent/__init__.py` |
 | Toolset version | **6** | `grep TOOLSET_VERSION src/agent/__init__.py` |
 | Tests | not written down | `python -m pytest tests -q`; skips are live-credential tests (D26) and other-OS tests |
@@ -70,9 +70,10 @@ Before any commit: tests red first, never weaken a check, nothing pushed.
 
 ## Next step
 
-Compare the console against Hermes WebUI's current feature set and build what is missing
-that fits the two-touch model (a task runs only after its plan is signed), verified by
-screenshot. In progress.
+Nothing is in progress. The Hermes WebUI comparison is built (commit `91bbd51` lists what
+was taken and what was left out on purpose). Candidates, none started: per-tool expandable
+cards showing a call's full arguments and result; Markdown preview in the file panel; a
+real-model run of HARNESS_VERSION 7 to re-baseline the numbers 6 produced (`bench/run.py`).
 
 Waiting on the user: D26 credentials; the memory line a test wrote into the real memory
 (`.\alpha.ps1 memory --forget "injected instruction"`); a Mac or bare-metal Linux run.
