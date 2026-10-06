@@ -38,7 +38,10 @@
       <button class="quiet menu" data-action="toggleSide" aria-controls="side" aria-label="Conversations">Menu</button>
       <h1 id="convTitle">New conversation</h1>
       <div class="head-actions">
+        <span id="convSpent" class="spent" title="What this conversation has spent"></span>
+        <button class="quiet" data-action="pinConversation" id="pinBtn">Pin</button>
         <button class="quiet" data-action="renameConversation">Rename</button>
+        <button class="quiet" data-action="exportConversation" data-args='["md"]' title="Download as Markdown">Export</button>
         <button class="quiet" data-action="archiveConversation" id="archBtn">Archive</button>
         <button class="quiet" data-action="toggleFiles" aria-controls="files">Files</button>
       </div>

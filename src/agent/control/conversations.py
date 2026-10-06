@@ -104,11 +104,25 @@ def thread(ctx, cid: str) -> dict:
             "plan": ({"plan_id": plan.id, "status": pstatus[0] if pstatus else None,
                       "body": plan.body()} if plan else None),
             "approvals": ctx.pending_approvals(tid),
-            "answer": answer[0] if answer else None,
+            "answer": shown_answer(answer[0]) if answer else None,
         })
     spent = {"usd": round(sum(i["budget"].get("spent_usd", 0) for i in items), 6),
              "seconds": round(sum(i["budget"].get("spent_seconds", 0) for i in items), 1)}
     return {"conversation": conv, "items": items, "spent": spent}
+
+
+def shown_answer(raw: str) -> str:
+    try:
+        value = json.loads(raw)
+    except (ValueError, TypeError):
+        return raw
+    if not isinstance(value, (dict, list)):
+        return raw
+    if isinstance(value, dict) and set(value) == {"answer"}:
+        value = value["answer"]
+        if not isinstance(value, (dict, list)):
+            return value if isinstance(value, str) else json.dumps(value)
+    return "```json\n" + json.dumps(value, indent=2, ensure_ascii=False) + "\n```"
 
 
 def markdown(th: dict) -> str:

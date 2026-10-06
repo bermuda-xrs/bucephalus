@@ -18,7 +18,7 @@ window.addEventListener("hashchange", () => {
 
 let RETURN_FOCUS = null;           // where focus goes back when a dialog closes
 const S = {conv: null, thread: null, loose: null, archived: false, streams: new Map(), trails: new Map(),
-           drafting: new Set(), filesTask: null, filesPath: "", pane: "memory",
+           drafting: new Set(), answers: new Map(), filesTask: null, filesPath: "", pane: "memory",
            settings: null, lastSide: ""};
 
 function toast(msg, bad) {
@@ -96,6 +96,7 @@ async function loadSide() {
   const sig = JSON.stringify([convs, gates, S.conv]);
   if (sig === S.lastSide) return;
   S.lastSide = sig;
+  notifyNeeds(gates, convs);
   const needs = [];
   for (const g of gates) needs.push(`<button class="side-item needs-item" data-action="openTaskOf" ${args(g.task_id)}>
       <span class="t">Wants to use <code>${esc(g.tool)}</code></span><span class="s">Parked for your decision</span></button>`);
@@ -103,12 +104,45 @@ async function loadSide() {
       <span class="t">${esc(c.title)}</span><span class="s">${c.needs_you} to sign or decide</span></button>`);
   $("#needsList").innerHTML = needs.join("") || `<div class="empty">Nothing is waiting on you.</div>`;
   $("#nNeeds").textContent = needs.length || "";
-  $("#convList").innerHTML = convs.map(c => `<button class="side-item" data-action="selectConversation" ${args(c.id)}
-      ${c.id === S.conv ? 'aria-current="true"' : ""}><span class="t">${esc(c.title)}</span>
-      <span class="s">${c.n_tasks} ${c.n_tasks === 1 ? "task" : "tasks"}, ${ago(c.updated_at)}</span></button>`).join("")
-    + `<button class="side-item" data-action="openLooseList"><span class="s">Tasks started elsewhere</span></button>`
-    || `<div class="empty">${S.archived ? "Nothing archived." : "No conversations yet."}</div>`;
+  document.title = (needs.length ? `(${needs.length}) ` : "") + "alpha test 1";
+  const item = c => `<button class="side-item" data-action="selectConversation" ${args(c.id)}
+      ${c.id === S.conv ? 'aria-current="true"' : ""}><span class="t">${c.pinned ? '<span class="pin" aria-label="Pinned">●</span> ' : ""}${esc(c.title)}</span>
+      <span class="s">${c.n_tasks} ${c.n_tasks === 1 ? "task" : "tasks"}, ${ago(c.updated_at)}</span></button>`;
+  const groups = [];
+  for (const c of convs) {
+    const g = c.pinned ? "Pinned" : dayGroup(c.updated_at);
+    if (!groups.length || groups[groups.length - 1][0] !== g) groups.push([g, []]);
+    groups[groups.length - 1][1].push(item(c));
+  }
+  $("#convList").innerHTML = (groups.map(([g, xs]) => `<h3 class="group">${g}</h3>${xs.join("")}`).join("")
+    || `<div class="empty">${S.archived ? "Nothing archived." : "No conversations yet."}</div>`)
+    + `<button class="side-item" data-action="openLooseList"><span class="s">Tasks started elsewhere</span></button>`;
   $("#archToggle").textContent = S.archived ? "Show active" : "Show archived";
+}
+function dayGroup(t) {
+  const d = new Date(t * 1000), now = new Date();
+  const days = Math.round((new Date(now.toDateString()) - new Date(d.toDateString())) / 86400000);
+  return days <= 0 ? "Today" : days === 1 ? "Yesterday" : days < 7 ? "This week" : "Earlier";
+}
+const SEEN = {needs: null, done: new Set()};
+function notifyNeeds(gates, convs) {
+  const keys = new Set([...gates.map(g => "g" + g.id), ...convs.filter(c => c.needs_you).map(c => "c" + c.id + ":" + c.needs_you)]);
+  const fresh = SEEN.needs ? [...keys].filter(k => !SEEN.needs.has(k)) : [];
+  SEEN.needs = keys;
+  if (fresh.length) notify("Something needs you", `${fresh.length} new: a plan to sign or a decision to make.`);
+}
+function notify(title, body) {
+  try {
+    if (!document.hidden || !("Notification" in window) || Notification.permission !== "granted") return;
+    const n = new Notification(title, {body, tag: "alpha"});
+    n.onclick = () => { window.focus(); n.close(); };
+  } catch { /* the title count still shows it */ }
+}
+async function enableNotifications() {
+  if (!("Notification" in window)) return toast("This browser can't show notifications.", true);
+  const p = await Notification.requestPermission();
+  toast(p === "granted" ? "You'll be told when something needs you or a task finishes, while this tab is in the background."
+                        : "Notifications are off. The tab title still counts what needs you.", p !== "granted");
 }
 function toggleArchived() { S.archived = !S.archived; S.lastSide = ""; loadSide(); }
 let searchTimer = null;
@@ -139,6 +173,14 @@ async function refreshThread(scroll) {
   S.thread = th;
   $("#convTitle").textContent = th.conversation.title;
   $("#archBtn").textContent = th.conversation.archived ? "Unarchive" : "Archive";
+  $("#pinBtn").textContent = th.conversation.pinned ? "Unpin" : "Pin";
+  $("#convSpent").textContent = th.items.length ? `$${th.spent.usd.toFixed(4)}, ${secs(th.spent.seconds)}` : "";
+  for (const it of th.items) {
+    if (TERMINAL(it.status) && S.trails.has(it.task_id) && !SEEN.done.has(it.task_id)) {
+      SEEN.done.add(it.task_id);
+      notify("A task finished", `${statusWord(it.status)}: ${firstLine(it.goal)}`);
+    }
+  }
   renderItems(th.items);
   const last = th.items[th.items.length - 1];
   updateRing(last ? last.task_id : null);
@@ -152,6 +194,24 @@ async function renameConversation() {
   if (t === null || !t.trim()) return;
   await api("/conversations/" + S.conv, {method: "PATCH", body: JSON.stringify({title: t})});
   refreshThread(); S.lastSide = ""; loadSide();
+}
+async function pinConversation() {
+  if (!S.conv || !S.thread) return toast("Start a conversation first.");
+  await api("/conversations/" + S.conv, {method: "PATCH", body: JSON.stringify({pinned: !S.thread.conversation.pinned})});
+  S.lastSide = ""; loadSide(); refreshThread();
+}
+async function download(path, name) {
+  const r = await fetch(path, {headers: {"Authorization": "Bearer " + TOKEN}});
+  if (!r.ok) return toast(`Export failed: ${r.status} ${r.statusText}`, true);
+  const url = URL.createObjectURL(await r.blob());
+  const a = document.createElement("a");
+  a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+function exportConversation(format) {
+  if (!S.conv) return toast("Open a conversation to export it.", true);
+  const f = format === "json" ? "json" : "md";
+  download(`/conversations/${S.conv}/export?format=${f}`, `${$("#convTitle").textContent.slice(0, 60).replace(/[^\w.-]+/g, "-")}.${f}`);
 }
 async function archiveConversation() {
   if (!S.conv || !S.thread) return;
@@ -168,7 +228,9 @@ function renderItems(items) {
 function renderItem(it) {
   return `<article class="exchange" id="t-${esc(it.task_id)}" aria-label="${esc(firstLine(it.goal))}">
     <div class="ask-bubble">${esc(it.goal)}</div>
-    <div class="ask-meta">${it.scope && it.scope.length ? `may touch <code>${it.scope.map(esc).join(", ")}</code>, ` : "no files, "}${ago(it.created_at)}</div>
+    <div class="ask-meta">${it.scope && it.scope.length ? `may touch <code>${it.scope.map(esc).join(", ")}</code>, ` : "no files, "}${ago(it.created_at)}
+      ${TERMINAL(it.status) || (it.plan && it.plan.status === "rejected") ? `<button class="link" data-action="askAgain" ${args(it.task_id)}>Ask again</button>
+      <button class="link" data-action="editAsk" ${args(it.task_id)}>Edit and ask</button>` : ""}</div>
     ${stateCard(it)}
     ${(it.approvals || []).map(approvalCard).join("")}
   </article>`;
@@ -243,11 +305,41 @@ function runCard(it) {
     <p class="prefill" id="pre-${esc(it.task_id)}" ${trail(it.task_id).waiting ? "" : "hidden"}><span class="spin"></span> Reading its prompt before the first word. On a CPU this is most of a turn.</p>
     <div class="live" id="live-${esc(it.task_id)}" aria-live="off">${esc(trail(it.task_id).live)}</div>
     <div class="tools" id="tools-${esc(it.task_id)}">${trail(it.task_id).tools.map(toolCard).join("")}</div>
-    ${it.status === "paused" && !(it.approvals || []).length ? `<p class="note">Paused. It stopped to ask something; check Needs you.</p>` : ""}
+    ${it.status === "running" ? `<div class="row"><button class="btn" data-action="stopTask" ${args(it.task_id)}>Pause</button></div>` : ""}
+    ${it.status === "paused" && !(it.approvals || []).length ? `<p class="note">Paused. It carries on from where it left off when you resume it.</p>
+      <div class="row"><button class="btn primary" data-action="resumeTask" ${args(it.task_id)}>Resume</button></div>` : ""}
     ${!live && !it.answer && TERMINAL(it.status) ? `<p class="note">It finished without an answer.</p>` : ""}
   </section>
-  ${it.answer ? `<section class="card answer" aria-label="Answer"><h3>Answer</h3><pre>${esc(it.answer)}</pre></section>` : ""}`;
+  ${it.answer ? answerCard(it) : ""}`;
 }
+function answerCard(it) {
+  S.answers.set(it.task_id, it.answer);
+  const html = renderMarkdown(it.answer).replace(/<pre class="code">/g,
+    '<pre class="code"><button class="copy quiet" data-action="copyCode">Copy</button>');
+  return `<section class="card answer" aria-label="Answer"><div class="answer-head"><h3>Answer</h3>
+    <button class="quiet" data-action="copyAnswer" ${args(it.task_id)}>Copy</button></div>
+    <div class="md">${html}</div></section>`;
+}
+async function copyText(text) {
+  try { await navigator.clipboard.writeText(text); toast("Copied."); }
+  catch { toast("The clipboard refused. Select the text instead.", true); }
+}
+function copyAnswer(taskId) { copyText(S.answers.get(taskId) || ""); }
+function copyCode(el) { const c = el.closest("pre").querySelector("code"); copyText(c ? c.textContent : ""); }
+async function stopTask(taskId) {
+  try { await post(`/tasks/${taskId}/pause`); toast("Pausing. It finishes the step it is on, then pauses."); afterChange(); }
+  catch (e) { toast(e.message, true); }
+}
+async function resumeTask(taskId) {
+  try { await post(`/tasks/${taskId}/run`); toast("Resumed."); await afterChange(); openStream(taskId); }
+  catch (e) { toast(e.message, true); }
+}
+function goalOf(taskId) {
+  const it = ((S.thread && S.thread.items) || []).find(x => x.task_id === taskId);
+  return it ? it.goal : "";
+}
+function askAgain(taskId) { send(goalOf(taskId)); }
+function editAsk(taskId) { const a = $("#ask"); a.value = goalOf(taskId); a.focus(); a.setSelectionRange(a.value.length, a.value.length); }
 function approvalCard(g) {
   return `<section class="card approval" aria-label="Decision needed">
     <h3>It wants to use <code>${esc(g.tool)}</code> and is waiting for you</h3>
@@ -262,15 +354,29 @@ $("#composer").addEventListener("submit", e => { e.preventDefault(); send(); });
 $("#ask").addEventListener("keydown", e => {
   if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); send(); }
 });
-async function send() {
-  const text = $("#ask").value.trim();
+const SLASH = {
+  "/new": ["Start a new conversation", () => newConversation()],
+  "/export": ["Download this conversation as Markdown", () => exportConversation("md")],
+  "/json": ["Download this conversation as JSON", () => exportConversation("json")],
+  "/pin": ["Pin or unpin this conversation", () => pinConversation()],
+  "/theme": ["Switch light or dark", () => toggleTheme()],
+  "/notify": ["Turn on notifications", () => enableNotifications()],
+  "/help": ["Open the command palette", () => openPalette()],
+};
+async function send(given) {
+  const text = (typeof given === "string" ? given : $("#ask").value).trim();
   if (!text) return $("#ask").focus();
+  if (/^\/\w+$/.test(text)) {
+    const c = SLASH[text.toLowerCase()];
+    if (!c) return toast(`No command ${text}. /help lists them; anything else is sent as a request.`, true);
+    $("#ask").value = ""; return c[1]();
+  }
   try {
     if (!S.conv) { const c = await post("/conversations", {}); S.conv = c.id; }
     const usd = $("#budUsd").value;
     const m = await post(`/conversations/${S.conv}/messages`, {text,
       artifact_scope: [$("#scope").value.trim() || "work"], budget_usd: usd === "" ? null : Number(usd)});
-    $("#ask").value = "";
+    if (typeof given !== "string") $("#ask").value = "";
     S.lastSide = ""; loadSide();
     await draft(m.task_id);
   } catch (err) { toast(err.message, true); }
@@ -327,7 +433,7 @@ async function looseItem(taskId) {
   try { const p = await api(`/tasks/${taskId}/plan`); plan = {plan_id: p.plan_id, status: p.status, body: p.plan}; }
   catch (e) { if (e.status !== 404) toast(e.message, true); }
   return {task_id: taskId, goal: t.goal, scope: [], status: t.status, created_at: Date.now() / 1000,
-          budget: t.budget, plan, approvals: gates.pending, answer: t.answer};
+          budget: t.budget, plan, approvals: gates.pending, answer: t.answer_shown};
 }
 async function openTaskAlone(taskId) {
   closeStreams(); S.conv = null; S.loose = taskId;
@@ -502,20 +608,27 @@ const PANES = {
       line here shapes what it does. Stored in <code>${esc(m.root)}</code>.</p>
       <p class="${m.blessing === "intact" ? "caveat good" : "caveat"}">${esc(state)}</p>
       ${m.tiers.map(t => `<h4>${esc(t.file)}, ${t.chars} of ${t.cap} characters</h4>
-        ${t.entries.map(e => `<div class="entry"><span class="taint">${esc(e.taint)}</span> ${esc(e.text)}</div>`).join("")
+        ${t.entries.map(e => `<div class="entry"><span class="taint">${esc(e.taint)}</span> ${esc(e.text)}
+          <button class="quiet" data-action="forgetMemory" ${args(e.text)}>Forget</button></div>`).join("")
           || '<div class="empty">Empty.</div>'}`).join("")}
-      <h4>Accept what is here</h4><p class="note">Same as <code>alpha memory --accept</code>. Remove a line with
-      <code>alpha memory --forget "text"</code>.</p>
+      <h4>Accept what is here</h4><p class="note">Same as <code>alpha memory --accept</code>. Forget removes a
+      line and accepts what is left, like <code>alpha memory --forget</code>.</p>
       <button class="btn" data-action="acceptMemory">Accept this memory</button>`;
   },
   async schedules() {
     const d = await api("/panels/schedules");
     return `<h3>Schedules</h3><p class="lede">Each firing creates a task that still needs its plan signed.
       Missed occurrences are recorded, never run late.</p>
-      <table><tr><th>Every</th><th>Goal</th><th>Next</th><th class="r">Missed</th></tr>
+      <table><tr><th>When</th><th>Goal</th><th>Next</th><th class="r">Missed</th><th></th></tr>
       ${d.schedules.map(s => `<tr><td><code>${esc(s.spec)}</code></td><td>${esc(firstLine(s.goal))}</td>
-        <td>${new Date(s.next_fire * 1000).toLocaleString()}</td><td class="r">${s.missed}</td></tr>`).join("")
-        || '<tr><td colspan="4" class="empty">No schedules. Add one with alpha schedule add.</td></tr>'}</table>
+        <td>${new Date(s.next_fire * 1000).toLocaleString()}</td><td class="r">${s.missed}</td>
+        <td class="r"><button class="quiet" data-action="removeSchedule" ${args(s.id)}>Remove</button></td></tr>`).join("")
+        || '<tr><td colspan="5" class="empty">No schedules yet.</td></tr>'}</table>
+      <h4>Add a schedule</h4>
+      <div class="grid2"><label class="field">When (cron: minute hour day month weekday)<input id="schSpec" placeholder="0 9 * * 1"></label>
+      <label class="field">Workspace<input id="schScope" value="work"></label></div>
+      <label class="field">Goal<textarea id="schGoal" placeholder="Summarise what changed in work/ this week."></textarea></label>
+      <button class="btn primary" data-action="addSchedule">Add schedule</button>
       <h4>Parked runs</h4>${d.parked.map(n => `<div class="entry"><code>${esc(n.task_id)}</code> ${esc(n.kind)}, ${ago(n.created_at)}</div>`).join("")
         || '<div class="empty">None.</div>'}`;
   },
@@ -534,10 +647,11 @@ const PANES = {
     const d = await api("/skills");
     return `<h3>Skills</h3><p class="lede">A skill starts as a candidate. Only the gate can promote it, after enough paired trials.</p>
       <table><tr><th>Name</th><th>Version</th><th>Status</th><th></th></tr>
-      ${d.skills.map(s => `<tr><td><code>${esc(s.name)}</code></td><td>${s.version}</td>
+      ${d.skills.map(s => `<tr><td><button class="link" data-action="viewSkill" ${args(s.id)}><code>${esc(s.name)}</code></button></td><td>${s.version}</td>
         <td class="${s.status === "promoted" ? "st-done" : ""}">${esc(s.status)}</td>
         <td class="r"><button class="quiet" data-action="checkGate" ${args(s.id)}>Check the gate</button></td></tr>`).join("")
         || '<tr><td colspan="4" class="empty">No skills yet.</td></tr>'}</table>
+      <div id="skillBody"></div>
       <h4>Add a candidate</h4>
       <div class="grid2"><label class="field">Name<input id="kName"></label>
       <label class="field">Applies when<input id="kWhen"></label></div>
@@ -609,6 +723,9 @@ What to do, in the words a model reads.</textarea></label>
     return `<h3>Settings</h3><p class="lede">Read from the config this console was started with. Change them there;
       the console does not rewrite your config.</p>
       <h4>Appearance</h4><button class="btn" data-action="toggleTheme">Switch to ${document.documentElement.dataset.theme === "light" ? "dark" : "light"}</button>
+      <h4>Notifications</h4><p class="note">A desktop notification when something needs you or a watched task finishes,
+      only while this tab is in the background. ${"Notification" in window ? `Now: ${esc(Notification.permission)}.` : "Not available here."}</p>
+      <button class="btn" data-action="enableNotifications">Turn on notifications</button>
       <h4>Models</h4><table><tr><th>Name</th><th>Kind</th><th>Model</th><th>Trust</th><th class="r">Window</th></tr>
       ${d.backends.map(b => `<tr><td>${esc(b.name)}</td><td>${esc(b.kind)}</td><td><code>${esc(b.model)}</code></td>
         <td>${esc(b.tier)}</td><td class="r">${ktok(b.window)}</td></tr>`).join("")}</table>
@@ -627,6 +744,29 @@ What to do, in the words a model reads.</textarea></label>
   },
 };
 
+async function forgetMemory(text) {
+  if (!confirm(`Forget this line?\n\n${text}`)) return;
+  try { const r = await post("/memory/forget", {text}); toast(`Forgot ${r.removed.length} line${r.removed.length === 1 ? "" : "s"}.`); openPane("memory"); }
+  catch (e) { toast(e.message, true); }
+}
+async function addSchedule() {
+  try { await post("/schedules", {spec: $("#schSpec").value.trim(), goal: $("#schGoal").value.trim(),
+                                  scope: $("#schScope").value.trim() || "work"});
+        toast("Scheduled. Each firing drafts a task whose plan you still sign."); openPane("schedules"); }
+  catch (e) { toast(e.message, true); }
+}
+async function removeSchedule(id) {
+  try { await api("/schedules/" + id, {method: "DELETE"}); toast("Removed."); openPane("schedules"); }
+  catch (e) { toast(e.message, true); }
+}
+async function viewSkill(id) {
+  try { const s = await api("/skills/" + id);
+        $("#skillBody").innerHTML = `<h4>${esc(s.name)}, version ${s.version}, ${esc(s.status)}</h4>
+          <p class="note">Applies when: ${esc((s.contract || {}).applies_when || "unstated")}</p>
+          <div class="md skill-md">${renderMarkdown(s.body)}</div>`;
+        $("#skillBody").scrollIntoView({block: "nearest"}); }
+  catch (e) { toast(e.message, true); }
+}
 async function acceptMemory() {
   try { const r = await post("/memory/accept"); toast(`Accepted (was ${r.before}).`); openPane("memory"); }
   catch (e) { toast(e.message, true); }
@@ -732,6 +872,8 @@ const COMMANDS = [
   ["New conversation", "newConversation"], ["Search conversations", "focusSearch"],
   ["Show or hide archived conversations", "toggleArchived"], ["Tasks started elsewhere", "openLooseList"],
   ["Show or hide the file panel", "toggleFiles"], ["Switch light or dark", "toggleTheme"],
+  ["Pin or unpin this conversation", "pinConversation"], ["Export this conversation as Markdown", "exportConversation", "md"],
+  ["Export this conversation as JSON", "exportConversation", "json"], ["Turn on notifications", "enableNotifications"],
   ["Open Control Center", "openControl"], ["Memory", "openPane", "memory"], ["Schedules", "openPane", "schedules"],
   ["Channels", "openPane", "channels"], ["Skills", "openPane", "skills"], ["Eval suites", "openPane", "suites"],
   ["Reviewer policy", "openPane", "policy"], ["Integrity", "openPane", "integrity"],
@@ -792,11 +934,12 @@ const ACTIONS = {newConversation, selectConversation, renameConversation, archiv
   toggleArchived, openLooseList, openTaskAlone, openTaskOf, draft, showSendBack, sign, sendBack, decide,
   toggleFiles, toggleSide, openFile, openControl, closeControl, openPane, openPalette, focusSearch,
   toggleTheme, acceptMemory, createSuite, saveTask, closeSuite, addSkill, savePolicy,
-  openSuite, delSuite, delTask, checkGate};
+  openSuite, delSuite, delTask, checkGate, pinConversation, exportConversation, enableNotifications,
+  stopTask, resumeTask, askAgain, editAsk, copyAnswer, copyCode, forgetMemory, addSchedule, removeSchedule, viewSkill};
 document.addEventListener("click", e => {
   const el = e.target.closest("[data-action]");
   if (!el || !ACTIONS[el.dataset.action]) return;
-  ACTIONS[el.dataset.action](...JSON.parse(el.dataset.args || "[]"));
+  ACTIONS[el.dataset.action](...(el.dataset.args ? JSON.parse(el.dataset.args) : [el]));
 });
 document.addEventListener("change", e => {
   if (e.target.dataset.change === "critChanged") critChanged();

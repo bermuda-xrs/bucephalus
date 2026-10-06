@@ -155,6 +155,8 @@ def create_app(ctx: AgentContext) -> FastAPI:
 
     @app.get("/tasks/{task_id}")
     def get_task(task_id: str) -> dict:
+        from .conversations import shown_answer
+
         task = _task(task_id)
         plan = load_plan(ctx, task_id)
         step = ctx.conn.execute(
@@ -177,6 +179,7 @@ def create_app(ctx: AgentContext) -> FastAPI:
             "current_step": step,
             "plan_id": plan.id if plan else None,
             "answer": answer[0] if answer else None,
+            "answer_shown": shown_answer(answer[0]) if answer else None,
             "tokens": tokens,
             "conversation_id": conversation_of(ctx.conn, task_id),
         }

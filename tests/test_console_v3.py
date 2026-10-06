@@ -149,3 +149,45 @@ def test_markdown_never_emits_markup_from_the_answer():
 def test_the_console_loads_the_renderer_before_the_app():
     html = (CONTROL / "ui.html").read_text(encoding="utf-8")
     assert html.index('src="/md.js"') < html.index('src="/ui.js"')
+
+
+UI = (CONTROL / "ui.js").read_text(encoding="utf-8")
+HTML = (CONTROL / "ui.html").read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize("route", ["/pause", "/memory/forget", "/schedules", "/skills/", "/export?format="])
+def test_the_console_uses_each_new_route(route):
+    assert route in UI
+
+
+def test_answers_render_through_the_safe_renderer():
+    assert "renderMarkdown(" in UI
+    assert "<pre>${esc(it.answer)}</pre>" not in UI
+
+
+def test_every_action_the_page_names_has_a_handler():
+    import re
+
+    named = set(re.findall(r'data-action="([A-Za-z]+)"', UI + HTML))
+    block = UI[UI.index("const ACTIONS = {"):]
+    handlers = set(re.findall(r"\b([A-Za-z]+)\b", block[:block.index("};")]))
+    assert named and not (named - handlers), named - handlers
+
+
+def test_the_thread_shows_the_answer_not_its_envelope(ctx, api, scripted):
+    cid, _ = _conversation_with_an_answer(ctx, api, scripted)
+    assert api.get(f"/conversations/{cid}").json()["items"][0]["answer"] == "alpha.txt and **beta.txt**"
+
+
+def test_a_structured_answer_is_shown_as_json():
+    from agent.control.conversations import shown_answer
+
+    assert shown_answer('{"answer": {"files": 2}}').startswith("```json")
+    assert shown_answer("plain text") == "plain text"
+
+
+def test_a_task_alone_also_shows_the_answer_not_its_envelope(ctx, api, scripted):
+    _, tid = _conversation_with_an_answer(ctx, api, scripted)
+    t = api.get(f"/tasks/{tid}").json()
+    assert t["answer_shown"] == "alpha.txt and **beta.txt**" and "answer" in json.loads(t["answer"])
+    assert "answer: t.answer_shown" in UI
