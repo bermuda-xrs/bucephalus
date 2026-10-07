@@ -48,6 +48,7 @@ One measurement process at a time (`src/agent/runlock.py`); nothing else runs du
 
 Verified 2026-10-08, against commit `a1df138`: Windows suite and ruff; the frozen gate on a fresh
 probe build. The desktop app itself was not rebuilt: an instance was open (`packaging/build.py` needs it closed).
+
 | Fact | Value | Regenerate with |
 |---|---|---|
 | Branch | `main`, fast-forwarded to `iteration-4` once the suite, the frozen gate and a visual check passed; no remote | `git branch --show-current` |
