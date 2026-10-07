@@ -46,8 +46,8 @@ One measurement process at a time (`src/agent/runlock.py`); nothing else runs du
 
 ## State
 
-Verified 2026-10-06, against commit `91bbd51`: Windows suite, WSL2 suite, ruff, the frozen gate on a fresh build, and a task through the rebuilt app's window.
-
+Verified 2026-10-08, against commit `a1df138`: Windows suite and ruff; the frozen gate on a fresh
+probe build. The desktop app itself was not rebuilt: an instance was open (`packaging/build.py` needs it closed).
 | Fact | Value | Regenerate with |
 |---|---|---|
 | Branch | `main`, fast-forwarded to `iteration-4` once the suite, the frozen gate and a visual check passed; no remote | `git branch --show-current` |
@@ -70,7 +70,8 @@ Before any commit: tests red first, never weaken a check, nothing pushed.
 
 ## Next step
 
-Nothing is in progress. The Hermes WebUI comparison is built (commit `91bbd51` lists what
+Nothing is in progress. Next: rebuild the desktop app (`packaging/build.py`, app closed) so it has the
+model picker and Run model button. The Hermes WebUI comparison is built (commit `91bbd51` lists what
 was taken and what was left out on purpose). Candidates, none started: per-tool expandable
 cards showing a call's full arguments and result; Markdown preview in the file panel; a
 real-model run of HARNESS_VERSION 7 to re-baseline the numbers 6 produced (`bench/run.py`).
