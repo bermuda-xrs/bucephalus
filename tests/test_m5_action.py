@@ -17,6 +17,7 @@ def test_the_bridge_closes_every_pipe_it_opened():
     import gc
     import warnings
 
+    gc.collect()
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always", ResourceWarning)
         r = run_sandboxed("import sys; print('x'); print('e', file=sys.stderr)",

@@ -13,6 +13,7 @@ class BackendConfig(BaseModel):
     model: str
     endpoint: str | None = None
     base_url: str | None = None
+    model_server: Literal["ollama"] | None = None
     api_key_env: str | None = None
     api_mode: Literal["chat_completions"] = "chat_completions"
     max_tokens_field: Literal["max_tokens", "max_completion_tokens"] = "max_tokens"

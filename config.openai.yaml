@@ -64,6 +64,7 @@ backends:
     kind: openai
     model: "granite4.1:3b"
     base_url: "http://localhost:11435/v1"
+    model_server: ollama
     reports_prompt_cache: true      # MEASURED - see the parity note above
     input_cost_per_mtok: 0.0
     output_cost_per_mtok: 0.0
@@ -81,6 +82,7 @@ backends:
     kind: openai
     model: "granite4.1:8b"
     base_url: "http://localhost:11435/v1"
+    model_server: ollama
     reports_prompt_cache: true      # MEASURED - see the parity note above
     input_cost_per_mtok: 0.0
     output_cost_per_mtok: 0.0
@@ -98,6 +100,7 @@ backends:
     kind: openai
     model: "granite4.1:3b"
     base_url: "http://localhost:11435/v1"
+    model_server: ollama
     reports_prompt_cache: true      # MEASURED - see the parity note above
     context_window: 131072
     usable_context_window: 16384

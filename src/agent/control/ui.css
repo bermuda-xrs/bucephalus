@@ -325,3 +325,6 @@ td.r, th.r { text-align: right; }
 .md a { color: var(--accent); }
 .skill-md { border: 1px solid var(--line); border-radius: var(--r-sm); padding: 12px; margin-bottom: 14px; }
 .entry .quiet { float: right; font-size: 12px; }
+#modelPick { background: transparent; color: inherit; border: 0; font: inherit; max-width: 16ch; }
+#modelPick:disabled { opacity: 0.8; }
+.run-model.on { color: var(--done); border-color: color-mix(in srgb, var(--done) 50%, var(--line)); }

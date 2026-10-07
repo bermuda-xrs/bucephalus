@@ -52,7 +52,8 @@
       <textarea id="ask" rows="3" aria-label="What should it do?"
         placeholder="Describe the work. It drafts a plan first; nothing runs until you sign it."></textarea>
       <div class="controls">
-        <button type="button" class="chip" data-action="openPane" data-args='["settings"]' id="chipModel" title="Which model runs, from Settings">Model</button>
+        <label class="chip field-chip" id="chipModel">Model <select id="modelPick" aria-label="Model the next task runs on"></select></label>
+        <button type="button" class="chip run-model" data-action="runModel" id="runModel" hidden>Run model</button>
         <button type="button" class="chip" data-action="openPane" data-args='["settings"]' id="chipProfile" title="The profile this console runs under">Profile</button>
         <label class="chip field-chip">Workspace <input id="scope" value="work" size="7" aria-describedby="scopeHelp"></label>
         <span id="scopeHelp" class="sr">The folder this task may read and write. Everything else is refused.</span>

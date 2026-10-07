@@ -140,6 +140,7 @@ def test_a_job_that_cannot_be_applied_refuses_the_run(monkeypatch):
     import gc
     import warnings
 
+    gc.collect()
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always", ResourceWarning)
         with pytest.raises(JobError, match="never ran"):

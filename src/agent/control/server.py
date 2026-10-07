@@ -90,6 +90,11 @@ class PatchConversation(BaseModel):
     pinned: bool | None = None
 
 
+class ModelIn(BaseModel):
+    model: str
+    slot: str = "cloud"
+
+
 class Forget(BaseModel):
     text: str
 
@@ -401,6 +406,61 @@ def create_app(ctx: AgentContext) -> FastAPI:
         from .panels import accept_memory
 
         return accept_memory(ctx)
+
+    def _local(body: ModelIn):
+        from ..models import local
+
+        b = ctx.backends.get(body.slot)
+        server = b and local.server_of(b.cfg)
+        if not server:
+            raise HTTPException(400, f"{body.slot} is not served by a local model server (model_server)")
+        try:
+            return local, b, local.guard(server, [x.cfg for x in ctx.backends.values()])
+        except local.Refused as e:
+            raise HTTPException(403, str(e)) from None
+
+    @app.get("/models")
+    def get_models() -> dict:
+        from ..models import local
+
+        b = ctx.backends.get("cloud")
+        return {"servers": [local.status(e) for e in local.endpoints([x.cfg for x in ctx.backends.values()])],
+                "executor": b and {"slot": "cloud", "model": b.cfg.model,
+                                   "endpoint": local.server_of(b.cfg),
+                                   "local": local.server_of(b.cfg) is not None}}
+
+    @app.post("/models/run")
+    def post_model_run(body: ModelIn) -> dict:
+        local, _, endpoint = _local(body)
+        try:
+            return local.run(endpoint, body.model, Path(ctx.config.root))
+        except ValueError as e:
+            raise HTTPException(400, str(e)) from None
+        except local.Refused as e:
+            raise HTTPException(503, str(e)) from None
+        except Exception as e:  # noqa: BLE001
+            raise HTTPException(502, f"the model server failed: {e}") from None
+
+    @app.post("/models/unload")
+    def post_model_unload(body: ModelIn) -> dict:
+        local, _, endpoint = _local(body)
+        try:
+            return local.unload(endpoint, body.model)
+        except Exception as e:  # noqa: BLE001
+            raise HTTPException(502, f"the model server failed: {e}") from None
+
+    @app.post("/models/select")
+    def post_model_select(body: ModelIn) -> dict:
+        local, b, endpoint = _local(body)
+        if any(t.is_alive() for t in _runs.values()):
+            raise HTTPException(409, "a task is running; switch models when it has finished")
+        if body.model not in local.installed(endpoint):
+            raise HTTPException(400, f"{body.model} is not installed on {endpoint}")
+        b.cfg.model = body.model
+        if hasattr(b, "model"):
+            b.model = body.model
+        ctx.config.backends[body.slot].model = body.model
+        return {"slot": body.slot, "model": body.model}
 
     @app.post("/memory/forget")
     def post_memory_forget(body: Forget) -> dict:

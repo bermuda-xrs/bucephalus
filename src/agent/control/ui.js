@@ -767,6 +767,37 @@ async function viewSkill(id) {
         $("#skillBody").scrollIntoView({block: "nearest"}); }
   catch (e) { toast(e.message, true); }
 }
+let MODELS = null;
+async function loadModels() {
+  try { MODELS = await api("/models"); } catch { return; }
+  const ex = MODELS.executor, pick = $("#modelPick"), btn = $("#runModel");
+  if (!ex) return;
+  const srv = MODELS.servers.find(s => s.endpoint === ex.endpoint);
+  const names = ex.local && srv && srv.up ? srv.installed.map(m => m.name) : [];
+  if (!names.includes(ex.model)) names.unshift(ex.model);
+  pick.innerHTML = names.map(n => `<option ${n === ex.model ? "selected" : ""}>${esc(n)}</option>`).join("");
+  pick.disabled = !ex.local || !(srv && srv.up);
+  pick.title = !ex.local ? "Not a local model; set in the config" : srv && srv.up ? "The model the next task runs on"
+             : "The model server is not running; Run model starts it";
+  btn.hidden = !ex.local || !srv || !srv.managed;
+  const loaded = srv && srv.loaded.some(m => m.name === pick.value);
+  btn.textContent = !srv || !srv.up ? "Start and run" : loaded ? "Running" : "Run model";
+  btn.classList.toggle("on", !!loaded);
+  btn.title = loaded ? "Loaded in memory and kept warm for 30 minutes" : "Load this model so the first step does not wait for it";
+}
+async function runModel() {
+  const btn = $("#runModel"), model = $("#modelPick").value;
+  btn.disabled = true; btn.innerHTML = `<span class="spin"></span> Loading`;
+  try { const r = await post("/models/run", {model}); toast(`${model} is loaded (${r.seconds} s).`); }
+  catch (e) { toast(e.message, true); }
+  btn.disabled = false; loadModels();
+}
+$("#modelPick").addEventListener("change", async e => {
+  const model = e.target.value;
+  try { await post("/models/select", {model}); toast(`New tasks run on ${model}.`); }
+  catch (err) { toast(err.message, true); }
+  loadModels();
+});
 async function acceptMemory() {
   try { const r = await post("/memory/accept"); toast(`Accepted (was ${r.before}).`); openPane("memory"); }
   catch (e) { toast(e.message, true); }
@@ -935,7 +966,7 @@ const ACTIONS = {newConversation, selectConversation, renameConversation, archiv
   toggleFiles, toggleSide, openFile, openControl, closeControl, openPane, openPalette, focusSearch,
   toggleTheme, acceptMemory, createSuite, saveTask, closeSuite, addSkill, savePolicy,
   openSuite, delSuite, delTask, checkGate, pinConversation, exportConversation, enableNotifications,
-  stopTask, resumeTask, askAgain, editAsk, copyAnswer, copyCode, forgetMemory, addSchedule, removeSchedule, viewSkill};
+  runModel, stopTask, resumeTask, askAgain, editAsk, copyAnswer, copyCode, forgetMemory, addSchedule, removeSchedule, viewSkill};
 document.addEventListener("click", e => {
   const el = e.target.closest("[data-action]");
   if (!el || !ACTIONS[el.dataset.action]) return;
@@ -960,11 +991,10 @@ new MutationObserver(() => document.querySelectorAll("i[data-pct]").forEach(i =>
     S.settings = st;
     const exec = st.backends.find(b => b.name === "cloud") || st.backends[0];
     $("#health").textContent = `Connected. ${h.backends.length} models configured.`;
-    $("#chipModel").textContent = exec ? `Model: ${exec.model}` : "Model";
     $("#chipProfile").textContent = `Profile: ${st.profile}`;
     if ($("#budUsd").value === "") $("#budUsd").placeholder = String(st.limits.default_task_budget_usd);
   } catch { $("#health").textContent = "Can't reach the control plane"; }
-  loadAlerts(); await loadSide(); updateRing(null);
+  loadAlerts(); loadModels(); await loadSide(); updateRing(null);
   if (OPEN.theme === "light" || OPEN.theme === "dark") setTheme(OPEN.theme);
   if (OPEN.task) openTaskOf(OPEN.task);
   else if (OPEN.conv) selectConversation(OPEN.conv);
@@ -973,5 +1003,6 @@ new MutationObserver(() => document.querySelectorAll("i[data-pct]").forEach(i =>
     if (first) selectConversation(JSON.parse(first.dataset.args)[0]);
   }
   if (OPEN.pane && PANES[OPEN.pane]) openPane(OPEN.pane);
+  setInterval(loadModels, 20000);
   setInterval(() => { loadAlerts(); loadSide(); if (S.conv && !S.streams.size && !S.drafting.size) refreshThread(); }, 6000);
 })();

@@ -261,6 +261,10 @@ def has_data_streams() -> bool:
     return True
 
 
+def background_popen_flags() -> dict:
+    return {"creationflags": 0x08000000}
+
+
 def lock_file(fh) -> None:
     fh.seek(0)
     msvcrt.locking(fh.fileno(), msvcrt.LK_NBLCK, 1)

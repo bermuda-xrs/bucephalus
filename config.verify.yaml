@@ -33,6 +33,7 @@ backends:
     kind: ollama
     model: "granite4.1:3b"
     endpoint: "http://localhost:11435"
+    model_server: ollama
     input_cost_per_mtok: 0.0
     output_cost_per_mtok: 0.0
     cache_read_per_mtok: 0.0
@@ -50,6 +51,7 @@ backends:
     kind: ollama
     model: "granite4.1:8b"
     endpoint: "http://localhost:11435"
+    model_server: ollama
     input_cost_per_mtok: 0.0
     output_cost_per_mtok: 0.0
     cache_read_per_mtok: 0.0
@@ -66,6 +68,7 @@ backends:
     kind: ollama
     model: "granite4.1:3b"
     endpoint: "http://localhost:11435"
+    model_server: ollama
     context_window: 131072
     usable_context_window: 16384
     thinking: "disabled"

@@ -267,6 +267,10 @@ def exit_note(proc, timeout_s: int) -> str:
     return ""
 
 
+def background_popen_flags() -> dict:
+    return {}
+
+
 def lock_file(fh) -> None:
     import fcntl
 

@@ -27,6 +27,7 @@ INTERFACE = {
                   "paths, or None where the platform cannot list them",
     "lock_file": "exclusive, non-blocking lock on an open file; raises OSError if held",
     "unlock_file": "release lock_file's lock",
+    "background_popen_flags": "Popen keyword arguments for a helper server that runs with no window",
 }
 
 
