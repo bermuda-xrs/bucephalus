@@ -172,7 +172,7 @@ def create_app(ctx: AgentContext) -> FastAPI:
 
         answer = ctx.conn.execute(
             "SELECT content FROM artifacts WHERE task_id=? AND kind='answer' "
-            "ORDER BY created_at DESC LIMIT 1", (task_id,)).fetchone()
+            "ORDER BY created_at DESC, rowid DESC LIMIT 1", (task_id,)).fetchone()
         tokens = ctx.conn.execute(
             "SELECT COALESCE(SUM(input_tokens),0) + COALESCE(SUM(output_tokens),0) "
             "FROM calls WHERE task_id=?", (task_id,)).fetchone()[0]
@@ -301,9 +301,9 @@ def create_app(ctx: AgentContext) -> FastAPI:
         rows = ctx.conn.execute(
             """SELECT t.id, t.contract_json, t.status, t.created_at,
                       (SELECT p.status FROM plans p WHERE p.task_id = t.id
-                       ORDER BY p.created_at DESC LIMIT 1)
+                       ORDER BY p.created_at DESC, p.rowid DESC LIMIT 1)
                FROM tasks t WHERE t.parent_id IS NULL
-               ORDER BY t.created_at DESC LIMIT ?""", (max(1, min(limit, 500)),)
+               ORDER BY t.created_at DESC, t.rowid DESC LIMIT ?""", (max(1, min(limit, 500)),)
         ).fetchall()
         return {"tasks": [{"task_id": r[0], "goal": json.loads(r[1]).get("goal", ""),
                            "status": r[2], "created_at": r[3], "plan_status": r[4]}
@@ -313,7 +313,7 @@ def create_app(ctx: AgentContext) -> FastAPI:
     def get_plan(task_id: str) -> dict:
         _task(task_id)
         row = ctx.conn.execute(
-            "SELECT status FROM plans WHERE task_id=? ORDER BY created_at DESC LIMIT 1",
+            "SELECT status FROM plans WHERE task_id=? ORDER BY created_at DESC, rowid DESC LIMIT 1",
             (task_id,)).fetchone()
         plan = load_plan(ctx, task_id)
         if plan is None or row is None:

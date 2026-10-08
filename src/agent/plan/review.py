@@ -241,7 +241,7 @@ def _record(ctx, req: ReviewRequest, d: ReviewDecision) -> None:
 def decisions(conn, task_id: str) -> list[dict]:
     rows = conn.execute(
         """SELECT step_id, tool, arg_taint, verdict, rationale, backend, created_at
-           FROM review_decisions WHERE task_id=? ORDER BY created_at""",
+           FROM review_decisions WHERE task_id=? ORDER BY created_at, rowid""",
         (task_id,),
     ).fetchall()
     return [

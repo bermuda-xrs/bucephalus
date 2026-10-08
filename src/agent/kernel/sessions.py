@@ -70,12 +70,12 @@ def lineage(conn: sqlite3.Connection, session_id: str) -> list[str]:
 def for_task(conn: sqlite3.Connection, task_id: str) -> list[dict]:
     rows = conn.execute(
         f"""SELECT {_COLS} FROM sessions WHERE task_id=?
-            ORDER BY created_at, id""", (task_id,)).fetchall()
+            ORDER BY created_at, rowid""", (task_id,)).fetchall()
     return [_row(r) for r in rows]
 
 
 def root_session(conn: sqlite3.Connection, task_id: str) -> str | None:
     r = conn.execute(
         """SELECT id FROM sessions WHERE task_id=? AND parent_id IS NULL
-           ORDER BY created_at, id LIMIT 1""", (task_id,)).fetchone()
+           ORDER BY created_at, rowid LIMIT 1""", (task_id,)).fetchone()
     return r[0] if r else None

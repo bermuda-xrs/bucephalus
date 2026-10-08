@@ -164,7 +164,7 @@ class AlphaTUI(App):
             self.state.apply_live(kind, data)
         plan = load_plan(self.ctx, task_id)
         row = self.ctx.conn.execute(
-            "SELECT status FROM plans WHERE task_id=? ORDER BY created_at DESC LIMIT 1",
+            "SELECT status FROM plans WHERE task_id=? ORDER BY created_at DESC, rowid DESC LIMIT 1",
             (task_id,)).fetchone()
         self.plan = plan if row and row[0] == "drafted" else None
         self.show_plan(plan, row[0] if row else None)

@@ -144,7 +144,7 @@ def remove(conn: sqlite3.Connection, sid: str) -> bool:
 def active(conn: sqlite3.Connection) -> list[dict]:
     rows = conn.execute(
         f"""SELECT {', '.join(_SCOLS)} FROM schedules WHERE removed_at IS NULL
-            ORDER BY created_at, id""").fetchall()
+            ORDER BY created_at, rowid""").fetchall()
     return [dict(zip(_SCOLS, r)) for r in rows]
 
 
@@ -314,7 +314,7 @@ def notifications(conn: sqlite3.Connection, unseen_only: bool = True) -> list[di
         q += " WHERE seen_at IS NULL"
     return [{"id": r[0], "task_id": r[1], "kind": r[2],
              "detail": json.loads(r[3]), "created_at": r[4]}
-            for r in conn.execute(q + " ORDER BY created_at, id").fetchall()]
+            for r in conn.execute(q + " ORDER BY created_at, rowid").fetchall()]
 
 
 def mark_seen(conn: sqlite3.Connection, ids: list[str]) -> None:

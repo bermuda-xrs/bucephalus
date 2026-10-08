@@ -60,7 +60,7 @@ def test_sending_a_plan_back_records_why_and_runs_nothing(ctx, workspace):
             app.query_one("#goal").value = "use a table"
             await pilot.press("enter")
             assert await _until(pilot, lambda: ctx.conn.execute(
-                "SELECT status FROM plans WHERE task_id=? ORDER BY created_at DESC LIMIT 1",
+                "SELECT status FROM plans WHERE task_id=? ORDER BY created_at DESC, rowid DESC LIMIT 1",
                 (tid,)).fetchone()[0] == "rejected")
             assert not _steps_run(ctx, tid)
     asyncio.run(go())

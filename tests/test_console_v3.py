@@ -191,3 +191,25 @@ def test_a_task_alone_also_shows_the_answer_not_its_envelope(ctx, api, scripted)
     t = api.get(f"/tasks/{tid}").json()
     assert t["answer_shown"] == "alpha.txt and **beta.txt**" and "answer" in json.loads(t["answer"])
     assert "answer: t.answer_shown" in UI
+
+
+def test_latest_means_last_written_even_within_one_clock_tick(ctx, api, monkeypatch):
+    import time as _t
+
+    from agent.kernel.tasks import load_task
+    from agent.ledger.artifacts import write_artifact
+    from agent.plan.planner import load_plan, store_plan
+    from agent.plan.types import Plan, PlanStep
+
+    cid = api.post("/conversations", json={}).json()["id"]
+    tid = api.post(f"/conversations/{cid}/messages", json={"text": "x"}).json()["task_id"]
+    t = load_task(ctx.conn, tid)
+    monkeypatch.setattr(_t, "time", lambda: 1_790_000_000.0)
+    store_plan(ctx, t, Plan(objective="first", steps=[PlanStep(id="1", intent="a")]).seal())
+    second = store_plan(ctx, t, Plan(objective="second", steps=[PlanStep(id="1", intent="b")]).seal())
+    write_artifact(ctx.conn, tid, "answer", "older", Taint.TRUSTED, {})
+    write_artifact(ctx.conn, tid, "answer", "newer", Taint.TRUSTED, {})
+    assert load_plan(ctx, tid).id == second.id
+    item = api.get(f"/conversations/{cid}").json()["items"][0]
+    assert item["plan"]["body"]["objective"] == "second" and item["answer"] == "newer"
+    assert api.get(f"/tasks/{tid}").json()["answer"] == "newer"

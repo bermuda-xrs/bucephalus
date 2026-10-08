@@ -195,7 +195,7 @@ def load_plan(ctx, task_id: str, status: str | None = None) -> Plan | None:
     if status:
         q += " AND status=?"
         args = (task_id, status)
-    q += " ORDER BY created_at DESC LIMIT 1"
+    q += " ORDER BY created_at DESC, rowid DESC LIMIT 1"
     row = ctx.conn.execute(q, args).fetchone()
     if row is None:
         return None
@@ -237,7 +237,7 @@ def reject_plan(ctx, task, plan: Plan, comment: str) -> None:
 def verify_plan_pin(ctx, task) -> Plan:
     row = ctx.conn.execute(
         """SELECT id, body_json, approved_hash FROM plans
-           WHERE task_id=? AND status='approved' ORDER BY created_at DESC LIMIT 1""",
+           WHERE task_id=? AND status='approved' ORDER BY created_at DESC, rowid DESC LIMIT 1""",
         (task.id,),
     ).fetchone()
     if row is None:

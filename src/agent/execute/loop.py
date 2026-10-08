@@ -593,7 +593,7 @@ def _release_decided(ctx, task) -> list[LedgerEntry]:
         """SELECT id, step_id, tool, args_json, status FROM approvals
            WHERE task_id=? AND status IN ('approved', 'denied')
              AND consumed_at IS NULL
-           ORDER BY created_at, id""",
+           ORDER BY created_at, rowid""",
         (task.id,),
     ).fetchall()
     out: list[LedgerEntry] = []

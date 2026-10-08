@@ -187,7 +187,7 @@ def cmd_status(ctx, args, console) -> int:
     for c in ("task", "status", "goal", "cost", "steps"):
         t.add_column(c)
     rows = ctx.conn.execute(
-        "SELECT id, status FROM tasks ORDER BY created_at DESC LIMIT 20"
+        "SELECT id, status FROM tasks ORDER BY created_at DESC, rowid DESC LIMIT 20"
     ).fetchall()
     for tid, status in rows:
         task = load_task(ctx.conn, tid)

@@ -107,14 +107,14 @@ def rebuild(conn: sqlite3.Connection) -> int:
             f"""INSERT INTO search_index(body, source, ref, task_id, kind, created_at)
                SELECT {CONTRACT_INDEX_BODY}, 'contract', id, id, 'contract',
                       created_at
-               FROM tasks ORDER BY created_at, id"""
+               FROM tasks ORDER BY created_at, rowid"""
         )
         placeholders = ",".join("?" * len(INDEXED_ARTIFACT_KINDS))
         conn.execute(
             f"""INSERT INTO search_index(body, source, ref, task_id, kind, created_at)
                 SELECT content, 'artifact', id, task_id, kind, created_at
                 FROM artifacts WHERE kind IN ({placeholders})
-                ORDER BY created_at, id""",
+                ORDER BY created_at, rowid""",
             INDEXED_ARTIFACT_KINDS,
         )
     return conn.execute("SELECT COUNT(*) FROM search_index").fetchone()[0]

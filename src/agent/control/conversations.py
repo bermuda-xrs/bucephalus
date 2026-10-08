@@ -37,12 +37,12 @@ def listing(conn, q: str = "", archived: bool = False) -> list[dict]:
                 + (SELECT COUNT(*) FROM conversation_tasks x JOIN tasks t ON t.id = x.task_id
                     WHERE x.conversation_id = c.id AND t.status = 'pending'
                       AND (SELECT p.status FROM plans p WHERE p.task_id = t.id
-                           ORDER BY p.created_at DESC LIMIT 1) = 'drafted')
+                           ORDER BY p.created_at DESC, p.rowid DESC LIMIT 1) = 'drafted')
              FROM conversations c
             WHERE c.archived = ? AND (? = '' OR c.title LIKE ? OR EXISTS (
                   SELECT 1 FROM conversation_tasks x JOIN tasks t ON t.id = x.task_id
                    WHERE x.conversation_id = c.id AND t.contract_json LIKE ?))
-            ORDER BY c.pinned DESC, c.updated_at DESC LIMIT 200""",
+            ORDER BY c.pinned DESC, c.updated_at DESC, c.rowid DESC LIMIT 200""",
         (1 if archived else 0, q.strip(), like, like)).fetchall()
     return [{"id": r[0], "title": r[1], "updated_at": r[2], "archived": bool(r[3]),
              "pinned": bool(r[4]), "n_tasks": r[5], "needs_you": r[6]} for r in rows]
@@ -94,9 +94,9 @@ def thread(ctx, cid: str) -> dict:
     for tid, contract, status, created, budget in rows:
         plan = load_plan(ctx, tid)
         pstatus = ctx.conn.execute("SELECT status FROM plans WHERE task_id=? "
-                                   "ORDER BY created_at DESC LIMIT 1", (tid,)).fetchone()
+                                   "ORDER BY created_at DESC, rowid DESC LIMIT 1", (tid,)).fetchone()
         answer = ctx.conn.execute("SELECT content FROM artifacts WHERE task_id=? AND kind='answer' "
-                                  "ORDER BY created_at DESC LIMIT 1", (tid,)).fetchone()
+                                  "ORDER BY created_at DESC, rowid DESC LIMIT 1", (tid,)).fetchone()
         items.append({
             "task_id": tid, "goal": json.loads(contract).get("goal", ""),
             "scope": json.loads(contract).get("artifact_scope", []),
@@ -167,7 +167,7 @@ def history(conn, task_id: str) -> tuple[str, int]:
     parts = []
     for tid, contract in reversed(rows):
         answer = conn.execute("SELECT content FROM artifacts WHERE task_id=? AND kind='answer' "
-                              "ORDER BY created_at DESC LIMIT 1", (tid,)).fetchone()
+                              "ORDER BY created_at DESC, rowid DESC LIMIT 1", (tid,)).fetchone()
         goal = json.loads(contract).get("goal", "")[:HISTORY_GOAL_CHARS]
         said = answer[0][:HISTORY_ANSWER_CHARS] if answer else "(no answer)"
         parts.append(f"Asked: {goal}\nAnswered: {said}")

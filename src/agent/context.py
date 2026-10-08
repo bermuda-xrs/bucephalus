@@ -454,7 +454,7 @@ class AgentContext:
         return [
             {"id": r[0], "task_id": r[1], "step_id": r[2], "tool": r[3],
              "preview": r[4], "reason": r[5], "created_at": r[6]}
-            for r in self.conn.execute(q + " ORDER BY created_at", args).fetchall()
+            for r in self.conn.execute(q + " ORDER BY created_at, rowid", args).fetchall()
         ]
 
     def resolve_approval(self, approval_id: str, approve: bool) -> dict:

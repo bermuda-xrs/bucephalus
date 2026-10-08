@@ -81,7 +81,7 @@ def flags(conn: sqlite3.Connection, task_id: str | None = None) -> list[dict]:
     if task_id:
         q += " WHERE task_id=?"
         args = (task_id,)
-    q += " ORDER BY created_at DESC"
+    q += " ORDER BY created_at DESC, rowid DESC"
     return [
         {"task_id": r[0], "severity": r[1], "finding": r[2], "created_at": r[3]}
         for r in conn.execute(q, args).fetchall()

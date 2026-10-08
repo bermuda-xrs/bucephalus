@@ -268,7 +268,7 @@ class UserStore:
     def get_active_policy(self) -> str | None:
         row = self.conn.execute(
             "SELECT body FROM documents WHERE owner=? AND kind='policy' AND active=1 "
-            "ORDER BY updated_at DESC LIMIT 1",
+            "ORDER BY updated_at DESC, rowid DESC LIMIT 1",
             (self.owner,),
         ).fetchone()
         return row[0] if row else None
@@ -331,7 +331,7 @@ class UserStore:
     def document_history(self, kind: str, name: str, limit: int = 50) -> list[dict]:
         rows = self.conn.execute(
             "SELECT body_sha256, actor, replaced_at, length(body) FROM document_history "
-            "WHERE owner=? AND kind=? AND name=? ORDER BY replaced_at DESC LIMIT ?",
+            "WHERE owner=? AND kind=? AND name=? ORDER BY replaced_at DESC, rowid DESC LIMIT ?",
             (self.owner, kind, name, limit),
         ).fetchall()
         return [{"sha256": r[0][:12], "actor": r[1], "replaced_at": r[2],
