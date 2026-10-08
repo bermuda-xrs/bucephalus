@@ -46,7 +46,7 @@ One measurement process at a time (`src/agent/runlock.py`); nothing else runs du
 
 ## State
 
-Verified 2026-10-08, against commit `a1df138`: Windows suite and ruff; the frozen gate and a task
+Verified 2026-10-08, against commit `fc881b6`: Windows suite and ruff; the frozen gate and a task
 through the rebuilt desktop app's window.
 
 | Fact | Value | Regenerate with |
