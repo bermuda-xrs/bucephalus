@@ -5,7 +5,7 @@ An entry is removed in the change that closes it; its history is in git and CHAN
 | entry | state |
 |---|---|
 | D2 | open: diagnosis, no measurement at risk |
-| D16 | open: needs a live model per backend |
+| D16 | open: buildable now that the estimate is fitted per backend (P6); the check is not written |
 | D26 | open: needs a bot token and an API key (the user's); D25 and D31 close with it |
 | D27 | open: the bot's queue, with D26 |
 | D32 | known and accepted |
@@ -48,16 +48,14 @@ the corrupting direction: M3.4's ceiling is computed from a number the server
 will not honour, and Ollama truncates without an error.
 
 **Why not detected in code:** the only portable signal is the returned
-`prompt_tokens`, and flagging a mismatch means comparing it against this
-project's own token count — which is an uncalibrated estimator (D6). A check
-whose false-alarm rate is unknown is worse than a documented constraint, so
-this is documented.
+`prompt_tokens`, compared against this project's own count. Since 2026-10-05
+that count is fitted per backend (P6: `tokens.calibration`, after 30 calls),
+so the comparison is now possible: a server that truncates reports far fewer
+tokens than the fit predicts for a long prompt. Not built yet.
 
-**Correct version:** either query the server's window through whatever
-non-portable route it offers and assert against the config at startup, or
-measure the estimator against the server's own counts first (D6) and then
-compare `prompt_tokens` to a count that can be trusted. The second unblocks several other things and is the better
-order.
+**Correct version:** at each step call, flag `prompt_tokens` well under the
+fitted estimate for a prompt near the configured window, and record it; or
+query the server's window through a non-portable route at startup.
 
 SPEC-DELTA C29.
 

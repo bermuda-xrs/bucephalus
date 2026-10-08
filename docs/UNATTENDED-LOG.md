@@ -260,7 +260,7 @@ pushed.
 
 Asked to finish what was left and to find errors and dead code. Done, each
 commit green:
-- 344d3b9: 20 definitions nothing called, deleted (U21). Two rules that only
+- 344d3b9: 22 definitions nothing called, deleted (U21). Two rules that only
   a dead copy's test checked now hold on the live path; a routing test that
   could not fail is two-sided.
 - fbc52f2: three statements made untrue by the code (the console's grounding

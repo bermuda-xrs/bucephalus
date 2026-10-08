@@ -15,13 +15,21 @@ what still stands between here and a first iteration.
 - P5: a graded program cannot write its own verdict; code graders run the answer in a child.
 - P6: the context ceiling budgets against a per-backend fit of the token estimator.
 - P3: a follow-up task is given its conversation's earlier exchanges, untrusted, in the tail.
-- Deleted: escalation-by-disagreement (never ran), grounding notes (never read), 20 helpers with no caller.
+- Deleted: escalation-by-disagreement (never ran), grounding notes (never read), 22 definitions with no caller (344d3b9's message says 20; the diff removes 22).
 - P1, P4 rejected; P2 dropped by its own measurement.
 - Two pipe leaks in the sandbox fixed; ruff (bug rules) in CI.
 - Console, after a comparison with Hermes WebUI: Markdown answers with copy, Pause/Resume (Stop never
   stopped a running task before), ask again, pin, export, per-conversation spend, notifications,
   memory forget, schedule add/remove, skill bodies, slash commands. Answers no longer show their
   JSON envelope.
+- Model picker and Run model for a backend declaring `model_server: ollama`.
+- "Latest" now means last written: every timestamp ordering breaks ties by insertion order. Windows'
+  clock ticks every 15.6 ms here, so two plans or answers written in one tick read back oldest-first.
+- Corrections to commit messages (history is not rewritten):
+  - 344d3b9 says 20 definitions were deleted; the diff removes 22.
+  - 9fa285e says argparse descriptions that read `__doc__` were dropped; that was in 2602553 (scripts).
+  - e8b8532: the recorded estimate covers the prompt text (prefix and tail), not the tool schemas;
+    the fit's intercept carries those.
 - Code, tests and scripts carry no docstrings and almost no comments; HANDOVER is state and next step;
   DEFERRED holds open issues only.
 

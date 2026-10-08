@@ -57,6 +57,7 @@ backends:
     kind: ollama
     model: "granite4.1:8b"          # 5.3 GB, Q4_K_M
     endpoint: "http://localhost:11435"
+    model_server: ollama
     input_cost_per_mtok: 0.0
     output_cost_per_mtok: 0.0
     cache_read_per_mtok: 0.0
@@ -74,6 +75,7 @@ backends:
     kind: ollama
     model: "granite4.1:3b"          # 2.1 GB, same family = same template
     endpoint: "http://localhost:11435"
+    model_server: ollama
     input_cost_per_mtok: 0.0
     output_cost_per_mtok: 0.0
     cache_read_per_mtok: 0.0
@@ -99,8 +101,7 @@ backends:
 # later. So offload ships OFF, from the measurement rather than from a guess.
 #
 # The whole local path is built and tested regardless — router, allowlist,
-# escalation-by-disagreement, and the compress_tool_output call site in the
-# loop. Set this to "laptop" (or "local" on a real GPU) and it turns on with
+# and the compress_tool_output call site in the loop. Set this to "laptop" (or "local" on a real GPU) and it turns on with
 # no other change. Re-run `alpha bench-local` first.
 active_local_tier: null             # local | laptop | null (null disables offload)
 

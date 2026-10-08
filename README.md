@@ -157,6 +157,14 @@ Other commands:
 .\alpha.ps1 serve               control plane on :8901 for phone/web clients
 ```
 
+`serve` prints a link to the console: conversations whose follow-ups see the
+earlier exchanges, a plan card you sign before anything runs, Pause and
+Resume, approvals that park inline, Markdown answers, export, pinning, and a
+Control Center (memory, schedules, skills, suites, policy, integrity,
+settings, logs). For a backend marked `model_server: ollama` the composer has
+a model picker and a Run model button that starts the project's server on
+11435 if needed and loads the model; the Ollama on 11434 is never touched.
+
 The control plane also runs under any ASGI server via a module-level app:
 
 ```bat
@@ -268,8 +276,7 @@ from your own measurements rather than someone else's leaderboard.
 
 ## Where the local tier actually does work
 
-The router, the allowlist and escalation-by-disagreement are only worth
-anything if something in the loop asks for a local-eligible purpose. One does:
+The router and the allowlist are only worth anything if something in the loop asks for a local-eligible purpose. One does:
 **tool outputs above `compress_observations_over_tokens` are condensed by the
 local tier** before entering the ledger (`compress_tool_output`, on both
 allowlists). That is the high-volume, low-risk work.
@@ -352,9 +359,9 @@ src/agent/
   kernel/      M1  event log, hash chain, anchor, receipts, task graph
   instrument/  M2  cost math, per-call telemetry, reports
   ledger/      M3  artifacts by reference, cache-stable prefix, compaction
-  models/      M4  anthropic + ollama + mock backends
+  models/      M4  anthropic + ollama + openai-compatible + mock backends; local server control
   execute/     M4/M5 the loop, tools, sandbox, code-as-action + tool bridge
-  router/      M6  allowlist routing, escalation by self-consistency
+  router/      M6  allowlist routing
   assure/      M7/M8.3 verifiers, ratchet, out-of-band monitor
   security/    M8  taint propagation, capability gate
   skills/      M9 store, retrieval, THE GATE (M11's generator is retired)
@@ -398,10 +405,11 @@ number derived from it would be quietly wrong. `src/agent/tokens.py` is a
 fast local estimate, used only for in-loop budgeting. Recorded usage - every
 token figure in `calls` and in a report - is the model server's own count
 (Ollama's `prompt_eval_count` / `eval_count`, the OpenAI protocol's
-`prompt_tokens` / `completion_tokens`, Anthropic's `usage`). The estimate's
-error against the executing model is unmeasured (DEFERRED D6); a
-`calibrate()` against Anthropic's counter existed and was deleted, because it
-would have tuned the estimate to the wrong tokenizer for local models.
+`prompt_tokens` / `completion_tokens`, Anthropic's `usage`). Every call row
+keeps the raw estimate beside the server's count, and once a backend has 30
+such calls the context ceiling budgets against a fit of one to the other
+(HARNESS_VERSION 7). On granite4.1:3b the raw estimate undercounts by about a
+quarter.
 
 ## The sandbox, honestly
 

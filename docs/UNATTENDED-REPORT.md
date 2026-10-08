@@ -13,7 +13,7 @@ Nothing was pushed; there is no remote.
 
 ## After you came back, 2026-10-04
 
-Errors and dead code, as asked. **Deleted 20 definitions nothing called** (U21),
+Errors and dead code, as asked. **Deleted 22 definitions nothing called** (U21),
 porting first the two rules only their tests checked: the quarantined
 summarizer is given no tools, and routing moves off a slow tier (that test
 could not fail before). **Two resource leaks in the product**, found by

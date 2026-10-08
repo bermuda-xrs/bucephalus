@@ -254,7 +254,7 @@ test holds. Not built. `docs/PROPOSALS.md` P4 says what it would take.
 - **Why.** `KNOWN_INERT` had become a second home for code nothing called:
   superseded copies of logic now inline elsewhere, and helpers no path
   reached. Each was a place a reader had to check and a mutant that could
-  only survive. 20 were deleted. Where a test pinned a rule only on the dead
+  only survive. 22 were deleted. Where a test pinned a rule only on the dead
   copy (the quarantined summarizer gets no tools; routing reacts to a slow
   tier), the rule was asserted on the live path first.
 - **Kept.** The inert guarantee `local_with_escalation` (a decision for the
