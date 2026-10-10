@@ -88,6 +88,7 @@ class MechanismsConfig(BaseModel):
     code_as_action: bool = True
     diagnostics: bool = True
     verify_before_stop: bool = True
+    constrained_calls: bool = True
 
     def ablated(self) -> list[str]:
         return sorted(k for k, v in self.model_dump().items() if not v)

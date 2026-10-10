@@ -25,6 +25,7 @@ from ..security.exposure import check as exposure_check
 from ..security.taint import QUARANTINE_PREFIX
 from ..assure.verifiers import inspects
 from ..tokens import Calibration, calibration, count_tokens
+from .schema import build_action_schema
 from .. import stream
 
 COMPRESS_PREFIX = """\
@@ -99,6 +100,12 @@ ACTION_SCHEMA_HINT = """\
 Answer with a single JSON object, not the tag syntax:
   {"kind": "action", "tool": "read_file", "args": {"path": "work/x.py"}}
   {"kind": "code",   "code": "..."}
+  {"kind": "final",  "answer": {...}}"""
+
+ACTION_SCHEMA_HINT_NO_CODE = """\
+
+Answer with a single JSON object, not the tag syntax:
+  {"kind": "action", "tool": "read_file", "args": {"path": "work/x.py"}}
   {"kind": "final",  "answer": {...}}"""
 
 
@@ -290,7 +297,7 @@ def run_task(ctx, task_id: str) -> TaskResult:
             backend = ctx.router.choose("step", task, step)
             ctx.executing_backend = backend.name
 
-            tail, step_schema = _envelope(backend, tail)
+            tail, step_schema = _envelope(ctx, backend, tail)
             ctx.log.append(
                 task.id,
                 "model.called",
@@ -484,10 +491,13 @@ def _verify(ctx, task, artifact: str):
     return r.passed, r
 
 
-def _envelope(backend, tail: str) -> tuple[str, dict | None]:
+def _envelope(ctx, backend, tail: str) -> tuple[str, dict | None]:
     if backend.cfg.needs_action_envelope:
         if getattr(backend.cfg, "action_protocol", "json") == "tags":
             return tail + "\n" + ACTION_TAG_HINT, None
+        if ctx.config.mechanisms.constrained_calls:
+            hint = ACTION_SCHEMA_HINT if ctx.code_as_action else ACTION_SCHEMA_HINT_NO_CODE
+            return tail + "\n" + hint, build_action_schema(ctx.tools, ctx.code_as_action)
         return tail + "\n" + ACTION_SCHEMA_HINT, ACTION_SCHEMA
     return tail, None
 
@@ -510,7 +520,7 @@ def _flush_memory(ctx, task, builder, prefix: str, entries, step: int, plan):
         return [], {"flush": "skipped", "why": str(e)}
 
     backend = ctx.router.choose("step", task, step)
-    tail, schema = _envelope(backend, render_tail(entries) + "\n\n" + FLUSH_NOTE)
+    tail, schema = _envelope(ctx, backend, render_tail(entries) + "\n\n" + FLUSH_NOTE)
     ctx.log.append(task.id, "model.called",
                    {"backend": backend.name, "purpose": "memory_flush",
                     "step": step, "prefix_fp": builder.fingerprint()})

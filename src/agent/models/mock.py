@@ -40,7 +40,7 @@ class MockBackend(BackendBase):
         t0 = time.time()
         self.prompts.append(prefix + "\n" + tail)
         self.calls.append({"prefix": prefix, "tail": tail, "max_tokens": max_tokens,
-                           "tools": tools})
+                           "tools": tools, "schema": schema})
 
         if self._responder is not None:
             text = self._responder(prefix, tail)
