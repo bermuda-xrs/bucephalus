@@ -725,6 +725,13 @@ def _perform(ctx, task, tool, tool_name: str, args: dict, step: int) -> LedgerEn
     except Exception as e:  # noqa: BLE001
         result = {"ok": False, "error": f"{type(e).__name__}: {e}"}
 
+    if (tool_name in ("write_file", "edit_file") and ctx.config.mechanisms.diagnostics
+            and isinstance(result, dict) and result.get("ok") and result.get("path")):
+        from .diagnostics import diagnose
+
+        found = diagnose(result["path"])
+        if found:
+            result["diagnostics"] = found
     touched = result.pop("touched", None) if isinstance(result, dict) else None
     receipt = {"tool": tool_name, "key": key, "ok": bool(result.get("ok", True)),
                "wall_ms": int((time.time() - t0) * 1000)}

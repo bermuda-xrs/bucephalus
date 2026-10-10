@@ -86,6 +86,7 @@ class MechanismsConfig(BaseModel):
     semantic_cache: bool = True
     prefix_stability: bool = True
     code_as_action: bool = True
+    diagnostics: bool = True
 
     def ablated(self) -> list[str]:
         return sorted(k for k, v in self.model_dump().items() if not v)
