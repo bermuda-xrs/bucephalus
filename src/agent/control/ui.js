@@ -557,11 +557,15 @@ async function loadFiles(taskId, path) {
         || `<div class="empty">Empty so far.</div>`);
   } else {
     $$(".file").forEach(f => f.setAttribute("aria-current", String(f.dataset.args === JSON.stringify([d.path]))));
-    $("#filePreview").textContent = d.text !== undefined ? d.text
+    const pv = $("#filePreview");
+    pv.classList.toggle("md", d.text !== undefined && isMarkdownFile(d.path));
+    if (d.text !== undefined && isMarkdownFile(d.path)) pv.innerHTML = renderMarkdown(d.text);
+    else pv.textContent = d.text !== undefined ? d.text
       : d.too_large ? `Too large to preview (${d.bytes.toLocaleString()} bytes).`
       : `Binary file, ${d.bytes.toLocaleString()} bytes.`;
   }
 }
+function isMarkdownFile(path) { return /\.(md|markdown)$/i.test(path || ""); }
 function openFile(path) { if (S.filesTask) loadFiles(S.filesTask, path); }
 async function upload(file) {
   if (!S.filesTask) return toast("Pick a task first: files go into a task's workspace.", true);
@@ -784,11 +788,12 @@ async function loadModels() {
   btn.textContent = !srv || !srv.up ? "Start and run" : loaded ? "Running" : "Run model";
   btn.classList.toggle("on", !!loaded);
   btn.title = loaded ? "Loaded in memory and kept warm for 30 minutes" : "Load this model so the first step does not wait for it";
+  $("#modelWarn").textContent = ex.warning || ""; $("#modelWarn").hidden = !ex.warning;
 }
 async function runModel() {
   const btn = $("#runModel"), model = $("#modelPick").value;
   btn.disabled = true; btn.innerHTML = `<span class="spin"></span> Loading`;
-  try { const r = await post("/models/run", {model}); toast(`${model} is loaded (${r.seconds} s).`); }
+  try { const r = await post("/models/run", {model}); toast(r.warning || `${model} is loaded (${r.seconds} s).`, !!r.warning); }
   catch (e) { toast(e.message, true); }
   btn.disabled = false; loadModels();
 }

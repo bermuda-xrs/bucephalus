@@ -213,3 +213,8 @@ def test_latest_means_last_written_even_within_one_clock_tick(ctx, api, monkeypa
     item = api.get(f"/conversations/{cid}").json()["items"][0]
     assert item["plan"]["body"]["objective"] == "second" and item["answer"] == "newer"
     assert api.get(f"/tasks/{tid}").json()["answer"] == "newer"
+
+
+def test_markdown_files_preview_rendered_and_others_as_text():
+    assert "isMarkdownFile(" in UI and 'id="filePreview"' in HTML
+    assert "(md|markdown)$" in UI and "renderMarkdown(d.text)" in UI

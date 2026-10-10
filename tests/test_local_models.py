@@ -20,6 +20,7 @@ class FakeOllama:
     def __init__(self):
         self.installed = ["granite4.1:3b", "granite4.1:8b"]
         self.loaded: dict[str, str] = {}
+        self.context_length = 16384
         self.generated: list[dict] = []
         outer = self
 
@@ -39,7 +40,8 @@ class FakeOllama:
                 if self.path == "/api/tags":
                     self._send({"models": [{"name": m, "size": 2_000_000_000} for m in outer.installed]})
                 elif self.path == "/api/ps":
-                    self._send({"models": [{"name": m, "size": 3_000_000_000, "expires_at": e}
+                    self._send({"models": [{"name": m, "size": 3_000_000_000, "expires_at": e,
+                                           "context_length": outer.context_length}
                                            for m, e in outer.loaded.items()]})
                 else:
                     self.send_response(404)
@@ -183,3 +185,32 @@ def test_a_backend_without_a_model_server_has_no_run_button(api, ctx):
     ctx.backends["cloud"].cfg.model_server = None
     assert api.get("/models").json()["executor"]["local"] is False
     assert api.post("/models/run", json={"model": "granite4.1:3b"}).status_code == 400
+
+
+def _window(api, ctx, usable):
+    ctx.backends["cloud"].cfg.usable_context_window = usable
+
+
+def test_a_server_window_smaller_than_the_configured_one_is_reported(api, ctx, fake):
+    _window(api, ctx, 16384)
+    fake.context_length = 4096
+    fake.loaded["granite4.1:3b"] = "2026-10-08T12:00:00Z"
+    ex = api.get("/models").json()["executor"]
+    assert ex["window"] == {"server": 4096, "configured": 16384}
+    assert "4096" in ex["warning"] and "16384" in ex["warning"]
+
+
+def test_a_matching_or_unknown_window_raises_no_warning(api, ctx, fake):
+    _window(api, ctx, 16384)
+    assert "warning" not in api.get("/models").json()["executor"]
+    fake.loaded["granite4.1:3b"] = "2026-10-08T12:00:00Z"
+    assert "warning" not in api.get("/models").json()["executor"]
+    fake.context_length = 32768
+    assert "warning" not in api.get("/models").json()["executor"]
+
+
+def test_run_model_says_when_the_window_is_smaller(api, ctx, fake):
+    _window(api, ctx, 16384)
+    fake.context_length = 4096
+    r = api.post("/models/run", json={"model": "granite4.1:3b"}).json()
+    assert "4096" in r["warning"]

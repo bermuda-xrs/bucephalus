@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import socket
 import subprocess
 import sys
 import time
@@ -8,6 +7,7 @@ from pathlib import Path
 
 import httpx
 import pytest
+from conftest import serve_on_free_port
 
 PROJ = Path(__file__).resolve().parents[1]
 
@@ -18,12 +18,6 @@ _get = lambda url, **kw: httpx.get(url, headers=AUTH, **kw)  # noqa: E731
 _post = lambda url, **kw: httpx.post(url, headers=AUTH, **kw)  # noqa: E731
 _put = lambda url, **kw: httpx.put(url, headers=AUTH, **kw)  # noqa: E731
 _delete = lambda url, **kw: httpx.delete(url, headers=AUTH, **kw)  # noqa: E731
-
-
-def _free_port() -> int:
-    with socket.socket() as s:
-        s.bind(("127.0.0.1", 0))
-        return s.getsockname()[1]
 
 
 @pytest.fixture(scope="module")
@@ -49,7 +43,6 @@ def server(tmp_path_factory):
 
     cfg_path.write_text(yaml.safe_dump(cfg), encoding="utf-8")
 
-    port = _free_port()
     env = {
         "PATH": __import__("os").environ.get("PATH", ""),
         "SYSTEMROOT": __import__("os").environ.get("SYSTEMROOT", ""),
@@ -61,26 +54,25 @@ def server(tmp_path_factory):
         "ALPHA_CONFIG_DIR": str(tmp / "user_config"),
     }
     log_path = tmp / "server.log"
-    log = log_path.open("w", encoding="utf-8")
-    proc = subprocess.Popen(  # noqa: S603
-        [sys.executable, "-m", "uvicorn", "agent.control.asgi:app",
-         "--host", "127.0.0.1", "--port", str(port), "--log-level", "warning"],
-        env=env, stdout=log, stderr=subprocess.STDOUT,
-    )
-    log.close()
-    base = f"http://127.0.0.1:{port}"
-    deadline = time.time() + 60
-    while time.time() < deadline:
-        if proc.poll() is not None:
-            pytest.fail(f"server exited early: {log_path.read_text(encoding='utf-8')[:2000]}")
+
+    def launch(port):
+        with log_path.open("a", encoding="utf-8") as log:
+            return subprocess.Popen(  # noqa: S603
+                [sys.executable, "-m", "uvicorn", "agent.control.asgi:app",
+                 "--host", "127.0.0.1", "--port", str(port), "--log-level", "warning"],
+                env=env, stdout=log, stderr=subprocess.STDOUT)
+
+    def answers(port):
         try:
-            if httpx.get(base + "/health", timeout=2).status_code == 200:
-                break
+            return httpx.get(f"http://127.0.0.1:{port}/health", timeout=2).status_code == 200
         except Exception:  # noqa: BLE001
-            time.sleep(0.4)
-    else:
-        proc.kill()
-        pytest.fail("server never became ready")
+            return False
+
+    try:
+        proc, port = serve_on_free_port(launch, answers)
+    except (RuntimeError, TimeoutError) as e:
+        pytest.fail(f"{e}: {log_path.read_text(encoding='utf-8')[-2000:]}")
+    base = f"http://127.0.0.1:{port}"
 
     yield base
     proc.terminate()

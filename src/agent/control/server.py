@@ -424,16 +424,22 @@ def create_app(ctx: AgentContext) -> FastAPI:
         from ..models import local
 
         b = ctx.backends.get("cloud")
-        return {"servers": [local.status(e) for e in local.endpoints([x.cfg for x in ctx.backends.values()])],
-                "executor": b and {"slot": "cloud", "model": b.cfg.model,
-                                   "endpoint": local.server_of(b.cfg),
-                                   "local": local.server_of(b.cfg) is not None}}
+        servers = [local.status(e) for e in local.endpoints([x.cfg for x in ctx.backends.values()])]
+        executor = b and {"slot": "cloud", "model": b.cfg.model, "endpoint": local.server_of(b.cfg),
+                          "local": local.server_of(b.cfg) is not None}
+        srv = executor and next((s for s in servers if s["endpoint"] == executor["endpoint"]), None)
+        if srv:
+            executor.update(local.window_warning(srv["loaded"], b.cfg.model, b.cfg.budgeted_window) or {})
+        return {"servers": servers, "executor": executor}
 
     @app.post("/models/run")
     def post_model_run(body: ModelIn) -> dict:
-        local, _, endpoint = _local(body)
+        local, b, endpoint = _local(body)
         try:
-            return local.run(endpoint, body.model, Path(ctx.config.root))
+            out = local.run(endpoint, body.model, Path(ctx.config.root))
+            out.update(local.window_warning([{"name": body.model, "context_length": out["context_length"]}],
+                                            body.model, b.cfg.budgeted_window) or {})
+            return out
         except ValueError as e:
             raise HTTPException(400, str(e)) from None
         except local.Refused as e:

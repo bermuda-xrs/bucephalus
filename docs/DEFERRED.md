@@ -5,7 +5,7 @@ An entry is removed in the change that closes it; its history is in git and CHAN
 | entry | state |
 |---|---|
 | D2 | open: diagnosis, no measurement at risk |
-| D16 | open: buildable now that the estimate is fitted per backend (P6); the check is not written |
+| D16 | open: the check exists in the console for Ollama-served backends; not in `run_task` or for other servers |
 | D26 | open: needs a bot token and an API key (the user's); D25 and D31 close with it |
 | D27 | open: the bot's queue, with D26 |
 | D32 | known and accepted |
@@ -47,15 +47,13 @@ Budgeting BELOW the server's window merely wastes it. Budgeting ABOVE it is
 the corrupting direction: M3.4's ceiling is computed from a number the server
 will not honour, and Ollama truncates without an error.
 
-**Why not detected in code:** the only portable signal is the returned
-`prompt_tokens`, compared against this project's own count. Since 2026-10-05
-that count is fitted per backend (P6: `tokens.calibration`, after 30 calls),
-so the comparison is now possible: a server that truncates reports far fewer
-tokens than the fit predicts for a long prompt. Not built yet.
-
-**Correct version:** at each step call, flag `prompt_tokens` well under the
-fitted estimate for a prompt near the configured window, and record it; or
-query the server's window through a non-portable route at startup.
+**Detected, in the console, for the executor on an Ollama server** declared
+`model_server: ollama` (2026-10-10): Ollama's `/api/ps` reports the loaded
+model's `context_length`; the model picker shows a warning when it is under
+the backend's configured window, and Run model returns it. Checked against a
+real Ollama 0.40.2. **Still open:** the CLI and `run_task` do not check at
+start; servers other than Ollama have no such route; two backends asking
+different windows of one server still cannot both be satisfied.
 
 SPEC-DELTA C29.
 

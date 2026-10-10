@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import socket
+import subprocess
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -14,6 +17,41 @@ def _user_dirs_are_scratch(tmp_path_factory, monkeypatch):
     monkeypatch.setenv("ALPHA_CONFIG_DIR", str(tmp_path_factory.mktemp("user_config")))
     data = str(tmp_path_factory.mktemp("user_data"))
     monkeypatch.setattr("platformdirs.user_data_dir", lambda *a, **k: data)
+
+
+def free_port() -> int:
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        return s.getsockname()[1]
+
+
+def serve_on_free_port(launch, probe, attempts: int = 4, timeout: float = 60.0):
+    for _ in range(attempts):
+        port = free_port()
+        p = launch(port)
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            if p.poll() is not None:
+                break
+            if probe(port):
+                return p, port
+            time.sleep(0.3)
+        else:
+            _reap(p)
+            raise TimeoutError(f"the server on {port} never answered")
+        _reap(p)
+    raise RuntimeError(f"the server did not start in {attempts} attempts (a port taken between choosing and binding it, or a real failure)")
+
+
+def _reap(p) -> None:
+    from agent.proc import kill_tree
+
+    if p.poll() is None:
+        kill_tree(p.pid)
+    try:
+        p.wait(10)
+    except subprocess.TimeoutExpired:
+        p.kill()
 
 
 def make_config(tmp_path: Path, **overrides) -> Config:

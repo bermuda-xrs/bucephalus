@@ -62,9 +62,19 @@ def status(endpoint: str) -> dict:
         return out
     out.update(up=True,
                installed=[{"name": m["name"], "bytes": m.get("size", 0)} for m in tags],
-               loaded=[{"name": m["name"], "bytes": m.get("size", 0), "expires_at": m.get("expires_at")}
-                       for m in ps])
+               loaded=[{"name": m["name"], "bytes": m.get("size", 0), "expires_at": m.get("expires_at"),
+                        "context_length": m.get("context_length")} for m in ps])
     return out
+
+
+def window_warning(loaded: list[dict], model: str, configured: int) -> dict | None:
+    served = next((m.get("context_length") for m in loaded if m["name"] == model), None)
+    if not served or served >= configured:
+        return None
+    return {"window": {"server": served, "configured": configured},
+            "warning": (f"The server holds {served} tokens of context for {model}; the config budgets {configured}. "
+                        f"Past {served} it drops the start of the prompt without an error. "
+                        "Start the server with OLLAMA_CONTEXT_LENGTH at least that large (ollama-serve.ps1 sets it).")}
 
 
 def installed(endpoint: str) -> list[str]:
@@ -105,7 +115,9 @@ def run(endpoint: str, model: str, root: Path) -> dict:
     t0 = time.monotonic()
     httpx.post(f"{endpoint}/api/generate", json={"model": model, "prompt": "", "keep_alive": KEEP_ALIVE},
                timeout=600.0).raise_for_status()
-    return {"model": model, "endpoint": endpoint, "loaded": True, "seconds": round(time.monotonic() - t0, 2)}
+    return {"model": model, "endpoint": endpoint, "loaded": True, "seconds": round(time.monotonic() - t0, 2),
+            "context_length": next((m.get("context_length") for m in status(endpoint)["loaded"]
+                                    if m["name"] == model), None)}
 
 
 def unload(endpoint: str, model: str) -> dict:

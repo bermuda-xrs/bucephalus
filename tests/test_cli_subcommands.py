@@ -520,31 +520,23 @@ def test_channel_refuses_while_disabled(cli):
 
 
 def test_serve_binds_and_answers_health(cli):
-    import socket
     import urllib.request
 
     from agent.proc import kill_tree
+    from conftest import serve_on_free_port
 
-    with socket.socket() as s:
-        s.bind(("127.0.0.1", 0))
-        port = s.getsockname()[1]
-    p = cli.spawn("serve", "--port", str(port))
+    def health(port):
+        try:
+            with urllib.request.urlopen(  # noqa: S310
+                    f"http://127.0.0.1:{port}/health", timeout=2) as resp:
+                return json.loads(resp.read().decode())
+        except Exception:  # noqa: BLE001
+            return None
+
+    p, port = serve_on_free_port(lambda port: cli.spawn("serve", "--port", str(port)),
+                                 lambda port: health(port) is not None, timeout=90)
     try:
-        body = None
-        deadline = time.time() + 90
-        while time.time() < deadline:
-            if p.poll() is not None:
-                out, err = p.communicate(timeout=30)
-                pytest.fail(f"`alpha serve` exited {p.returncode}\n"
-                            f"{out[-800:]}\n{err[-800:]}")
-            try:
-                with urllib.request.urlopen(  # noqa: S310
-                        f"http://127.0.0.1:{port}/health", timeout=2) as resp:
-                    body = json.loads(resp.read().decode())
-                break
-            except Exception:  # noqa: BLE001
-                time.sleep(0.5)
-        assert body is not None, "`alpha serve` never answered /health"
+        body = health(port)
         assert body.get("ok") is True and "backends" in body, body
     finally:
         kill_tree(p.pid)

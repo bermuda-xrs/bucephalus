@@ -328,3 +328,4 @@ td.r, th.r { text-align: right; }
 #modelPick { background: transparent; color: inherit; border: 0; font: inherit; max-width: 16ch; }
 #modelPick:disabled { opacity: 0.8; }
 .run-model.on { color: var(--done); border-color: color-mix(in srgb, var(--done) 50%, var(--line)); }
+.model-warn { flex-basis: 100%; margin: 0; font-size: 12.5px; }

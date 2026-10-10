@@ -71,10 +71,10 @@ Before any commit: tests red first, never weaken a check, nothing pushed.
 
 ## Next step
 
-Nothing is in progress. The Hermes WebUI comparison is built (commit `91bbd51` lists what
-was taken and what was left out on purpose). Candidates, none started: per-tool expandable
-cards showing a call's full arguments and result; Markdown preview in the file panel; a
-real-model run of HARNESS_VERSION 7 to re-baseline the numbers 6 produced (`bench/run.py`).
+In progress (user's 2026-10-10 brief): rename to Bucephalus, then HARNESS_VERSION 8 (small-model
+tool profile, post-edit diagnostics, verify-before-stop, constrained tool calls, stuck detection,
+shadow-git rewind, AGENTS.md, `exec` mode, hooks, MCP client). Not started: per-tool expandable
+cards (needs the stream events to carry full arguments); a real-model re-baseline of HARNESS_VERSION 7.
 
 Waiting on the user: D26 credentials; the memory line a test wrote into the real memory
 (`.\alpha.ps1 memory --forget "injected instruction"`); a Mac or bare-metal Linux run.
