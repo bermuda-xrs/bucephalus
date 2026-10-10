@@ -51,7 +51,7 @@ One measurement process at a time (`src/agent/runlock.py`); nothing else runs du
 
 ## State
 
-Verified 2026-10-10 on the rename: Windows suite, ruff, the frozen gate (63) and a task through the
+Verified 2026-10-10 against commit `008e6ba` (the rename): Windows suite, ruff, the frozen gate (63) and a task through the
 rebuilt `bucephalus.exe`'s window, all from the renamed tree.
 
 | Fact | Value | Regenerate with |
