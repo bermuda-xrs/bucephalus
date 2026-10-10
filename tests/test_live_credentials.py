@@ -30,7 +30,7 @@ def exercise_telegram(transport) -> None:
     assert me.get("is_bot") is True and me.get("username"), me
     assert isinstance(transport.get_updates(offset=0, timeout=0), list)
     with pytest.raises(TransportError):
-        transport._call("alphaNoSuchMethod", {})  # noqa: SLF001
+        transport._call("bucephalusNoSuchMethod", {})  # noqa: SLF001
 
 
 def exercise_anthropic(backend) -> None:
@@ -106,7 +106,7 @@ def test_the_telegram_body_against_a_fake_api(fake_server):
     srv, base = fake_server(telegram_api)
     exercise_telegram(HttpTransport("fake-token", base=base))
     assert [p.rsplit("/", 1)[-1] for p, _ in srv.requests] == [
-        "getMe", "getUpdates", "alphaNoSuchMethod"]
+        "getMe", "getUpdates", "bucephalusNoSuchMethod"]
     assert srv.requests[1][1] == {"offset": 0, "timeout": 0}, "a live poll confirms nothing"
 
 

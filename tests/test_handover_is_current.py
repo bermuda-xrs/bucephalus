@@ -92,7 +92,7 @@ def test_the_cli_subcommand_count_is_the_real_one():
     assert stated == {real}, f"handover says {stated} subcommands, the parser has {real}"
 
 
-def test_every_named_alpha_subcommand_exists():
+def test_every_named_bucephalus_subcommand_exists():
     from agent.cli import build_parser  # noqa: PLC0415
 
     import argparse

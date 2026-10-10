@@ -8,7 +8,7 @@ from pathlib import Path
 
 from .assure.mesh import VerificationMesh
 from .config import Config, load_config, load_dotenv
-from .execute.tools import ToolRegistry, default_registry
+from .execute.tools import ToolRegistry, apply_profile, default_registry
 from .instrument.telemetry import Telemetry, compute_cost, record_call
 from .kernel.db import open_db
 from .kernel.events import EventLog
@@ -46,6 +46,9 @@ class AgentContext:
         self.anchor = Anchor(config.resolve_state(config.anchor_path))
         self.backends = backends if backends is not None else build_backends(config)
         self.tools = tools or default_registry()
+        executor = self.backends.get("cloud")
+        self.tool_profile = executor.cfg.tool_profile if executor else "full"
+        self.tools = apply_profile(self.tools, self.tool_profile)
         if not config.mechanisms.code_as_action:
             self.tools = _without(self.tools, "run_code")
         self.skills = SkillStore(self.conn, config.resolve(config.skills_path))
@@ -201,6 +204,10 @@ class AgentContext:
             ).fetchone()
             self._origin[task_id] = (row[0] if row and row[0] else "local")
         return self._origin[task_id]
+
+    @property
+    def code_as_action(self) -> bool:
+        return self.config.mechanisms.code_as_action and self.tool_profile != "small"
 
     def tool_policy(self, task_id: str):
         from .security.origin import policy_for

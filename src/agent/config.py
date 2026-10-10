@@ -33,6 +33,7 @@ class BackendConfig(BaseModel):
     accepts_temperature: bool = True
     action_protocol: Literal["json", "tags"] = "json"
     keep_alive: str = "30m"
+    tool_profile: Literal["full", "small"] = "full"
     assumed_tokens_per_sec: float = 5.0
 
     @property

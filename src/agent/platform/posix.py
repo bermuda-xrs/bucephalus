@@ -258,7 +258,7 @@ def spawn_limited(argv: list[str], *, timeout_s: int, memory_bytes: int,
 
 
 def exit_note(proc, timeout_s: int) -> str:
-    if getattr(proc, "alpha_limit", None):
+    if getattr(proc, "limit_reason", None):
         return f"\nsandbox: {proc.limit_reason}"
     if proc.returncode == -getattr(signal, "SIGXCPU", 24):
         return f"\nsandbox: CPU time limit reached ({timeout_s} s)"

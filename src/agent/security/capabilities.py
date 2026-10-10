@@ -245,7 +245,7 @@ def gate_tool_call(ctx, task, tool, args: dict, phase: str = "execute") -> GateD
             f"{glob_key}={pattern!r} leaves its directory: a file pattern may "
             "not contain '..' or be absolute, because pathlib follows it")
 
-    if getattr(tool, "name", "") == "run_code":
+    if getattr(tool, "name", "") in ("run_code", "run_command"):
         state = state or task_state_paths(ctx, task)
         for s in task.contract.artifact_scope:
             if is_protected(s, ctx.config.root, state):

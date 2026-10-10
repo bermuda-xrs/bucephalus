@@ -246,7 +246,7 @@ def run_task(ctx, task_id: str) -> TaskResult:
                 skills = ctx.freeze_skills(task)
                 memory = ctx._snapshot_memory(task.id)  # noqa: SLF001
             builder = PrefixBuilder(
-                system_contract(ctx.config.mechanisms.code_as_action),
+                system_contract(ctx.code_as_action),
                 skills,
                 json.loads(task.contract.model_dump_json()),
                 tool_manual=ctx.tools.manual(),
@@ -378,6 +378,8 @@ def run_task(ctx, task_id: str) -> TaskResult:
 
             obs = execute_action(ctx, task, parsed, step, plan)
             entries.append(obs)
+            if parsed.tool == "update_plan" and obs.label == "update_plan":
+                entries = _with_checklist(ctx, task, entries, parsed.args)
 
         return _final_sweep(ctx, task, "max_steps", best_answer,
                             ctx.config.limits.max_steps)
@@ -416,6 +418,16 @@ def run_task(ctx, task_id: str) -> TaskResult:
 
     finally:
         ctx.executing_backend = None
+
+
+def _with_checklist(ctx, task, entries, args) -> list[LedgerEntry]:
+    from .tools import render_checklist
+
+    note = LedgerEntry.note("Your working checklist (the approved plan is unchanged):" + chr(10)
+                            + render_checklist(args["items"][:30]), pinned=True)
+    note.label = "checklist"
+    note.taint = ctx.taint_tracker(task.id).args_taint(args)
+    return [e for e in entries if e.label != "checklist"] + [note]
 
 
 def _final_sweep(ctx, task, status: str, best_answer, steps: int) -> TaskResult:
@@ -516,7 +528,7 @@ def _session_boundary(ctx, task, entries, window, step, plan, skills, builder,
                                              "tombstoned": tombstoned})
     guard = PrefixGuard() if ctx.config.mechanisms.prefix_stability else None
     builder = PrefixBuilder(
-        system_contract(ctx.config.mechanisms.code_as_action),
+        system_contract(ctx.code_as_action),
         skills, json.loads(task.contract.model_dump_json()),
         tool_manual=ctx.tools.manual(), memory=rot["memory"])
     if guard is not None:

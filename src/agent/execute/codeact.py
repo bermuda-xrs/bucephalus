@@ -4,6 +4,8 @@ import os
 
 from ..kernel.receipts import execute_once, idempotency_key
 from ..security.capabilities import gate_tool_call, render_preview
+from ..security.exposure import ToolNotExposed
+from ..security.exposure import check as exposure_check
 from .sandbox import TOOLCALL_MARKER, run_sandboxed
 
 
@@ -33,6 +35,10 @@ def make_tool_handler(ctx, task, step: int = 0):
         spec = ctx.tools.get(name)
         if spec is None:
             raise ToolCallDenied(f"no such tool {name!r}")
+        try:
+            exposure_check(ctx.tool_policy(task.id), name)
+        except ToolNotExposed as e:
+            raise ToolCallDenied(str(e)) from None
 
         decision = gate_tool_call(ctx, task, spec, args, phase=ctx.phase)
         if decision.verdict == "deny":

@@ -479,6 +479,58 @@ def tool_git_push(ctx, task, remote: str = "origin", branch: str | None = None) 
     }
 
 
+SMALL_TOOLS = ("read_file", "write_file", "search", "run_command", "update_plan")
+SMALL_ONLY = ("search", "run_command", "update_plan")
+
+
+def apply_profile(registry: ToolRegistry, profile: str) -> ToolRegistry:
+    keep = SMALL_TOOLS if profile == "small" else tuple(n for n in registry.names() if n not in SMALL_ONLY)
+    out = ToolRegistry()
+    for name in registry.names():
+        if name in keep:
+            out.register(registry.get(name))
+    return out
+
+
+def tool_search(ctx, task, pattern: str, path: str = ".", glob: str | None = None,
+                names: bool = False) -> dict:
+    if names:
+        recursive = pattern if ("/" in pattern or "**" in pattern) else f"**/{pattern}"
+        return tool_glob(ctx, task, pattern=recursive, path=path)
+    return tool_grep(ctx, task, pattern=pattern, path=path, glob=glob or "**/*")
+
+
+_STATUS_MARK = {"todo": "[ ]", "doing": "[~]", "done": "[x]"}
+
+
+def render_checklist(items: list) -> str:
+    return chr(10).join(f"{_STATUS_MARK[i['status']]} {i['text']}" for i in items)
+
+
+def tool_update_plan(ctx, task, items: list) -> dict:
+    if not isinstance(items, list) or not items:
+        return {"ok": False, "error": "items must be a non-empty list of {text, status}"}
+    clean = []
+    for i in items:
+        if not isinstance(i, dict) or not isinstance(i.get("text"), str) or i.get("status") not in _STATUS_MARK:
+            return {"ok": False, "error": "each item is {\"text\": str, \"status\": todo|doing|done}"}
+        clean.append({"text": i["text"][:200], "status": i["status"]})
+    return {"ok": True, "checklist": render_checklist(clean[:30])}
+
+
+def tool_run_command(ctx, task, command: str, timeout_s: int = 60) -> dict:
+    from .command import CommandRefused, to_program
+    from .codeact import run_code_action
+
+    try:
+        code, verification = to_program(command)
+    except CommandRefused as e:
+        return {"ok": False, "command": command, "error": str(e)}
+    out = run_code_action(ctx, task, code, timeout_s=min(int(timeout_s), 300), live_tools=False)
+    out.update(command=command, verification=verification)
+    return out
+
+
 def _s(**props) -> dict:
     return {"type": "object", "properties": props, "required": list(props)}
 
@@ -670,6 +722,47 @@ def default_registry() -> ToolRegistry:
             max_arg_taint=Taint.USER,
             output_taint=Taint.UNTRUSTED,
             description="run a short python program in the sandbox",
+        )
+    )
+    r.register(
+        ToolSpec(
+            "search",
+            tool_search,
+            {"type": "object",
+             "properties": {"pattern": _STR, "path": _STR, "glob": _STR, "names": {"type": "boolean"}},
+             "required": ["pattern"]},
+            side_effecting=False,
+            max_arg_taint=Taint.UNTRUSTED,
+            output_taint=Taint.UNTRUSTED,
+            description="search file contents for a regex (or, with names=true, file names for a glob)",
+        )
+    )
+    r.register(
+        ToolSpec(
+            "update_plan",
+            tool_update_plan,
+            {"type": "object",
+             "properties": {"items": {"type": "array", "items": {
+                 "type": "object",
+                 "properties": {"text": _STR, "status": {"type": "string", "enum": ["todo", "doing", "done"]}},
+                 "required": ["text", "status"]}}},
+             "required": ["items"]},
+            side_effecting=False,
+            max_arg_taint=Taint.UNTRUSTED,
+            output_taint=Taint.UNTRUSTED,
+            description="keep your own working checklist; the approved plan is not changed",
+        )
+    )
+    r.register(
+        ToolSpec(
+            "run_command",
+            tool_run_command,
+            {"type": "object", "properties": {"command": _STR, "timeout_s": {"type": "integer"}},
+             "required": ["command"]},
+            side_effecting=True,
+            max_arg_taint=Taint.USER,
+            output_taint=Taint.UNTRUSTED,
+            description="run `python FILE`, `python -m MODULE`, `pytest` or `ruff` in the sandbox",
         )
     )
     r.register(
