@@ -184,7 +184,7 @@ def main(argv: list[str] | None = None) -> int:
         prev = json.loads(Path(a.rerun).read_text(encoding="utf-8"))["results"]
         again = {(r["node"], r["op"]) for r in prev if r["status"] in ("timeout", "killed-timeout")}
         ms = [m for m in ms if (m["node"], m["op"]) in again]
-    work = Path(tempfile.mkdtemp(prefix="alpha-mut-"))
+    work = Path(tempfile.mkdtemp(prefix="bucephalus-mut-"))
     trees = [_copy(work / f"w{i}") for i in range(a.jobs)]
     (trees[0] / rel).write_text(ast.unparse(ast.parse(source)), encoding="utf-8")
     status, base = _run(trees[0], a.tests, 600)

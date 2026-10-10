@@ -12,10 +12,10 @@ from agent.proc import _alive  # noqa: PLC2701
 
 
 def test_loopback_unless_remote_is_opted_in(monkeypatch):
-    monkeypatch.delenv("ALPHA_ALLOW_REMOTE", raising=False)
+    monkeypatch.delenv("BUCEPHALUS_ALLOW_REMOTE", raising=False)
     monkeypatch.setenv(desktop.HOST_ENV, "0.0.0.0")
     assert desktop.resolve_host() == "127.0.0.1", "a host env alone must not widen the bind"
-    monkeypatch.setenv("ALPHA_ALLOW_REMOTE", "1")
+    monkeypatch.setenv("BUCEPHALUS_ALLOW_REMOTE", "1")
     assert desktop.resolve_host() == "0.0.0.0"
 
 
@@ -26,9 +26,9 @@ def test_state_goes_to_platformdirs_even_from_inside_a_checkout(tmp_path, monkey
 
     checkout = Path(__file__).resolve().parents[1]
     monkeypatch.chdir(checkout)
-    monkeypatch.setenv("ALPHA_DATA_DIR", "placeholder")
-    monkeypatch.delenv("ALPHA_DATA_DIR")
-    monkeypatch.setenv("ALPHA_CONFIG_DIR", str(tmp_path / "config"))
+    monkeypatch.setenv("BUCEPHALUS_DATA_DIR", "placeholder")
+    monkeypatch.delenv("BUCEPHALUS_DATA_DIR")
+    monkeypatch.setenv("BUCEPHALUS_CONFIG_DIR", str(tmp_path / "config"))
     monkeypatch.setattr(paths, "user_data_dir", lambda: tmp_path / "data")
     cfg, data = desktop.resolve_state()
     assert data == tmp_path / "data"
@@ -129,7 +129,7 @@ def test_the_tree_stops_when_the_window_closes_not_after_its_teardown(monkeypatc
     monkeypatch.setattr(desktop, "start_server", lambda ctx, host: (
         types.SimpleNamespace(config=types.SimpleNamespace(app=app)), None, 1))
     monkeypatch.setattr(desktop, "shutdown", lambda *a, **k: order.append("tree stopped") or [1])
-    monkeypatch.setenv("ALPHA_DATA_DIR", str(tmp_path / "data"))
+    monkeypatch.setenv("BUCEPHALUS_DATA_DIR", str(tmp_path / "data"))
     assert desktop.main([]) == 0
     assert order[:2] == ["tree stopped", "webview teardown"], order
 

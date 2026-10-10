@@ -35,7 +35,7 @@ def cli(tmp_path_factory):
     from agent.paths import ensure_state_dirs
     from agent.plan.planner import approve_plan, draft_plan
 
-    root = tmp_path_factory.mktemp("alpha_cli")
+    root = tmp_path_factory.mktemp("bucephalus_cli")
     ensure_state_dirs(root)
     (root / "policy.md").write_text(
         "# policy\n\nDefault is DENY.\n\n"
@@ -100,7 +100,7 @@ def cli(tmp_path_factory):
     approval_id = ctx.request_approval(
         seeded, ctx.tools.get("write_file"),
         {"path": "work/x.txt", "content": "hello"},
-        "seeded: something for `alpha approvals` to decide", 0)
+        "seeded: something for `bucephalus approvals` to decide", 0)
 
     skill_id = ctx.skills.store(
         name="units", body=(root / "a_skill.md").read_text(encoding="utf-8"),
@@ -119,10 +119,10 @@ def cli(tmp_path_factory):
 
     env = {k: v for k, v in os.environ.items()
            if k not in ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN",
-                        "OPENAI_API_KEY", "ALPHA_TOKEN")}
+                        "OPENAI_API_KEY", "BUCEPHALUS_TOKEN")}
     env.update({"PYTHONPATH": str(ROOT / "src"), "PYTHONUTF8": "1",
-                "PYTHONDONTWRITEBYTECODE": "1", "ALPHA_DATA_DIR": str(root),
-                "ALPHA_CONFIG_DIR": str(root),
+                "PYTHONDONTWRITEBYTECODE": "1", "BUCEPHALUS_DATA_DIR": str(root),
+                "BUCEPHALUS_CONFIG_DIR": str(root),
                 "COLUMNS": "200", "TERM": "dumb", "NO_COLOR": "1"})
 
     class Runner:
@@ -134,7 +134,7 @@ def cli(tmp_path_factory):
                 encoding="utf-8", errors="replace", timeout=timeout)
             if expect is not None:
                 assert r.returncode == expect, (
-                    f"alpha {' '.join(argv)} -> exit {r.returncode}, "
+                    f"bucephalus {' '.join(argv)} -> exit {r.returncode}, "
                     f"expected {expect}\nSTDOUT:\n{r.stdout[-1500:]}\n"
                     f"STDERR:\n{r.stderr[-1500:]}")
             assert "Traceback (most recent call last)" not in r.stderr, \
@@ -327,7 +327,7 @@ def test_tui_starts_and_keeps_running(cli):
         time.sleep(6)
         if p.poll() is not None:
             out, err = p.communicate(timeout=30)
-            pytest.fail(f"`alpha tui` exited {p.returncode}\n"
+            pytest.fail(f"`bucephalus tui` exited {p.returncode}\n"
                         f"{out[-800:]}\n{err[-800:]}")
     finally:
         kill_tree(p.pid)
@@ -473,7 +473,7 @@ def test_schedule_add_then_remove(cli):
 
 def test_schedule_add_without_a_spec_is_exit_2(cli):
     r = cli("schedule", "add", expect=2)
-    assert "usage: alpha schedule add" in r.stdout
+    assert "usage: bucephalus schedule add" in r.stdout
 
 
 def test_schedule_remove_of_nothing_is_exit_1(cli):

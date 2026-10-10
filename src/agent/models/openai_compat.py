@@ -116,7 +116,7 @@ class OpenAICompatibleBackend(BackendBase):
         try:
             if injecting_timeout(n):
                 raise httpx.ReadTimeout(
-                    "INJECTED transport timeout (ALPHA_INJECT_STALL)")
+                    "INJECTED transport timeout (BUCEPHALUS_INJECT_STALL)")
             with client.stream("POST", f"{self.base_url}/chat/completions",
                                timeout=httpx.Timeout(connect=15.0, read=900.0,
                                                      write=30.0, pool=15.0),

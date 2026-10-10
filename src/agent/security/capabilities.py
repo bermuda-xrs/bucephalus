@@ -20,7 +20,7 @@ PROJECT_STATE = (
     "anchor", "skills_store",
     "grading", "bench",
     "runs", "docs/evidence",
-    ".alpha_token", ".env", "policy.md",
+    ".bucephalus_token", ".env", "policy.md",
     "cal.json", ".token_calibration.json", ".measurement.lock",
     "checkouts",
 )
@@ -93,7 +93,7 @@ def within_scope(args: dict, artifact_scope: list[str], root: str = ".") -> tupl
             if _looks_like_path(key, value):
                 return False, (f"{key}={value!r}: this task declared no "
                                "artifact_scope, so no path is permitted - "
-                               "declare one (alpha new --scope work)")
+                               "declare one (bucephalus new --scope work)")
         return True, ""
     roots = [Path(os.path.abspath(os.path.join(root, s))) for s in artifact_scope]
     real_roots = [_resolved(r) for r in roots]

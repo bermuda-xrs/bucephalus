@@ -48,10 +48,10 @@ def server(tmp_path_factory):
         "SYSTEMROOT": __import__("os").environ.get("SYSTEMROOT", ""),
         "PYTHONPATH": str(PROJ / "src"),
         "PYTHONUTF8": "1",
-        "ALPHA_CONFIG": str(cfg_path),
-        "ALPHA_TOKEN": TEST_TOKEN,
-        "ALPHA_DATA_DIR": str(tmp / "user_data"),
-        "ALPHA_CONFIG_DIR": str(tmp / "user_config"),
+        "BUCEPHALUS_CONFIG": str(cfg_path),
+        "BUCEPHALUS_TOKEN": TEST_TOKEN,
+        "BUCEPHALUS_DATA_DIR": str(tmp / "user_data"),
+        "BUCEPHALUS_CONFIG_DIR": str(tmp / "user_config"),
     }
     log_path = tmp / "server.log"
 
@@ -118,7 +118,7 @@ def test_unknown_task_is_404(server):
 def test_console_is_served(server):
     r = _get(server + "/", timeout=10)
     assert r.status_code == 200
-    assert "alpha test 1" in r.text and "Eval suites" in r.text
+    assert "Bucephalus" in r.text and "Eval suites" in r.text
 
 
 def test_suite_crud_over_http(server):

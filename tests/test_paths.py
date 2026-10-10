@@ -16,14 +16,15 @@ from agent.paths import (
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_a_checkout_keeps_state_beside_the_source():
+def test_a_checkout_keeps_state_beside_the_source(monkeypatch):
+    monkeypatch.delenv("BUCEPHALUS_DATA_DIR", raising=False)
     assert checkout_root(ROOT) is not None
     assert checkout_root(ROOT) == ROOT
     assert state_root(ROOT / "config.local.yaml") == ROOT
 
 
 def test_an_installed_package_uses_user_dirs(tmp_path, monkeypatch):
-    monkeypatch.delenv("ALPHA_DATA_DIR", raising=False)
+    monkeypatch.delenv("BUCEPHALUS_DATA_DIR", raising=False)
     lonely = tmp_path / "nowhere" / "deep"
     lonely.mkdir(parents=True)
     monkeypatch.chdir(lonely)
@@ -32,7 +33,7 @@ def test_an_installed_package_uses_user_dirs(tmp_path, monkeypatch):
 
 
 def test_the_data_dir_override_wins(tmp_path, monkeypatch):
-    monkeypatch.setenv("ALPHA_DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("BUCEPHALUS_DATA_DIR", str(tmp_path))
     assert state_root(ROOT / "config.local.yaml") == tmp_path
 
 

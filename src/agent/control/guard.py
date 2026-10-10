@@ -8,9 +8,9 @@ from pathlib import Path
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 
-TOKEN_ENV = "ALPHA_TOKEN"
-TOKEN_FILE = ".alpha_token"
-ALLOW_REMOTE_ENV = "ALPHA_ALLOW_REMOTE"
+TOKEN_ENV = "BUCEPHALUS_TOKEN"
+TOKEN_FILE = ".bucephalus_token"
+ALLOW_REMOTE_ENV = "BUCEPHALUS_ALLOW_REMOTE"
 
 OPEN_PATHS = {"/health"}
 
@@ -32,7 +32,7 @@ def resolve_token(root: str | Path = ".") -> str:
         try:
             legacy.unlink()
             sys.stderr.write(
-                f"alpha: retired the console token found at {legacy}. It lived in "
+                f"bucephalus: retired the console token found at {legacy}. It lived in "
                 "the project folder, which may sync to the cloud; a new one is in "
                 f"{path.parent}. If the folder syncs, also delete it from the "
                 "service's deleted items and version history.\n")
@@ -134,7 +134,7 @@ class AccessGuard(BaseHTTPMiddleware):
         if header.lower().startswith("bearer "):
             if _same(header[7:].strip(), self.token):
                 return True
-        supplied = request.headers.get("x-alpha-token") or \
+        supplied = request.headers.get("x-bucephalus-token") or \
             request.query_params.get("token", "")
         return bool(supplied) and _same(supplied, self.token)
 

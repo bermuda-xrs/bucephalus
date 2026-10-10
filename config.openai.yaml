@@ -1,7 +1,7 @@
 # The same all-local run as config.local.yaml, through the OpenAI
 # chat-completions protocol instead of Ollama's native API.
 #
-#   .\alpha.ps1 --config config.openai.yaml new "..." --scope work
+#   .\bucephalus.ps1 --config config.openai.yaml new "..." --scope work
 #
 # Same server, same weights, same tasks. The ONLY differences from
 # config.local.yaml are `kind`, `base_url`, and the db/anchor paths. That is

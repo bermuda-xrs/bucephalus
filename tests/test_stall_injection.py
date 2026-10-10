@@ -14,7 +14,7 @@ from agent.models import stall  # noqa: E402
 
 @pytest.fixture(autouse=True)
 def _clean_env(monkeypatch):
-    monkeypatch.delenv("ALPHA_INJECT_STALL", raising=False)
+    monkeypatch.delenv("BUCEPHALUS_INJECT_STALL", raising=False)
     stall.reset_injection_counter()
     yield
     stall.reset_injection_counter()
@@ -28,7 +28,7 @@ def test_injection_cannot_fire_without_the_flag():
 
 
 def test_injection_fires_only_on_the_named_calls(monkeypatch):
-    monkeypatch.setenv("ALPHA_INJECT_STALL", "2,4")
+    monkeypatch.setenv("BUCEPHALUS_INJECT_STALL", "2,4")
     assert stall._inject_on() == {2, 4}  # noqa: SLF001
     fired = [n for n in range(1, 7) if n in stall._inject_on()]  # noqa: SLF001
     assert fired == [2, 4]
@@ -36,17 +36,17 @@ def test_injection_fires_only_on_the_named_calls(monkeypatch):
 
 def test_garbage_in_the_flag_disables_it_rather_than_firing(monkeypatch):
     for bad in ("yes", "all", "-1", "1;2", " ", "abc,def"):
-        monkeypatch.setenv("ALPHA_INJECT_STALL", bad)
+        monkeypatch.setenv("BUCEPHALUS_INJECT_STALL", bad)
         assert stall._inject_on() == set(), f"{bad!r} should disable injection"
 
 
 def test_the_flag_is_read_from_the_environment_only():
     sites = {
         path.relative_to(ROOT).as_posix(): text.count(
-            'os.environ.get("ALPHA_INJECT_STALL"')
+            'os.environ.get("BUCEPHALUS_INJECT_STALL"')
         for path in (ROOT / "src" / "agent").rglob("*.py")
         if (text := path.read_text(encoding="utf-8"))
-        and "ALPHA_INJECT_STALL" in text
+        and "BUCEPHALUS_INJECT_STALL" in text
     }
     assert sum(sites.values()) == 1, (
         f"the switch must be READ in exactly one place; found {sites}")

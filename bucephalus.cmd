@@ -14,8 +14,8 @@ set "PYTHONPATH=%HERE%src;%PYTHONPATH%"
 set "PYTHONUTF8=1"
 if exist "%HERE%.venv\Scripts\python.exe" (
   set "PY=%HERE%.venv\Scripts\python.exe"
-) else if exist "%USERPROFILE%\.alpha-test-1-venv\Scripts\python.exe" (
-  set "PY=%USERPROFILE%\.alpha-test-1-venv\Scripts\python.exe"
+) else if exist "%USERPROFILE%\.bucephalus-venv\Scripts\python.exe" (
+  set "PY=%USERPROFILE%\.bucephalus-venv\Scripts\python.exe"
 ) else (
   set "PY=python"
 )

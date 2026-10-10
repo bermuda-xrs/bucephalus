@@ -123,7 +123,7 @@ def test_a_cross_origin_request_is_refused_and_the_same_origin_is_not(ctx):
 def test_the_token_is_accepted_from_the_header_or_the_query_alone(ctx):
     app, c = _guarded(ctx)
     t = app.state.token
-    assert c.get("/approvals", headers={"X-Alpha-Token": t, "Authorization": ""}).status_code == 200
+    assert c.get("/approvals", headers={"X-Bucephalus-Token": t, "Authorization": ""}).status_code == 200
     assert c.get("/approvals", params={"token": t}, headers={"Authorization": ""}).status_code == 200
     assert c.get("/approvals", params={"token": t + "x"}, headers={"Authorization": ""}).status_code == 401
     assert c.get("/approvals", headers={"Authorization": ""}).status_code == 401

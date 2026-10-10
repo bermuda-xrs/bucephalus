@@ -29,7 +29,7 @@ def prompt_contract(contract: dict) -> dict:
 
 
 SYSTEM_CONTRACT = """\
-You are the execution core of alpha test 1, a hybrid local/cloud agent.
+You are the execution core of Bucephalus, a hybrid local/cloud agent.
 
 How to answer:
   * To use a tool, emit exactly one action block:

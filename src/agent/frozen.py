@@ -3,8 +3,8 @@ from __future__ import annotations
 import os
 import sys
 
-SANDBOX_CHILD_FLAG = "--alpha-sandbox-child"
-CHILD_ENV = "ALPHA_SANDBOX_CHILD"
+SANDBOX_CHILD_FLAG = "--bucephalus-sandbox-child"
+CHILD_ENV = "BUCEPHALUS_SANDBOX_CHILD"
 
 _ACCEPTED = {"-I", "-u", "-E", "-s", "-S", "-B", "-P"}
 

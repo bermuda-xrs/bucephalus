@@ -13,7 +13,7 @@ param([switch]$InPlace)
 
 $ErrorActionPreference = "Stop"
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
-$venv = if ($InPlace) { Join-Path $here ".venv" } else { Join-Path $env:USERPROFILE ".alpha-test-1-venv" }
+$venv = if ($InPlace) { Join-Path $here ".venv" } else { Join-Path $env:USERPROFILE ".bucephalus-venv" }
 
 Write-Host "venv -> $venv" -ForegroundColor Cyan
 
@@ -32,7 +32,7 @@ if (-not (Test-Path "$venv\Scripts\python.exe")) {
 }
 & "$venv\Scripts\python.exe" -m pip install --quiet --upgrade pip
 & "$venv\Scripts\python.exe" -m pip install --quiet `
-    pydantic httpx anthropic pyyaml fastapi uvicorn scipy rich pytest pytest-asyncio `
+    pydantic httpx anthropic pyyaml fastapi uvicorn scipy rich textual platformdirs pytest pytest-asyncio pytest-xdist ruff `
     "sympy==1.13.3"
 
 Write-Host "`nverifying..." -ForegroundColor Cyan
@@ -47,6 +47,6 @@ Write-Host @"
 
 Next:
   1. .\ollama-serve.ps1                     (leave open; serves the models)
-  2. .\alpha.ps1 --config config.local.yaml serve    (console on :8901)
+  2. .\bucephalus.ps1 --config config.local.yaml serve    (console on :8901)
   3. Read docs/HANDOVER.md
 "@ -ForegroundColor Green

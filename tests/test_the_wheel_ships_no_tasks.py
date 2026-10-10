@@ -40,7 +40,7 @@ def test_the_wheel_contains_no_bench_directory(wheel):
 def test_the_wheel_contains_no_task_files(wheel):
     data = [n for n in wheel.namelist()
             if n.endswith((".json", ".yaml", ".yml"))
-            and not n.startswith("alpha_test_1-")]
+            and not n.startswith("bucephalus-")]
     assert not data, f"task-shaped data in the wheel: {data}"
 
 
@@ -63,13 +63,13 @@ def test_no_grading_key_is_anywhere_in_the_wheel(wheel):
 
 def test_the_wheel_ships_only_the_package(wheel):
     tops = {n.split("/")[0] for n in wheel.namelist()}
-    assert tops == {"agent", "alpha_test_1-0.1.0.dist-info"}, sorted(tops)
+    assert tops == {"agent", "bucephalus-0.1.0.dist-info"}, sorted(tops)
 
 
 def test_the_only_non_python_payload_is_the_runtime_assets(wheel):
     payload = sorted(n for n in wheel.namelist()
                      if not n.endswith(".py")
-                     and not n.startswith("alpha_test_1-")
+                     and not n.startswith("bucephalus-")
                      and not n.endswith("/"))
     assert payload == ["agent/assets/banner.ans", "agent/control/md.js", "agent/control/ui.css",
                        "agent/control/ui.html", "agent/control/ui.js",

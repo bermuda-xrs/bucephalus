@@ -91,7 +91,7 @@ def measurement(ctx) -> dict:
     inv = Path(__file__).resolve().parents[3] / "bench" / "inventory.py"
     inventory = None
     if inv.is_file():
-        spec = importlib.util.spec_from_file_location("alpha_inventory", inv)
+        spec = importlib.util.spec_from_file_location("bucephalus_inventory", inv)
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
         inventory = mod.take(ctx.config.resolve_state(ctx.config.db_path))

@@ -6,9 +6,9 @@ after 30 paired trials clear all four conditions, and only with a human
 approving.
 
 ```bat
-.\alpha.ps1 skills --add examples\skills\verbatim.md --name verbatim --when "asked what a file says"
+.\bucephalus.ps1 skills --add examples\skills\verbatim.md --name verbatim --when "asked what a file says"
 python bench\run.py paired <skill_id> --suite bench\tasks
-.\alpha.ps1 skills --gate <skill_id>
+.\bucephalus.ps1 skills --gate <skill_id>
 ```
 
 The shape that matters, from M9.3 and the evidence behind it:

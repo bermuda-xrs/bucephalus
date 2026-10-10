@@ -32,7 +32,7 @@ def test_a_timeout_is_raised_as_a_stall_not_a_generic_backend_error(
     from agent.models import stall as stall_mod
     from agent.models.registry import build_backend
 
-    monkeypatch.setenv("ALPHA_INJECT_STALL", "1t")
+    monkeypatch.setenv("BUCEPHALUS_INJECT_STALL", "1t")
     stall_mod.reset_injection_counter()
     cfg = BackendConfig(kind=kind, model="granite4.1:3b", trust_tier="local",
                         **extra)

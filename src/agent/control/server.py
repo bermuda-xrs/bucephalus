@@ -125,7 +125,7 @@ class SkillIn(BaseModel):
 
 
 def create_app(ctx: AgentContext) -> FastAPI:
-    app = FastAPI(title="alpha test 1", version="0.1.0")
+    app = FastAPI(title="Bucephalus", version="0.1.0")
     app.state.ctx = ctx
 
     token = resolve_token(ctx.config.root)

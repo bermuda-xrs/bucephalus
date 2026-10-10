@@ -32,7 +32,7 @@ def test_S1_a_data_stream_spelling_is_refused_everywhere(ctx, workspace, name):
                        Budget(usd=1.0, seconds=60))
     before = {p.name for p in root.iterdir()}
     r = _client(ctx).post(f"/tasks/{task.id}/files",
-                          json={"path": name, "content_b64": base64.b64encode(b"ALPHA_TOKEN=x").decode()})
+                          json={"path": name, "content_b64": base64.b64encode(b"BUCEPHALUS_TOKEN=x").decode()})
     assert r.status_code == 403, (name, r.status_code, r.text)
     assert {p.name for p in root.iterdir()} == before, "a file appeared"
     assert is_protected(name, str(root), ())
@@ -42,7 +42,7 @@ def test_S1_a_data_stream_spelling_is_refused_everywhere(ctx, workspace, name):
 
 
 def test_S2_the_tui_never_decides_an_approval_it_is_not_showing(ctx, workspace):
-    from agent.tui.app import AlphaTUI
+    from agent.tui.app import BucephalusTUI
 
     other = create_task(ctx.conn, ctx.log, TaskContract(goal="other", artifact_scope=["work"]),
                         Budget(usd=1.0, seconds=60))
@@ -52,7 +52,7 @@ def test_S2_the_tui_never_decides_an_approval_it_is_not_showing(ctx, workspace):
                         Budget(usd=1.0, seconds=60))
 
     async def go():
-        app = AlphaTUI(ctx, task_id=shown.id)
+        app = BucephalusTUI(ctx, task_id=shown.id)
         async with app.run_test(size=(140, 44)) as pilot:
             await pilot.pause(0.3)
             app.query_one("#trail").focus()
@@ -65,7 +65,7 @@ def test_S2_the_tui_never_decides_an_approval_it_is_not_showing(ctx, workspace):
 
 
 def test_S2_resuming_from_the_tui_needs_a_signed_plan_when_plans_are_required(ctx, workspace):
-    from agent.tui.app import AlphaTUI
+    from agent.tui.app import BucephalusTUI
 
     ctx.config.autonomy.plan_required = True
     t = create_task(ctx.conn, ctx.log, TaskContract(goal="t", artifact_scope=["work"]),
@@ -74,7 +74,7 @@ def test_S2_resuming_from_the_tui_needs_a_signed_plan_when_plans_are_required(ct
                          {"path": "work/a.txt", "content": "x"}, "needs a human", 0)
 
     async def go():
-        app = AlphaTUI(ctx, task_id=t.id)
+        app = BucephalusTUI(ctx, task_id=t.id)
         async with app.run_test(size=(140, 44)) as pilot:
             await pilot.pause(0.3)
             app.query_one("#trail").focus()

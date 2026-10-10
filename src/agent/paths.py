@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import os
+import shutil
 from pathlib import Path
 
-APP = "alpha-test-1"
+APP = "bucephalus"
+LEGACY_APP = "alpha-test-1"
 
 _CHECKOUT_MARKERS = ("pyproject.toml", "src/agent", "bench")
 
@@ -20,23 +22,42 @@ def checkout_root(start: str | Path | None = None) -> Path | None:
     return None
 
 
+def _adopt_legacy(new: Path, old: Path) -> Path:
+    if new.exists() or new == old or not old.is_dir():
+        return new
+    staging = new.with_name(f"{new.name}.migrating-{os.getpid()}")
+    try:
+        new.parent.mkdir(parents=True, exist_ok=True)
+        shutil.rmtree(staging, ignore_errors=True)
+        shutil.copytree(old, staging)
+        os.replace(staging, new)
+    except OSError as e:
+        shutil.rmtree(staging, ignore_errors=True)
+        if new.is_dir():
+            return new
+        raise RuntimeError(f"could not copy {old} to {new}: {e}. nothing was changed; the old directory is intact") from e
+    return new
+
+
 def user_config_dir() -> Path:
     import platformdirs
 
-    return Path(os.environ.get("ALPHA_CONFIG_DIR")
-                or platformdirs.user_config_dir(APP))
+    if os.environ.get("BUCEPHALUS_CONFIG_DIR"):
+        return Path(os.environ["BUCEPHALUS_CONFIG_DIR"])
+    return _adopt_legacy(Path(platformdirs.user_config_dir(APP)), Path(platformdirs.user_config_dir(LEGACY_APP)))
 
 
 def user_data_dir() -> Path:
     import platformdirs
 
-    return Path(os.environ.get("ALPHA_DATA_DIR")
-                or platformdirs.user_data_dir(APP))
+    if os.environ.get("BUCEPHALUS_DATA_DIR"):
+        return Path(os.environ["BUCEPHALUS_DATA_DIR"])
+    return _adopt_legacy(Path(platformdirs.user_data_dir(APP)), Path(platformdirs.user_data_dir(LEGACY_APP)))
 
 
 def state_root(config_path: str | Path | None = None) -> Path:
-    if os.environ.get("ALPHA_DATA_DIR"):
-        return Path(os.environ["ALPHA_DATA_DIR"])
+    if os.environ.get("BUCEPHALUS_DATA_DIR"):
+        return Path(os.environ["BUCEPHALUS_DATA_DIR"])
     if config_path is not None:
         root = checkout_root(Path(config_path).resolve().parent)
         if root is not None:

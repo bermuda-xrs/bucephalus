@@ -7,7 +7,7 @@ files attached, only pointing at.
 ---
 
 You are picking up an in-progress research project at
-`C:\Users\char1\OneDrive\Desktop\Βουκεφάλας\alpha-test-1`. It is a working
+`C:\Users\char1\OneDrive\Desktop\Βουκεφάλας\bucephalus`. It is a working
 system, not a greenfield build — 40+ commits, 257 passing tests. Your job is to
 continue it, not to redesign it.
 
@@ -66,9 +66,9 @@ measurement.
 
 - `pip install -e .` **does not work** at this path — the folder name has Greek
   characters and setuptools writes its `.pth` in the system ANSI codepage. Use
-  `.\alpha.ps1`; pytest gets `pythonpath` from `pyproject.toml`.
+  `.\bucephalus.ps1`; pytest gets `pythonpath` from `pyproject.toml`.
 - The virtualenv is **outside** the project at
-  `%USERPROFILE%\.alpha-test-1-venv` — OneDrive deleted an in-folder one twice.
+  `%USERPROFILE%\.bucephalus-venv` — OneDrive deleted an in-folder one twice.
   `.\setup.ps1` rebuilds it.
 - Local models need a **dedicated Ollama instance on port 11435**. Run
   `.\ollama-serve.ps1` in its own window and leave it open, or every model

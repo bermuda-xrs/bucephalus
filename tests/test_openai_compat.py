@@ -231,7 +231,7 @@ def test_the_stall_switch_is_shared_so_an_injected_index_survives_the_switch():
 
 
 def test_an_injected_stall_on_the_new_adapter_is_a_model_stall(monkeypatch):
-    monkeypatch.setenv("ALPHA_INJECT_STALL", "1")
+    monkeypatch.setenv("BUCEPHALUS_INJECT_STALL", "1")
     stall_mod.reset_injection_counter()
     b, c = backend()
     with pytest.raises(stall_mod.ModelStall, match="INJECTED"):

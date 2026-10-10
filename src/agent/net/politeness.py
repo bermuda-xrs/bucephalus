@@ -7,7 +7,7 @@ from urllib.parse import urlparse
 
 import httpx
 
-USER_AGENT = "alpha-test-1/0.1 (personal agent)"
+USER_AGENT = "bucephalus/0.1 (personal agent)"
 
 MIN_INTERVAL_S = 1.0
 

@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+import atexit
+import os
+import shutil
 import socket
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 
@@ -11,11 +15,18 @@ import pytest
 from agent.config import AutonomyConfig, BackendConfig, Config, GateConfig, Limits
 from agent.context import AgentContext
 
+_SCRATCH = tempfile.mkdtemp(prefix="bucephalus_user_")
+atexit.register(shutil.rmtree, _SCRATCH, ignore_errors=True)
+for _var, _name in (("BUCEPHALUS_DATA_DIR", "data"), ("BUCEPHALUS_CONFIG_DIR", "config")):
+    os.environ[_var] = os.path.join(_SCRATCH, _name)
+    os.makedirs(os.environ[_var])
+
 
 @pytest.fixture(autouse=True)
 def _user_dirs_are_scratch(tmp_path_factory, monkeypatch):
-    monkeypatch.setenv("ALPHA_CONFIG_DIR", str(tmp_path_factory.mktemp("user_config")))
+    monkeypatch.setenv("BUCEPHALUS_CONFIG_DIR", str(tmp_path_factory.mktemp("user_config")))
     data = str(tmp_path_factory.mktemp("user_data"))
+    monkeypatch.setenv("BUCEPHALUS_DATA_DIR", data)
     monkeypatch.setattr("platformdirs.user_data_dir", lambda *a, **k: data)
 
 

@@ -101,7 +101,7 @@ def _inject_timeout_on() -> set[int]:
 
 
 def _inject_spec() -> dict[int, str]:
-    raw = os.environ.get("ALPHA_INJECT_STALL", "").strip()
+    raw = os.environ.get("BUCEPHALUS_INJECT_STALL", "").strip()
     if not raw:
         return {}
     out: dict[int, str] = {}
@@ -119,7 +119,7 @@ def injected_stall(n: int, baseline: float | None) -> ModelStall | None:
     if n not in _inject_on():
         return None
     return ModelStall(
-        f"INJECTED stall on model call {n} (ALPHA_INJECT_STALL) - aborted as "
+        f"INJECTED stall on model call {n} (BUCEPHALUS_INJECT_STALL) - aborted as "
         "a machine fault, not a task outcome",
         0.01, baseline or 2.5, 0, 0.0)
 

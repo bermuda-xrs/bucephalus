@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 
-from agent.tui.app import AlphaTUI
+from agent.tui.app import BucephalusTUI
 
 
 def _events(ctx, tid):
@@ -28,7 +28,7 @@ async def _until(pilot, cond, seconds=20.0):
 
 def test_submitting_drafts_a_plan_and_runs_nothing_until_it_is_signed(ctx, workspace):
     async def go():
-        app = AlphaTUI(ctx)
+        app = BucephalusTUI(ctx)
         async with app.run_test(size=(140, 44)) as pilot:
             app.query_one("#goal").value = "summarise work/notes.md"
             await pilot.press("enter")
@@ -49,7 +49,7 @@ def test_submitting_drafts_a_plan_and_runs_nothing_until_it_is_signed(ctx, works
 
 def test_sending_a_plan_back_records_why_and_runs_nothing(ctx, workspace):
     async def go():
-        app = AlphaTUI(ctx)
+        app = BucephalusTUI(ctx)
         async with app.run_test(size=(140, 44)) as pilot:
             app.query_one("#goal").value = "count the files"
             await pilot.press("enter")
@@ -68,7 +68,7 @@ def test_sending_a_plan_back_records_why_and_runs_nothing(ctx, workspace):
 
 def test_the_status_bar_carries_the_model_and_the_context_meter(ctx, workspace):
     async def go():
-        app = AlphaTUI(ctx)
+        app = BucephalusTUI(ctx)
         async with app.run_test(size=(140, 44)) as pilot:
             await pilot.pause(0.3)
             bar = str(app.query_one("#budget").render())
@@ -80,7 +80,7 @@ def test_the_input_and_the_status_bar_are_on_screen(ctx, workspace):
     from textual.widgets import Footer
 
     async def go():
-        app = AlphaTUI(ctx)
+        app = BucephalusTUI(ctx)
         async with app.run_test(size=(140, 44)) as pilot:
             await pilot.pause(0.3)
             screen = app.screen.region

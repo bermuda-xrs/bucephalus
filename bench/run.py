@@ -326,7 +326,7 @@ def _paired(args) -> int:
 
     if primary.verdict == "promote":
         print("\ngate passed. Promotion still needs a human: "
-              f"alpha skills --gate {args.skill_id} --yes")
+              f"bucephalus skills --gate {args.skill_id} --yes")
     ctx.close()
     return 0
 
@@ -364,7 +364,7 @@ def _print_arm(label: str, d: dict) -> None:
 
 
 def main() -> int:
-    p = argparse.ArgumentParser(description="alpha test 1 benchmark harness")
+    p = argparse.ArgumentParser(description="Bucephalus benchmark harness")
     p.add_argument("--config", default="config.yaml")
     p.add_argument("--profile", choices=["local", "mixed"],
                    help="enforced backend profile; 'local' forbids cloud "

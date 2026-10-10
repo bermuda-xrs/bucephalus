@@ -1,5 +1,5 @@
 [project]
-name = "alpha-test-1"
+name = "bucephalus"
 version = "0.1.0"
 description = "Hybrid local/cloud agent system with verified skill learning"
 requires-python = ">=3.11"
@@ -32,7 +32,7 @@ dev = ["pytest>=8.0", "pytest-asyncio>=0.23", "pytest-xdist>=3.5", "pytest-cov>=
        "ruff>=0.6"]     # CI lint, bug rules only (tool.ruff below)
 
 [project.scripts]
-alpha = "agent.cli:main"
+bucephalus = "agent.cli:main"
 
 [tool.ruff]
 extend-exclude = ["tests/archive", "bench/archive", "build"]
@@ -66,5 +66,5 @@ filterwarnings = ["ignore::DeprecationWarning"]
 # Editable installs (`pip install -e .`) fail when this project lives under a
 # path containing non-ASCII characters on a machine whose ANSI codepage is not
 # UTF-8: setuptools encodes its .pth file with the locale codec and raises
-# UnicodeEncodeError. Hence `pythonpath` above and the alpha.cmd launcher —
+# UnicodeEncodeError. Hence `pythonpath` above and the bucephalus.cmd launcher —
 # neither needs the package installed. See README, "Running it".

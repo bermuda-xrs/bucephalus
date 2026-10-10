@@ -92,7 +92,7 @@ def start_server(endpoint: str, root: Path, wait_s: float = 30.0) -> None:
         raise Refused("ollama is not installed (https://ollama.com)")
     env = {**os.environ, "OLLAMA_HOST": f"127.0.0.1:{u.port}",
            "OLLAMA_KEEP_ALIVE": KEEP_ALIVE, "OLLAMA_CONTEXT_LENGTH": CONTEXT_LENGTH}
-    models = os.environ.get("ALPHA_OLLAMA_MODELS") or Path(root).parent / "ollama-models"
+    models = os.environ.get("BUCEPHALUS_OLLAMA_MODELS") or Path(root).parent / "ollama-models"
     if Path(models).is_dir():
         env["OLLAMA_MODELS"] = str(models)
     _owned[endpoint] = subprocess.Popen(  # noqa: S603

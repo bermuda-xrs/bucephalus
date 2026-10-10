@@ -7,9 +7,9 @@ const OPEN = Object.fromEntries(new URLSearchParams(location.hash.slice(1)));
 const TOKEN = (() => {
   const fromHash = OPEN.token;
   try {
-    if (fromHash) sessionStorage.setItem("alpha-token", fromHash);
+    if (fromHash) sessionStorage.setItem("bucephalus-token", fromHash);
     if (location.hash) history.replaceState(null, "", location.pathname);
-    return fromHash || sessionStorage.getItem("alpha-token") || "";
+    return fromHash || sessionStorage.getItem("bucephalus-token") || "";
   } catch { return fromHash || ""; }
 })();
 window.addEventListener("hashchange", () => {
@@ -66,10 +66,10 @@ async function applyTheme() {
 }
 function setTheme(mode) {
   document.documentElement.dataset.theme = mode;
-  try { localStorage.setItem("alpha-theme", mode); } catch { /* per-viewer only */ }
+  try { localStorage.setItem("bucephalus-theme", mode); } catch { /* per-viewer only */ }
 }
 function toggleTheme() { setTheme(document.documentElement.dataset.theme === "light" ? "dark" : "light"); }
-try { const m = localStorage.getItem("alpha-theme"); if (m) document.documentElement.dataset.theme = m; } catch { /* dark */ }
+try { const m = localStorage.getItem("bucephalus-theme"); if (m) document.documentElement.dataset.theme = m; } catch { /* dark */ }
 
 async function loadAlerts() {
   try {
@@ -104,7 +104,7 @@ async function loadSide() {
       <span class="t">${esc(c.title)}</span><span class="s">${c.needs_you} to sign or decide</span></button>`);
   $("#needsList").innerHTML = needs.join("") || `<div class="empty">Nothing is waiting on you.</div>`;
   $("#nNeeds").textContent = needs.length || "";
-  document.title = (needs.length ? `(${needs.length}) ` : "") + "alpha test 1";
+  document.title = (needs.length ? `(${needs.length}) ` : "") + "Bucephalus";
   const item = c => `<button class="side-item" data-action="selectConversation" ${args(c.id)}
       ${c.id === S.conv ? 'aria-current="true"' : ""}><span class="t">${c.pinned ? '<span class="pin" aria-label="Pinned">●</span> ' : ""}${esc(c.title)}</span>
       <span class="s">${c.n_tasks} ${c.n_tasks === 1 ? "task" : "tasks"}, ${ago(c.updated_at)}</span></button>`;
@@ -134,7 +134,7 @@ function notifyNeeds(gates, convs) {
 function notify(title, body) {
   try {
     if (!document.hidden || !("Notification" in window) || Notification.permission !== "granted") return;
-    const n = new Notification(title, {body, tag: "alpha"});
+    const n = new Notification(title, {body, tag: "bucephalus"});
     n.onclick = () => { window.focus(); n.close(); };
   } catch { /* the title count still shows it */ }
 }
@@ -615,8 +615,8 @@ const PANES = {
         ${t.entries.map(e => `<div class="entry"><span class="taint">${esc(e.taint)}</span> ${esc(e.text)}
           <button class="quiet" data-action="forgetMemory" ${args(e.text)}>Forget</button></div>`).join("")
           || '<div class="empty">Empty.</div>'}`).join("")}
-      <h4>Accept what is here</h4><p class="note">Same as <code>alpha memory --accept</code>. Forget removes a
-      line and accepts what is left, like <code>alpha memory --forget</code>.</p>
+      <h4>Accept what is here</h4><p class="note">Same as <code>bucephalus memory --accept</code>. Forget removes a
+      line and accepts what is left, like <code>bucephalus memory --forget</code>.</p>
       <button class="btn" data-action="acceptMemory">Accept this memory</button>`;
   },
   async schedules() {
@@ -988,7 +988,7 @@ new MutationObserver(() => document.querySelectorAll("i[data-pct]").forEach(i =>
   applyTheme(); renderWelcome();
   if (window.innerWidth < 1100) $("#app").classList.add("files-closed");   // a drawer there
   if (!TOKEN) {
-    $("#health").textContent = "No session. Open the console from the desktop app, or the link alpha serve prints.";
+    $("#health").textContent = "No session. Open the console from the desktop app, or the link bucephalus serve prints.";
     return;
   }
   try {

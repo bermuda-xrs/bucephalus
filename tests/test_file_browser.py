@@ -33,7 +33,7 @@ def world(ctx, workspace):
     app = create_app(ctx)
     client = TestClient(app, base_url="http://127.0.0.1")
     client.headers["Authorization"] = "Bearer " + app.state.token
-    token_file = next(Path(os.environ["ALPHA_CONFIG_DIR"]).glob("*token*"))
+    token_file = next(Path(os.environ["BUCEPHALUS_CONFIG_DIR"]).glob("*token*"))
     return client, task.id, root, token_file, ctx
 
 
@@ -76,7 +76,7 @@ def test_absolute_paths_to_state_are_refused(world):
               root / "grading" / "t1" / "verify.py"):
         r = _get(client, tid, str(p))
         assert r.status_code in (403, 404), p
-        assert SECRET not in r.text and "alpha-token" not in r.text
+        assert SECRET not in r.text and "bucephalus-token" not in r.text
 
 
 def test_a_link_out_of_the_workspace_is_not_followed(world):

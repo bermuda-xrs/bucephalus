@@ -67,7 +67,7 @@ def test_F2_the_console_page_does_not_carry_the_token(ctx, workspace):
         token = server.config.app.state.token
         with urllib.request.urlopen(f"http://127.0.0.1:{port}/", timeout=10) as r:
             body = r.read().decode("utf-8")
-        assert r.status == 200 and "alpha" in body
+        assert r.status == 200 and "Bucephalus" in body
         assert token not in body, "any local caller reads the bearer token from GET /"
     finally:
         desktop.shutdown(server, thread)
@@ -80,5 +80,5 @@ def test_F2_the_token_reaches_the_console_in_the_url_fragment():
     assert url == "http://127.0.0.1:4321/#token=tok-123"
     ctl = Path(__file__).resolve().parents[1] / "src" / "agent" / "control"
     ui = "".join((ctl / n).read_text(encoding="utf-8") for n in ("ui.html", "ui.js"))
-    assert "__ALPHA_TOKEN__" not in ui
+    assert "__BUCEPHALUS_TOKEN__" not in ui
     assert "location.hash" in ui

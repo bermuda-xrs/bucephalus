@@ -2,7 +2,7 @@ import json, pathlib, sys
 from agent.paths import state_root, ensure_state_dirs
 root = state_root(None)
 print("state_root ->", root)
-print("is the checkout? ", "alpha-test-1" in str(root) and "OneDrive" in str(root))
+print("is the checkout? ", "bucephalus" in str(root) and "OneDrive" in str(root))
 ensure_state_dirs(root)
 from agent.config import Config, BackendConfig, Limits, AutonomyConfig, GateConfig
 from agent.context import AgentContext

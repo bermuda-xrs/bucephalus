@@ -112,7 +112,7 @@ def main() -> int:
     SANDBOX = fresh_sandbox(SANDBOX_BASE)
     ctx = build_ctx(SANDBOX)
     console.print(Panel("scripted model · no API key · no network",
-                        title="alpha test 1 — demo", border_style="cyan"))
+                        title="Bucephalus — demo", border_style="cyan"))
 
     task = create_task(
         ctx.conn, ctx.log,

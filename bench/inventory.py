@@ -62,7 +62,7 @@ ROWS: list[tuple[str, str, str, str]] = [
     ("a model call stalls", "task.model_stalled", "event", ""),
     ("a task crashes", "task.crashed", "event", ""),
 
-    ("alpha snapshot (the backup API)", "writes a FILE", "none", ""),
+    ("bucephalus snapshot (the backup API)", "writes a FILE", "none", ""),
     ("the TUI", "paints a terminal", "none", ""),
     ("the control plane: server, SSE, console", "answers HTTP", "none", ""),
     ("the POSIX rlimit branch", "ran in WSL2 only (docs/evidence/wsl-2026-09-25)", "none", ""),

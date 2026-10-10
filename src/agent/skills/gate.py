@@ -48,7 +48,7 @@ def check_contamination(ctx, skill_id: str, task_key: str) -> None:
     if prov.get("drafted_from") is None:
         raise ContaminationError(
             f"skill {skill_id[:12]} records no drafting set, so no trial can be "
-            "certified uncontaminated. Declare it, once: alpha skills "
+            "certified uncontaminated. Declare it, once: bucephalus skills "
             f"--declare-drafted-from {skill_id} KEYS|none - 'none' is a human "
             "asserting it was drafted from none of the suite's tasks.")
     drafted_from = set(prov["drafted_from"])

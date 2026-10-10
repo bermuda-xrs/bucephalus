@@ -498,7 +498,7 @@ def test_the_channel_binds_nothing(bot):
 def test_allow_remote_is_untouched_by_this_phase():
     guard = (ROOT / "src" / "agent" / "control" / "guard.py").read_text(
         encoding="utf-8")
-    assert 'ALLOW_REMOTE_ENV = "ALPHA_ALLOW_REMOTE"' in guard
+    assert 'ALLOW_REMOTE_ENV = "BUCEPHALUS_ALLOW_REMOTE"' in guard
     assert "if not self.allow_remote and not is_loopback_host(host):" in guard
     assert "allow_remote and host and" not in guard
 

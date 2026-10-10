@@ -88,7 +88,7 @@ def fetch_with_provenance(url: str, *, max_bytes: int = MAX_BYTES,
     final_url = url
     try:
         with httpx.Client(follow_redirects=True, timeout=timeout_s,
-                          headers={"User-Agent": "alpha-test-1/0.1 (personal agent)"}) as c:
+                          headers={"User-Agent": "bucephalus/0.1 (personal agent)"}) as c:
             with c.stream("GET", url) as r:
                 r.raise_for_status()
                 final_url = str(r.url)

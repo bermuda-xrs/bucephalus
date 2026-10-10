@@ -224,7 +224,7 @@ def _watch(proc, max_processes: int, memory_bytes: int | None) -> None:
         except Exception:  # noqa: BLE001
             reason = None
         if reason:
-            proc.alpha_limit = reason
+            proc.limit_reason = reason
             try:
                 os.killpg(proc.pid, signal.SIGKILL)
             except OSError:
@@ -243,7 +243,7 @@ def spawn_limited(argv: list[str], *, timeout_s: int, memory_bytes: int,
         limits["as"] = int(memory_bytes)
     wrapped = [*interpreter_argv(), "-c", LIMITER, json.dumps(limits), *argv]
     proc = subprocess.Popen(wrapped, start_new_session=True, **popen)  # noqa: S603
-    proc.alpha_limit = None
+    proc.limit_reason = None
     threading.Thread(
         target=_watch, args=(proc, max_processes,
                              None if memory_by_rlimit else memory_bytes),
@@ -259,7 +259,7 @@ def spawn_limited(argv: list[str], *, timeout_s: int, memory_bytes: int,
 
 def exit_note(proc, timeout_s: int) -> str:
     if getattr(proc, "alpha_limit", None):
-        return f"\nsandbox: {proc.alpha_limit}"
+        return f"\nsandbox: {proc.limit_reason}"
     if proc.returncode == -getattr(signal, "SIGXCPU", 24):
         return f"\nsandbox: CPU time limit reached ({timeout_s} s)"
     if proc.returncode == -getattr(signal, "SIGXFSZ", 25):

@@ -103,7 +103,7 @@ def test_every_named_alpha_subcommand_exists():
             if isinstance(a, argparse._SubParsersAction)  # noqa: SLF001
         ).choices
     )
-    named = set(re.findall(r"`alpha ([a-z-]+)", TEXT))
+    named = set(re.findall(r"`bucephalus ([a-z-]+)", TEXT))
     unknown = named - choices
     assert not unknown, f"handover names CLI subcommands that do not exist: {unknown}"
 

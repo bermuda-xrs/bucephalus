@@ -122,16 +122,16 @@ def verify_memory(store) -> dict | None:
     detail = (
         "tier 1 memory does not match its last blessed fingerprint — the "
         "files were changed outside memory_write, memory_consolidate or "
-        "`alpha memory`. Tier 1 is REFUSED on every task until this is "
+        "`bucephalus memory`. Tier 1 is REFUSED on every task until this is "
         "resolved; tasks still run, without persistent memory. Inspect with "
-        "`alpha memory`, then `alpha memory --accept` to bless the current "
+        "`bucephalus memory`, then `bucephalus memory --accept` to bless the current "
         "state or `--forget` to remove entries."
     ) if state == TAMPERED else (
         "tier 1 memory has content but no blessed fingerprint. Either it "
         "predates the anchor record or it was placed there by something that "
         "did not go through the write path; both are handled as tampering, "
         "because text that cannot be accounted for still goes into every "
-        "future prompt. `alpha memory --accept` to bless it."
+        "future prompt. `bucephalus memory --accept` to bless it."
     )
     return {"task_id": "__memory__", "severity": "critical", "detail": detail}
 

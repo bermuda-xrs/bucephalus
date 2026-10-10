@@ -21,7 +21,7 @@ def _checkout(parent: Path) -> Path:
 
 @pytest.fixture
 def appdata(tmp_path, monkeypatch):
-    monkeypatch.delenv("ALPHA_DATA_DIR", raising=False)
+    monkeypatch.delenv("BUCEPHALUS_DATA_DIR", raising=False)
     monkeypatch.delenv("OneDrive", raising=False)
     d = tmp_path / "appdata"
     monkeypatch.setattr("platformdirs.user_data_dir", lambda *a, **k: str(d))

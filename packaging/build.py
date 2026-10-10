@@ -9,7 +9,7 @@ import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-OUT = Path(os.environ.get("ALPHA_BUILD_DIR", Path.home() / ".alpha-build"))
+OUT = Path(os.environ.get("BUCEPHALUS_BUILD_DIR", Path.home() / ".bucephalus-build"))
 
 _SKIP = {"tkinter", "_tkinter", "turtle", "turtledemo", "idlelib", "test",
          "lib2to3", "ensurepip", "venv", "antigravity", "this", "__phello__"}
@@ -69,12 +69,12 @@ def main(argv=None) -> int:
     args = p.parse_args(argv)
     sep = os.pathsep
     if args.probe:
-        build("alpha-probe", ROOT / "packaging" / "probe_entry.py",
+        build("bucephalus-probe", ROOT / "packaging" / "probe_entry.py",
               ["--collect-all", "pytest", "--collect-all", "_pytest",
                "--collect-all", "pluggy", "--collect-all", "iniconfig",
                "--add-data", f"{ROOT / 'tests'}{sep}tests"])
         return 0
-    dist = build("alpha", ROOT / "packaging" / "app_entry.py",
+    dist = build("bucephalus", ROOT / "packaging" / "app_entry.py",
                  ["--collect-all", "webview",
                   "--add-data", f"{ROOT / 'config.local.yaml'}{sep}."],
                  console=False)

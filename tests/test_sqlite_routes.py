@@ -74,7 +74,7 @@ def test_vacuum_into_cannot_write_outside_scope(ctx, task, tmp_path):
 
 
 def test_sqlite_cannot_create_a_file_outside_scope(ctx, task):
-    target = Path(sys.prefix) / "zz-alpha-sqlite-probe.db"
+    target = Path(sys.prefix) / "zz-bucephalus-sqlite-probe.db"
     try:
         res = _try(ctx, task, f"c = sqlite3.connect({str(target)!r})",
                    "c.execute('create table t(x)')", "c.commit()")

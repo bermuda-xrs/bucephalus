@@ -16,7 +16,7 @@ DEFAULT_COLORS = {
 BRAILLE = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
 ASCII_SPINNER = ["-", "\\", "|", "/"]
 
-PLAIN_BANNER = "alpha test 1"
+PLAIN_BANNER = "Bucephalus"
 
 
 def supports_glyphs(stream=None) -> bool:

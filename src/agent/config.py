@@ -104,7 +104,7 @@ class AutonomyConfig(BaseModel):
 class TelegramConfig(BaseModel):
     enabled: bool = False
     allowed_senders: list[str] = Field(default_factory=list)
-    token_env: str = "ALPHA_TELEGRAM_TOKEN"
+    token_env: str = "BUCEPHALUS_TELEGRAM_TOKEN"
     poll_timeout_s: int = 25
     artifact_scope: list[str] = Field(default_factory=lambda: ["work"])
 
@@ -193,7 +193,7 @@ def _synced_state_dir(raw: dict) -> str:
     from .paths import checkout_root, checkout_state_dir, sync_root
 
     root = Path(raw["root"])
-    if os.environ.get("ALPHA_DATA_DIR") or checkout_root(root) != root.resolve():
+    if os.environ.get("BUCEPHALUS_DATA_DIR") or checkout_root(root) != root.resolve():
         return ""
     synced = sync_root(root)
     if synced is None:
@@ -204,7 +204,7 @@ def _synced_state_dir(raw: dict) -> str:
         (state / "runs").mkdir()
         old = [str(root / raw[k]) for k in ("db_path", "anchor_path")
                if raw.get(k) and not Path(raw[k]).is_absolute() and (root / raw[k]).exists()]
-        print(f"alpha: this checkout is inside a synced folder ({synced}), so its "
+        print(f"bucephalus: this checkout is inside a synced folder ({synced}), so its "
               f"database, anchor and run records now live in {state} and are not "
               "uploaded." + (" Existing state was NOT moved and is still synced: "
                              + ", ".join(old) + ". Move or delete it yourself."

@@ -121,7 +121,7 @@ def test_it_raises_critical_into_a_channel_d17_cleared(rig):
     found = verify_memory(ctx.memory)
     assert found is not None
     assert found["severity"] == "critical"
-    assert "alpha memory" in found["detail"], (
+    assert "bucephalus memory" in found["detail"], (
         "a critical must say what to do about it, or it is just an alarm")
 
     sweep = verify_all(ctx.conn, ctx.log, ctx.anchor, ctx.memory)

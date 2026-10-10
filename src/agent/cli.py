@@ -60,7 +60,7 @@ def banner(ctx, console: Console) -> None:
     if p is not None and p.exists():
         console.print(p.read_text(encoding="utf-8", errors="replace"))
     else:
-        console.print("[bold]alpha test 1[/bold]")
+        console.print("[bold]Bucephalus[/bold]")
 
 
 def cmd_new(ctx, args, console) -> int:
@@ -79,7 +79,7 @@ def cmd_new(ctx, args, console) -> int:
         console.print("[yellow]no --scope: this task may read or write no file "
                       "(an empty scope permits nothing). Pass --scope work to "
                       "declare one.[/]")
-    console.print(f"next: alpha plan {task.id}")
+    console.print(f"next: bucephalus plan {task.id}")
     return 0
 
 
@@ -99,7 +99,7 @@ def cmd_plan(ctx, args, console) -> int:
             f"[{theme['warning']}]answer the open questions before approving; "
             f"that is what keeps this to two touches.[/]"
         )
-    console.print(f"approve: alpha approve {task.id} {plan.id}")
+    console.print(f"approve: bucephalus approve {task.id} {plan.id}")
     return 0
 
 
@@ -127,7 +127,7 @@ def cmd_reject(ctx, args, console) -> int:
         console.print("[red]no plan to reject[/red]")
         return 1
     reject_plan(ctx, task, plan, args.comment or "")
-    console.print("plan rejected; redraft with alpha plan")
+    console.print("plan rejected; redraft with bucephalus plan")
     return 0
 
 
@@ -145,7 +145,7 @@ def cmd_run(ctx, args, console) -> int:
         console.print(
             Panel(
                 f"{result.reason}\napproval id: {result.approval_id}\n"
-                f"decide with: alpha approvals --decide {result.approval_id} --yes",
+                f"decide with: bucephalus approvals --decide {result.approval_id} --yes",
                 title="parked for you",
                 border_style=theme["warning"],
             )
@@ -196,7 +196,7 @@ def cmd_status(ctx, args, console) -> int:
     console.print(t)
     pend = ctx.pending_approvals()
     if pend:
-        console.print(f"[{theme['warning']}]{len(pend)} approval(s) waiting — alpha approvals[/]")
+        console.print(f"[{theme['warning']}]{len(pend)} approval(s) waiting — bucephalus approvals[/]")
     return 0
 
 
@@ -323,7 +323,7 @@ def cmd_search(ctx, args, console) -> int:
     if not status["consistent"]:
         console.print(
             f"[yellow]index has {status['indexed']} rows against "
-            f"{status['expected']} expected — run `alpha search --rebuild`. "
+            f"{status['expected']} expected — run `bucephalus search --rebuild`. "
             f"Results below may be incomplete.[/yellow]")
 
     if not args.query:
@@ -422,7 +422,7 @@ def cmd_skills(ctx, args, console) -> int:
         if args.drafted_from is None:
             console.print("[yellow]no --drafted-from: the gate refuses every paired "
                           "trial of this skill until its drafting set is declared "
-                          f"(alpha skills --declare-drafted-from {sid} KEYS|none)[/]")
+                          f"(bucephalus skills --declare-drafted-from {sid} KEYS|none)[/]")
         console.print(
             f"next: run paired trials, then\n"
             f"  python bench/run.py paired {sid} --suite bench/tasks"
@@ -508,7 +508,7 @@ def cmd_steer(ctx, args, console) -> int:
     )
     set_status(ctx.conn, ctx.log, parent, TaskStatus.PAUSED, "superseded by steer")
     console.print(f"forked into [bold]{child.id}[/bold]; parent paused, history intact")
-    console.print(f"next: alpha run {child.id}")
+    console.print(f"next: bucephalus run {child.id}")
     return 0
 
 
@@ -576,7 +576,7 @@ def cmd_schedule(ctx, args, console) -> int:
 
     if args.action == "add":
         if not args.spec or not args.goal:
-            console.print('usage: alpha schedule add "<cron>" "<goal>"')
+            console.print('usage: bucephalus schedule add "<cron>" "<goal>"')
             return 2
         lim = ctx.config.limits
         sid = sched.add(ctx.conn, args.spec,
@@ -625,7 +625,7 @@ def cmd_notifications(ctx, args, console) -> int:
         d = n["detail"]
         console.print(f"{n['id']}  {n['kind']:<7} {n['task_id'][:12]}  "
                       f"{d.get('tool', '')}  {d.get('preview', '')[:60]}  "
-                      f"-> alpha approvals --decide {d.get('approval_id', '')}")
+                      f"-> bucephalus approvals --decide {d.get('approval_id', '')}")
     if args.seen:
         sched.mark_seen(ctx.conn, [n["id"] for n in rows])
     return 0
@@ -640,7 +640,7 @@ def cmd_monitor(ctx, args, console) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(prog="alpha", description="alpha test 1")
+    p = argparse.ArgumentParser(prog="bucephalus", description="Bucephalus")
     from .paths import default_config_path
 
     p.add_argument("--config",

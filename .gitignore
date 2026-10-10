@@ -17,7 +17,7 @@ agent.local.db
 anchor/chain.local.anchor
 agent.local.db-wal
 agent.local.db-shm
-.alpha_token
+.bucephalus_token
 bench/tasks/aero_calc/**/output/answer.json
 .measurement.lock
 *.partial.jsonl

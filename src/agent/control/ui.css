@@ -1,4 +1,4 @@
-/* alpha console (iteration 3). One file, served as /ui.css: the CSP allows
+/* Bucephalus console (iteration 3). One file, served as /ui.css: the CSP allows
    no inline style. Colours: themes/default.toml arrives through /theme as
    --theme-* on :root, and the dark palette reads those; light has its own.
 

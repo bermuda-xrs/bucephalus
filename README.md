@@ -1,4 +1,4 @@
-# alpha test 1
+# Bucephalus
 
 **An agent runtime with verified skill learning.** Not a benchmark harness:
 the harness exists to keep the runtime honest, and the runtime is the
@@ -15,7 +15,7 @@ Everything here exists to keep that measurement honest.
 ## Install
 
 ```bash
-pip install alpha-test-1
+pip install bucephalus
 ```
 
 State — the database, hash-chain anchor, run records, workspaces, graders and
@@ -53,23 +53,23 @@ folder.** Two environment facts forced both choices:
 2. OneDrive deleted the in-folder `.venv` twice. A venv is thousands of tiny
    files, which is exactly what an unstable sync loses; the 2 GB model blobs
    next door survived fine. The venv now lives at
-   `%USERPROFILE%\.alpha-test-1-venv` and the launcher finds it there.
+   `%USERPROFILE%\.bucephalus-venv` and the launcher finds it there.
    Move it back to `.venv` once sync is healthy — the launcher checks that
    location first.
 
 ```powershell
-.\alpha.ps1 status
+.\bucephalus.ps1 status
 ```
 
-`alpha.cmd` does the same from `cmd.exe`, but only at a path without
+`bucephalus.cmd` does the same from `cmd.exe`, but only at a path without
 non-ASCII characters: `cmd.exe` reads a batch file in the OEM codepage, so at
 this folder's path it fails silently (HANDOVER B1). The examples below use
-`.\alpha.ps1`, which works anywhere.
+`.\bucephalus.ps1`, which works anywhere.
 
 Tests:
 
 ```bat
-%USERPROFILE%\.alpha-test-1-venv\Scripts\python.exe -m pytest tests -q
+%USERPROFILE%\.bucephalus-venv\Scripts\python.exe -m pytest tests -q
 ```
 
 ## Running it with no API key at all
@@ -85,8 +85,8 @@ ollama-serve.cmd
 Then in another window:
 
 ```bat
-.\alpha.ps1 --config config.local.yaml new "Read work/note.txt and report what it says." --scope work --seconds 1800
-.\alpha.ps1 --config config.local.yaml run t_xxxxxxxx
+.\bucephalus.ps1 --config config.local.yaml new "Read work/note.txt and report what it says." --scope work --seconds 1800
+.\bucephalus.ps1 --config config.local.yaml run t_xxxxxxxx
 ```
 
 Verified working end to end: `done` in 2 steps, ~27s, 1,868 free tokens,
@@ -128,10 +128,10 @@ Two things make this work that are worth knowing about:
 ## The two-touch loop
 
 ```
-.\alpha.ps1 new "Refactor work/parser.py to use pathlib" --scope work
-.\alpha.ps1 plan   t_abc123      # drafts a plan. Cannot write: enforced in the gate.
-.\alpha.ps1 approve t_abc123     # HUMAN TOUCH #1
-.\alpha.ps1 run    t_abc123      # runs unattended. HUMAN TOUCH #2 is the result.
+.\bucephalus.ps1 new "Refactor work/parser.py to use pathlib" --scope work
+.\bucephalus.ps1 plan   t_abc123      # drafts a plan. Cannot write: enforced in the gate.
+.\bucephalus.ps1 approve t_abc123     # HUMAN TOUCH #1
+.\bucephalus.ps1 run    t_abc123      # runs unattended. HUMAN TOUCH #2 is the result.
 ```
 
 Between those two touches the agent does not interrupt you. Boundary crossings
@@ -143,18 +143,18 @@ you walk away.
 Other commands:
 
 ```
-.\alpha.ps1 status              list tasks, cost, and anything waiting on you
-.\alpha.ps1 approvals           decide what parked
-.\alpha.ps1 alerts              integrity breaks + monitor findings (NOT approvals)
-.\alpha.ps1 bench-local         measure local tier throughput before trusting it
-.\alpha.ps1 report <task>       per-run JSON + CSV of every model call
-.\alpha.ps1 pareto              cost vs pass rate across arms
-.\alpha.ps1 steer <task> "..."  correct a task — forks it, never mutates
-.\alpha.ps1 monitor <task>      run the out-of-band inspector over a trace
-.\alpha.ps1 skills                          list skills + promotion rate
-.\alpha.ps1 skills --add S.md --when "..."  store a hand-written skill (candidate)
-.\alpha.ps1 skills --gate <id> [--yes]      evaluate, then promote with a human
-.\alpha.ps1 serve               control plane on :8901 for phone/web clients
+.\bucephalus.ps1 status              list tasks, cost, and anything waiting on you
+.\bucephalus.ps1 approvals           decide what parked
+.\bucephalus.ps1 alerts              integrity breaks + monitor findings (NOT approvals)
+.\bucephalus.ps1 bench-local         measure local tier throughput before trusting it
+.\bucephalus.ps1 report <task>       per-run JSON + CSV of every model call
+.\bucephalus.ps1 pareto              cost vs pass rate across arms
+.\bucephalus.ps1 steer <task> "..."  correct a task — forks it, never mutates
+.\bucephalus.ps1 monitor <task>      run the out-of-band inspector over a trace
+.\bucephalus.ps1 skills                          list skills + promotion rate
+.\bucephalus.ps1 skills --add S.md --when "..."  store a hand-written skill (candidate)
+.\bucephalus.ps1 skills --gate <id> [--yes]      evaluate, then promote with a human
+.\bucephalus.ps1 serve               control plane on :8901 for phone/web clients
 ```
 
 `serve` prints a link to the console: conversations whose follow-ups see the
@@ -168,7 +168,7 @@ a model picker and a Run model button that starts the project's server on
 The control plane also runs under any ASGI server via a module-level app:
 
 ```bat
-set ALPHA_CONFIG=config.local.yaml
+set BUCEPHALUS_CONFIG=config.local.yaml
 uvicorn agent.control.asgi:app --host 127.0.0.1 --port 8901
 ```
 
@@ -192,15 +192,15 @@ python bench\noise.py --config config.local.yaml --profile local --suite aero_ca
 # 2. the calibration skill - a POSITIVE CONTROL on the instrument (D35).
 #    Drafted from the drafting split only, declared so, scored on eval only.
 #    In agent.local.db it is already stored and declared: a4aa91a3e464.
-.\alpha.ps1 --config config.local.yaml skills --add examples\skills\si_first_orbital_arithmetic.md ^
+.\bucephalus.ps1 --config config.local.yaml skills --add examples\skills\si_first_orbital_arithmetic.md ^
     --name si_first_orbital_arithmetic --when "aerospace calculation from params.json and constants.json" ^
     --drafted-from E01,E02,E03,E04,E05,M11,M12,M13,M14,M15,M16,H23,H24,H25,H26
 python bench\run.py --config config.local.yaml --profile local paired <skill_id> ^
     --suite aero_calc --split eval --out runs\calibration.json
 
 # 3. the verdict, and promotion, which requires a human
-.\alpha.ps1 --config config.local.yaml skills --gate <skill_id>
-.\alpha.ps1 --config config.local.yaml skills --gate <skill_id> --yes
+.\bucephalus.ps1 --config config.local.yaml skills --gate <skill_id>
+.\bucephalus.ps1 --config config.local.yaml skills --gate <skill_id> --yes
 
 # 4. the run sheet, with the caveats attached to the numbers
 python bench\report.py --out docs\run-sheet.md
@@ -270,7 +270,7 @@ instance on port **11435**, so your existing models on 11434 are untouched:
 set OLLAMA_MODELS=..\ollama-models && set OLLAMA_HOST=127.0.0.1:11435 && ollama serve
 ```
 
-Run `.\alpha.ps1 bench-local` before trusting either tier. On CPU-only hardware
+Run `.\bucephalus.ps1 bench-local` before trusting either tier. On CPU-only hardware
 output tokens are wall-clock seconds, and §0.1c says to settle model choice
 from your own measurements rather than someone else's leaderboard.
 
@@ -466,7 +466,7 @@ makes one the moment its credential exists, and skips until then:
 
 | path | test | runs when | what it does |
 |---|---|---|---|
-| Telegram HTTP transport | `tests/test_live_credentials.py::test_telegram_transport_live` | `ALPHA_TELEGRAM_TOKEN` is set | `getMe`, a `getUpdates` at offset 0 and timeout 0 (read-only; confirms nothing), and one unknown method that must be refused |
+| Telegram HTTP transport | `tests/test_live_credentials.py::test_telegram_transport_live` | `BUCEPHALUS_TELEGRAM_TOKEN` is set | `getMe`, a `getUpdates` at offset 0 and timeout 0 (read-only; confirms nothing), and one unknown method that must be refused |
 | Anthropic adapter, streaming | `tests/test_live_credentials.py::test_anthropic_streaming_live` - once per Anthropic backend in `config.yaml` | `ANTHROPIC_API_KEY` is set | one tiny streamed call with that backend's exact request shape; text must reach the surface in chunks, and usage, stop reason and model must come back |
 
 **A key in the environment makes the full suite spend** - two small paid calls,
@@ -483,12 +483,12 @@ environment variable alone.
 
 ```powershell
 # Telegram. A bot token from @BotFather; the test only READS.
-$env:ALPHA_TELEGRAM_TOKEN = "123456:ABC..."
-..\..\..\.alpha-test-1-venv\Scripts\python.exe -m pytest tests/test_live_credentials.py -k telegram -v
+$env:BUCEPHALUS_TELEGRAM_TOKEN = "123456:ABC..."
+..\..\..\.bucephalus-venv\Scripts\python.exe -m pytest tests/test_live_credentials.py -k telegram -v
 
 # Anthropic. One small streamed call per Anthropic backend in config.yaml.
 $env:ANTHROPIC_API_KEY = "sk-ant-..."
-..\..\..\.alpha-test-1-venv\Scripts\python.exe -m pytest tests/test_live_credentials.py -k anthropic -v
+..\..\..\.bucephalus-venv\Scripts\python.exe -m pytest tests/test_live_credentials.py -k anthropic -v
 ```
 
 **A pass looks like `1 passed` (Telegram) or `2 passed` (Anthropic, one per

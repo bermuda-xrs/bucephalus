@@ -117,7 +117,7 @@ the end, and only if the suite, the frozen gate and the Part 5 audit pass.
   were TIMEOUTS under 10-way contention, and the whole-suite recheck had never
   been shown to pass unmutated. A timeout is now undecided (neither kill nor
   survivor) and the recheck must pass unmutated first. The corrected queue
-  runs from a snapshot worktree (`~/.alpha-mut-snap`, removed at the end).
+  runs from a snapshot worktree (`~/.bucephalus-mut-snap`, removed at the end).
 
 ## Part 2.4 - coverage, reported not chased
 
@@ -131,7 +131,7 @@ dispatcher, `__main__` - reads as uncovered although it runs. Under 70%:
 | `__main__.py`, `control/asgi.py` | 0% | entry points; run as subprocesses by the CLI and serve tests |
 | `frozen.py` | 26% | the frozen child dispatch; run by the frozen gate, not the suite |
 | `cli.py` | 30% | every subcommand; run as subprocesses (test_cli_subcommands) |
-| `instrument/report.py` | 44% | run reports and CSVs for `alpha report` / bench; subprocess-run |
+| `instrument/report.py` | 44% | run reports and CSVs for `bucephalus report` / bench; subprocess-run |
 | `models/ollama.py` | 50% | the live streaming loop against a real Ollama; tests use fakes |
 | `platform/posix.py` | 54% | the Linux/macOS half; runs on POSIX only (WSL2 run in Phase D) |
 | `skills/retrieve.py` | 61% | skill retrieval ranking branches |
@@ -264,7 +264,7 @@ commit green:
   a dead copy's test checked now hold on the live path; a routing test that
   could not fail is two-sided.
 - fbc52f2: three statements made untrue by the code (the console's grounding
-  note and integrity lede; README's `alpha.cmd`, which fails at this path).
+  note and integrity lede; README's `bucephalus.cmd`, which fails at this path).
 - dac0ffc: found with `-W default`: the code-action bridge leaked the child's
   stderr pipe on every run; a refused job leaked its child's pipes; invalid
   escapes in two source files and a test; a BOM that hid a script from every

@@ -90,7 +90,7 @@ backends:
 
 # Which local tier is live. Set from MEASUREMENT, not from the spec table.
 #
-# MEASURED on this machine (2026-08-17, `alpha bench-local`):
+# MEASURED on this machine (2026-08-17, `bucephalus bench-local`):
 #   granite4.1:3b  cold 0.4 tok/s, warm 1.4-2.1 tok/s   (Intel iGPU, CPU inference)
 #   granite4.1:8b  cold 0.7 tok/s   — roughly 2x slower than the 3b, as expected
 #
@@ -102,7 +102,7 @@ backends:
 #
 # The whole local path is built and tested regardless — router, allowlist,
 # and the compress_tool_output call site in the loop. Set this to "laptop" (or "local" on a real GPU) and it turns on with
-# no other change. Re-run `alpha bench-local` first.
+# no other change. Re-run `bucephalus bench-local` first.
 active_local_tier: null             # local | laptop | null (null disables offload)
 
 limits:
@@ -162,7 +162,7 @@ channels:                           # A4 — inbound message channels
     allowed_senders: []
     # The bot token is NOT in this file and must not be put here. A config
     # file is the thing people paste into an issue.
-    token_env: "ALPHA_TELEGRAM_TOKEN"
+    token_env: "BUCEPHALUS_TELEGRAM_TOKEN"
     poll_timeout_s: 25              # long poll; no webhook, no bound port
     artifact_scope: ["work"]
 

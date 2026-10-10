@@ -306,7 +306,7 @@ The honest caveat, which I'll publish alongside any claim: these defenses have o
 
 ---
 
-## What the alpha will and won't do
+## What Bucephalus will and won't do
 
 Setting expectations, since I'd rather under-promise:
 

@@ -65,7 +65,7 @@ def test_S1_sweep_sandboxed_code_cannot_plant_a_protected_file_through_a_stream(
     from agent.execute.sandbox import run_sandboxed
 
     target = tmp_path / ".env"
-    code = f"open({str(target) + '::$DATA'!r}, 'w').write('ALPHA_TOKEN=x')\n"
+    code = f"open({str(target) + '::$DATA'!r}, 'w').write('BUCEPHALUS_TOKEN=x')\n"
     r = run_sandboxed(code, allowed_paths=[str(tmp_path)], timeout_s=15,
                       protected_paths=(str(target),))
     assert not target.exists(), "sandboxed code planted a protected file"

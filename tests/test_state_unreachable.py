@@ -18,7 +18,7 @@ MARK = "zq-protected-marker"
 LOCATIONS = [
     "agent.db", "agent.db-wal",
     "agent.local.db", "agent.local.db-wal",
-    "config.local.yaml", "policy.md", ".env", ".alpha_token",
+    "config.local.yaml", "policy.md", ".env", ".bucephalus_token",
     "anchor/chain.anchor",
     "skills_store/s_x/tests/holdout/1.txt",
     "grading/E01/verify.py",
@@ -106,7 +106,7 @@ def test_no_traversal_reaches_protected_state(project, scope, route):
     if not gate_tool_call(project, t, project.tools.get(tool), args).allowed:
         return
     out = json.dumps(FNS[tool](project, t, **args))
-    leaked = [s for s in (MARK, "verify.py", "agent.local.db", ".alpha_token")
+    leaked = [s for s in (MARK, "verify.py", "agent.local.db", ".bucephalus_token")
               if s in out]
     assert not leaked, f"{route} from a {scope} scope reached {leaked}"
 

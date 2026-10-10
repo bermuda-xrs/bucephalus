@@ -10,6 +10,16 @@
 Dates are commit dates. `0.1.0` is not released yet — see "Unreleased" for
 what still stands between here and a first iteration.
 
+## Renamed to Bucephalus - 2026-10-10
+
+Product `alpha` / `alpha-test-1` is now `bucephalus`: the CLI and `bucephalus.ps1`/`.cmd`, the wheel, the
+frozen app (`bucephalus.exe`, `bucephalus-probe.exe`, `~/.bucephalus-build`), `BUCEPHALUS_*` environment
+variables, the console token header and file, the venvs (`~/.bucephalus-venv`, `~/.bucephalus-build-venv`)
+and the platformdirs app name. No aliases for the old names. On first use `user_data_dir()` and
+`user_config_dir()` copy the old directory to the new one once, when the new one is absent (the old one is
+left as it was). Entries below this one use the old name. The import package is still `agent`. Prompt
+bytes changed with the name ("the execution core of Bucephalus"): HARNESS_VERSION 8.
+
 ## Iteration 4 - 2026-10-05/06 (HARNESS_VERSION 7)
 
 - P5: a graded program cannot write its own verdict; code graders run the answer in a child.
@@ -38,7 +48,7 @@ what still stands between here and a first iteration.
 HANDOVER E3, in its stated order. Four of its five items; the fifth (E3e, the
 frozen-app fix) is dormant and was left dormant.
 
-### E3(b) - D39: the 25 rooms behind `alpha --help` (CLOSED)
+### E3(b) - D39: the 25 rooms behind `bucephalus --help` (CLOSED)
 
 `tests/test_cli_subcommands.py`, 46 tests. Each enters ONE subcommand in a
 subprocess, through `agent.cli`, and asserts its exit code plus one fact about
@@ -46,11 +56,11 @@ what it changed. A subprocess and not an in-process `main()`: `main` catches
 every exception and returns 1, so in process the difference between "worked"
 and "raised" is invisible unless the caller also reads the return value.
 
-The scratch installation is the work the entry predicted, and `ALPHA_DATA_DIR`
+The scratch installation is the work the entry predicted, and `BUCEPHALUS_DATA_DIR`
 is what makes it one line: `paths.state_root` and `user_data_dir` both honour
 it, so the database, anchor, skills, `runs/`, `work/` AND the operator's
 persistent memory land under one temporary directory. Without that last one
-`alpha memory --forget` would have deleted out of the real memory files.
+`bucephalus memory --forget` would have deleted out of the real memory files.
 `serve` and `tui` never return, so they are started, proved live and killed
 through `kill_tree`. `test_every_subcommand_is_entered_by_a_test_here` fails
 when a subcommand is added without one (DR5). Invariant 115.
@@ -175,7 +185,7 @@ before any fix): 0 critical, 2 high, 4 medium, 3 low, 2 hypotheses.
 ## The desktop app - 2026-09-25 (desktop-app)
 
   * `agent/desktop.py`: the console in a pywebview window. Loopback only
-    unless ALPHA_ALLOW_REMOTE; state in platformdirs even from a checkout;
+    unless BUCEPHALUS_ALLOW_REMOTE; state in platformdirs even from a checkout;
     closing the window kill_trees everything the app started. Windowed builds
     have no stdout/stderr, and uvicorn died on that - they go to desktop.log.
   * The console redesigned around plan review: a queue ordered by what needs
@@ -190,7 +200,7 @@ before any fix): 0 critical, 2 high, 4 medium, 3 low, 2 hypotheses.
 ## D13 closed: the sandbox survives a freeze - 2026-09-25 (desktop-app)
 
   * `agent/frozen.py`: a frozen build starts itself as an INTERPRETER for
-    sandboxed code (`--alpha-sandbox-child`), dispatched before any app code;
+    sandboxed code (`--bucephalus-sandbox-child`), dispatched before any app code;
     anything started from inside the sandbox is an interpreter too, never the
     app. `agent/__main__.py` is the frozen CLI's entry, dispatch first.
   * Sandbox children get `stdin=DEVNULL`: the inherited handle is invalid in
@@ -469,11 +479,11 @@ every real-model record (`agent.local.db` and the 2026-09-16 verification run;
 the `runs/demo-*` databases are scripted-model runs and count as tests). The
 current answer: **9 of 36 observable paths have run for real.**
 
-**Three states, not two.** `alpha snapshot` writes a file, the TUI paints a
+**Three states, not two.** `bucephalus snapshot` writes a file, the TUI paints a
 terminal, the control plane answers HTTP - none leaves a row, and reporting
 those as "never ran" would be a false negative that reads exactly like a true
 one. A fourth state was needed once it ran: Part 3's real runs used their own
-database under `ALPHA_DATA_DIR`, which `runs/` being gitignored has since
+database under `BUCEPHALUS_DATA_DIR`, which `runs/` being gitignored has since
 taken, so three rows the record says ran read `never` here. They are reported
 as `ran elsewhere` with the evidence path, rather than answered for. DR4, in
 the instrument built to check DR4.
@@ -548,7 +558,7 @@ up first. HANDOVER's state table says the same thing without this changelog.
 - **DR6. An entry is closed in the change that fixes it, not in a later
   triage.** D17 and D20 sat open for sessions after their defects were fixed.
   A pile that carries closed items is one people stop reading - the same harm
-  as `alpha verify`'s permanent false criticals.
+  as `bucephalus verify`'s permanent false criticals.
 
 ### Deleted (5) and closed-as-already-fixed (2)
 
@@ -1034,7 +1044,7 @@ busy".
 
 ### A4-1 - live tests that skip without the credential
 
-`tests/test_live_credentials.py`. With `ALPHA_TELEGRAM_TOKEN` set, the live
+`tests/test_live_credentials.py`. With `BUCEPHALUS_TELEGRAM_TOKEN` set, the live
 Telegram test calls `getMe`, a non-confirming `getUpdates`, and an unknown
 method that must be refused. With `ANTHROPIC_API_KEY` set, one tiny streamed
 call per Anthropic backend in `config.yaml`, with that backend's exact request
@@ -1085,7 +1095,7 @@ plan, approve (the pin goes to the anchor), run (parks on a `write_file`),
 | `plan.pin_verified` | 2, every one `matched` against the anchor: True | 4, every one `matched`: True |
 | decided approval released on resume | a_bdf9e58e2abd - executed | a_7c6bd60da2e3 - executed |
 | pin verified before the release, in the resumed process | **no** | **yes** |
-| every command exited 0 | False - the resumed `alpha run` exited 1 | True |
+| every command exited 0 | False - the resumed `bucephalus run` exited 1 | True |
 | wall clock, all commands | 137 s | 114 s |
 
 ### What run A found (C58)
@@ -1093,7 +1103,7 @@ plan, approve (the pin goes to the anchor), run (parks on a `write_file`),
 * **The pin was verified one step late.** The resumed process released the
   decided write before its first pin check. Now verified before anything a run
   does (invariant 103) - and run B's log shows it.
-* **`alpha run` crashed on every finished local task**, formatting the cache
+* **`bucephalus run` crashed on every finished local task**, formatting the cache
   ratio that local backends leave null. Now `n/a`.
 
 ### A3-2 - the sandbox, stated plainly
@@ -1189,7 +1199,7 @@ without a bump. If that precedent is wrong, both changes bump together.
 ### D29 - fixed: empty means nothing (C53)
 
 An empty `artifact_scope` now permits no path. The refusal names the fix
-(`--scope work`), and `alpha new` / `POST /tasks` warn at creation.
+(`--scope work`), and `bucephalus new` / `POST /tasks` warn at creation.
 
 ### The sibling sweep - DR4
 
@@ -1206,7 +1216,7 @@ fixed:
   at both layers.
 * **`check_contamination`.** A missing row or a missing `drafted_from`
   certified every trial. Neither real skill declares one, so their trials are
-  refused until someone does: `alpha skills --declare-drafted-from <id>
+  refused until someone does: `bucephalus skills --declare-drafted-from <id>
   KEYS|none` (once - never overwritten, and it records how many trials already
   existed), or `--drafted-from` with `--add`, which now warns without it.
 * **The Host check.** An absent header skipped DNS-rebinding protection.
@@ -1276,7 +1286,7 @@ become sixty parked tasks by 4.
 A scheduled task has origin `schedule`. It never auto-proceeds - the deputy and
 the scoped-write fast path are skipped for every unattended origin, channel or
 schedule, whatever the config says. At a boundary it parks and raises a
-notification (`alpha notifications`); once a human decides, the next wake resumes
+notification (`bucephalus notifications`); once a human decides, the next wake resumes
 it and - since `f11be4d` - the decision is acted on. Its tool floor is derived
 from the origin: no `git_push`, `append_to_outbox`, `memory_write`,
 `memory_consolidate` or `delegate`. `run_code` stays, because a side-effecting
@@ -1296,8 +1306,8 @@ The supervisor does not consult the measurement lock: the lock cannot be probed
 without being taken, and a probe that can abort a measurement is worse than none
 (C52, D34).
 
-`alpha schedule add|list|remove`, `alpha supervise [--once]`,
-`alpha notifications`.
+`bucephalus schedule add|list|remove`, `bucephalus supervise [--once]`,
+`bucephalus notifications`.
 
 ### Tests
 
@@ -1354,7 +1364,7 @@ memory. Store the fact, derive the rule.
 
 ### The storage layer (C41 generalised), D25, FINDINGS 1.23
 
-Nothing in the repository copies or ships the database. `alpha snapshot` uses
+Nothing in the repository copies or ships the database. `bucephalus snapshot` uses
 the backup API. The sandbox carries a database's `-wal` in both directions. The
 Anthropic adapter streams on one path (the SDK would have refused the old one at
 large ceilings); unverified, carried by D26. FINDINGS 1.23: the taint wall stops
@@ -1374,7 +1384,7 @@ on PrefixGuard, which never read the mock's cache.
 
 ### Phase 9 - built
 
-Sessions, lineage (`alpha lineage`), the pre-compaction flush with visible
+Sessions, lineage (`bucephalus lineage`), the pre-compaction flush with visible
 refusals that never park, per-session tier-1 snapshots, 9.7 in the schema (a
 trigger and a partial unique index), search's session label repointed.
 
@@ -1541,7 +1551,7 @@ A webhook needs a public HTTPS endpoint: bind non-loopback, terminate TLS, and
 put a service that can rewrite the reviewer's policy on the open internet
 behind one bearer token. Long polling makes an outbound request and waits.
 Nothing in `agent/channel/` binds, listens, or imports the control plane —
-asserted by AST, not by intention — and `ALPHA_ALLOW_REMOTE` is untouched.
+asserted by AST, not by intention — and `BUCEPHALUS_ALLOW_REMOTE` is untouched.
 
 ### Drops are evidence, not a queue
 
@@ -1555,7 +1565,7 @@ in this database they can cause growth. And a stranger gets **no reply**: a
 bot that answers "you are not authorised" tells anyone sweeping user ids that
 this account is a live bot with an allowlist.
 
-`recent_drops` is read by `alpha alerts` and `GET /alerts` as a **third key**,
+`recent_drops` is read by `bucephalus alerts` and `GET /alerts` as a **third key**,
 never merged with integrity or monitor findings — the dead-code audit caught
 it unwired, correctly.
 
@@ -1772,7 +1782,7 @@ The TUI imports the kernel directly AND renders through
 That is not a compromise between the two options in the brief; it is the
 observation that they answer different questions. Making the TUI speak HTTP
 would mean every TUI user runs a SERVER — a bound port, gated by
-`ALPHA_ALLOW_REMOTE`, about to have a message channel in front of it — to
+`BUCEPHALUS_ALLOW_REMOTE`, about to have a message channel in front of it — to
 look at a task on their own machine. The maintenance benefit the brief wanted
 is real, but it does not come from the transport; it comes from two surfaces
 agreeing on what an event MEANS. Sharing the vocabulary buys that without the
@@ -2009,7 +2019,7 @@ when the receiver is a name an import bound in that file.
 
 Noted against my own work: the D17 fix two commits earlier modified
 `resume()`. That change is correct and currently unreachable. D17's
-`verify_all` half IS wired — `alpha verify` and `/alerts` both call it — so
+`verify_all` half IS wired — `bucephalus verify` and `/alerts` both call it — so
 the reclassification is live; only the resume half is inert.
 
 ### Versions
@@ -2133,7 +2143,7 @@ buggy tool, a sync conflict, an editor. The authenticated record is the hash
 chain: every `memory.written` event carries the fingerprint at write time and
 cannot be altered without breaking the chain.
 
-`alpha memory --accept` blesses a deliberate hand edit. Without it the only
+`bucephalus memory --accept` blesses a deliberate hand edit. Without it the only
 options would be a permanent critical or never touching your own files.
 
 ### C33 amended
@@ -2161,7 +2171,7 @@ whether it survives as something the model is told to believe.
 Three tiers: `USER.md` + `MEMORY.md` in the user data dir, always in the
 stable prefix; the Phase 2 FTS index; and an interface stub for tier 3.
 Tools: `memory_read`, `memory_write`, `memory_consolidate`, plus
-`alpha memory` so a person can read and correct what the agent believes
+`bucephalus memory` so a person can read and correct what the agent believes
 about them.
 
 ### The prefix constraint, satisfied by construction
@@ -2318,7 +2328,7 @@ which side of that commit a run sits on.
 ## Phase 2 (B4) — FTS5 search over prior sessions — 2026-09-06
 
 `search_history`, an FTS5 index over what earlier runs were asked and what
-they produced. `alpha search <query>`, `--rebuild`, `--verify`.
+they produced. `bucephalus search <query>`, `--rebuild`, `--verify`.
 
 **Results are UNTRUSTED as a floor, not as a computation.** `answer`
 artifacts are stored `taint=trusted` and propagating that would have been the

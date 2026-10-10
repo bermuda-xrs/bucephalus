@@ -68,7 +68,7 @@ def test_frozen_no_recursive_spawn_by_process_tree():
     exe = os.path.basename(sys.executable).lower()
     before = {p for p, _ in _descendants(os.getpid())}
     code = ("import os, time, glob\n"
-            "print('nested', glob.glob(os.path.join(os.getcwd(), 'alpha_sbx_*')))\n"
+            "print('nested', glob.glob(os.path.join(os.getcwd(), 'bucephalus_sbx_*')))\n"
             "time.sleep(4)\nprint('done')\n")
     seen: list[list[tuple[int, str]]] = []
 
@@ -93,9 +93,9 @@ def test_frozen_no_recursive_spawn_by_process_tree():
             if img.lower() == exe and p not in before]
     assert not left, f"left running after the run: {left}"
     leftovers = [d for d in os.listdir(tempfile.gettempdir())
-                 if d.startswith("alpha_sbx_")
+                 if d.startswith("bucephalus_sbx_")
                  and os.path.isdir(os.path.join(tempfile.gettempdir(), d, ))
-                 and any(x.startswith("alpha_sbx_") for x in
+                 and any(x.startswith("bucephalus_sbx_") for x in
                          os.listdir(os.path.join(tempfile.gettempdir(), d)))]
     assert not leftovers, f"nested sandbox directories: {leftovers}"
 

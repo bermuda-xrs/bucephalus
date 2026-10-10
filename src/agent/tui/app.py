@@ -25,8 +25,8 @@ from .model import ALERT_ROLE, RunState
 from .theme import banner_text, load, supports_glyphs
 
 
-class AlphaTUI(App):
-    TITLE = "alpha"
+class BucephalusTUI(App):
+    TITLE = "Bucephalus"
     COMMAND_PALETTE_BINDING = "ctrl+k"
     CSS = """
     Screen { layout: vertical; }
@@ -399,4 +399,4 @@ class AlphaTUI(App):
 
 
 def run(ctx, task_id: str | None = None) -> None:
-    AlphaTUI(ctx, task_id).run()
+    BucephalusTUI(ctx, task_id).run()

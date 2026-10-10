@@ -18,21 +18,21 @@ was not made.
   283-task measurement record) and `anchor/*.anchor` stay in the checkout and
   stay synced until the user moves them; a one-time notice names them. Moving
   a measurement record is not a call to make unattended.
-- **Consequence to know about.** `alpha` run from this checkout now starts on
-  an empty database in `%LOCALAPPDATA%\alpha-test-1\alpha-test-1\checkouts\
-  alpha-test-1-<hash>\`. The desktop app is unaffected (it always used
+- **Consequence to know about.** `bucephalus` run from this checkout now starts on
+  an empty database in `%LOCALAPPDATA%\bucephalus\bucephalus\checkouts\
+  bucephalus-<hash>\`. The desktop app is unaffected (it always used
   platformdirs).
-- **Reverse.** Set `ALPHA_DATA_DIR` to the checkout, or copy the old database
+- **Reverse.** Set `BUCEPHALUS_DATA_DIR` to the checkout, or copy the old database
   into the new directory. Code: `config._synced_state_dir`.
 
 ## U2 - The operator's real memory holds test content: WAITING FOR USER
 
-`%LOCALAPPDATA%\alpha-test-1\alpha-test-1\memory\MEMORY.md` contains
+`%LOCALAPPDATA%\bucephalus\bucephalus\memory\MEMORY.md` contains
 `- [user] injected instruction`, written 2026-09-25 by the audit's probe (the
 suite did not isolate the user data dir; fixed in 38edfa1). It is in the
 prefix of every real session since. The run's rules forbid touching real
 memory files, so it is left. To remove it:
-`alpha memory --forget "injected instruction"` (then `alpha memory` to check).
+`bucephalus memory --forget "injected instruction"` (then `bucephalus memory` to check).
 
 ## U3 - Memory integrity is not compared against the chain (1.4)
 
@@ -40,7 +40,7 @@ memory files, so it is left. To remove it:
   chain, "the authenticated record".
 - **Measured (Phase E, D44; re-read 2026-09-28).** Memory is ONE store per
   user, shared by every config; each config's chain is its own database, and
-  `alpha memory --accept` blesses a state with no chain event. A load-time
+  `bucephalus memory --accept` blesses a state with no chain event. A load-time
   comparison alarms on another config's legitimate write and on every
   accepted state (`tests/test_memory_integrity_claim.py` went red under the
   naive wiring). The chain is also not a stronger authenticator here: it and

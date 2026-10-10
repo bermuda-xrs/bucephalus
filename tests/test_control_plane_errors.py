@@ -22,7 +22,7 @@ def test_D47_a_non_ascii_credential_is_refused_not_a_crash(ctx):
     c = _client(ctx, raise_server_exceptions=False)
     r = c.get("/approvals", headers={"Authorization": "Bearer café".encode()})
     assert r.status_code == 401, r.status_code
-    r = c.get("/approvals", headers={"Authorization": b"", "X-Alpha-Token": "été".encode()})
+    r = c.get("/approvals", headers={"Authorization": b"", "X-Bucephalus-Token": "été".encode()})
     assert r.status_code == 401, r.status_code
     r = c.get("/approvals", params={"token": "été"}, headers={"Authorization": b""})
     assert r.status_code == 401, r.status_code

@@ -5,7 +5,7 @@ import sys
 import threading
 from pathlib import Path
 
-HOST_ENV = "ALPHA_HOST"
+HOST_ENV = "BUCEPHALUS_HOST"
 
 
 def resolve_host() -> str:
@@ -19,8 +19,8 @@ def resolve_host() -> str:
 def resolve_state() -> tuple[Path, Path]:
     from .paths import user_config_dir, user_data_dir
 
-    data = Path(os.environ.get("ALPHA_DATA_DIR") or user_data_dir())
-    os.environ["ALPHA_DATA_DIR"] = str(data)
+    data = Path(os.environ.get("BUCEPHALUS_DATA_DIR") or user_data_dir())
+    os.environ["BUCEPHALUS_DATA_DIR"] = str(data)
     cfg = user_config_dir() / "config.yaml"
     if not cfg.exists():
         cfg.parent.mkdir(parents=True, exist_ok=True)
@@ -58,7 +58,7 @@ def start_server(ctx, host: str):
     server = uvicorn.Server(uvicorn.Config(create_app(ctx), log_level="warning",
                                            timeout_graceful_shutdown=GRACEFUL_SHUTDOWN_S))
     thread = threading.Thread(target=server.run, kwargs={"sockets": [sock]},
-                              daemon=True, name="alpha-control-plane")
+                              daemon=True, name="bucephalus-control-plane")
     thread.start()
     while not server.started and thread.is_alive():
         threading.Event().wait(0.05)
@@ -100,7 +100,7 @@ def main(argv: list[str] | None = None) -> int:
 
     import argparse
 
-    p = argparse.ArgumentParser(prog="alpha-desktop")
+    p = argparse.ArgumentParser(prog="bucephalus-desktop")
     p.add_argument("--config", help="a config file; default: the user config")
     args = p.parse_args(argv)
 
@@ -115,7 +115,7 @@ def main(argv: list[str] | None = None) -> int:
 
         from .control.server import console_url
 
-        window = webview.create_window("alpha", console_url(port, server.config.app.state.token),
+        window = webview.create_window("Bucephalus", console_url(port, server.config.app.state.token),
                                        width=1280, height=860, min_size=(900, 600))
         def stop_now() -> None:
             shutdown(server, thread)

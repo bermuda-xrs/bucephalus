@@ -16,22 +16,22 @@ KNOWN_INERT = {
         "tests. No production call site BY DESIGN: a reset reachable from a "
         "real run is a way to bypass a site's crawl-delay.",
     "reset_injection_counter":
-        "test-only helper for the ALPHA_INJECT_STALL fault-injection switch. "
+        "test-only helper for the BUCEPHALUS_INJECT_STALL fault-injection switch. "
         "Production has no call site BY DESIGN - a reset reachable from a "
         "real run is one more way for injection to affect a measurement.",
 
     "AccessGuard.dispatch": "ASGI middleware; Starlette calls it.",
-    "AlphaTUI.compose": "Textual lifecycle hook.",
-    "AlphaTUI.on_mount": "Textual lifecycle hook.",
-    "AlphaTUI.on_unmount": "Textual lifecycle hook.",
-    "AlphaTUI.on_button_pressed": "Textual event handler, dispatched by name.",
-    "AlphaTUI.on_input_submitted": "Textual event handler, dispatched by name.",
-    "AlphaTUI.on_list_view_selected": "Textual event handler, dispatched by name.",
-    "AlphaTUI.action_sign": "Textual action, bound to `s` in BINDINGS.",
-    "AlphaTUI.action_send_back": "Textual action, bound to `b` in BINDINGS.",
-    "AlphaTUI.action_allow": "Textual action, bound to `a` in BINDINGS.",
-    "AlphaTUI.action_deny": "Textual action, bound to `d` in BINDINGS.",
-    "AlphaTUI.action_new": "Textual action, bound to `n` in BINDINGS.",
+    "BucephalusTUI.compose": "Textual lifecycle hook.",
+    "BucephalusTUI.on_mount": "Textual lifecycle hook.",
+    "BucephalusTUI.on_unmount": "Textual lifecycle hook.",
+    "BucephalusTUI.on_button_pressed": "Textual event handler, dispatched by name.",
+    "BucephalusTUI.on_input_submitted": "Textual event handler, dispatched by name.",
+    "BucephalusTUI.on_list_view_selected": "Textual event handler, dispatched by name.",
+    "BucephalusTUI.action_sign": "Textual action, bound to `s` in BINDINGS.",
+    "BucephalusTUI.action_send_back": "Textual action, bound to `b` in BINDINGS.",
+    "BucephalusTUI.action_allow": "Textual action, bound to `a` in BINDINGS.",
+    "BucephalusTUI.action_deny": "Textual action, bound to `d` in BINDINGS.",
+    "BucephalusTUI.action_new": "Textual action, bound to `n` in BINDINGS.",
     "_Text.handle_data": "HTMLParser callback, invoked by the stdlib.",
     "_Text.handle_starttag": "HTMLParser callback, invoked by the stdlib.",
     "_Text.handle_endtag": "HTMLParser callback, invoked by the stdlib.",

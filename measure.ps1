@@ -29,7 +29,7 @@ $ErrorActionPreference = "Stop"
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $py = @(
     (Join-Path $here ".venv\Scripts\python.exe"),
-    (Join-Path $env:USERPROFILE ".alpha-test-1-venv\Scripts\python.exe")
+    (Join-Path $env:USERPROFILE ".bucephalus-venv\Scripts\python.exe")
 ) | Where-Object { Test-Path $_ } | Select-Object -First 1
 if (-not $py) { $py = "python" }
 
@@ -125,7 +125,7 @@ switch ($Command) {
         if ($cmd -match "<skill_id>") {
             if (-not $SkillId) {
                 Write-Host "This step needs -SkillId. List candidates with:" -ForegroundColor Yellow
-                Write-Host "  .\alpha.ps1 --config config.local.yaml skills"
+                Write-Host "  .\bucephalus.ps1 --config config.local.yaml skills"
                 Write-Host "  .\measure.ps1 next -SkillId <id>"
                 exit 2
             }

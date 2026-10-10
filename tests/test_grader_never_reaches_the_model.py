@@ -48,7 +48,7 @@ def _run(root: Path, secret: str, measured: bool, monkeypatch):
     from agent.kernel.types import Budget, TaskContract
     from agent.memory.store import MemoryStore, record_fingerprint
 
-    monkeypatch.setenv("ALPHA_DATA_DIR", str(root))
+    monkeypatch.setenv("BUCEPHALUS_DATA_DIR", str(root))
     cfg_path = _config(root)
     if measured:
         from measurement import open_measurement

@@ -530,7 +530,7 @@ def run_sandboxed(
     if note:
         notes.append(note)
 
-    with tempfile.TemporaryDirectory(prefix="alpha_sbx_") as workdir:
+    with tempfile.TemporaryDirectory(prefix="bucephalus_sbx_") as workdir:
         links = []
         for p in allowed_paths:
             src, rel = p if isinstance(p, (tuple, list)) else (p, None)
@@ -540,7 +540,7 @@ def run_sandboxed(
 
         touch_path = None
         if protected_paths:
-            fd, touch_path = tempfile.mkstemp(prefix="alpha_touch_", suffix=".log")
+            fd, touch_path = tempfile.mkstemp(prefix="bucephalus_touch_", suffix=".log")
             os.close(fd)
         guard = _GUARD_TEMPLATE.format(
             roots=[str(Path(p[0] if isinstance(p, (tuple, list)) else p).resolve())

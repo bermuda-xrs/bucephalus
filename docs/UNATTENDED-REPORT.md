@@ -22,7 +22,7 @@ stderr pipe open, and a refused job left its child's pipes open. Source that
 a later Python will reject (invalid escapes) and a BOM that hid a script from
 every AST audit are fixed, with a test that keeps them out. **ruff now lints
 for bugs in CI** (U22; new dev dependency). Three sentences the code no
-longer made true are corrected, including README's `alpha.cmd` examples,
+longer made true are corrected, including README's `bucephalus.cmd` examples,
 which fail at this path. Windows 1288 passed, WSL2 1262, frozen gate 63.
 
 ## The continuation, 2026-09-30
@@ -63,10 +63,10 @@ In the order I would take them:
 
 1. **Your real memory holds a line a test wrote** (U2). The audit's probe put
    `- [user] injected instruction` into
-   `%LOCALAPPDATA%\alpha-test-1\alpha-test-1\memory\MEMORY.md` on 2026-09-25,
+   `%LOCALAPPDATA%\bucephalus\bucephalus\memory\MEMORY.md` on 2026-09-25,
    and it has been in the prefix of every real session since. The suite no
    longer opens real memory (38edfa1); removing the line was yours to do:
-   `.\alpha.ps1 memory --forget "injected instruction"`.
+   `.\bucephalus.ps1 memory --forget "injected instruction"`.
 2. **A graded program can print its own verdict** (D79, proposal P5). Found
    while mutation-testing the verifiers: `verify_program` reads the first
    verdict marker on stdout, and the grader runs the answer inside its own
@@ -91,16 +91,16 @@ In the order I would take them:
 ## Run the new console
 
 ```powershell
-cd "C:\Users\char1\OneDrive\Desktop\Βουκεφάλας\alpha-test-1"
-.\alpha.ps1 --config config.local.yaml serve
+cd "C:\Users\char1\OneDrive\Desktop\Βουκεφάλας\bucephalus"
+.\bucephalus.ps1 --config config.local.yaml serve
 # then open the link it prints: 127.0.0.1:8901, with the token in the fragment
 ```
 
 It needs the model server from HANDOVER B2 step 3 (`.\ollama-serve.ps1`, port
-11435) to do real work. Not `alpha.cmd`: `.cmd` files fail at this path (B1).
-The same console in a window: `C:\Users\char1\.alpha-build\dist\alpha\alpha.exe`
+11435) to do real work. Not `bucephalus.cmd`: `.cmd` files fail at this path (B1).
+The same console in a window: `C:\Users\char1\.bucephalus-build\dist\bucephalus\bucephalus.exe`
 (rebuilt with `python packaging\build.py` from the build venv). The terminal
-UI: `.\alpha.ps1 --config config.local.yaml tui`.
+UI: `.\bucephalus.ps1 --config config.local.yaml tui`.
 
 ## What changed
 
@@ -146,7 +146,7 @@ prepared, UNVERIFIED.
 | desktop app: spawn to first paint | 4.59 s | 4.55 s |
 | desktop app, idle, whole tree: working set / private | 501 / 280 MB | 512 / 283 MB |
 | per agent step, harness only | 33.3 ms | 31.9 ms |
-| `alpha serve` to /health | 2.63 s | 2.58 s |
+| `bucephalus serve` to /health | 2.63 s | 2.58 s |
 | desktop build | 63 MB | 62 MB |
 
 **The close target (under 2 s) is not met** (U12): the app's own work ends
@@ -219,7 +219,7 @@ Defects in the product, each fixed red-first unless marked:
 - **D64**: the console never offered a real plan for signature (it waited for
   "draft"; the planner writes "drafted"; the tests seeded "draft" by hand).
 - **D65**: the TUI ran a task on submit with no plan.
-- **D60**: a task deleted from the database was invisible to `alpha verify`.
+- **D60**: a task deleted from the database was invisible to `bucephalus verify`.
 - **D80**: a test migrated the measurement record's schema on every run.
 - **D79 (open)**: above.
 

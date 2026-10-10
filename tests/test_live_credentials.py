@@ -15,7 +15,7 @@ from agent.config import BackendConfig
 from agent.models.anthropic import AnthropicBackend
 
 ROOT = Path(__file__).resolve().parents[1]
-TELEGRAM_TOKEN = os.environ.get("ALPHA_TELEGRAM_TOKEN")
+TELEGRAM_TOKEN = os.environ.get("BUCEPHALUS_TELEGRAM_TOKEN")
 ANTHROPIC_KEY = os.environ.get("ANTHROPIC_API_KEY")
 
 
@@ -47,11 +47,11 @@ def exercise_anthropic(backend) -> None:
     assert str(resp.raw.get("model", "")).startswith(backend.cfg.model), resp.raw
 
 
-@pytest.mark.skipif(not TELEGRAM_TOKEN, reason="ALPHA_TELEGRAM_TOKEN is not set: "
+@pytest.mark.skipif(not TELEGRAM_TOKEN, reason="BUCEPHALUS_TELEGRAM_TOKEN is not set: "
                     "the live Telegram path stays UNVERIFIED (D26)")
 def test_telegram_transport_live():
     exercise_telegram(HttpTransport(
-        TELEGRAM_TOKEN, base=os.environ.get("ALPHA_TELEGRAM_API_BASE", API)))
+        TELEGRAM_TOKEN, base=os.environ.get("BUCEPHALUS_TELEGRAM_API_BASE", API)))
 
 
 @pytest.mark.skipif(not ANTHROPIC_KEY, reason="ANTHROPIC_API_KEY is not set: "
