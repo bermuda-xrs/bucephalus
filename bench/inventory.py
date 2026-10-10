@@ -28,6 +28,9 @@ ROWS: list[tuple[str, str, str, str]] = [
     ("deviation from the plan is detected", "deviation.detected", "event", ""),
     ("the ceiling budgets against a fitted estimator", "tokens.calibration", "fitted", ""),
     ("a follow-up is given its conversation", "conversation.history", "event", ""),
+    ("a final answer is held back for a check", "verify.continued", "event", ""),
+    ("a repeated call is warned about", "stuck.warned", "event", ""),
+    ("a repeated call halts the task", "stuck.detected", "event", ""),
 
     ("compaction tombstones an artifact", "session.opened", "tombstoned", ""),
     ("a session BOUNDARY is crossed", "session.opened", "rotate", ""),

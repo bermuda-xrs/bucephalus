@@ -6,7 +6,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Any
 
-from ..kernel.events import sha256_hex
+from ..kernel.events import canonical, sha256_hex
 from ..kernel.integrity import IntegrityError, checkpoint, resume
 from ..kernel.receipts import execute_once, idempotency_key
 from ..models.ollama import ModelStall
@@ -224,6 +224,7 @@ def run_task(ctx, task_id: str) -> TaskResult:
     best_score: float = -1.0
     score_history: list[float] = []
     charged_s = 0.0
+    seen: dict[str, int] = {}
 
     try:
         if plan is not None:
@@ -338,6 +339,16 @@ def run_task(ctx, task_id: str) -> TaskResult:
 
             parsed = parse_action(resp.text)
 
+            repeats = 0
+            if ctx.config.mechanisms.stuck_detection and parsed.kind != "final":
+                key = sha256_hex(canonical({"k": parsed.kind, "t": parsed.tool, "a": parsed.args,
+                                            "r": parsed.raw if parsed.kind == "none" else ""}))
+                seen[key] = repeats = seen.get(key, 0) + 1
+                if repeats >= STUCK_HALT:
+                    ctx.log.append(task.id, "stuck.detected",
+                                   {"step": step, "kind": parsed.kind, "tool": parsed.tool, "repeats": repeats})
+                    return _final_sweep(ctx, task, "stuck", best_answer, step + 1)
+
             if parsed.kind == "final" and _must_verify_first(ctx, task):
                 n = _verify_continuations(ctx, task) + 1
                 ctx.log.append(task.id, "verify.continued", {"step": step, "n": n})
@@ -390,10 +401,16 @@ def run_task(ctx, task_id: str) -> TaskResult:
                         parsed.error, taint=Taint.TRUSTED, label="parser"
                     )
                 )
+                _warn_if_stuck(ctx, task, entries, step, repeats, parsed)
                 continue
 
+            seq0 = _last_receipt_seq(ctx, task)
             obs = execute_action(ctx, task, parsed, step, plan)
             entries.append(obs)
+            if _changed_since(ctx, task, seq0):
+                seen.clear()
+            else:
+                _warn_if_stuck(ctx, task, entries, step, repeats, parsed)
             if parsed.tool == "update_plan" and obs.label == "update_plan":
                 entries = _with_checklist(ctx, task, entries, parsed.args)
 
@@ -437,6 +454,30 @@ def run_task(ctx, task_id: str) -> TaskResult:
 
 
 MAX_VERIFY_CONTINUATIONS = 3
+STUCK_WARN = 3
+STUCK_HALT = 6
+
+
+def _last_receipt_seq(ctx, task) -> int:
+    return ctx.conn.execute("SELECT COALESCE(MAX(seq), 0) FROM events WHERE task_id=? AND type='tool.receipt'",
+                            (task.id,)).fetchone()[0]
+
+
+def _changed_since(ctx, task, seq: int) -> bool:
+    row = ctx.conn.execute("SELECT payload_json FROM events WHERE task_id=? AND type='tool.receipt' AND seq>? "
+                           "ORDER BY seq DESC LIMIT 1", (task.id, seq)).fetchone()
+    return bool(row and json.loads(row[0]).get("changed"))
+
+
+def _warn_if_stuck(ctx, task, entries, step, repeats, parsed) -> None:
+    if repeats != STUCK_WARN:
+        return
+    ctx.log.append(task.id, "stuck.warned", {"step": step, "kind": parsed.kind, "tool": parsed.tool,
+                                             "repeats": repeats})
+    entries.append(LedgerEntry.observation(
+        f"You have now made this exact same call {repeats} times and nothing has changed. Change approach: "
+        f"try something different, or answer with what you have. At {STUCK_HALT} the task is stopped.",
+        taint=Taint.TRUSTED, label="stuck"))
 
 
 def _verify_continuations(ctx, task) -> int:
@@ -942,6 +983,7 @@ def finish(
         "failed": TaskStatus.FAILED,
         "crashed": TaskStatus.FAILED,
         "model_stalled": TaskStatus.FAILED,
+        "stuck": TaskStatus.FAILED,
     }
     set_status(ctx.conn, ctx.log, task, mapping.get(status, TaskStatus.FAILED), status)
     if mapping.get(status, TaskStatus.FAILED) != TaskStatus.PAUSED:

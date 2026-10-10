@@ -49,7 +49,7 @@ setInterval(() => { const f = FRAMES[Math.floor(Date.now() / 90) % FRAMES.length
 
 function statusWord(s) {
   return ({pending: "Waiting", running: "Running", done: "Done", done_unannounced: "Done, not announced",
-    failed: "Failed", budget_exhausted: "Out of budget", max_steps: "Out of steps", plateau: "Stalled",
+    failed: "Failed", budget_exhausted: "Out of budget", max_steps: "Out of steps", plateau: "Stalled", stuck: "Stopped: repeating itself",
     paused: "Paused", rejected: "Sent back"}[s]) || s;
 }
 const TERMINAL = s => !["pending", "running", "paused"].includes(s);

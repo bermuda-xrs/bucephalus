@@ -78,6 +78,8 @@ EVENT_TYPES = frozenset(
         "tokens.calibration",
         "conversation.history",
         "verify.continued",
+        "stuck.warned",
+        "stuck.detected",
     }
 )
 
