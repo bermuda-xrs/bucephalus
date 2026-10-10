@@ -76,10 +76,14 @@ Before any commit: tests red first, never weaken a check, nothing pushed.
 
 ## Next step
 
-Done: the rename. In progress (user's 2026-10-10 brief): HARNESS_VERSION 8 (small-model
-tool profile, post-edit diagnostics, verify-before-stop, constrained tool calls, stuck detection,
-shadow-git rewind, AGENTS.md, `exec` mode, hooks, MCP client). Not started: per-tool expandable
-cards (needs the stream events to carry full arguments); a real-model re-baseline of HARNESS_VERSION 7.
+Done: the rename (main). On branch `harness-8` (not merged; HARNESS_VERSION and TOOLSET_VERSION NOT yet bumped,
+they go 7->8 and 6->7 at the end): items (a) small tool profile with run_command/search/update_plan, (b) post-edit
+diagnostics, (c) verify-before-stop, (d) constrained tool calls, (e) stuck detection, plus a path-taint fix and an
+exposure check inside call_tool. In hand: (f) `execute/shadow.py` + `tests/test_shadow_repo.py` exist; still to
+write: the per-step checkpoint hook in the loop (events checkpoint.shadow / task.rewound, ledger snapshot as a
+park seed, `shadow` added to protected state, mechanisms.shadow_checkpoints off in conftest make_config),
+`bucephalus rewind`, console route and button. Not started: (g) AGENTS.md, (h) `exec`, (i) hooks, (j) MCP client,
+the HARNESS bump, and the paired 3B run (`config.small.yaml` does not exist yet).
 
 Waiting on the user: D26 credentials; the memory line a test wrote into the real memory
 (`.\bucephalus.ps1 memory --forget "injected instruction"`); a Mac or bare-metal Linux run.
