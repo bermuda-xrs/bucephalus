@@ -135,6 +135,17 @@ def make_config(tmp_path: Path, **overrides) -> Config:
 
 
 @pytest.fixture
+def small(tmp_path, workspace):
+    c = AgentContext(make_config(tmp_path))
+    c.backends["cloud"].cfg.tool_profile = "small"
+    c.close()
+    c = AgentContext(make_config(tmp_path), backends=c.backends)
+    c.config.autonomy.approve_scoped_writes = True
+    yield c
+    c.close()
+
+
+@pytest.fixture
 def workspace(tmp_path: Path) -> Path:
     ws = tmp_path / "work"
     ws.mkdir()

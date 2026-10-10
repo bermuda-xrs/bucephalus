@@ -331,6 +331,15 @@ def run_task(ctx, task_id: str) -> TaskResult:
 
             parsed = parse_action(resp.text)
 
+            if parsed.kind == "final" and _must_verify_first(ctx, task):
+                n = _verify_continuations(ctx, task) + 1
+                ctx.log.append(task.id, "verify.continued", {"step": step, "n": n})
+                entries.append(LedgerEntry.observation(
+                    "You changed files but have not run a test, lint or the program since. Run one now "
+                    "with run_command, or answer again if none applies (" + str(MAX_VERIFY_CONTINUATIONS - n)
+                    + " reminder(s) left).", taint=Taint.TRUSTED, label="verify-before-stop"))
+                continue
+
             if parsed.kind == "final":
                 result = parsed.payload
                 artifact_text = (
@@ -418,6 +427,30 @@ def run_task(ctx, task_id: str) -> TaskResult:
 
     finally:
         ctx.executing_backend = None
+
+
+MAX_VERIFY_CONTINUATIONS = 3
+
+
+def _verify_continuations(ctx, task) -> int:
+    return ctx.conn.execute("SELECT COUNT(*) FROM events WHERE task_id=? AND type='verify.continued'",
+                            (task.id,)).fetchone()[0]
+
+
+def _must_verify_first(ctx, task) -> bool:
+    if not ctx.config.mechanisms.verify_before_stop or "run_command" not in ctx.tools:
+        return False
+    if _verify_continuations(ctx, task) >= MAX_VERIFY_CONTINUATIONS:
+        return False
+    dirty = False
+    for (payload,) in ctx.conn.execute(
+            "SELECT payload_json FROM events WHERE task_id=? AND type='tool.receipt' ORDER BY seq", (task.id,)):
+        d = json.loads(payload)
+        if d.get("changed"):
+            dirty = True
+        if d.get("verify"):
+            dirty = False
+    return dirty
 
 
 def _with_checklist(ctx, task, entries, args) -> list[LedgerEntry]:
@@ -735,6 +768,13 @@ def _perform(ctx, task, tool, tool_name: str, args: dict, step: int) -> LedgerEn
     touched = result.pop("touched", None) if isinstance(result, dict) else None
     receipt = {"tool": tool_name, "key": key, "ok": bool(result.get("ok", True)),
                "wall_ms": int((time.time() - t0) * 1000)}
+    if isinstance(result, dict):
+        changed = bool(result.get("changed_files")) or (tool_name in ("write_file", "edit_file")
+                                                         and bool(result.get("ok")))
+        if changed:
+            receipt["changed"] = True
+        if tool_name == "run_command" and result.get("verification"):
+            receipt["verify"] = True
     if tool_name == "run_code":
         receipt.update(_touched_record(touched))
         receipt["limits"] = list(result.get("notes") or []) if isinstance(result, dict) else []
@@ -751,6 +791,7 @@ def _perform(ctx, task, tool, tool_name: str, args: dict, step: int) -> LedgerEn
     )
     ctx.log.append(task.id, "artifact.written",
                    {"id": aid, "kind": "tool_output", "taint": taint.value})
+    ctx.taint_tracker(task.id).trust_paths(args)
     ctx.taint_tracker(task.id).observe(text, taint)
 
     rendered, via = condense_observation(ctx, task, text, taint, aid)

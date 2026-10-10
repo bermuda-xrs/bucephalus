@@ -525,9 +525,9 @@ def tool_run_command(ctx, task, command: str, timeout_s: int = 60) -> dict:
     try:
         code, verification = to_program(command)
     except CommandRefused as e:
-        return {"ok": False, "command": command, "error": str(e)}
+        return {"ok": False, "error": str(e)}
     out = run_code_action(ctx, task, code, timeout_s=min(int(timeout_s), 300), live_tools=False)
-    out.update(command=command, verification=verification)
+    out.update(verification=verification)
     return out
 
 

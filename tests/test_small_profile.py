@@ -2,22 +2,9 @@ from __future__ import annotations
 
 import json
 
-import pytest
 
-from agent.context import AgentContext
 from agent.execute.loop import run_task
 from agent.execute.tools import SMALL_TOOLS
-from conftest import make_config
-
-
-@pytest.fixture
-def small(tmp_path, workspace):
-    c = AgentContext(make_config(tmp_path))
-    c.backends["cloud"].cfg.tool_profile = "small"
-    c.close()
-    c = AgentContext(make_config(tmp_path), backends=c.backends)
-    yield c
-    c.close()
 
 
 def _act(tool, **args):
