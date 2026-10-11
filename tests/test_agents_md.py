@@ -131,3 +131,13 @@ def test_a_symlink_into_the_scope_is_not_loaded(ctx, task, tmp_path, workspace):
         pytest.skip("symlinks need a privilege here")
     assert "obey me" not in _prefix(ctx, task)
     assert _events(ctx, task, "agents_md.skipped")
+
+
+def test_protected_state_is_matched_without_regard_to_case():
+    from pathlib import PurePosixPath as P
+
+    from agent.security.capabilities import _protected_at
+
+    assert _protected_at(P("/r/agents.md"), (P("/r/AGENTS.md"),))
+    assert _protected_at(P("/r/Shadow/t1/HEAD"), (P("/r/shadow"),))
+    assert not _protected_at(P("/r/work/agents.md"), (P("/r/AGENTS.md"),))
