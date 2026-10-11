@@ -83,6 +83,8 @@ EVENT_TYPES = frozenset(
         "checkpoint.shadow",
         "checkpoint.skipped",
         "task.rewound",
+        "agents_md.loaded",
+        "agents_md.skipped",
     }
 )
 

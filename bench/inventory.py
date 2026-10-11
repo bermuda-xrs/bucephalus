@@ -34,6 +34,8 @@ ROWS: list[tuple[str, str, str, str]] = [
     ("a step is checkpointed in the shadow repo", "checkpoint.shadow", "event", ""),
     ("a checkpoint could not be taken", "checkpoint.skipped", "event", ""),
     ("a task is rewound", "task.rewound", "event", ""),
+    ("the user's AGENTS.md enters the prefix", "agents_md.loaded", "event", ""),
+    ("an AGENTS.md the task could write is left out", "agents_md.skipped", "event", ""),
 
     ("compaction tombstones an artifact", "session.opened", "tombstoned", ""),
     ("a session BOUNDARY is crossed", "session.opened", "rotate", ""),

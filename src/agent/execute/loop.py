@@ -211,6 +211,7 @@ def run_task(ctx, task_id: str) -> TaskResult:
         set_status(ctx.conn, ctx.log, task, TaskStatus.FAILED, "skill_set_changed")
         raise
     memory = ctx.freeze_memory(task.id)
+    notes = ctx.freeze_project_notes(task)
     exe = ctx.backends.get("cloud")
     cal = calibration(ctx.conn, "cloud", exe.cfg.model) if exe else Calibration()
     ctx.log.append(task.id, "tokens.calibration",
@@ -262,6 +263,7 @@ def run_task(ctx, task_id: str) -> TaskResult:
                 json.loads(task.contract.model_dump_json()),
                 tool_manual=ctx.tools.manual(),
                 memory=memory,
+                project_notes=notes,
             )
             if guard is not None:
                 guard.check(builder, task.id)
@@ -617,7 +619,8 @@ def _session_boundary(ctx, task, entries, window, step, plan, skills, builder,
     builder = PrefixBuilder(
         system_contract(ctx.code_as_action),
         skills, json.loads(task.contract.model_dump_json()),
-        tool_manual=ctx.tools.manual(), memory=rot["memory"])
+        tool_manual=ctx.tools.manual(), memory=rot["memory"],
+        project_notes=ctx.freeze_project_notes(task))
     if guard is not None:
         guard.check(builder, task.id)
     return entries, rot["memory"], guard, builder, builder.build()

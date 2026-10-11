@@ -11,7 +11,7 @@ from .config import Config, load_config, load_dotenv
 from .execute.tools import ToolRegistry, apply_profile, default_registry
 from .instrument.telemetry import Telemetry, compute_cost, record_call
 from .kernel.db import open_db
-from .kernel.events import EventLog
+from .kernel.events import EventLog, sha256_hex
 from .kernel.integrity import Anchor
 from .kernel.tasks import spend
 from .kernel.types import ModelResponse, Taint
@@ -30,6 +30,9 @@ def _without(registry: ToolRegistry, *names: str) -> ToolRegistry:
         if name not in names:
             out.register(registry.get(name))
     return out
+
+
+MAX_PROJECT_NOTES = 8000
 
 
 class AgentContext:
@@ -58,6 +61,7 @@ class AgentContext:
 
         self.memory = MemoryStore(user_data_dir() / "memory")
         self._memory_frozen: dict[str, dict] = {}
+        self._notes_frozen: dict[str, str] = {}
         self.telemetry = Telemetry(self.conn, cloud_backend_names(config),
                                    cache_reporting_backend_names(config))
         self.mesh = VerificationMesh(self)
@@ -143,6 +147,30 @@ class AgentContext:
         if not isinstance(task, str):
             spend(self.conn, self.log, task, usd=cost)
         return resp
+
+    def freeze_project_notes(self, task) -> str:
+        if task.id not in self._notes_frozen:
+            self._notes_frozen[task.id] = self._load_project_notes(task)
+        return self._notes_frozen[task.id]
+
+    def _load_project_notes(self, task) -> str:
+        from .security.capabilities import within_scope
+
+        path = Path(self.config.root) / "AGENTS.md"
+        if not self.config.mechanisms.agents_md or not path.is_file():
+            return ""
+        if within_scope({"path": "AGENTS.md"}, task.contract.artifact_scope, self.config.root)[0]:
+            self.log.append(task.id, "agents_md.skipped",
+                            {"why": "inside artifact_scope: the task can write it, so it is not an instruction"})
+            return ""
+        raw = path.read_bytes()
+        text = raw.decode("utf-8", errors="replace")
+        cut = len(text) > MAX_PROJECT_NOTES
+        if cut:
+            text = text[:MAX_PROJECT_NOTES] + chr(10) + "[truncated]"
+        self.log.append(task.id, "agents_md.loaded",
+                        {"bytes": len(raw), "sha256": sha256_hex(raw.decode("utf-8", errors="replace")), "truncated": cut})
+        return text
 
     def freeze_memory(self, task_id: str) -> dict:
         if task_id not in self._memory_frozen:

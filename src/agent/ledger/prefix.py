@@ -81,12 +81,14 @@ class PrefixBuilder:
         task_contract: dict,
         tool_manual: str = "",
         memory: dict | None = None,
+        project_notes: str = "",
     ):
         self.system_contract = system_contract
         self.skills = sorted(skills, key=lambda s: (s["name"], s["version"]))
         self.task_contract = task_contract
         self.tool_manual = tool_manual
         self.memory = dict(memory or {})
+        self.project_notes = project_notes
 
     def build(self) -> str:
         parts = [self.system_contract.rstrip(), "\n\n"]
@@ -94,6 +96,8 @@ class PrefixBuilder:
             parts.append("<tools>\n")
             parts.append(self.tool_manual.rstrip())
             parts.append("\n</tools>\n\n")
+        if self.project_notes:
+            parts.append(f'<project_notes source="AGENTS.md">\n{self.project_notes.rstrip()}\n</project_notes>\n\n')
         if self.memory:
             from ..memory.store import render_for_prefix
 
