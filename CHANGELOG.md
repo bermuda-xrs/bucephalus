@@ -41,6 +41,9 @@ loop has a `mechanisms.*` switch so a control arm can turn it off.
 - `bucephalus exec` (stream-JSON, exit 0/2/3/4), hooks (pre_tool, post_tool, stop), MCP client (stdio; tools
   write unless listed read_only; output untrusted; server descriptions never enter the prefix; not for
   unattended origins).
+- The console's live stream missed events written between its replay and its subscription, so a task that finished
+  quickly left the page on "Running" (the poll is off while a stream is open). It now drains persisted events
+  throughout and ends on the task's terminal status. Found by the frozen e2e, which failed after checkpoints added latency.
 - A path a task chose stays usable when a traceback echoes it; `call_tool` inside a program honours the
   tool exposure policy.
 

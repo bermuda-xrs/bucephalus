@@ -20,6 +20,8 @@ CLIENT_EVENTS = {
 FORBIDDEN_PREFIXES = ("monitor.",)
 
 ALERT_EVENTS = {"alert.integrity"}
+OPEN_STATUSES = ("pending", "running", "paused")
+POLL_S = 0.25
 
 
 def to_client_event(internal: dict) -> dict | None:
@@ -38,13 +40,22 @@ def sse(event: dict) -> str:
 def stream_events(ctx, task_id: str, since_seq: int = -1,
                   live: bool = False, idle_timeout_s: float = 30.0) -> Iterator[str]:
     import queue
+    import time
 
     from .. import stream as bus
 
-    for e in ctx.log.events(task_id, since_seq=since_seq):
-        ce = to_client_event(e)
-        if ce and ce["event"] not in ALERT_EVENTS:
-            yield sse(ce)
+    last = since_seq
+
+    def persisted() -> Iterator[tuple[dict, bool]]:
+        nonlocal last
+        for e in ctx.log.events(task_id, since_seq=last):
+            last = e["seq"]
+            ce = to_client_event(e)
+            if ce and ce["event"] not in ALERT_EVENTS:
+                yield ce, ce["event"] == "task.status" and ce["data"].get("status") not in OPEN_STATUSES
+
+    for ce, _ in persisted():
+        yield sse(ce)
     if not live:
         return
 
@@ -52,12 +63,22 @@ def stream_events(ctx, task_id: str, since_seq: int = -1,
     unsubscribe = bus.subscribe(task_id, lambda kind, data: q.put((kind, data)))
     try:
         seq = 10**9
+        quiet_since = time.monotonic()
         while True:
+            ended = False
+            for ce, terminal in persisted():
+                yield sse(ce)
+                ended = ended or terminal
+            if ended:
+                return
             try:
-                kind, data = q.get(timeout=idle_timeout_s)
+                kind, data = q.get(timeout=min(idle_timeout_s, POLL_S))
             except queue.Empty:
-                yield ": keepalive" + chr(10) + chr(10)
+                if time.monotonic() - quiet_since >= idle_timeout_s:
+                    quiet_since = time.monotonic()
+                    yield ": keepalive" + chr(10) + chr(10)
                 continue
+            quiet_since = time.monotonic()
             seq += 1
             yield sse({"event": f"live.{kind}", "seq": seq, "data": data})
     finally:
