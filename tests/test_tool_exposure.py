@@ -288,6 +288,7 @@ def test_every_measurement_entry_point_declares_one():
 TAINT_TABLE = {
     "append_to_outbox": (True, Taint.USER, Taint.TRUSTED),
     "edit_file": (True, Taint.USER, Taint.TRUSTED),
+    "apply_patch": (True, Taint.USER, Taint.TRUSTED),
     "expand_artifact": (False, Taint.UNTRUSTED, Taint.UNTRUSTED),
     "git_push": (True, Taint.TRUSTED, Taint.TRUSTED),
     "glob": (False, Taint.UNTRUSTED, Taint.UNTRUSTED),

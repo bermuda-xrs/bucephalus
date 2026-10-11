@@ -536,7 +536,7 @@ def _envelope(ctx, backend, tail: str) -> tuple[str, dict | None]:
     if backend.cfg.needs_action_envelope:
         if getattr(backend.cfg, "action_protocol", "json") == "tags":
             return tail + "\n" + ACTION_TAG_HINT, None
-        if ctx.config.mechanisms.constrained_calls:
+        if ctx.config.mechanisms.constrained_calls and backend.cfg.model_server == "ollama":
             hint = ACTION_SCHEMA_HINT if ctx.code_as_action else ACTION_SCHEMA_HINT_NO_CODE
             return tail + "\n" + hint, build_action_schema(ctx.tools, ctx.code_as_action)
         return tail + "\n" + ACTION_SCHEMA_HINT, ACTION_SCHEMA
@@ -779,6 +779,18 @@ def execute_action(ctx, task, parsed: ParsedAction, step: int, plan=None) -> Led
     return _perform(ctx, task, tool, tool_name, args, step)
 
 
+FILE_EDITS = ("write_file", "edit_file", "apply_patch")
+
+
+def _file_bytes(ctx, args: dict):
+    from .tools import _resolve
+
+    try:
+        return _resolve(ctx, str(args["path"])).read_bytes()
+    except (OSError, KeyError):
+        return None
+
+
 def _perform(ctx, task, tool, tool_name: str, args: dict, step: int) -> LedgerEntry:
     key = idempotency_key(task.id, step, tool_name, args)
     intent = {"tool": tool_name, "step": step, "key": key,
@@ -788,6 +800,7 @@ def _perform(ctx, task, tool, tool_name: str, args: dict, step: int) -> LedgerEn
     ctx.log.append(task.id, "tool.intent", intent)
 
     t0 = time.time()
+    before = _file_bytes(ctx, args) if tool_name in FILE_EDITS else None
     try:
         if tool_name == "run_code":
             from .codeact import run_code_action
@@ -809,7 +822,7 @@ def _perform(ctx, task, tool, tool_name: str, args: dict, step: int) -> LedgerEn
     except Exception as e:  # noqa: BLE001
         result = {"ok": False, "error": f"{type(e).__name__}: {e}"}
 
-    if (tool_name in ("write_file", "edit_file") and ctx.config.mechanisms.diagnostics
+    if (tool_name in FILE_EDITS and ctx.config.mechanisms.diagnostics
             and isinstance(result, dict) and result.get("ok") and result.get("path")):
         from .diagnostics import diagnose
 
@@ -820,8 +833,8 @@ def _perform(ctx, task, tool, tool_name: str, args: dict, step: int) -> LedgerEn
     receipt = {"tool": tool_name, "key": key, "ok": bool(result.get("ok", True)),
                "wall_ms": int((time.time() - t0) * 1000)}
     if isinstance(result, dict):
-        changed = bool(result.get("changed_files")) or (tool_name in ("write_file", "edit_file")
-                                                         and bool(result.get("ok")))
+        changed = bool(result.get("changed_files")) or (
+            tool_name in FILE_EDITS and bool(result.get("ok")) and _file_bytes(ctx, args) != before)
         if changed:
             receipt["changed"] = True
         if tool_name == "run_command" and result.get("verification"):

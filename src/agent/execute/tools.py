@@ -437,6 +437,62 @@ def tool_edit_file(ctx, task, path: str, old: str, new: str,
             "bytes": len(text) - len(old) * found + len(new) * found}
 
 
+_PATCH_FORM = "a patch is hunks, each starting with a line '@@'"
+
+
+def tool_apply_patch(ctx, task, path: str, patch: str) -> dict:
+    p = _resolve(ctx, path)
+    nl, crnl = chr(10), chr(13) + chr(10)
+    raw = p.read_bytes().decode("utf-8") if p.exists() else ""
+    lines = raw.replace(crnl, nl).split(nl)
+    hunks, cur = [], None
+    for ln in patch.replace(crnl, nl).split(nl):
+        if ln.startswith("@@"):
+            cur = []
+            hunks.append(cur)
+        elif cur is not None:
+            cur.append(ln)
+        elif ln.strip():
+            return {"ok": False, "error": _PATCH_FORM}
+    if not hunks:
+        return {"ok": False, "error": _PATCH_FORM}
+    for n, h in enumerate(hunks, 1):
+        while h and h[-1] == "":
+            h.pop()
+        old, new = [], []
+        for ln in h:
+            if ln == "":
+                tag, body = " ", ""
+            elif ln[0] in " -+":
+                tag, body = ln[0], ln[1:]
+            else:
+                return {"ok": False, "error": f"hunk {n}: every line starts with ' ', '-' or '+'; got {ln[:40]!r}"}
+            if tag != "+":
+                old.append(body)
+            if tag != "-":
+                new.append(body)
+        if not old:
+            at = len(lines) - 1 if lines and lines[-1] == "" else len(lines)
+            lines[at:at] = new
+            continue
+        found = [i for i in range(len(lines) - len(old) + 1) if lines[i:i + len(old)] == old]
+        if not found:
+            return {"ok": False, "error": (
+                f"hunk {n}: the lines to replace were not found in {path}. Read the file and copy "
+                "the context and '-' lines verbatim, including indentation.")}
+        if len(found) > 1:
+            return {"ok": False, "error": (
+                f"hunk {n}: the lines to replace appear {len(found)} times in {path}. Add context "
+                "lines around the change to make it unique.")}
+        lines[found[0]:found[0] + len(old)] = new
+    text = nl.join(lines)
+    if crnl in raw:
+        text = text.replace(nl, crnl)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_bytes(text.encode("utf-8"))
+    return {"ok": True, "path": str(p), "hunks": len(hunks), "bytes": len(text)}
+
+
 def tool_append_to_outbox(ctx, task, to: str, body: str) -> dict:
     outbox = ctx.config.resolve_state("runs") / "outbox.log"
     outbox.parent.mkdir(parents=True, exist_ok=True)
@@ -481,13 +537,19 @@ def tool_git_push(ctx, task, remote: str = "origin", branch: str | None = None) 
 
 SMALL_TOOLS = ("read_file", "write_file", "search", "run_command", "update_plan")
 SMALL_ONLY = ("search", "run_command", "update_plan")
+PATCH_ONLY = ("apply_patch",)
 
 
 def apply_profile(registry: ToolRegistry, profile: str) -> ToolRegistry:
-    keep = SMALL_TOOLS if profile == "small" else tuple(n for n in registry.names() if n not in SMALL_ONLY)
+    if profile == "small":
+        drop = set(registry.names()) - set(SMALL_TOOLS)
+    elif profile == "patch":
+        drop = {*SMALL_ONLY, "edit_file"}
+    else:
+        drop = {*SMALL_ONLY, *PATCH_ONLY}
     out = ToolRegistry()
     for name in registry.names():
-        if name in keep:
+        if name not in drop:
             out.register(registry.get(name))
     return out
 
@@ -686,6 +748,19 @@ def default_registry() -> ToolRegistry:
             max_arg_taint=Taint.UNTRUSTED,
             output_taint=Taint.UNTRUSTED,
             description="search file contents for a regex",
+        )
+    )
+    r.register(
+        ToolSpec(
+            "apply_patch",
+            tool_apply_patch,
+            _s(path=_STR, patch=_STR),
+            side_effecting=True,
+            max_arg_taint=Taint.USER,
+            output_taint=Taint.TRUSTED,
+            description=("edit one file inside artifact_scope with hunks: a line '@@', then lines "
+                         "starting ' ' (context), '-' (remove) or '+' (add); each hunk's context "
+                         "and '-' lines must match the file exactly once"),
         )
     )
     r.register(

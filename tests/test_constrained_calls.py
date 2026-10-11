@@ -48,6 +48,7 @@ def test_the_small_profile_schema_names_exactly_its_tools(small):
 
 def _local(small, constrained=True):
     small.backends["cloud"].cfg.trust_tier = "local"
+    small.backends["cloud"].cfg.model_server = "ollama"
     small.config.mechanisms.constrained_calls = constrained
 
 
