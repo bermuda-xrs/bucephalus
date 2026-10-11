@@ -57,7 +57,7 @@ window (see the Branch row for whether it reached `main`).
 
 | Fact | Value | Regenerate with |
 |---|---|---|
-| Branch | `main`, fast-forwarded from `harness-8` after the suite, the frozen gate (63) and the frozen e2e passed; no remote | `git branch --show-current` |
+| Branch | `main`, fast-forwarded from `harness-9` after the suite, the frozen gate (63) and the frozen e2e passed; no remote | `git branch --show-current` |
 | Harness version | **9**, bumped 2026-10-11 for read_first in the small profile (CHANGELOG "Harness 9"); numbers from 8 and earlier do not compare | `grep HARNESS_VERSION src/agent/__init__.py` |
 | Toolset version | **7** | `grep TOOLSET_VERSION src/agent/__init__.py` |
 | Tests | not written down | `python -m pytest tests -q`; skips are live-credential tests (D26) and other-OS tests |
@@ -77,7 +77,7 @@ Before any commit: tests red first, never weaken a check, nothing pushed.
 
 ## Next step
 
-Done on branch `harness-9` (merged to `main` only if the Branch row says so): tool scripts (bench/, packaging/,
+Done, merged to `main`: tool scripts (bench/, packaging/,
 scripts/) refuse the real user directories unless `BUCEPHALUS_DATA_DIR` / `BUCEPHALUS_CONFIG_DIR` are set (a test walks
 every entry point); `read_first` (no answer before the first observation; on for the small profile only); checkpoints only
 before an action that changes something; the console Rewind control clicked through and three bugs fixed. The copy of
