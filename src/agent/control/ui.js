@@ -308,6 +308,8 @@ function runCard(it) {
     ${it.status === "running" ? `<div class="row"><button class="btn" data-action="stopTask" ${args(it.task_id)}>Pause</button></div>` : ""}
     ${it.status === "paused" && !(it.approvals || []).length ? `<p class="note">Paused. It carries on from where it left off when you resume it.</p>
       <div class="row"><button class="btn primary" data-action="resumeTask" ${args(it.task_id)}>Resume</button></div>` : ""}
+    ${it.status !== "running" && it.status !== "pending" ? `<div class="row"><button class="quiet" data-action="showRewind" ${args(it.task_id)}>Rewind…</button></div>
+      <div class="rewind" id="rw-${esc(it.task_id)}" hidden></div>` : ""}
     ${!live && !it.answer && TERMINAL(it.status) ? `<p class="note">It finished without an answer.</p>` : ""}
   </section>
   ${it.answer ? answerCard(it) : ""}`;
@@ -333,6 +335,30 @@ async function stopTask(taskId) {
 async function resumeTask(taskId) {
   try { await post(`/tasks/${taskId}/run`); toast("Resumed."); await afterChange(); openStream(taskId); }
   catch (e) { toast(e.message, true); }
+}
+async function showRewind(taskId) {
+  const box = document.getElementById(`rw-${taskId}`);
+  if (!box) return;
+  if (!box.hidden) { box.hidden = true; return; }
+  try {
+    const cps = await api(`/tasks/${taskId}/checkpoints`);
+    box.innerHTML = cps.length
+      ? `<label>Go back to <select id="rws-${esc(taskId)}">${cps.map(c => `<option value="${c.step}">before step ${c.step}</option>`).join("")}</select></label>
+         <div class="row"><button class="btn" data-action="doRewind" ${args(taskId, "code")}>Files only</button>
+         <button class="btn" data-action="doRewind" ${args(taskId, "conversation")}>Conversation only</button>
+         <button class="btn primary" data-action="doRewind" ${args(taskId, "both")}>Both</button>
+         <button class="quiet" data-action="doRewind" ${args(taskId, "undo")}>Undo last rewind</button></div>`
+      : `<p class="note">This task has no checkpoints.</p>`;
+    box.hidden = false;
+  } catch (e) { toast(e.message, true); }
+}
+async function doRewind(taskId, what) {
+  const sel = document.getElementById(`rws-${taskId}`);
+  try {
+    const out = await post(`/tasks/${taskId}/rewind`, {what, step: sel && what !== "undo" ? Number(sel.value) : null});
+    toast(what === "undo" ? "Files put back." : `Rewound to step ${out.step}. Resume to carry on.`);
+    await afterChange();
+  } catch (e) { toast(e.message, true); }
 }
 function goalOf(taskId) {
   const it = ((S.thread && S.thread.items) || []).find(x => x.task_id === taskId);
@@ -971,7 +997,7 @@ const ACTIONS = {newConversation, selectConversation, renameConversation, archiv
   toggleFiles, toggleSide, openFile, openControl, closeControl, openPane, openPalette, focusSearch,
   toggleTheme, acceptMemory, createSuite, saveTask, closeSuite, addSkill, savePolicy,
   openSuite, delSuite, delTask, checkGate, pinConversation, exportConversation, enableNotifications,
-  runModel, stopTask, resumeTask, askAgain, editAsk, copyAnswer, copyCode, forgetMemory, addSchedule, removeSchedule, viewSkill};
+  runModel, stopTask, resumeTask, showRewind, doRewind, askAgain, editAsk, copyAnswer, copyCode, forgetMemory, addSchedule, removeSchedule, viewSkill};
 document.addEventListener("click", e => {
   const el = e.target.closest("[data-action]");
   if (!el || !ACTIONS[el.dataset.action]) return;

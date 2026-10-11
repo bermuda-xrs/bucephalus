@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 
-from ..kernel.receipts import execute_once, idempotency_key
+from ..kernel.receipts import execute_once, idempotency_key, rewind_epoch
 from ..security.capabilities import gate_tool_call, render_preview
 from ..security.exposure import ToolNotExposed
 from ..security.exposure import check as exposure_check
@@ -50,7 +50,7 @@ def make_tool_handler(ctx, task, step: int = 0):
             )
 
         if spec.side_effecting:
-            key = idempotency_key(task.id, step, name, args)
+            key = idempotency_key(task.id, step + rewind_epoch(ctx.conn, task.id), name, args)
             ctx.log.append(
                 task.id,
                 "tool.intent",

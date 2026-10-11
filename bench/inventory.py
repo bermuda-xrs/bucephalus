@@ -31,6 +31,9 @@ ROWS: list[tuple[str, str, str, str]] = [
     ("a final answer is held back for a check", "verify.continued", "event", ""),
     ("a repeated call is warned about", "stuck.warned", "event", ""),
     ("a repeated call halts the task", "stuck.detected", "event", ""),
+    ("a step is checkpointed in the shadow repo", "checkpoint.shadow", "event", ""),
+    ("a checkpoint could not be taken", "checkpoint.skipped", "event", ""),
+    ("a task is rewound", "task.rewound", "event", ""),
 
     ("compaction tombstones an artifact", "session.opened", "tombstoned", ""),
     ("a session BOUNDARY is crossed", "session.opened", "rotate", ""),

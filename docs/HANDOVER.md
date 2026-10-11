@@ -62,7 +62,7 @@ rebuilt `bucephalus.exe`'s window, all from the renamed tree.
 | Tests | not written down | `python -m pytest tests -q`; skips are live-credential tests (D26) and other-OS tests |
 | Lint | bug rules only | `python -m ruff check src tests scripts packaging demo.py` |
 | Open issues | `docs/DEFERRED.md`, open entries only | its state table |
-| CLI | 25 subcommands, each smoke-tested | `.\bucephalus.ps1 --help` |
+| CLI | 26 subcommands, each smoke-tested | `.\bucephalus.ps1 --help` |
 | Platforms | Windows. POSIX has run twice, in WSL2 (`docs/evidence/wsl-2026-09-30/`); bare-metal Linux never, and macOS (`src/agent/platform/darwin.py`) has never executed anywhere | `docs/PLATFORMS.md` section 5 is the checklist |
 | Security posture | the capability gate is the boundary; the sandbox (Job Object limits, advisory path/network fence) constrains a mistaken agent, not a hostile one: D32 | |
 | Phase program | complete | `RELEASE.md`, "ITERATION TWO: COMPLETE" |

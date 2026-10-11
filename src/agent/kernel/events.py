@@ -80,6 +80,9 @@ EVENT_TYPES = frozenset(
         "verify.continued",
         "stuck.warned",
         "stuck.detected",
+        "checkpoint.shadow",
+        "checkpoint.skipped",
+        "task.rewound",
     }
 )
 

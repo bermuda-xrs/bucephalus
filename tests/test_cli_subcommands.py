@@ -448,6 +448,21 @@ def test_steer_forks_and_never_mutates(cli):
     assert "[steered] use metric units" in json.loads(goal)["goal"]
 
 
+def test_rewind_lists_and_goes_back(cli):
+    tid = cli.new_task("rewind me")
+    cli("rewind", tid, "--list", expect=1)
+    cli("run", tid, expect=None)
+    listing = cli("rewind", tid, "--list").stdout
+    assert "step 0" in listing
+    r = cli("rewind", tid, "--step", "0", "--what", "both")
+    assert "rewound" in r.stdout
+    c = cli.conn()
+    status = c.execute("SELECT status FROM tasks WHERE id=?", (tid,)).fetchone()[0]
+    c.close()
+    assert status == "paused"
+    assert "no checkpoint at step 99" in cli("rewind", tid, "--step", "99", expect=1).stdout
+
+
 def test_bench_local(cli):
     r = cli("bench-local")
     assert "mock-local" in r.stdout and "mock-laptop" in r.stdout

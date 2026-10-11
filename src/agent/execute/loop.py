@@ -2,13 +2,14 @@ from __future__ import annotations
 
 import json
 import re
+import subprocess
 import time
 from dataclasses import dataclass, field
 from typing import Any
 
 from ..kernel.events import canonical, sha256_hex
 from ..kernel.integrity import IntegrityError, checkpoint, resume
-from ..kernel.receipts import execute_once, idempotency_key
+from ..kernel.receipts import execute_once, idempotency_key, rewind_epoch
 from ..models.ollama import ModelStall
 from ..kernel.tasks import load_task, set_status, spend
 from ..kernel.types import GateDecision, Taint, TaskStatus, join_taint
@@ -249,6 +250,8 @@ def run_task(ctx, task_id: str) -> TaskResult:
                 from ..plan.planner import verify_plan_pin
 
                 plan = verify_plan_pin(ctx, task)
+
+            _checkpoint(ctx, task, step, entries)
 
             if not stable:
                 skills = ctx.freeze_skills(task)
@@ -620,18 +623,34 @@ def _session_boundary(ctx, task, entries, window, step, plan, skills, builder,
     return entries, rot["memory"], guard, builder, builder.build()
 
 
-def _write_park_seed(ctx, task, entries: list[LedgerEntry]) -> None:
+def _seed_record(ctx, task, entries: list[LedgerEntry], kind: str = "park_seed") -> dict:
     payload = json.dumps(
         [{"kind": e.kind, "content": e.content, "artifact_id": e.artifact_id,
           "taint": e.taint.value, "pinned": e.pinned, "label": e.label,
           "exact_strings": list(e.exact_strings)} for e in entries],
         sort_keys=True)
-    aid = write_artifact(ctx.conn, task.id, "park_seed", payload,
+    aid = write_artifact(ctx.conn, task.id, kind, payload,
                          join_taint(*(e.taint for e in entries)),
                          {"entries": len(entries)})
-    ctx.log.append(task.id, "task.park_seed",
-                   {"artifact": aid, "sha256": sha256_hex(payload),
-                    "entries": len(entries)})
+    return {"artifact": aid, "sha256": sha256_hex(payload), "entries": len(entries)}
+
+
+def _write_park_seed(ctx, task, entries: list[LedgerEntry]) -> None:
+    ctx.log.append(task.id, "task.park_seed", _seed_record(ctx, task, entries))
+
+
+def _checkpoint(ctx, task, step: int, entries: list[LedgerEntry]) -> None:
+    if not ctx.config.mechanisms.shadow_checkpoints:
+        return
+    from .shadow import ShadowRepo, ShadowUnavailable
+
+    try:
+        sha = ShadowRepo.for_task(ctx, task).checkpoint(f"{task.id} step {step}")
+    except (ShadowUnavailable, OSError, subprocess.TimeoutExpired) as e:
+        ctx.log.append(task.id, "checkpoint.skipped", {"step": step, "why": str(e)[:200]})
+        return
+    ctx.log.append(task.id, "checkpoint.shadow",
+                   {"step": step, "sha": sha, **_seed_record(ctx, task, entries, "rewind_seed")})
 
 
 _MAX_LISTED = 100
@@ -792,7 +811,7 @@ def _file_bytes(ctx, args: dict):
 
 
 def _perform(ctx, task, tool, tool_name: str, args: dict, step: int) -> LedgerEntry:
-    key = idempotency_key(task.id, step, tool_name, args)
+    key = idempotency_key(task.id, step + rewind_epoch(ctx.conn, task.id), tool_name, args)
     intent = {"tool": tool_name, "step": step, "key": key,
               "preview": render_preview(tool, args)}
     if tool_name == "run_code":

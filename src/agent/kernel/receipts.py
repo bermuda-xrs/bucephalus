@@ -17,6 +17,14 @@ def idempotency_key(task_id: str, step_seq: int, tool: str, args: dict) -> str:
     )
 
 
+REWIND_STRIDE = 1_000_000
+
+
+def rewind_epoch(conn: sqlite3.Connection, task_id: str) -> int:
+    return conn.execute("SELECT COUNT(*) FROM events WHERE task_id=? AND type='task.rewound'",
+                        (task_id,)).fetchone()[0] * REWIND_STRIDE
+
+
 _CLAIM = "CLAIMED"
 _inflight: dict[str, threading.Event] = {}
 WAIT_S = 900.0

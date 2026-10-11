@@ -512,6 +512,29 @@ def cmd_steer(ctx, args, console) -> int:
     return 0
 
 
+def cmd_rewind(ctx, args, console) -> int:
+    from .execute.rewind import RewindError, list_checkpoints, rewind, undo
+
+    if args.list:
+        cps = list_checkpoints(ctx, args.task_id)
+        for c in cps:
+            console.print(f"step {c['step']}  {(c['sha'] or '-')[:10]}  {c['entries']} ledger entries")
+        if not cps:
+            console.print("this task has no checkpoints")
+        return 0 if cps else 1
+    try:
+        out = undo(ctx, args.task_id) if args.undo else rewind(ctx, args.task_id, args.step, args.what)
+    except RewindError as e:
+        console.print(f"[red]{e}[/red]")
+        return 1
+    if args.undo:
+        console.print("files put back as they were before the last rewind")
+    else:
+        console.print(f"rewound {args.task_id} to step {out['step']} ({out['what']}); "
+                      f"paused, continue with: bucephalus run {args.task_id}")
+    return 0
+
+
 def cmd_serve(ctx, args, console) -> int:
     import uvicorn
 
@@ -735,6 +758,14 @@ def build_parser() -> argparse.ArgumentParser:
     st.add_argument("task_id")
     st.add_argument("correction")
     st.set_defaults(fn=cmd_steer)
+
+    rw = sub.add_parser("rewind", help="put a task's files, conversation or both back to a step")
+    rw.add_argument("task_id")
+    rw.add_argument("--list", action="store_true", help="list the checkpoints")
+    rw.add_argument("--step", type=int, help="default: the latest checkpoint")
+    rw.add_argument("--what", choices=["code", "conversation", "both"], default="both")
+    rw.add_argument("--undo", action="store_true", help="put the files back as before the last rewind")
+    rw.set_defaults(fn=cmd_rewind)
 
     bl = sub.add_parser("bench-local", help="measure local tier throughput")
     bl.set_defaults(fn=cmd_bench_local)

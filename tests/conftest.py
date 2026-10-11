@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from agent.config import AutonomyConfig, BackendConfig, Config, GateConfig, Limits
+from agent.config import AutonomyConfig, BackendConfig, Config, GateConfig, Limits, MechanismsConfig
 from agent.context import AgentContext
 
 _SCRATCH = tempfile.mkdtemp(prefix="bucephalus_user_")
@@ -116,6 +116,7 @@ def make_config(tmp_path: Path, **overrides) -> Config:
         },
         active_local_tier="local",
         limits=Limits(max_steps=6, default_task_budget_usd=1.0),
+        mechanisms=MechanismsConfig(shadow_checkpoints=False),
         local_allowlist=["summarize", "classify", "extract", "compress_tool_output",
                          "draft_candidate"],
         laptop_allowlist=["classify", "extract", "compress_tool_output"],

@@ -90,6 +90,7 @@ class MechanismsConfig(BaseModel):
     verify_before_stop: bool = True
     constrained_calls: bool = True
     stuck_detection: bool = True
+    shadow_checkpoints: bool = True
 
     def ablated(self) -> list[str]:
         return sorted(k for k, v in self.model_dump().items() if not v)

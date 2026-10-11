@@ -47,6 +47,11 @@ class Steer(BaseModel):
     correction: str
 
 
+class Rewind(BaseModel):
+    step: int | None = None
+    what: str = "both"
+
+
 class Decide(BaseModel):
     decision: str
 
@@ -261,6 +266,26 @@ def create_app(ctx: AgentContext) -> FastAPI:
         task = _task(task_id)
         set_status(ctx.conn, ctx.log, task, TaskStatus.PAUSED, "human requested")
         return {"task_id": task_id, "status": "paused"}
+
+    @app.get("/tasks/{task_id}/checkpoints")
+    def get_checkpoints(task_id: str) -> list:
+        from ..execute.rewind import list_checkpoints
+
+        _task(task_id)
+        return [{"step": c["step"], "sha": c["sha"], "entries": c["entries"]} for c in list_checkpoints(ctx, task_id)]
+
+    @app.post("/tasks/{task_id}/rewind")
+    def post_rewind(task_id: str, body: Rewind) -> dict:
+        from ..execute.rewind import RewindError, rewind, undo
+
+        _task(task_id)
+        with _runs_lock:
+            if _runs.get(task_id) and _runs[task_id].is_alive():
+                raise HTTPException(409, "the task is running; pause it first")
+        try:
+            return undo(ctx, task_id) if body.what == "undo" else rewind(ctx, task_id, body.step, body.what)
+        except RewindError as e:
+            raise HTTPException(409, str(e)) from e
 
     @app.get("/approvals")
     def get_approvals(task_id: str | None = None) -> dict:
