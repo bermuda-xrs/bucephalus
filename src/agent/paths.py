@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import shutil
+import sys
 from pathlib import Path
 
 APP = "bucephalus"
@@ -10,6 +11,38 @@ LEGACY_APP = "alpha-test-1"
 _CHECKOUT_MARKERS = ("pyproject.toml", "src/agent", "bench")
 
 STATE_DIRS = ("runs", "work", "grading", "anchor", "skills_store")
+
+TOOL_DIRS = ("bench", "packaging", "scripts")
+SCRATCH_ONLY = "BUCEPHALUS_SCRATCH_ONLY"
+
+
+class RealDirRefused(RuntimeError):
+    pass
+
+
+def _started_from_tool_dir() -> bool:
+    main = getattr(sys.modules.get("__main__"), "__file__", None) or (sys.argv[0] if sys.argv else "")
+    if not main or getattr(sys, "frozen", False):
+        return False
+    root = Path(__file__).resolve().parents[2]
+    try:
+        p = Path(main).resolve()
+    except OSError:
+        return False
+    return any(p.is_relative_to(root / d) for d in TOOL_DIRS)
+
+
+def scratch_only() -> bool:
+    if os.environ.get(SCRATCH_ONLY) or _started_from_tool_dir():
+        os.environ[SCRATCH_ONLY] = "1"
+        return True
+    return False
+
+
+def _refuse_real(var: str) -> None:
+    if scratch_only():
+        raise RealDirRefused(f"a process started from {', '.join(TOOL_DIRS)}/ never uses the real user directories; "
+                             f"set {var} to a scratch directory")
 
 
 def checkout_root(start: str | Path | None = None) -> Path | None:
@@ -44,6 +77,7 @@ def user_config_dir() -> Path:
 
     if os.environ.get("BUCEPHALUS_CONFIG_DIR"):
         return Path(os.environ["BUCEPHALUS_CONFIG_DIR"])
+    _refuse_real("BUCEPHALUS_CONFIG_DIR")
     return _adopt_legacy(Path(platformdirs.user_config_dir(APP)), Path(platformdirs.user_config_dir(LEGACY_APP)))
 
 
@@ -52,6 +86,7 @@ def user_data_dir() -> Path:
 
     if os.environ.get("BUCEPHALUS_DATA_DIR"):
         return Path(os.environ["BUCEPHALUS_DATA_DIR"])
+    _refuse_real("BUCEPHALUS_DATA_DIR")
     return _adopt_legacy(Path(platformdirs.user_data_dir(APP)), Path(platformdirs.user_data_dir(LEGACY_APP)))
 
 
@@ -117,3 +152,6 @@ def ensure_state_dirs(root: str | Path) -> list[Path]:
 def default_config_path() -> Path | None:
     p = user_config_dir() / "config.yaml"
     return p if p.exists() else None
+
+
+scratch_only()
