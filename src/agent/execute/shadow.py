@@ -85,8 +85,11 @@ class ShadowRepo:
 
     def restore(self, sha: str) -> None:
         self.ensure()
+        dirs = [self.work_tree / s for s in self.scopes if (self.work_tree / s).is_dir()]
         self._git("read-tree", "--reset", "-u", sha)
         self._git("clean", "-fdxq", "--", *self.scopes)
+        for d in dirs:
+            d.mkdir(parents=True, exist_ok=True)
 
     def log(self) -> list[tuple[str, str]]:
         if not (self.git_dir / "HEAD").exists():

@@ -111,3 +111,12 @@ def test_missing_git_is_reported_not_raised_as_a_crash(repo, monkeypatch):
     monkeypatch.setattr(shadow.shutil, "which", lambda name: None)
     with pytest.raises(shadow.ShadowUnavailable):
         r.checkpoint("step 0")
+
+
+def test_restoring_to_an_empty_scope_keeps_the_scope_directory(repo):
+    r, root = repo
+    sha = r.checkpoint("step 0")
+    (root / "work" / "a.txt").write_text("v1\n", encoding="utf-8")
+    r.checkpoint("step 1")
+    r.restore(sha)
+    assert (root / "work").is_dir() and not (root / "work" / "a.txt").exists()

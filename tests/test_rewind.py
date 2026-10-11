@@ -184,3 +184,14 @@ def test_the_console_has_a_rewind_control():
 
     js = (Path(__file__).resolve().parents[1] / "src" / "agent" / "control" / "ui.js").read_text(encoding="utf-8")
     assert "showRewind" in js and "doRewind" in js and "/rewind" in js
+
+
+def test_the_rewind_panel_survives_the_console_poll():
+    from pathlib import Path
+
+    js = (Path(__file__).resolve().parents[1] / "src" / "agent" / "control" / "ui.js").read_text(encoding="utf-8")
+    poll = next(line for line in js.splitlines() if "setInterval" in line and "refreshThread" in line)
+    assert "!S.rewind" in poll, "the 6 s poll re-renders the thread and closes an open Rewind panel"
+    body = js[js.index("async function showRewind"):js.index("async function doRewind")]
+    assert body.index("await api(") < body.index("getElementById", body.index("await api(")), \
+        "after the fetch the panel must be looked up again: a re-render may have replaced it"

@@ -19,7 +19,7 @@ window.addEventListener("hashchange", () => {
 let RETURN_FOCUS = null;           // where focus goes back when a dialog closes
 const S = {conv: null, thread: null, loose: null, archived: false, streams: new Map(), trails: new Map(),
            drafting: new Set(), answers: new Map(), filesTask: null, filesPath: "", pane: "memory",
-           settings: null, lastSide: ""};
+           settings: null, lastSide: "", rewind: null};
 
 function toast(msg, bad) {
   const t = $("#toast"); t.textContent = msg; t.className = "show" + (bad ? " bad" : "");
@@ -309,7 +309,7 @@ function runCard(it) {
     ${it.status === "paused" && !(it.approvals || []).length ? `<p class="note">Paused. It carries on from where it left off when you resume it.</p>
       <div class="row"><button class="btn primary" data-action="resumeTask" ${args(it.task_id)}>Resume</button></div>` : ""}
     ${it.status !== "running" && it.status !== "pending" ? `<div class="row"><button class="quiet" data-action="showRewind" ${args(it.task_id)}>Rewind…</button></div>
-      <div class="rewind" id="rw-${esc(it.task_id)}" hidden></div>` : ""}
+      <div class="rewind" id="rw-${esc(it.task_id)}" ${S.rewind && S.rewind.task === it.task_id ? "" : "hidden"}>${S.rewind && S.rewind.task === it.task_id ? rewindBody() : ""}</div>` : ""}
     ${!live && !it.answer && TERMINAL(it.status) ? `<p class="note">It finished without an answer.</p>` : ""}
   </section>
   ${it.answer ? answerCard(it) : ""}`;
@@ -336,27 +336,33 @@ async function resumeTask(taskId) {
   try { await post(`/tasks/${taskId}/run`); toast("Resumed."); await afterChange(); openStream(taskId); }
   catch (e) { toast(e.message, true); }
 }
+function rewindBody() {
+  const {task, cps, step} = S.rewind;
+  if (!cps.length) return `<p class="note">This task has no checkpoints: it changed nothing.</p>`;
+  return `<label>Go back to <select id="rws-${esc(task)}" data-change="rewindStep">${cps.map(c =>
+      `<option value="${c.step}" ${c.step === step ? "selected" : ""}>before step ${c.step}</option>`).join("")}</select></label>
+    <div class="row"><button class="btn" data-action="doRewind" ${args(task, "code")}>Files only</button>
+    <button class="btn" data-action="doRewind" ${args(task, "conversation")}>Conversation only</button>
+    <button class="btn primary" data-action="doRewind" ${args(task, "both")}>Both</button>
+    <button class="quiet" data-action="doRewind" ${args(task, "undo")}>Undo last rewind</button></div>`;
+}
 async function showRewind(taskId) {
   const box = document.getElementById(`rw-${taskId}`);
   if (!box) return;
-  if (!box.hidden) { box.hidden = true; return; }
+  if (S.rewind && S.rewind.task === taskId) { S.rewind = null; box.hidden = true; return; }
   try {
     const cps = await api(`/tasks/${taskId}/checkpoints`);
-    box.innerHTML = cps.length
-      ? `<label>Go back to <select id="rws-${esc(taskId)}">${cps.map(c => `<option value="${c.step}">before step ${c.step}</option>`).join("")}</select></label>
-         <div class="row"><button class="btn" data-action="doRewind" ${args(taskId, "code")}>Files only</button>
-         <button class="btn" data-action="doRewind" ${args(taskId, "conversation")}>Conversation only</button>
-         <button class="btn primary" data-action="doRewind" ${args(taskId, "both")}>Both</button>
-         <button class="quiet" data-action="doRewind" ${args(taskId, "undo")}>Undo last rewind</button></div>`
-      : `<p class="note">This task has no checkpoints.</p>`;
-    box.hidden = false;
+    S.rewind = {task: taskId, cps, step: cps.length ? cps[cps.length - 1].step : null};
+    const now = document.getElementById(`rw-${taskId}`);
+    if (now) { now.innerHTML = rewindBody(); now.hidden = false; }
   } catch (e) { toast(e.message, true); }
 }
 async function doRewind(taskId, what) {
-  const sel = document.getElementById(`rws-${taskId}`);
+  const step = S.rewind && S.rewind.task === taskId ? S.rewind.step : null;
   try {
-    const out = await post(`/tasks/${taskId}/rewind`, {what, step: sel && what !== "undo" ? Number(sel.value) : null});
+    const out = await post(`/tasks/${taskId}/rewind`, {what, step: what === "undo" ? null : step});
     toast(what === "undo" ? "Files put back." : `Rewound to step ${out.step}. Resume to carry on.`);
+    S.rewind = null;
     await afterChange();
   } catch (e) { toast(e.message, true); }
 }
@@ -1005,6 +1011,7 @@ document.addEventListener("click", e => {
 });
 document.addEventListener("change", e => {
   if (e.target.dataset.change === "critChanged") critChanged();
+  if (e.target.dataset.change === "rewindStep" && S.rewind) S.rewind.step = Number(e.target.value);
 });
 new MutationObserver(() => document.querySelectorAll("i[data-pct]").forEach(i => {
   i.style.width = i.dataset.pct + "%";
@@ -1035,5 +1042,5 @@ new MutationObserver(() => document.querySelectorAll("i[data-pct]").forEach(i =>
   }
   if (OPEN.pane && PANES[OPEN.pane]) openPane(OPEN.pane);
   setInterval(loadModels, 20000);
-  setInterval(() => { loadAlerts(); loadSide(); if (S.conv && !S.streams.size && !S.drafting.size) refreshThread(); }, 6000);
+  setInterval(() => { loadAlerts(); loadSide(); if (S.conv && !S.streams.size && !S.drafting.size && !S.rewind) refreshThread(); }, 6000);
 })();
