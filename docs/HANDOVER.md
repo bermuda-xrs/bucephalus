@@ -46,17 +46,18 @@ $env:PYTHONUTF8 = "1"
 | `bench/report.py`, `bench/inventory.py` | instant, read-only |
 | `bench/noise.py --runs 1` | ~2.5 h, takes the machine; resumable with its `order_seed` |
 | `bench/run.py paired` | ~4 h |
+| `bench/profile_run.py --suite bench/tasks` | ~35 min, 3B, control vs small profile |
 
 One measurement process at a time (`src/agent/runlock.py`); nothing else runs during a timed run.
 
 ## State
 
-Verified 2026-10-10 against commit `008e6ba` (the rename): Windows suite, ruff, the frozen gate (63) and a task through the
-rebuilt `bucephalus.exe`'s window, all from the renamed tree.
+Verified 2026-10-11 against commit `b30ffce` on `harness-8`: Windows suite, ruff, the frozen gate and a task through the rebuilt `bucephalus.exe`'s
+window (see the Branch row for whether it reached `main`).
 
 | Fact | Value | Regenerate with |
 |---|---|---|
-| Branch | `main`, fast-forwarded to `iteration-4` once the suite, the frozen gate and a visual check passed; no remote | `git branch --show-current` |
+| Branch | `harness-8` (see Next step); `main` is the rename; no remote | `git branch --show-current` |
 | Harness version | **8**, bumped 2026-10-11 for the rename and items a-j (CHANGELOG "Harness 8"); numbers from 7 and earlier do not compare | `grep HARNESS_VERSION src/agent/__init__.py` |
 | Toolset version | **7** | `grep TOOLSET_VERSION src/agent/__init__.py` |
 | Tests | not written down | `python -m pytest tests -q`; skips are live-credential tests (D26) and other-OS tests |
@@ -76,14 +77,28 @@ Before any commit: tests red first, never weaken a check, nothing pushed.
 
 ## Next step
 
-Done: the rename (main). On branch `harness-8` (not merged; HARNESS_VERSION and TOOLSET_VERSION NOT yet bumped,
-they go 7->8 and 6->7 at the end): items (a) small tool profile with run_command/search/update_plan, (b) post-edit
-diagnostics, (c) verify-before-stop, (d) constrained tool calls, (e) stuck detection, plus a path-taint fix and an
-exposure check inside call_tool. In hand: (f) the shadow module (src/agent/execute/shadow.py) and its tests exist; still to
-write: the per-step checkpoint hook in the loop (events checkpoint.shadow / task.rewound, ledger snapshot as a
-park seed, `shadow` added to protected state, mechanisms.shadow_checkpoints off in conftest make_config),
-a rewind subcommand, console route and button. Not started: (g) AGENTS.md, (h) `exec`, (i) hooks, (j) MCP client,
-the HARNESS bump, and the paired 3B run (its config file does not exist yet).
+Done on branch `harness-8` (merged to `main` only if the line under "Branch" above says so): items a-j of the harness
+brief, one HARNESS_VERSION 8 / TOOLSET_VERSION 7 bump, profiles per backend (default `full`; `patch`, `small` opt in),
+checkpoints and `bucephalus rewind`, AGENTS.md, `bucephalus exec`, hooks, MCP client. CHANGELOG "Harness 8" lists them.
+
+Measured once (`bench/profile_run.py`, granite4.1:3b, `bench/tasks`, 5 tasks x 3 repetitions = 15 pairs, order shuffled
+per repetition, 2026-10-11, `runs/profile-small-20261011/paired.json`): control (full kit, new mechanisms off) passed 3
+of 15 (negative-control-004, every repetition), small profile 0 of 15; McNemar exact p 0.25; mean wall 95 s vs 30 s.
+A sighting, not a result: greedy decoding makes repetitions near-copies, so n is nearer 5 than 15. Cause seen in the
+log: the small arm made no tool call in any of its 15 model calls; the schema's explicit final branch lets the 3B answer
+at once (it invents an answer without reading the file).
+
+Not working or unverified: the small profile on the 3B (above); symlink case of the AGENTS.md check (no privilege to create
+one here); MCP against a real server (only the fake in tests); hooks and MCP not run on POSIX; the console Rewind control
+was exercised by test and not looked at in a browser.
+
+Next three, in order:
+1. Make the 3B act before it answers (e.g. no final branch before the first tool call unless the plan needs none, or a
+   read-before-answer check) and rerun `bench/profile_run.py`; red-first, then re-measure.
+2. Run the same pairing with `patch` on a larger local model and look at the Rewind control in the console.
+3. Try an MCP server you actually use (`mcp_servers` in the config) and a pre_tool hook on `write_file`.
 
 Waiting on the user: D26 credentials; the memory line a test wrote into the real memory
-(`.\bucephalus.ps1 memory --forget "injected instruction"`); a Mac or bare-metal Linux run.
+(`.ucephalus.ps1 memory --forget "injected instruction"`); a Mac or bare-metal Linux run; renaming the folder, then
+moving its state directory (see Running it); the old venvs and `~/.alpha-build`. A real run already copied
+`%LOCALAPPDATA%lpha-test-1` to `bucephalus` (the old one is untouched).
