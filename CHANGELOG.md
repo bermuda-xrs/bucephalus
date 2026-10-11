@@ -20,6 +20,30 @@ and the platformdirs app name. No aliases for the old names. On first use `user_
 left as it was). Entries below this one use the old name. The import package is still `agent`. Prompt
 bytes changed with the name ("the execution core of Bucephalus"): HARNESS_VERSION 8.
 
+## Harness 8 - 2026-10-11 (HARNESS_VERSION 7 -> 8, TOOLSET_VERSION 6 -> 7)
+
+One bump covers the rename's prompt bytes and everything below. Every mechanism that changes the prompt or the
+loop has a `mechanisms.*` switch so a control arm can turn it off.
+
+- Tool profiles, per backend (`tool_profile`): `full` is the default and is the old kit; `patch` swaps
+  `edit_file` for `apply_patch` (one file, hunks, all or nothing, same path gate); `small` is five tools
+  (`read_file`, `write_file`, `search`, `run_command`, `update_plan`) with no code-as-action. A test fails if
+  the small kit ever becomes the default.
+- `run_command` runs `python FILE`, `python -m MODULE`, `pytest`, `ruff` inside the sandbox; nothing else.
+- Diagnostics (py_compile + ruff) after every Python write; verify-before-stop (cap 3); stuck detection
+  (3 identical calls warn, 6 halt; a rewrite with identical bytes is no change); constrained decoding
+  (one schema with a final branch) only for `model_server: ollama` backends.
+- Shadow-git checkpoint before every step in a git dir outside the workspace, plus the ledger; `bucephalus
+  rewind` and the console put back files, conversation or both, and can be undone. Receipts are keyed by a
+  rewind epoch so a repeated call after a rewind runs.
+- `AGENTS.md` beside the config enters the prefix, frozen per task; skipped when the task can write it
+  (inside scope, symlink, hard link); protected from tasks; protected-state matching ignores case.
+- `bucephalus exec` (stream-JSON, exit 0/2/3/4), hooks (pre_tool, post_tool, stop), MCP client (stdio; tools
+  write unless listed read_only; output untrusted; server descriptions never enter the prefix; not for
+  unattended origins).
+- A path a task chose stays usable when a traceback echoes it; `call_tool` inside a program honours the
+  tool exposure policy.
+
 ## Iteration 4 - 2026-10-05/06 (HARNESS_VERSION 7)
 
 - P5: a graded program cannot write its own verdict; code graders run the answer in a child.

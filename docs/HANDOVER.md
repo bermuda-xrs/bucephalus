@@ -57,8 +57,8 @@ rebuilt `bucephalus.exe`'s window, all from the renamed tree.
 | Fact | Value | Regenerate with |
 |---|---|---|
 | Branch | `main`, fast-forwarded to `iteration-4` once the suite, the frozen gate and a visual check passed; no remote | `git branch --show-current` |
-| Harness version | **7**, bumped 2026-10-05 for P3, P5, P6 (`docs/PROPOSALS.md`); numbers from 6 and earlier do not compare | `grep HARNESS_VERSION src/agent/__init__.py` |
-| Toolset version | **6** | `grep TOOLSET_VERSION src/agent/__init__.py` |
+| Harness version | **8**, bumped 2026-10-11 for the rename and items a-j (CHANGELOG "Harness 8"); numbers from 7 and earlier do not compare | `grep HARNESS_VERSION src/agent/__init__.py` |
+| Toolset version | **7** | `grep TOOLSET_VERSION src/agent/__init__.py` |
 | Tests | not written down | `python -m pytest tests -q`; skips are live-credential tests (D26) and other-OS tests |
 | Lint | bug rules only | `python -m ruff check src tests scripts packaging demo.py` |
 | Open issues | `docs/DEFERRED.md`, open entries only | its state table |
