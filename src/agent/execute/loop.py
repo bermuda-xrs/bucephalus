@@ -306,7 +306,8 @@ def run_task(ctx, task_id: str) -> TaskResult:
             backend = ctx.router.choose("step", task, step)
             ctx.executing_backend = backend.name
 
-            tail, step_schema = _envelope(ctx, backend, tail)
+            tail, step_schema = _envelope(
+                ctx, backend, tail, not backend.cfg.requires_observation or _observed(ctx, task))
             ctx.log.append(
                 task.id,
                 "model.called",
@@ -356,6 +357,11 @@ def run_task(ctx, task_id: str) -> TaskResult:
                     ctx.log.append(task.id, "stuck.detected",
                                    {"step": step, "kind": parsed.kind, "tool": parsed.tool, "repeats": repeats})
                     return _final_sweep(ctx, task, "stuck", best_answer, step + 1)
+
+            if parsed.kind == "final" and backend.cfg.requires_observation and not _observed(ctx, task):
+                ctx.log.append(task.id, "read_first.held", {"step": step})
+                entries.append(LedgerEntry.observation(READ_FIRST_NOTE, taint=Taint.TRUSTED, label="read-first"))
+                continue
 
             if parsed.kind == "final" and _must_verify_first(ctx, task):
                 n = _verify_continuations(ctx, task) + 1
@@ -475,6 +481,13 @@ def run_task(ctx, task_id: str) -> TaskResult:
 
 MAX_VERIFY_CONTINUATIONS = 3
 MAX_STOP_BLOCKS = 3
+READ_FIRST_NOTE = ("No answer is accepted yet: look at something first with a tool (read a file, search, "
+                   "run a command), then answer from what you saw.")
+
+
+def _observed(ctx, task) -> bool:
+    return ctx.conn.execute("SELECT 1 FROM events WHERE task_id=? AND type='tool.receipt' LIMIT 1",
+                            (task.id,)).fetchone() is not None
 
 
 def _stop_blocks(ctx, task) -> int:
@@ -558,13 +571,15 @@ def _verify(ctx, task, artifact: str):
     return r.passed, r
 
 
-def _envelope(ctx, backend, tail: str) -> tuple[str, dict | None]:
+def _envelope(ctx, backend, tail: str, allow_final: bool = True) -> tuple[str, dict | None]:
     if backend.cfg.needs_action_envelope:
         if getattr(backend.cfg, "action_protocol", "json") == "tags":
             return tail + "\n" + ACTION_TAG_HINT, None
         if ctx.config.mechanisms.constrained_calls and backend.cfg.model_server == "ollama":
             hint = ACTION_SCHEMA_HINT if ctx.code_as_action else ACTION_SCHEMA_HINT_NO_CODE
-            return tail + "\n" + hint, build_action_schema(ctx.tools, ctx.code_as_action)
+            if not allow_final:
+                hint += chr(10) + READ_FIRST_NOTE
+            return tail + "\n" + hint, build_action_schema(ctx.tools, ctx.code_as_action, allow_final)
         return tail + "\n" + ACTION_SCHEMA_HINT, ACTION_SCHEMA
     return tail, None
 

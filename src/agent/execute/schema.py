@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 
-def build_action_schema(tools, code_as_action: bool) -> dict:
+def build_action_schema(tools, code_as_action: bool, allow_final: bool = True) -> dict:
     branches = [
         {
             "type": "object",
@@ -17,9 +17,10 @@ def build_action_schema(tools, code_as_action: bool) -> dict:
             "properties": {"kind": {"const": "code"}, "code": {"type": "string"}},
             "required": ["kind", "code"],
         })
-    branches.append({
-        "type": "object",
-        "properties": {"kind": {"const": "final"}, "answer": {}},
-        "required": ["kind", "answer"],
-    })
+    if allow_final:
+        branches.append({
+            "type": "object",
+            "properties": {"kind": {"const": "final"}, "answer": {}},
+            "required": ["kind", "answer"],
+        })
     return {"anyOf": branches}

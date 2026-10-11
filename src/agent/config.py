@@ -34,6 +34,7 @@ class BackendConfig(BaseModel):
     action_protocol: Literal["json", "tags"] = "json"
     keep_alive: str = "30m"
     tool_profile: Literal["full", "patch", "small"] = "full"
+    read_first: bool | None = None
     assumed_tokens_per_sec: float = 5.0
 
     @property
@@ -50,6 +51,10 @@ class BackendConfig(BaseModel):
                 "OpenAI-compatible server"
             )
         return url.rstrip("/")
+
+    @property
+    def requires_observation(self) -> bool:
+        return self.tool_profile == "small" if self.read_first is None else self.read_first
 
     @property
     def needs_action_envelope(self) -> bool:

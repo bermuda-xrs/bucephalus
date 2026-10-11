@@ -41,7 +41,8 @@ def test_it_is_capped_at_three(run):
     assert n == 3 and res.status.startswith("done"), (res, n)
 
 
-def test_no_write_means_no_bounce(run):
+def test_no_write_means_no_bounce(run, small):
+    small.backends["cloud"].cfg.read_first = False
     res, n, _ = run(FINAL)
     assert res.status.startswith("done") and n == 0
 

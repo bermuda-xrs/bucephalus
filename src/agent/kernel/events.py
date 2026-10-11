@@ -91,6 +91,7 @@ EVENT_TYPES = frozenset(
         "mcp.started",
         "mcp.failed",
         "mcp.skipped",
+        "read_first.held",
     }
 )
 

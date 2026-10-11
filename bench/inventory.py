@@ -42,6 +42,7 @@ ROWS: list[tuple[str, str, str, str]] = [
     ("an MCP server's tools are registered", "mcp.started", "event", ""),
     ("an MCP server could not be started", "mcp.failed", "event", ""),
     ("MCP is left out for the small kit", "mcp.skipped", "event", ""),
+    ("an answer before any observation is held back", "read_first.held", "event", ""),
 
     ("compaction tombstones an artifact", "session.opened", "tombstoned", ""),
     ("a session BOUNDARY is crossed", "session.opened", "rotate", ""),
