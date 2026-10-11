@@ -572,3 +572,9 @@ def test_every_subcommand_is_entered_by_a_test_here():
                if f'cli("{c}"' in source or f'cli.spawn("{c}"' in source
                or f'"-m", "agent.cli", "--config", str(strict), "{c}"' in source}
     assert declared == entered, f"no test enters: {sorted(declared - entered)}"
+
+
+def test_exec_runs_one_task_and_streams_json(cli):
+    r = cli("exec", "say hello", "--scope", "work", "--output-format", "stream-json", "--approve-plan")
+    rows = [json.loads(line) for line in r.stdout.splitlines() if line.strip()]
+    assert rows[0]["type"] == "task.created" and rows[-1]["type"] == "result" and rows[-1]["exit_code"] == 0

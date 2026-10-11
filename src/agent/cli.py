@@ -654,6 +654,82 @@ def cmd_notifications(ctx, args, console) -> int:
     return 0
 
 
+EXIT_PLAN_REQUIRED, EXIT_PARKED = 3, 4
+
+
+def cmd_exec(ctx, args, console) -> int:
+    from . import stream
+    from .control.events import to_client_event
+
+    jsonl = args.output_format == "stream-json"
+    task = None
+    seen = [-1]
+
+    def emit(obj: dict) -> None:
+        if jsonl:
+            sys.stdout.write(json.dumps(obj, ensure_ascii=False, default=str) + chr(10))
+            sys.stdout.flush()
+
+    def flush() -> None:
+        for e in ctx.log.events(task.id, since_seq=seen[0]):
+            seen[0] = e["seq"]
+            ce = to_client_event(e)
+            if ce:
+                emit({"type": ce["event"], "seq": ce["seq"], "data": ce["data"]})
+
+    def on_live(kind: str, data: dict) -> None:
+        emit({"type": f"live.{kind}", "data": data})
+        if kind in ("waiting", "step"):
+            flush()
+
+    def done(status: str, code: int, answer=None, **extra) -> int:
+        flush()
+        if isinstance(answer, dict) and set(answer) == {"answer"}:
+            answer = answer["answer"]
+        text = answer if isinstance(answer, str) else (json.dumps(answer, indent=2) if answer is not None else "")
+        emit({"type": "result", "task_id": task.id, "status": status, "exit_code": code,
+              "answer": answer, **extra})
+        if not jsonl:
+            if text:
+                print(text)
+            if code:
+                print(f"{status}" + "".join(f" {k}={v}" for k, v in extra.items() if v), file=sys.stderr)
+        return code
+
+    try:
+        task = create_task(
+            ctx.conn, ctx.log,
+            TaskContract(goal=args.goal, success_criterion=args.criterion, artifact_scope=args.scope or []),
+            Budget(usd=args.usd or ctx.config.limits.default_task_budget_usd,
+                   seconds=args.seconds or ctx.config.limits.default_task_budget_seconds))
+        emit({"type": "task.created", "task_id": task.id})
+        if ctx.config.autonomy.plan_required:
+            plan = draft_plan(ctx, task)
+            flush()
+            if not args.approve_plan:
+                return done("plan_required", EXIT_PLAN_REQUIRED, plan_id=plan.id,
+                            next=f"bucephalus approve {task.id} {plan.id} && bucephalus run {task.id}")
+            approve_plan(ctx, task, plan)
+            flush()
+        unsubscribe = stream.subscribe(task.id, on_live)
+        try:
+            result = run_task(ctx, task.id)
+        finally:
+            unsubscribe()
+        if result.status == "paused":
+            return done("paused", EXIT_PARKED, approval_id=result.approval_id, reason=result.reason,
+                        next=f"bucephalus approvals --decide {result.approval_id} --yes && bucephalus run {task.id}")
+        ok = result.status.startswith("done")
+        return done(result.status, 0 if ok else 2, result.answer, steps=result.steps)
+    except Exception as e:  # noqa: BLE001
+        if task is None:
+            emit({"type": "error", "error": f"{type(e).__name__}: {e}"})
+        else:
+            emit({"type": "error", "task_id": task.id, "error": f"{type(e).__name__}: {e}"})
+        print(f"{type(e).__name__}: {e}", file=sys.stderr)
+        return 1
+
+
 def cmd_monitor(ctx, args, console) -> int:
     from .assure.monitor import run_monitor
 
@@ -758,6 +834,17 @@ def build_parser() -> argparse.ArgumentParser:
     st.add_argument("task_id")
     st.add_argument("correction")
     st.set_defaults(fn=cmd_steer)
+
+    ex = sub.add_parser("exec", help="run one task headless (exit 0 done, 2 not done, 3 plan needed, 4 parked)")
+    ex.add_argument("goal")
+    ex.add_argument("--scope", nargs="*")
+    ex.add_argument("--criterion", default="always_pass")
+    ex.add_argument("--usd", type=float)
+    ex.add_argument("--seconds", type=int)
+    ex.add_argument("--output-format", choices=["text", "stream-json"], default="text")
+    ex.add_argument("--approve-plan", action="store_true",
+                    help="your approval of the plan it drafts; without it exec stops at the plan")
+    ex.set_defaults(fn=cmd_exec)
 
     rw = sub.add_parser("rewind", help="put a task's files, conversation or both back to a step")
     rw.add_argument("task_id")
