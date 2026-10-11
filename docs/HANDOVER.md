@@ -57,7 +57,7 @@ window (see the Branch row for whether it reached `main`).
 
 | Fact | Value | Regenerate with |
 |---|---|---|
-| Branch | `harness-8` (see Next step); `main` is the rename; no remote | `git branch --show-current` |
+| Branch | `main`, fast-forwarded from `harness-8` after the suite, the frozen gate (63) and the frozen e2e passed; no remote | `git branch --show-current` |
 | Harness version | **8**, bumped 2026-10-11 for the rename and items a-j (CHANGELOG "Harness 8"); numbers from 7 and earlier do not compare | `grep HARNESS_VERSION src/agent/__init__.py` |
 | Toolset version | **7** | `grep TOOLSET_VERSION src/agent/__init__.py` |
 | Tests | not written down | `python -m pytest tests -q`; skips are live-credential tests (D26) and other-OS tests |
@@ -77,7 +77,7 @@ Before any commit: tests red first, never weaken a check, nothing pushed.
 
 ## Next step
 
-Done on branch `harness-8` (merged to `main` only if the line under "Branch" above says so): items a-j of the harness
+Done, merged to `main`: items a-j of the harness
 brief, one HARNESS_VERSION 8 / TOOLSET_VERSION 7 bump, profiles per backend (default `full`; `patch`, `small` opt in),
 checkpoints and `bucephalus rewind`, AGENTS.md, `bucephalus exec`, hooks, MCP client. CHANGELOG "Harness 8" lists them.
 
@@ -90,7 +90,8 @@ at once (it invents an answer without reading the file).
 
 Not working or unverified: the small profile on the 3B (above); symlink case of the AGENTS.md check (no privilege to create
 one here); MCP against a real server (only the fake in tests); hooks and MCP not run on POSIX; the console Rewind control
-was exercised by test and not looked at in a browser.
+was looked at once in the source console (renders; the three buttons were not clicked); a frozen task now takes ~1.8 s
+against ~0.15 s because each step's checkpoint runs git (switch off with `mechanisms.shadow_checkpoints`).
 
 Next three, in order:
 1. Make the 3B act before it answers (e.g. no final branch before the first tool call unless the plan needs none, or a
