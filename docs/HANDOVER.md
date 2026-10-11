@@ -46,19 +46,19 @@ $env:PYTHONUTF8 = "1"
 | `bench/report.py`, `bench/inventory.py` | instant, read-only |
 | `bench/noise.py --runs 1` | ~2.5 h, takes the machine; resumable with its `order_seed` |
 | `bench/run.py paired` | ~4 h |
-| `bench/profile_run.py --suite bench/tasks` | ~35 min, 3B, control vs small profile |
+| `bench/profile_run.py --suite bench/tasks` | ~35 min, 3B, control vs small profile; keep the machine awake (Modern Standby stalls it) |
 
 One measurement process at a time (`src/agent/runlock.py`); nothing else runs during a timed run.
 
 ## State
 
-Verified 2026-10-11 against commit `b30ffce` on `harness-8`: Windows suite, ruff, the frozen gate and a task through the rebuilt `bucephalus.exe`'s
+Verified 2026-10-11 against commit `7a0eef1` on `harness-9`: Windows suite, ruff, the frozen gate and a task through the rebuilt `bucephalus.exe`'s
 window (see the Branch row for whether it reached `main`).
 
 | Fact | Value | Regenerate with |
 |---|---|---|
 | Branch | `main`, fast-forwarded from `harness-8` after the suite, the frozen gate (63) and the frozen e2e passed; no remote | `git branch --show-current` |
-| Harness version | **8**, bumped 2026-10-11 for the rename and items a-j (CHANGELOG "Harness 8"); numbers from 7 and earlier do not compare | `grep HARNESS_VERSION src/agent/__init__.py` |
+| Harness version | **9**, bumped 2026-10-11 for read_first in the small profile (CHANGELOG "Harness 9"); numbers from 8 and earlier do not compare | `grep HARNESS_VERSION src/agent/__init__.py` |
 | Toolset version | **7** | `grep TOOLSET_VERSION src/agent/__init__.py` |
 | Tests | not written down | `python -m pytest tests -q`; skips are live-credential tests (D26) and other-OS tests |
 | Lint | bug rules only | `python -m ruff check src tests scripts packaging demo.py` |
@@ -77,29 +77,32 @@ Before any commit: tests red first, never weaken a check, nothing pushed.
 
 ## Next step
 
-Done, merged to `main`: items a-j of the harness
-brief, one HARNESS_VERSION 8 / TOOLSET_VERSION 7 bump, profiles per backend (default `full`; `patch`, `small` opt in),
-checkpoints and `bucephalus rewind`, AGENTS.md, `bucephalus exec`, hooks, MCP client. CHANGELOG "Harness 8" lists them.
+Done on branch `harness-9` (merged to `main` only if the Branch row says so): tool scripts (bench/, packaging/,
+scripts/) refuse the real user directories unless `BUCEPHALUS_DATA_DIR` / `BUCEPHALUS_CONFIG_DIR` are set (a test walks
+every entry point); `read_first` (no answer before the first observation; on for the small profile only); checkpoints only
+before an action that changes something; the console Rewind control clicked through and three bugs fixed. The copy of
+the state directory a smoke run made was deleted (it had one extra empty folder); the real first launch will migrate.
 
-Measured once (`bench/profile_run.py`, granite4.1:3b, `bench/tasks`, 5 tasks x 3 repetitions = 15 pairs, order shuffled
-per repetition, 2026-10-11, `runs/profile-small-20261011/paired.json`): control (full kit, new mechanisms off) passed 3
-of 15 (negative-control-004, every repetition), small profile 0 of 15; McNemar exact p 0.25; mean wall 95 s vs 30 s.
-A sighting, not a result: greedy decoding makes repetitions near-copies, so n is nearer 5 than 15. Cause seen in the
-log: the small arm made no tool call in any of its 15 model calls; the schema's explicit final branch lets the 3B answer
-at once (it invents an answer without reading the file).
+Measured (`bench/profile_run.py`, granite4.1:3b, `bench/tasks`, 5 tasks x 3 repetitions = 15 pairs, 2026-10-11,
+`runs/profile-readfirst-20261011/paired.json`): control (full kit, new mechanisms off) 3 of 15, small + read_first 6 of
+15 (extract-json and summarize-untrusted every repetition; control only negative-control); McNemar exact p 0.51.
+Before read_first the small profile was 0 of 15. A sighting, not a result: n is nearer 5 tasks than 15 pairs. Wall clock
+is invalid for repetition 1 of the small arm (the laptop entered Modern Standby three times); without it, mean 57 s vs
+107 s (n = 10 per arm). Recorded with HARNESS_VERSION still reading 8; the code is that of 9.
 
-Not working or unverified: the small profile on the 3B (above); symlink case of the AGENTS.md check (no privilege to create
-one here); MCP against a real server (only the fake in tests); hooks and MCP not run on POSIX; the console Rewind control
-was looked at once in the source console (renders; the three buttons were not clicked); a frozen task now takes ~1.8 s
-against ~0.15 s because each step's checkpoint runs git (switch off with `mechanisms.shadow_checkpoints`).
+Checkpoint cost (mock backends, 7 steps: 5 reads, 1 write, 1 answer; median of 5): 3.95 s with 7 checkpoints before,
+0.86 s with 1 after, 0.22 s with checkpoints off.
+
+Not done: the 8B. granite4.1:8b is 5.1 GB of weights plus the KV cache for num_ctx 8192; 4.0 GB of 15.5 GB was free
+(commit 17.6 GB), held by applications this session did not start. Not working or unverified: symlink case of the
+AGENTS.md check; MCP against a real server; hooks and MCP on POSIX.
 
 Next three, in order:
-1. Make the 3B act before it answers (e.g. no final branch before the first tool call unless the plan needs none, or a
-   read-before-answer check) and rerun `bench/profile_run.py`; red-first, then re-measure.
-2. Run the same pairing with `patch` on a larger local model and look at the Rewind control in the console.
+1. Free about 7 GB (close the browser and other apps), keep the machine awake, and run 3B control vs 8B full vs
+   8B small+read_first with `bench/profile_run.py` (add the two 8B arms).
+2. Look at why small + read_first still fails write-function and handbook-recall (the per-arm databases sit beside `paired.json`).
 3. Try an MCP server you actually use (`mcp_servers` in the config) and a pre_tool hook on `write_file`.
 
 Waiting on the user: D26 credentials; the memory line a test wrote into the real memory
-(`.ucephalus.ps1 memory --forget "injected instruction"`); a Mac or bare-metal Linux run; renaming the folder, then
-moving its state directory (see Running it); the old venvs and `~/.alpha-build`. A real run already copied
-`%LOCALAPPDATA%lpha-test-1` to `bucephalus` (the old one is untouched).
+(`.\bucephalus.ps1 memory --forget "injected instruction"`); a Mac or bare-metal Linux run; renaming the folder, then
+moving its state directory (see Running it); the old venvs and `~/.alpha-build`.

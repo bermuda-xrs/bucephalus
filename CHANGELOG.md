@@ -20,6 +20,17 @@ and the platformdirs app name. No aliases for the old names. On first use `user_
 left as it was). Entries below this one use the old name. The import package is still `agent`. Prompt
 bytes changed with the name ("the execution core of Bucephalus"): HARNESS_VERSION 8.
 
+## Harness 9 - 2026-10-11 (HARNESS_VERSION 8 -> 9)
+
+- `read_first` (BackendConfig; on for the small profile only): no final answer before the task's first tool call; under
+  constrained decoding the final branch is left out of the schema until then. The small profile went from 0 of 15 to 6 of
+  15 on the 3B (a sighting; HANDOVER has the numbers).
+- A process started from bench/, packaging/ or scripts/ refuses the real user directories unless a scratch directory is
+  set; children inherit the refusal.
+- Checkpoints only before an action that changes something (3.95 s -> 0.86 s on a 7-step mock task).
+- Console Rewind: the poll no longer closes the panel; a fetch race fixed; rewinding to an empty scope keeps the scope
+  directory.
+
 ## Harness 8 - 2026-10-11 (HARNESS_VERSION 7 -> 8, TOOLSET_VERSION 6 -> 7)
 
 One bump covers the rename's prompt bytes and everything below. Every mechanism that changes the prompt or the
