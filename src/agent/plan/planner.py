@@ -52,6 +52,9 @@ Rules:
 
 
 def draft_plan(ctx, task, backend_name: str = "cloud") -> Plan:
+    from ..execute.mcp import attach
+
+    attach(ctx, task)
     backend = ctx.backends[backend_name]
     ctx.phase = "plan"
     try:

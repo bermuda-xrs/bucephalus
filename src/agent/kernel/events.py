@@ -88,6 +88,9 @@ EVENT_TYPES = frozenset(
         "hook.ran",
         "hook.denied",
         "hook.stop_blocked",
+        "mcp.started",
+        "mcp.failed",
+        "mcp.skipped",
     }
 )
 

@@ -39,6 +39,9 @@ ROWS: list[tuple[str, str, str, str]] = [
     ("a configured hook runs", "hook.ran", "event", ""),
     ("a pre_tool hook refuses a call", "hook.denied", "event", ""),
     ("a stop hook holds an answer back", "hook.stop_blocked", "event", ""),
+    ("an MCP server's tools are registered", "mcp.started", "event", ""),
+    ("an MCP server could not be started", "mcp.failed", "event", ""),
+    ("MCP is left out for the small kit", "mcp.skipped", "event", ""),
 
     ("compaction tombstones an artifact", "session.opened", "tombstoned", ""),
     ("a session BOUNDARY is crossed", "session.opened", "rotate", ""),

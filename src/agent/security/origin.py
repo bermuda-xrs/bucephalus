@@ -41,10 +41,10 @@ def is_unattended(origin: str | None) -> bool:
 
 def policy_for(origin: str | None) -> ToolPolicy:
     if (origin or LOCAL) == SCHEDULE:
-        return ToolPolicy(denied=SCHEDULE_DENIED, reason="scheduled task, unattended")
+        return ToolPolicy(denied=SCHEDULE_DENIED, reason="scheduled task, unattended", denied_prefixes=("mcp__",))
     if not is_channel(origin):
         return UNRESTRICTED
-    return ToolPolicy(denied=CHANNEL_DENIED, reason=f"{origin} channel task")
+    return ToolPolicy(denied=CHANNEL_DENIED, reason=f"{origin} channel task", denied_prefixes=("mcp__",))
 
 
 def clamp_budget(budget, limits, origin: str | None):

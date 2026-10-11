@@ -62,6 +62,7 @@ class AgentContext:
         self.memory = MemoryStore(user_data_dir() / "memory")
         self._memory_frozen: dict[str, dict] = {}
         self._notes_frozen: dict[str, str] = {}
+        self.mcp_servers: list = []
         self.telemetry = Telemetry(self.conn, cloud_backend_names(config),
                                    cache_reporting_backend_names(config))
         self.mesh = VerificationMesh(self)
@@ -83,6 +84,9 @@ class AgentContext:
         return cls(load_config(config_path, profile=profile))
 
     def close(self) -> None:
+        from .execute.mcp import close_all
+
+        close_all(self)
         try:
             self.conn.close()
         except Exception:  # noqa: BLE001

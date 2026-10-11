@@ -210,6 +210,9 @@ def run_task(ctx, task_id: str) -> TaskResult:
     except SkillSetChanged:
         set_status(ctx.conn, ctx.log, task, TaskStatus.FAILED, "skill_set_changed")
         raise
+    from .mcp import attach
+
+    attach(ctx, task)
     memory = ctx.freeze_memory(task.id)
     notes = ctx.freeze_project_notes(task)
     exe = ctx.backends.get("cloud")

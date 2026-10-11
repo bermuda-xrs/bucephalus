@@ -19,18 +19,20 @@ CHILD_DENIED = frozenset({
 class ToolPolicy:
     denied: frozenset[str] = field(default_factory=frozenset)
     reason: str = ""
+    denied_prefixes: tuple[str, ...] = ()
 
     def denies(self, tool_name: str) -> bool:
-        return tool_name in self.denied
+        return tool_name in self.denied or tool_name.startswith(self.denied_prefixes)
 
     def narrowed_by(self, more: frozenset[str], reason: str) -> "ToolPolicy":
         return ToolPolicy(
             denied=frozenset(self.denied) | frozenset(more),
             reason="; ".join(x for x in (self.reason, reason) if x),
+            denied_prefixes=self.denied_prefixes,
         )
 
     def describe(self) -> dict:
-        return {"denied": sorted(self.denied), "reason": self.reason}
+        return {"denied": sorted(self.denied), "reason": self.reason, "denied_prefixes": list(self.denied_prefixes)}
 
 
 UNRESTRICTED = ToolPolicy()

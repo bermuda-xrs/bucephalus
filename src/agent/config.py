@@ -93,6 +93,14 @@ class HooksConfig(BaseModel):
     stop: list[HookConfig] = Field(default_factory=list)
 
 
+class McpServerConfig(BaseModel):
+    argv: list[str]
+    env: dict[str, str] = Field(default_factory=dict)
+    read_only: list[str] = Field(default_factory=list)
+    timeout_s: int = 30
+    start_timeout_s: int = 20
+
+
 class MechanismsConfig(BaseModel):
     compaction: bool = True
     semantic_cache: bool = True
@@ -154,6 +162,7 @@ class Config(BaseModel):
     gate: GateConfig = Field(default_factory=GateConfig)
     mechanisms: MechanismsConfig = Field(default_factory=MechanismsConfig)
     hooks: HooksConfig = Field(default_factory=HooksConfig)
+    mcp_servers: dict[str, McpServerConfig] = Field(default_factory=dict)
     autonomy: AutonomyConfig = Field(default_factory=AutonomyConfig)
     ui: UIConfig = Field(default_factory=UIConfig)
     channels: ChannelConfig = Field(default_factory=ChannelConfig)
