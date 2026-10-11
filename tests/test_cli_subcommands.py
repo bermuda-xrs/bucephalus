@@ -448,10 +448,20 @@ def test_steer_forks_and_never_mutates(cli):
     assert "[steered] use metric units" in json.loads(goal)["goal"]
 
 
-def test_rewind_lists_and_goes_back(cli):
+def test_rewind_lists_and_goes_back(cli, monkeypatch):
+    from agent.context import AgentContext
+    from agent.execute.loop import run_task
+
     tid = cli.new_task("rewind me")
     cli("rewind", tid, "--list", expect=1)
-    cli("run", tid, expect=None)
+    monkeypatch.setenv("BUCEPHALUS_DATA_DIR", str(cli.root))
+    monkeypatch.setenv("BUCEPHALUS_CONFIG_DIR", str(cli.root))
+    ctx = AgentContext.open(cli.config_path)
+    ctx.config.autonomy.approve_scoped_writes = True
+    ctx.backends["cloud"].queue('<action tool="write_file">{"path": "work/r.txt", "content": "x"}</action>',
+                                '<final>{"answer": "ok"}</final>')
+    run_task(ctx, tid)
+    ctx.close()
     listing = cli("rewind", tid, "--list").stdout
     assert "step 0" in listing
     r = cli("rewind", tid, "--step", "0", "--what", "both")

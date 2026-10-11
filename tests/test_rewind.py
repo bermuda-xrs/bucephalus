@@ -32,11 +32,20 @@ def _events(ctx, task, kind):
         "SELECT payload_json FROM events WHERE task_id=? AND type=? ORDER BY seq", (task.id, kind))]
 
 
-def test_each_step_is_checkpointed_before_it_runs(run):
+def test_each_step_that_changes_something_is_checkpointed_before_it_runs(run):
     ctx, task, _ = run
     cps = list_checkpoints(ctx, task.id)
-    assert [c["step"] for c in cps] == [0, 1, 2]
-    assert all(len(c["sha"]) == 40 for c in cps) and len({c["sha"] for c in cps}) == 3
+    assert [c["step"] for c in cps] == [0, 1]
+    assert all(len(c["sha"]) == 40 for c in cps) and len({c["sha"] for c in cps}) == 2
+
+
+def test_a_step_that_only_reads_or_answers_is_not_checkpointed(ctx, task, workspace):
+    ctx.config.mechanisms.shadow_checkpoints = True
+    ctx.config.autonomy.approve_scoped_writes = True
+    ls = '<action tool="list_dir">{"path": "work"}</action>'
+    ctx.backends["cloud"].queue(ls, _write("one"), ls, FINAL)
+    run_task(ctx, task.id)
+    assert [c["step"] for c in list_checkpoints(ctx, task.id)] == [1]
 
 
 def test_rewinding_code_restores_the_files_and_leaves_the_conversation(run):
@@ -79,8 +88,8 @@ def test_rewinding_both_does_both_and_a_repeated_call_really_runs(run):
 def test_the_default_is_the_latest_checkpoint_and_both(run):
     ctx, task, ws = run
     out = rewind(ctx, task.id)
-    assert out["step"] == 2 and out["what"] == "both"
-    assert (ws / "a.txt").read_text(encoding="utf-8") == "twotwo"
+    assert out["step"] == 1 and out["what"] == "both"
+    assert (ws / "a.txt").read_text(encoding="utf-8") == "one"
 
 
 def test_an_unknown_step_or_mode_is_refused(run):
@@ -161,7 +170,7 @@ def api(run):
 def test_the_console_lists_and_rewinds(api, run):
     ctx, task, ws = run
     got = api.get(f"/tasks/{task.id}/checkpoints").json()
-    assert [c["step"] for c in got] == [0, 1, 2] and "sha" in got[0]
+    assert [c["step"] for c in got] == [0, 1] and "sha" in got[0]
     r = api.post(f"/tasks/{task.id}/rewind", json={"step": 1, "what": "code"})
     assert r.status_code == 200 and r.json()["step"] == 1
     assert (ws / "a.txt").read_text(encoding="utf-8") == "one"

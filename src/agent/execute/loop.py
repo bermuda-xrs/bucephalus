@@ -255,8 +255,6 @@ def run_task(ctx, task_id: str) -> TaskResult:
 
                 plan = verify_plan_pin(ctx, task)
 
-            _checkpoint(ctx, task, step, entries)
-
             if not stable:
                 skills = ctx.freeze_skills(task)
                 memory = ctx._snapshot_memory(task.id)  # noqa: SLF001
@@ -430,6 +428,8 @@ def run_task(ctx, task_id: str) -> TaskResult:
                 _warn_if_stuck(ctx, task, entries, step, repeats, parsed)
                 continue
 
+            if _changes_something(ctx, parsed):
+                _checkpoint(ctx, task, step, entries)
             seq0 = _last_receipt_seq(ctx, task)
             obs = execute_action(ctx, task, parsed, step, plan)
             entries.append(obs)
@@ -676,6 +676,11 @@ def _seed_record(ctx, task, entries: list[LedgerEntry], kind: str = "park_seed")
 
 def _write_park_seed(ctx, task, entries: list[LedgerEntry]) -> None:
     ctx.log.append(task.id, "task.park_seed", _seed_record(ctx, task, entries))
+
+
+def _changes_something(ctx, parsed) -> bool:
+    tool = ctx.tools.get("run_code" if parsed.kind == "code" else parsed.tool)
+    return tool is not None and tool.side_effecting
 
 
 def _checkpoint(ctx, task, step: int, entries: list[LedgerEntry]) -> None:
