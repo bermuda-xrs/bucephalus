@@ -363,6 +363,18 @@ def run_task(ctx, task_id: str) -> TaskResult:
                     + " reminder(s) left).", taint=Taint.TRUSTED, label="verify-before-stop"))
                 continue
 
+            if parsed.kind == "final" and ctx.config.hooks.stop and _stop_blocks(ctx, task) < MAX_STOP_BLOCKS:
+                from .hooks import run_hooks
+
+                answer = parsed.payload if isinstance(parsed.payload, str) else json.dumps(parsed.payload)
+                held, why = run_hooks(ctx, task, "stop", answer=answer)
+                if not held:
+                    ctx.log.append(task.id, "hook.stop_blocked", {"step": step, "why": why[:300]})
+                    entries.append(LedgerEntry.observation(
+                        "A stop hook configured by the user held your answer back:" + chr(10) + why
+                        + chr(10) + "Deal with that, then answer again.", taint=Taint.UNTRUSTED, label="hook"))
+                    continue
+
             if parsed.kind == "final":
                 result = parsed.payload
                 artifact_text = (
@@ -459,6 +471,12 @@ def run_task(ctx, task_id: str) -> TaskResult:
 
 
 MAX_VERIFY_CONTINUATIONS = 3
+MAX_STOP_BLOCKS = 3
+
+
+def _stop_blocks(ctx, task) -> int:
+    return ctx.conn.execute("SELECT COUNT(*) FROM events WHERE task_id=? AND type='hook.stop_blocked'",
+                            (task.id,)).fetchone()[0]
 STUCK_WARN = 3
 STUCK_HALT = 6
 
@@ -798,7 +816,26 @@ def execute_action(ctx, task, parsed: ParsedAction, step: int, plan=None) -> Led
                 decision.reason, taint=Taint.TRUSTED, label="review"
             )
 
-    return _perform(ctx, task, tool, tool_name, args, step)
+    if ctx.config.hooks.pre_tool:
+        from .hooks import run_hooks
+
+        allowed, why = run_hooks(ctx, task, "pre_tool", tool_name, args=args)
+        if not allowed:
+            ctx.log.append(task.id, "hook.denied", {"tool": tool_name, "step": step, "why": why[:300]})
+            return LedgerEntry.observation(
+                f"hook refused {tool_name} (a check the user configured): {why}" + chr(10)
+                + "This is a rule, not a judgment call.", taint=Taint.UNTRUSTED, label="hook")
+
+    obs = _perform(ctx, task, tool, tool_name, args, step)
+    if ctx.config.hooks.post_tool:
+        from .hooks import run_hooks
+
+        _, text = run_hooks(ctx, task, "post_tool", tool_name, args=args, result=obs.content[:2000])
+        if text:
+            obs.content += chr(10) + chr(10) + "<hook_output taint=untrusted>" + chr(10) + text + chr(10) + "</hook_output>"
+            obs.taint = join_taint(obs.taint, Taint.UNTRUSTED)
+            obs.n_tokens = count_tokens(obs.content)
+    return obs
 
 
 FILE_EDITS = ("write_file", "edit_file", "apply_patch")

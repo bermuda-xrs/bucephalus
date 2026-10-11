@@ -85,6 +85,9 @@ EVENT_TYPES = frozenset(
         "task.rewound",
         "agents_md.loaded",
         "agents_md.skipped",
+        "hook.ran",
+        "hook.denied",
+        "hook.stop_blocked",
     }
 )
 

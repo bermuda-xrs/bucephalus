@@ -49,6 +49,14 @@ def make_tool_handler(ctx, task, step: int = 0):
                 "sandboxed program. Issue it as a direct <action> instead."
             )
 
+        if ctx.config.hooks.pre_tool:
+            from .hooks import run_hooks
+
+            allowed, why = run_hooks(ctx, task, "pre_tool", name, args=args)
+            if not allowed:
+                ctx.log.append(task.id, "hook.denied", {"tool": name, "step": step, "why": why[:300]})
+                raise ToolCallDenied(f"a hook configured by the user refused {name}: {why}")
+
         if spec.side_effecting:
             key = idempotency_key(task.id, step + rewind_epoch(ctx.conn, task.id), name, args)
             ctx.log.append(

@@ -36,6 +36,9 @@ ROWS: list[tuple[str, str, str, str]] = [
     ("a task is rewound", "task.rewound", "event", ""),
     ("the user's AGENTS.md enters the prefix", "agents_md.loaded", "event", ""),
     ("an AGENTS.md the task could write is left out", "agents_md.skipped", "event", ""),
+    ("a configured hook runs", "hook.ran", "event", ""),
+    ("a pre_tool hook refuses a call", "hook.denied", "event", ""),
+    ("a stop hook holds an answer back", "hook.stop_blocked", "event", ""),
 
     ("compaction tombstones an artifact", "session.opened", "tombstoned", ""),
     ("a session BOUNDARY is crossed", "session.opened", "rotate", ""),

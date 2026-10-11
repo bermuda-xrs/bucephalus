@@ -81,6 +81,18 @@ class GateConfig(BaseModel):
     min_discordant_pairs: int = 10
 
 
+class HookConfig(BaseModel):
+    argv: list[str]
+    tools: list[str] = Field(default_factory=list)
+    timeout_s: int = 10
+
+
+class HooksConfig(BaseModel):
+    pre_tool: list[HookConfig] = Field(default_factory=list)
+    post_tool: list[HookConfig] = Field(default_factory=list)
+    stop: list[HookConfig] = Field(default_factory=list)
+
+
 class MechanismsConfig(BaseModel):
     compaction: bool = True
     semantic_cache: bool = True
@@ -141,6 +153,7 @@ class Config(BaseModel):
     compress_observations_over_tokens: int = 1200
     gate: GateConfig = Field(default_factory=GateConfig)
     mechanisms: MechanismsConfig = Field(default_factory=MechanismsConfig)
+    hooks: HooksConfig = Field(default_factory=HooksConfig)
     autonomy: AutonomyConfig = Field(default_factory=AutonomyConfig)
     ui: UIConfig = Field(default_factory=UIConfig)
     channels: ChannelConfig = Field(default_factory=ChannelConfig)
