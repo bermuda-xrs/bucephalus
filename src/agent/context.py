@@ -159,9 +159,13 @@ class AgentContext:
         path = Path(self.config.root) / "AGENTS.md"
         if not self.config.mechanisms.agents_md or not path.is_file():
             return ""
-        if within_scope({"path": "AGENTS.md"}, task.contract.artifact_scope, self.config.root)[0]:
-            self.log.append(task.id, "agents_md.skipped",
-                            {"why": "inside artifact_scope: the task can write it, so it is not an instruction"})
+        why = ""
+        if path.is_symlink() or path.stat().st_nlink > 1:
+            why = "a symlink or hard link: it may be a file the task can write"
+        elif within_scope({"path": "AGENTS.md"}, task.contract.artifact_scope, self.config.root)[0]:
+            why = "inside artifact_scope: the task can write it, so it is not an instruction"
+        if why:
+            self.log.append(task.id, "agents_md.skipped", {"why": why})
             return ""
         raw = path.read_bytes()
         text = raw.decode("utf-8", errors="replace")
