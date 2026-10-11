@@ -141,3 +141,11 @@ def test_protected_state_is_matched_without_regard_to_case():
     assert _protected_at(P("/r/agents.md"), (P("/r/AGENTS.md"),))
     assert _protected_at(P("/r/Shadow/t1/HEAD"), (P("/r/shadow"),))
     assert not _protected_at(P("/r/work/agents.md"), (P("/r/AGENTS.md"),))
+
+
+def test_a_parent_of_protected_state_matches_without_regard_to_case_too():
+    from pathlib import PurePosixPath as P
+
+    from agent.security.capabilities import _protected_at
+
+    assert _protected_at(P("/R"), (P("/r/shadow"),))

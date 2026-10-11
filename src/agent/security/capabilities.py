@@ -205,8 +205,12 @@ def _protected_at(p: Path, state: tuple[Path, ...]) -> bool:
         return True
     if p.name.lower() in PROTECTED_FILES:
         return True
-    low = type(p)(str(p).lower())
-    return any(_is_within(p, s) or _is_within(s, p) or _is_within(low, type(s)(str(s).lower())) for s in state)
+    low = type(p)(str(p).casefold())
+    for s in state:
+        fs = type(s)(str(s).casefold())
+        if _is_within(p, s) or _is_within(s, p) or _is_within(low, fs) or _is_within(fs, low):
+            return True
+    return False
 
 
 def gate_tool_call(ctx, task, tool, args: dict, phase: str = "execute") -> GateDecision:
