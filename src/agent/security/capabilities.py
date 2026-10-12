@@ -135,14 +135,17 @@ def _file_uri_path(v: str) -> str | None:
     from urllib.request import url2pathname
 
     u = urlparse(v)
+    if u.query or u.fragment or u.params:
+        return v
     return url2pathname(unquote((("//" + u.netloc) if u.netloc else "") + u.path))
 
 
 def _names_something(v: str, root) -> bool:
-    if root is None or not v or len(v) > 260 or any(c in v for c in "\n\r\t*?\"<>|"):
+    if root is None or not v or chr(0) in v or "\n" in v or "\r" in v or len(v) > 4096:
         return False
     try:
-        return Path(os.path.join(root, v)).exists()
+        q = Path(os.path.normpath(os.path.join(root, v)))
+        return q.exists() or (any(sep in v for sep in "/" + chr(92)) and q.parent.is_dir() and q.parent != Path(root))
     except (OSError, ValueError):
         return False
 

@@ -218,3 +218,20 @@ def test_a_bare_word_that_names_nothing_is_left_alone(ctx, mcp):
     _, calls = mcp(_call("mcp__fake__where", repo_path="work", note="hello"), FINAL, read_only=["where"])
     assert "at:work" in calls[1]["tail"]
 
+
+
+def test_a_file_uri_with_a_query_or_fragment_is_refused(ctx, mcp, workspace):
+    uri = (workspace / "x").as_uri() + "?p=../../secret"
+    _, calls = mcp(_call("mcp__fake__where", repo_path="work", note=uri), FINAL, read_only=["where"])
+    assert "at:" not in calls[1]["tail"]
+
+
+def test_a_new_file_in_an_existing_directory_outside_the_scope_is_checked(ctx, mcp, tmp_path):
+    (tmp_path / "elsewhere").mkdir()
+    _, calls = mcp(_call("mcp__fake__where", repo_path="work", note="elsewhere/new.txt"), FINAL, read_only=["where"])
+    assert "at:" not in calls[1]["tail"]
+
+
+def test_a_new_file_inside_the_scope_is_fine(ctx, mcp, workspace):
+    _, calls = mcp(_call("mcp__fake__where", repo_path="work", note="work/new.txt"), FINAL, read_only=["where"])
+    assert "at:work" in calls[1]["tail"]
