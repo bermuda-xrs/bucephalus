@@ -11,8 +11,8 @@ def _act(tool, **args):
     return f'<action tool="{tool}">{json.dumps(args)}</action>'
 
 
-def test_the_small_profile_has_exactly_the_five_tools():
-    assert set(SMALL_TOOLS) == {"read_file", "write_file", "search", "run_command", "update_plan"}
+def test_the_small_profile_has_exactly_these_six_tools_the_sixth_so_it_can_open_what_is_elided():
+    assert set(SMALL_TOOLS) == {"read_file", "write_file", "search", "run_command", "update_plan", "expand_artifact"}
 
 
 def test_a_small_context_registers_only_those(small):

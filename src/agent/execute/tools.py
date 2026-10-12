@@ -535,7 +535,7 @@ def tool_git_push(ctx, task, remote: str = "origin", branch: str | None = None) 
     }
 
 
-SMALL_TOOLS = ("read_file", "write_file", "search", "run_command", "update_plan")
+SMALL_TOOLS = ("read_file", "write_file", "search", "run_command", "update_plan", "expand_artifact")
 SMALL_ONLY = ("search", "run_command", "update_plan")
 PATCH_ONLY = ("apply_patch",)
 

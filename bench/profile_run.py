@@ -32,11 +32,25 @@ def write_config(base: Path, arm: str, out: Path) -> Path:
     return p
 
 
+def prepare_data(data: Path, suite: str) -> None:
+    import shutil
+
+    p = Path(suite)
+    files = sorted(p.glob("*.json")) if p.is_dir() else [p]
+    for f in files:
+        specs = json.loads(f.read_text(encoding="utf-8"))
+        for spec in specs if isinstance(specs, list) else [specs]:
+            g = spec.get("grader_dir")
+            if g and (ROOT / g).is_dir():
+                shutil.copytree(ROOT / g, data / g, dirs_exist_ok=True)
+
+
 def run_arm(cfg: Path, arm: str, rep: int, suite: str, out: Path, models: str, timeout_s: int) -> Path:
     from agent.proc import kill_tree
 
     data = out / "data" / f"{arm}-{rep}"
     data.mkdir(parents=True, exist_ok=True)
+    prepare_data(data, suite)
     dest = out / f"{arm}-{rep}.json"
     env = {**os.environ, "BUCEPHALUS_DATA_DIR": str(data), "BUCEPHALUS_CONFIG_DIR": str(data / "config"),
            "BUCEPHALUS_OLLAMA_MODELS": models, "PYTHONUTF8": "1"}

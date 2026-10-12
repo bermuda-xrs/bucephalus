@@ -35,6 +35,7 @@ class BackendConfig(BaseModel):
     keep_alive: str = "30m"
     tool_profile: Literal["full", "patch", "small"] = "full"
     read_first: bool | None = None
+    observation_tokens: int | None = None
     assumed_tokens_per_sec: float = 5.0
 
     @property
@@ -51,6 +52,12 @@ class BackendConfig(BaseModel):
                 "OpenAI-compatible server"
             )
         return url.rstrip("/")
+
+    @property
+    def inline_observation_tokens(self) -> int:
+        if self.observation_tokens is not None:
+            return self.observation_tokens
+        return int(self.budgeted_window * 0.4) if self.tool_profile == "small" else 400
 
     @property
     def requires_observation(self) -> bool:

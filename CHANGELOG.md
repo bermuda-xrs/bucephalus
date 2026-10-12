@@ -20,6 +20,16 @@ and the platformdirs app name. No aliases for the old names. On first use `user_
 left as it was). Entries below this one use the old name. The import package is still `agent`. Prompt
 bytes changed with the name ("the execution core of Bucephalus"): HARNESS_VERSION 8.
 
+## Harness 10 - 2026-10-12 (HARNESS_VERSION 9 -> 10)
+
+- The small tool kit gains `expand_artifact` (six tools): observations over 400 tokens are shown as head and tail with a
+  pointer to it, and the small profile had no such tool, so the 3B never saw the middle of a long file.
+- The small profile's inline observation cap is 40% of the window (`observation_tokens` overrides it); other profiles keep 400.
+- Non-Python diagnostics (JSON, YAML, TOML, JavaScript via node), `bucephalus say`, diff view, the Telegram queue.
+- Found while diagnosing: `bench/profile_run.py` rooted each arm in a scratch directory with no graders, so the
+  `verify_program` task could not pass in either arm; it now copies the graders in. The earlier tables (3 of 15 vs 6 of
+  15) count that task as failed in both arms.
+
 ## Harness 9 - 2026-10-11 (HARNESS_VERSION 8 -> 9)
 
 - `read_first` (BackendConfig; on for the small profile only): no final answer before the task's first tool call; under
