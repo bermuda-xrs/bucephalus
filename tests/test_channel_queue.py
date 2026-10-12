@@ -148,3 +148,38 @@ def test_the_http_transport_is_untouched():
     node = next(n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == "HttpTransport")
     got = hashlib.sha256(ast.unparse(node).encode()).hexdigest()
     assert got == HTTP_TRANSPORT_SHA256, "HttpTransport has never made a live call (D26) and must not change without one"
+
+
+def _pending(bot, bind=7000):
+    task = channel_task(bot.ctx)
+    if bind is not None:
+        bot._bind(task.id, bind)
+    appr = bot.ctx.request_approval(task, bot.ctx.tools.get("write_file"), {"path": "work/x", "content": "y"}, "needs you", 0)
+    return task, appr
+
+
+def _status(bot, appr):
+    return bot.ctx.conn.execute("SELECT status FROM approvals WHERE id=?", (appr,)).fetchone()[0]
+
+
+@pytest.mark.parametrize("bind", [8000, None])
+def test_an_approval_pressed_in_a_chat_it_was_not_sent_to_is_refused(bot, bind):
+    task, appr = _pending(bot, bind)
+    out = bot.handle_update(callback(appr))
+    assert out == {"action": "refused", "why": "approval not routed to this chat"}
+    assert _status(bot, appr) == "pending"
+    row = bot.ctx.conn.execute("SELECT payload_json FROM events WHERE task_id=? AND type='channel.refused'", (task.id,)).fetchone()
+    assert row is not None and appr in row[0]
+
+
+@pytest.mark.parametrize("data", ["maybe:{id}", "approve:", "approve{id}"])
+def test_an_unparseable_callback_changes_nothing(bot, data):
+    _, appr = _pending(bot)
+    cb = callback(appr)
+    cb["callback_query"]["data"] = data.format(id=appr)
+    assert bot.handle_update(cb) == {"action": "ignored", "why": "unparseable callback"}
+    assert _status(bot, appr) == "pending"
+
+
+def test_a_callback_for_an_unknown_approval_is_ignored(bot):
+    assert bot.handle_update(callback("no-such-id")) == {"action": "ignored", "why": "no such approval"}

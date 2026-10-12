@@ -93,3 +93,9 @@ def test_every_ollama_call_sets_num_ctx_explicitly_from_the_budgeted_window():
 def test_without_a_usable_window_the_full_window_is_sent():
     body = _ollama_body(BackendConfig(kind="ollama", model="m", endpoint="http://x", context_window=32768))
     assert body["options"]["num_ctx"] == 32768
+
+
+def test_every_branch_requires_all_of_its_fields():
+    schema = build_action_schema(default_registry(), code_as_action=True)
+    for b in schema["anyOf"]:
+        assert set(b["required"]) == set(b["properties"]), b["properties"]["kind"]
