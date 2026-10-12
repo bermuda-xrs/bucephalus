@@ -1,0 +1,2 @@
+src\agent\execute\rewind.py: 34 mutants, baseline 14.9s, timeout 60s
+src\agent\execute\rewind.py: 34/34 killed, 0 undecided (timeout), score 100.0%

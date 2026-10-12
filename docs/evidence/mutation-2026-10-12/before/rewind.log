@@ -1,0 +1,8 @@
+src\agent\execute\rewind.py: 34 mutants, baseline 27.3s, timeout 109s
+  SURVIVED src\agent\execute\rewind.py:30 raise_pass   raise RewindError("this task has no checkpoints")
+  SURVIVED src\agent\execute\rewind.py:38 raise_pass   raise RewindError("that checkpoint holds no files (the task has no artifact_scope)")
+  SURVIVED src\agent\execute\rewind.py:44 raise_pass   raise RewindError(str(e)) from e
+  SURVIVED src\agent\execute\rewind.py:45 drop1        if what in ("conversation", "both"):
+  SURVIVED src\agent\execute\rewind.py:47 drop2        {k: cp[k] for k in ("artifact", "sha256", "entries")})
+  SURVIVED src\agent\execute\rewind.py:63 raise_pass   raise RewindError(str(e)) from e
+src\agent\execute\rewind.py: 28/34 killed, 0 undecided (timeout), score 82.4%

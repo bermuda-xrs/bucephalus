@@ -1,0 +1,20 @@
+src\agent\execute\tools.py: 69 mutants, baseline 13.1s, timeout 60s
+  SURVIVED src\agent\execute\tools.py:457 negate       elif ln.strip():
+  SURVIVED src\agent\execute\tools.py:458 return_none  return {"ok": False, "error": _PATCH_FORM}
+  SURVIVED src\agent\execute\tools.py:458 bool         return {"ok": False, "error": _PATCH_FORM}
+  SURVIVED src\agent\execute\tools.py:460 return_none  return {"ok": False, "error": _PATCH_FORM}
+  SURVIVED src\agent\execute\tools.py:460 bool         return {"ok": False, "error": _PATCH_FORM}
+  SURVIVED src\agent\execute\tools.py:461 int          for n, h in enumerate(hunks, 1):
+  SURVIVED src\agent\execute\tools.py:467 drop0        tag, body = " ", ""
+  SURVIVED src\agent\execute\tools.py:467 drop1        tag, body = " ", ""
+  SURVIVED src\agent\execute\tools.py:471 return_none  return {"ok": False, "error": f"hunk {n}: every line starts with ' ', '-' or '+'; got {ln[
+  SURVIVED src\agent\execute\tools.py:471 bool         return {"ok": False, "error": f"hunk {n}: every line starts with ' ', '-' or '+'; got {ln[
+  SURVIVED src\agent\execute\tools.py:471 int          return {"ok": False, "error": f"hunk {n}: every line starts with ' ', '-' or '+'; got {ln[
+  SURVIVED src\agent\execute\tools.py:477 boolop       at = len(lines) - 1 if lines and lines[-1] == "" else len(lines)
+  SURVIVED src\agent\execute\tools.py:477 int          at = len(lines) - 1 if lines and lines[-1] == "" else len(lines)
+  SURVIVED src\agent\execute\tools.py:480 addsub       found = [i for i in range(len(lines) - len(old) + 1) if lines[i:i + len(old)] == old]
+  SURVIVED src\agent\execute\tools.py:480 int          found = [i for i in range(len(lines) - len(old) + 1) if lines[i:i + len(old)] == old]
+  SURVIVED src\agent\execute\tools.py:489 addsub       lines[found[0]:found[0] + len(old)] = new
+  SURVIVED src\agent\execute\tools.py:491 cmp0         if crnl in raw:
+  SURVIVED src\agent\execute\tools.py:493 bool         p.parent.mkdir(parents=True, exist_ok=True)
+src\agent\execute\tools.py: 51/69 killed, 0 undecided (timeout), score 73.9%

@@ -1,0 +1,6 @@
+src\agent\execute\loop.py: 24 mutants, baseline 51.2s, timeout 205s
+  SURVIVED src\agent\execute\loop.py:700 int          ctx.log.append(task.id, "checkpoint.skipped", {"step": step, "why": str(e)[:200]})
+  TIMEOUT  src\agent\execute\loop.py:489 int          MAX_STOP_BLOCKS = 3
+  TIMEOUT  src\agent\execute\loop.py:500 return_none  return ctx.conn.execute("SELECT COUNT(*) FROM events WHERE task_id=? AND type='hook.stop_b
+  TIMEOUT  src\agent\execute\loop.py:501 int          (task.id,)).fetchone()[0]
+src\agent\execute\loop.py: 20/21 killed, 3 undecided (timeout), score 95.2%

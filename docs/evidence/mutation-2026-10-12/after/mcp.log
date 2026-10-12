@@ -1,0 +1,29 @@
+src\agent\execute\mcp.py: 131 mutants, baseline 37.7s, timeout 151s
+  SURVIVED src\agent\execute\mcp.py:16 int          MAX_RESULT_CHARS = 20000
+  SURVIVED src\agent\execute\mcp.py:20 drop0        _TYPES = {"string", "number", "integer", "boolean", "array", "object", "null"}
+  SURVIVED src\agent\execute\mcp.py:21 int          MAX_PAGES = 20
+  SURVIVED src\agent\execute\mcp.py:22 int          MAX_TOOLS = 200
+  SURVIVED src\agent\execute\mcp.py:23 int          MAX_LINE = 1_000_000
+  SURVIVED src\agent\execute\mcp.py:36 int          self._next_id = 0
+  SURVIVED src\agent\execute\mcp.py:44 bool         stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace", bufsize=1)
+  SURVIVED src\agent\execute\mcp.py:44 int          stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace", bufsize=1)
+  SURVIVED src\agent\execute\mcp.py:46 raise_pass   raise McpError(f"could not start: {e}") from e
+  SURVIVED src\agent\execute\mcp.py:47 bool         threading.Thread(target=self._read, daemon=True, name=f"mcp-{self.name}").start()
+  SURVIVED src\agent\execute\mcp.py:48 bool         threading.Thread(target=self._drain, daemon=True, name=f"mcp-err-{self.name}").start()
+  SURVIVED src\agent\execute\mcp.py:77 int          self.stderr_tail = (self.stderr_tail + line)[-2000:]
+  SURVIVED src\agent\execute\mcp.py:84 raise_pass   raise McpError(f"the server is not running: {e}") from e
+  SURVIVED src\agent\execute\mcp.py:88 raise_pass   raise McpError("the server is not running")
+  SURVIVED src\agent\execute\mcp.py:90 int          self._next_id += 1
+  SURVIVED src\agent\execute\mcp.py:101 int          raise McpError("the server exited" + (f": {self.stderr_tail.strip()[-300:]}" if self.stder
+  SURVIVED src\agent\execute\mcp.py:124 addsub       deadline = time.monotonic() + self.cfg.start_timeout_s
+  SURVIVED src\agent\execute\mcp.py:147 int          parts = [str(c.get("text", "")) if c.get("type") == "text" else f"[{str(c.get('type', 'con
+  SURVIVED src\agent\execute\mcp.py:149 int          text = chr(10).join(parts)[:MAX_RESULT_CHARS]
+  SURVIVED src\agent\execute\mcp.py:155 boolop       if self.proc is not None and self.proc.poll() is None:
+  SURVIVED src\agent\execute\mcp.py:158 int          self.proc.wait(5)
+  SURVIVED src\agent\execute\mcp.py:161 cmp0         if self.proc is not None:
+  SURVIVED src\agent\execute\mcp.py:210 int          ctx.log.append(task.id, "mcp.failed", {"server": name, "why": f"{type(e).__name__}: {e}"[:
+  SURVIVED src\agent\execute\mcp.py:217 int          ctx.log.append(task.id, "mcp.skipped", {"server": name, "why": f"tool name refused: {tool[
+  SURVIVED src\agent\execute\mcp.py:228 boolop       full, _caller(server, tool, _originals(t.get("inputSchema") or {})), _schema(t.get("inputS
+  SURVIVED src\agent\execute\mcp.py:233 boolop       path_args=tuple({n for sane, orig in _originals(t.get("inputSchema") or {}).items()
+  TIMEOUT  src\agent\execute\mcp.py:63 bool         while True:
+src\agent\execute\mcp.py: 104/130 killed, 1 undecided (timeout), score 80.0%

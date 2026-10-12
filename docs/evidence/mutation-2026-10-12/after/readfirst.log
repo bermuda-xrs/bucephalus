@@ -1,0 +1,2 @@
+src\agent\execute\schema.py: 11 mutants, baseline 3.7s, timeout 60s
+src\agent\execute\schema.py: 11/11 killed, 0 undecided (timeout), score 100.0%

@@ -1,0 +1,19 @@
+src\agent\execute\shadow.py: 41 mutants, baseline 36.6s, timeout 146s
+  SURVIVED src\agent\execute\shadow.py:8 int          BIG_FILE_BYTES = 10 * 1024 * 1024
+  SURVIVED src\agent\execute\shadow.py:8 int          BIG_FILE_BYTES = 10 * 1024 * 1024
+  SURVIVED src\agent\execute\shadow.py:8 int          BIG_FILE_BYTES = 10 * 1024 * 1024
+  SURVIVED src\agent\execute\shadow.py:9 int          GIT_TIMEOUT_S = 120
+  SURVIVED src\agent\execute\shadow.py:17 return_none  return shutil.which("git") is not None
+  SURVIVED src\agent\execute\shadow.py:17 cmp0         return shutil.which("git") is not None
+  SURVIVED src\agent\execute\shadow.py:39 boolop       if rel.as_posix() == "." or is_protected(str(p), str(root), state):
+  SURVIVED src\agent\execute\shadow.py:53 bool         r = subprocess.run(cmd, cwd=self.work_tree, env=env, capture_output=True, text=True,  # no
+  SURVIVED src\agent\execute\shadow.py:56 raise_pass   raise ShadowUnavailable(f"git {args[0]} failed: {(r.stderr or r.stdout).strip()[:300]}")
+  SURVIVED src\agent\execute\shadow.py:56 int          raise ShadowUnavailable(f"git {args[0]} failed: {(r.stderr or r.stdout).strip()[:300]}")
+  SURVIVED src\agent\execute\shadow.py:56 boolop       raise ShadowUnavailable(f"git {args[0]} failed: {(r.stderr or r.stdout).strip()[:300]}")
+  SURVIVED src\agent\execute\shadow.py:56 int          raise ShadowUnavailable(f"git {args[0]} failed: {(r.stderr or r.stdout).strip()[:300]}")
+  SURVIVED src\agent\execute\shadow.py:61 bool         self.git_dir.mkdir(parents=True, exist_ok=True)
+  SURVIVED src\agent\execute\shadow.py:92 bool         d.mkdir(parents=True, exist_ok=True)
+  SURVIVED src\agent\execute\shadow.py:95 return_none  return self._git("diff", "--no-color", "--no-ext-diff", a, b, "--", *self.scopes).stdout
+  SURVIVED src\agent\execute\shadow.py:98 return_none  return self._git("diff", "--name-only", a, b, "--", *self.scopes).stdout.split()
+  SURVIVED src\agent\execute\shadow.py:102 return_none  return []
+src\agent\execute\shadow.py: 24/41 killed, 0 undecided (timeout), score 58.5%

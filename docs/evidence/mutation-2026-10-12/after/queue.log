@@ -1,0 +1,7 @@
+src\agent\channel\telegram.py: 54 mutants, baseline 11.1s, timeout 60s
+  SURVIVED src\agent\channel\telegram.py:214 int          ahead = waiting.index(task.id) if task.id in waiting else 0
+  SURVIVED src\agent\channel\telegram.py:352 bool         self.queued = True
+  SURVIVED src\agent\channel\telegram.py:357 cmp0         if self.drain_once() is None:
+  SURVIVED src\agent\channel\telegram.py:360 bool         w = threading.Thread(target=worker, name="telegram-queue", daemon=True)
+  SURVIVED src\agent\channel\telegram.py:368 int          w.join(60)
+src\agent\channel\telegram.py: 49/54 killed, 0 undecided (timeout), score 90.7%

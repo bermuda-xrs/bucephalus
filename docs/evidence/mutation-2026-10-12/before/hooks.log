@@ -1,0 +1,10 @@
+src\agent\execute\hooks.py: 27 mutants, baseline 8.3s, timeout 60s
+  SURVIVED src\agent\execute\hooks.py:11 int          MAX_HOOK_TEXT = 1500
+  SURVIVED src\agent\execute\hooks.py:23 bool         stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace")
+  SURVIVED src\agent\execute\hooks.py:25 int          return 127, f"could not start: {e}"
+  SURVIVED src\agent\execute\hooks.py:31 int          return 124, f"timed out after {h.timeout_s}s"
+  SURVIVED src\agent\execute\hooks.py:34 return_none  return 126, str(e)
+  SURVIVED src\agent\execute\hooks.py:34 int          return 126, str(e)
+  SURVIVED src\agent\execute\hooks.py:47 addsub       "exit_code": code, "ms": int((time.time() - t0) * 1000)})
+  SURVIVED src\agent\execute\hooks.py:47 int          "exit_code": code, "ms": int((time.time() - t0) * 1000)})
+src\agent\execute\hooks.py: 19/27 killed, 0 undecided (timeout), score 70.4%

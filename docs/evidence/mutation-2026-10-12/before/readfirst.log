@@ -1,0 +1,4 @@
+src\agent\execute\schema.py: 11 mutants, baseline 4.2s, timeout 60s
+  SURVIVED src\agent\execute\schema.py:18 drop0        "required": ["kind", "code"],
+  SURVIVED src\agent\execute\schema.py:18 drop1        "required": ["kind", "code"],
+src\agent\execute\schema.py: 9/11 killed, 0 undecided (timeout), score 81.8%

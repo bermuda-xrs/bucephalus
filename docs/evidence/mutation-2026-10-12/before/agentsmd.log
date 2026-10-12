@@ -1,0 +1,5 @@
+src\agent\context.py: 21 mutants, baseline 5.4s, timeout 60s
+  SURVIVED src\agent\context.py:165 return_none  return ""
+  SURVIVED src\agent\context.py:173 return_none  return ""
+  SURVIVED src\agent\context.py:178 int          text = text[:MAX_PROJECT_NOTES] + chr(10) + "[truncated]"
+src\agent\context.py: 18/21 killed, 0 undecided (timeout), score 85.7%

@@ -1,0 +1,13 @@
+src\agent\security\capabilities.py: 117 mutants, baseline 65.0s, timeout 260s
+  SURVIVED src\agent\security\capabilities.py:129 bool         extra_keys: frozenset = frozenset(), by_value: bool = False) -> tuple[bool, str]:
+  SURVIVED src\agent\security\capabilities.py:163 int          return (os.path.isabs(v) or v.startswith(("/", chr(92), "~")) or bool(_DRIVE.match(v))
+  SURVIVED src\agent\security\capabilities.py:171 int          v = re.sub("[\t\r\n]", "", v).strip("".join(map(chr, range(33))))
+  SURVIVED src\agent\security\capabilities.py:184 int          if root is None or not v or chr(0) in v or "\n" in v or "\r" in v or len(v) > 4096:
+  SURVIVED src\agent\security\capabilities.py:184 int          if root is None or not v or chr(0) in v or "\n" in v or "\r" in v or len(v) > 4096:
+  SURVIVED src\agent\security\capabilities.py:185 return_none  return False
+  SURVIVED src\agent\security\capabilities.py:188 cmp0         return q.exists() or (any(sep in v for sep in "/" + chr(92)) and q.parent.is_dir() and q.p
+  SURVIVED src\agent\security\capabilities.py:190 return_none  return False
+  SURVIVED src\agent\security\capabilities.py:190 bool         return False
+  SURVIVED src\agent\security\capabilities.py:193 bool         def _path_strings(key: str, value, extra: frozenset = frozenset(), by_value=False, root=No
+  SURVIVED src\agent\security\capabilities.py:303 return_none  return False
+src\agent\security\capabilities.py: 106/117 killed, 0 undecided (timeout), score 90.6%

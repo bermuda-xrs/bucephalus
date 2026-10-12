@@ -1,0 +1,5 @@
+src\agent\execute\loop.py: 24 mutants, baseline 35.6s, timeout 142s
+  SURVIVED src\agent\execute\loop.py:697 int          ctx.log.append(task.id, "checkpoint.skipped", {"step": step, "why": str(e)[:200]})
+  SURVIVED src\agent\execute\loop.py:986 int          cap = b.cfg.inline_observation_tokens if b else 400
+  SURVIVED src\agent\execute\loop.py:988 int          return max(200, min(cap, ceiling))
+src\agent\execute\loop.py: 21/24 killed, 0 undecided (timeout), score 87.5%

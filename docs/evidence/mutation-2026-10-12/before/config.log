@@ -1,0 +1,2 @@
+src\agent\config.py: 8 mutants, baseline 12.3s, timeout 60s
+src\agent\config.py: 8/8 killed, 0 undecided (timeout), score 100.0%

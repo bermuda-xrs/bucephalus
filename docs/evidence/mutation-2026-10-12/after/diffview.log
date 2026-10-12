@@ -1,0 +1,3 @@
+src\agent\execute\diffview.py: 18 mutants, baseline 22.1s, timeout 88s
+  SURVIVED src\agent\execute\diffview.py:9 int          MAX_DIFF_CHARS = 50000
+src\agent\execute\diffview.py: 17/18 killed, 0 undecided (timeout), score 94.4%

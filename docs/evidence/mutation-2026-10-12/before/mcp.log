@@ -1,0 +1,45 @@
+src\agent\execute\mcp.py: 93 mutants, baseline 14.4s, timeout 60s
+  SURVIVED src\agent\execute\mcp.py:16 int          MAX_RESULT_CHARS = 20000
+  SURVIVED src\agent\execute\mcp.py:31 int          self._next_id = 0
+  SURVIVED src\agent\execute\mcp.py:39 bool         stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace", bufsize=1)
+  SURVIVED src\agent\execute\mcp.py:39 int          stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace", bufsize=1)
+  SURVIVED src\agent\execute\mcp.py:41 raise_pass   raise McpError(f"could not start: {e}") from e
+  SURVIVED src\agent\execute\mcp.py:42 bool         threading.Thread(target=self._read, daemon=True, name=f"mcp-{self.name}").start()
+  SURVIVED src\agent\execute\mcp.py:43 bool         threading.Thread(target=self._drain, daemon=True, name=f"mcp-err-{self.name}").start()
+  SURVIVED src\agent\execute\mcp.py:51 raise_pass   raise
+  SURVIVED src\agent\execute\mcp.py:55 boolop       return self.proc is not None and self.proc.poll() is None
+  SURVIVED src\agent\execute\mcp.py:67 addsub       self.stderr_tail = (self.stderr_tail + line)[-2000:]
+  SURVIVED src\agent\execute\mcp.py:67 int          self.stderr_tail = (self.stderr_tail + line)[-2000:]
+  SURVIVED src\agent\execute\mcp.py:74 raise_pass   raise McpError(f"the server is not running: {e}") from e
+  SURVIVED src\agent\execute\mcp.py:78 raise_pass   raise McpError("the server is not running")
+  SURVIVED src\agent\execute\mcp.py:80 int          self._next_id += 1
+  SURVIVED src\agent\execute\mcp.py:91 int          raise McpError("the server exited" + (f": {self.stderr_tail.strip()[-300:]}" if self.stder
+  SURVIVED src\agent\execute\mcp.py:96 raise_pass   raise McpError(str(msg["error"].get("message", msg["error"]))[:300])
+  SURVIVED src\agent\execute\mcp.py:96 int          raise McpError(str(msg["error"].get("message", msg["error"]))[:300])
+  SURVIVED src\agent\execute\mcp.py:102 cmp0         if msg["method"] == "ping":
+  SURVIVED src\agent\execute\mcp.py:106 int          "error": {"code": -32601, "message": "this client offers no " + str(msg["method"])}})
+  SURVIVED src\agent\execute\mcp.py:106 addsub       "error": {"code": -32601, "message": "this client offers no " + str(msg["method"])}})
+  SURVIVED src\agent\execute\mcp.py:121 bool         return {"ok": False, "error": str(e)}
+  SURVIVED src\agent\execute\mcp.py:124 int          text = chr(10).join(parts)[:MAX_RESULT_CHARS]
+  SURVIVED src\agent\execute\mcp.py:127 bool         return {"ok": True, "content": text}
+  SURVIVED src\agent\execute\mcp.py:130 boolop       if self.proc is not None and self.proc.poll() is None:
+  SURVIVED src\agent\execute\mcp.py:132 cmp0         if self.proc is not None:
+  SURVIVED src\agent\execute\mcp.py:142 boolop       for k, v in (raw.get("properties") or {}).items():
+  SURVIVED src\agent\execute\mcp.py:147 cmp0         return {"type": "object", "properties": props, "required": [r for r in raw.get("required",
+  SURVIVED src\agent\execute\mcp.py:156 boolop       if not cfgs or getattr(ctx, "_mcp_attached", False):
+  SURVIVED src\agent\execute\mcp.py:158 bool         ctx._mcp_attached = True  # noqa: SLF001
+  SURVIVED src\agent\execute\mcp.py:168 int          ctx.log.append(task.id, "mcp.failed", {"server": name, "why": str(e)[:300]})
+  SURVIVED src\agent\execute\mcp.py:171 int          added = 0
+  SURVIVED src\agent\execute\mcp.py:179 boolop       if not tool or ctx.tools.get(full) is not None:
+  SURVIVED src\agent\execute\mcp.py:183 boolop       full, _caller(server, tool, _originals(t.get("inputSchema") or {})), _schema(t.get("inputS
+  SURVIVED src\agent\execute\mcp.py:188 boolop       path_args=tuple({n for sane, orig in _originals(t.get("inputSchema") or {}).items()
+  SURVIVED src\agent\execute\mcp.py:191 int          added += 1
+  SURVIVED src\agent\execute\mcp.py:199 bool         return {"ok": False, "error": f"{tool} takes no argument named {', '.join(unknown)}; it ta
+  TIMEOUT  src\agent\execute\mcp.py:55 cmp0         return self.proc is not None and self.proc.poll() is None
+  TIMEOUT  src\agent\execute\mcp.py:77 drop_not     if not self.running:
+  TIMEOUT  src\agent\execute\mcp.py:83 addsub       deadline = time.monotonic() + timeout_s
+  TIMEOUT  src\agent\execute\mcp.py:114 drop_not     if not cursor:
+  TIMEOUT  src\agent\execute\mcp.py:130 negate       if self.proc is not None and self.proc.poll() is None:
+  TIMEOUT  src\agent\execute\mcp.py:130 cmp0         if self.proc is not None and self.proc.poll() is None:
+  TIMEOUT  src\agent\execute\mcp.py:130 cmp0         if self.proc is not None and self.proc.poll() is None:
+src\agent\execute\mcp.py: 50/86 killed, 7 undecided (timeout), score 58.1%

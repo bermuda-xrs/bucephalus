@@ -1,0 +1,5 @@
+src\agent\execute\tools.py: 69 mutants, baseline 18.3s, timeout 73s
+  SURVIVED src\agent\execute\tools.py:488 int          return {"ok": False, "error": f"hunk {n}: every line starts with ' ', '-' or '+'; got {ln[
+  SURVIVED src\agent\execute\tools.py:497 addsub       found = [i for i in range(len(lines) - len(old) + 1) if lines[i:i + len(old)] == old]
+  SURVIVED src\agent\execute\tools.py:497 int          found = [i for i in range(len(lines) - len(old) + 1) if lines[i:i + len(old)] == old]
+src\agent\execute\tools.py: 66/69 killed, 0 undecided (timeout), score 95.7%

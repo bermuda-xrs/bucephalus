@@ -1,0 +1,4 @@
+src\agent\execute\say.py: 17 mutants, baseline 4.2s, timeout 60s
+  SURVIVED src\agent\execute\say.py:9 int          MAX_LEN = 4000
+  SURVIVED src\agent\execute\say.py:38 int          ctx.log.append(task.id, "human.message_delivered", {"upto": rows[-1][0], "count": len(rows
+src\agent\execute\say.py: 15/17 killed, 0 undecided (timeout), score 88.2%

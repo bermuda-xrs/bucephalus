@@ -1,0 +1,37 @@
+src\agent\security\capabilities.py: 88 mutants, baseline 24.3s, timeout 97s
+  SURVIVED src\agent\security\capabilities.py:91 bool         extra_keys: frozenset = frozenset(), by_value: bool = False) -> tuple[bool, str]:
+  SURVIVED src\agent\security\capabilities.py:95 cmp0         if v is REFUSED_URI:
+  SURVIVED src\agent\security\capabilities.py:96 return_none  return False, f"{key}: a file: URI with a query, fragment, params or encoded separator is 
+  SURVIVED src\agent\security\capabilities.py:96 bool         return False, f"{key}: a file: URI with a query, fragment, params or encoded separator is 
+  SURVIVED src\agent\security\capabilities.py:97 return_none  return False, (f"{key}={v!r}: this task declared no "
+  SURVIVED src\agent\security\capabilities.py:97 bool         return False, (f"{key}={v!r}: this task declared no "
+  SURVIVED src\agent\security\capabilities.py:100 return_none  return True, ""
+  SURVIVED src\agent\security\capabilities.py:100 bool         return True, ""
+  SURVIVED src\agent\security\capabilities.py:109 return_none  return False, f"{key}={v!r} names an alternate data stream"
+  SURVIVED src\agent\security\capabilities.py:109 bool         return False, f"{key}={v!r} names an alternate data stream"
+  SURVIVED src\agent\security\capabilities.py:111 boolop       if (not any(_is_within(p, r) for r in roots)
+  SURVIVED src\agent\security\capabilities.py:122 drop_not     if not isinstance(value, str):
+  SURVIVED src\agent\security\capabilities.py:123 return_none  return False
+  SURVIVED src\agent\security\capabilities.py:123 bool         return False
+  SURVIVED src\agent\security\capabilities.py:124 return_none  return key in _PATH_KEYS or key in extra
+  SURVIVED src\agent\security\capabilities.py:124 boolop       return key in _PATH_KEYS or key in extra
+  SURVIVED src\agent\security\capabilities.py:124 cmp0         return key in _PATH_KEYS or key in extra
+  SURVIVED src\agent\security\capabilities.py:124 cmp0         return key in _PATH_KEYS or key in extra
+  SURVIVED src\agent\security\capabilities.py:131 int          return (os.path.isabs(v) or v.startswith(("/", chr(92), "~")) or bool(_DRIVE.match(v))
+  SURVIVED src\agent\security\capabilities.py:147 addsub       return url2pathname((("//" + u.netloc) if u.netloc else "") + u.path)
+  SURVIVED src\agent\security\capabilities.py:151 boolop       if root is None or not v or chr(0) in v or "\n" in v or "\r" in v or len(v) > 4096:
+  SURVIVED src\agent\security\capabilities.py:151 int          if root is None or not v or chr(0) in v or "\n" in v or "\r" in v or len(v) > 4096:
+  SURVIVED src\agent\security\capabilities.py:151 int          if root is None or not v or chr(0) in v or "\n" in v or "\r" in v or len(v) > 4096:
+  SURVIVED src\agent\security\capabilities.py:152 return_none  return False
+  SURVIVED src\agent\security\capabilities.py:152 bool         return False
+  SURVIVED src\agent\security\capabilities.py:155 cmp0         return q.exists() or (any(sep in v for sep in "/" + chr(92)) and q.parent.is_dir() and q.p
+  SURVIVED src\agent\security\capabilities.py:155 int          return q.exists() or (any(sep in v for sep in "/" + chr(92)) and q.parent.is_dir() and q.p
+  SURVIVED src\agent\security\capabilities.py:157 return_none  return False
+  SURVIVED src\agent\security\capabilities.py:157 bool         return False
+  SURVIVED src\agent\security\capabilities.py:160 bool         def _path_strings(key: str, value, extra: frozenset = frozenset(), by_value=False, root=No
+  SURVIVED src\agent\security\capabilities.py:262 return_none  return True
+  SURVIVED src\agent\security\capabilities.py:262 bool         return True
+  SURVIVED src\agent\security\capabilities.py:264 return_none  return True
+  SURVIVED src\agent\security\capabilities.py:264 bool         return True
+  SURVIVED src\agent\security\capabilities.py:270 return_none  return False
+src\agent\security\capabilities.py: 53/88 killed, 0 undecided (timeout), score 60.2%

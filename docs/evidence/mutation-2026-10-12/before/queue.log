@@ -1,0 +1,14 @@
+src\agent\channel\telegram.py: 54 mutants, baseline 7.7s, timeout 60s
+  SURVIVED src\agent\channel\telegram.py:214 int          ahead = waiting.index(task.id) if task.id in waiting else 0
+  SURVIVED src\agent\channel\telegram.py:269 boolop       if decision not in ("approve", "deny") or not approval_id:
+  SURVIVED src\agent\channel\telegram.py:270 return_none  return {"action": "ignored", "why": "unparseable callback"}
+  SURVIVED src\agent\channel\telegram.py:274 cmp0         if row is not None:
+  SURVIVED src\agent\channel\telegram.py:277 boolop       if routed is None or str(routed) != str(pressed_in):
+  SURVIVED src\agent\channel\telegram.py:278 int          self.ctx.log.append(row[0], "channel.refused",
+  SURVIVED src\agent\channel\telegram.py:282 return_none  return {"action": "refused", "why": "approval not routed to this chat"}
+  SURVIVED src\agent\channel\telegram.py:288 return_none  return {"action": "ignored", "why": "no such approval"}
+  SURVIVED src\agent\channel\telegram.py:352 bool         self.queued = True
+  SURVIVED src\agent\channel\telegram.py:357 cmp0         if self.drain_once() is None:
+  SURVIVED src\agent\channel\telegram.py:360 bool         w = threading.Thread(target=worker, name="telegram-queue", daemon=True)
+  SURVIVED src\agent\channel\telegram.py:368 int          w.join(60)
+src\agent\channel\telegram.py: 42/54 killed, 0 undecided (timeout), score 77.8%

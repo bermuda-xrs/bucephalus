@@ -1,0 +1,9 @@
+src\agent\execute\hooks.py: 28 mutants, baseline 10.8s, timeout 60s
+  SURVIVED src\agent\execute\hooks.py:11 int          MAX_HOOK_TEXT = 1500
+  SURVIVED src\agent\execute\hooks.py:33 int          p.wait(5)
+  SURVIVED src\agent\execute\hooks.py:39 return_none  return 126, str(e)
+  SURVIVED src\agent\execute\hooks.py:39 int          return 126, str(e)
+  SURVIVED src\agent\execute\hooks.py:41 int          text = out.read(MAX_HOOK_TEXT * 4).decode("utf-8", errors="replace")
+  SURVIVED src\agent\execute\hooks.py:54 addsub       "exit_code": code, "ms": int((time.time() - t0) * 1000)})
+  SURVIVED src\agent\execute\hooks.py:54 int          "exit_code": code, "ms": int((time.time() - t0) * 1000)})
+src\agent\execute\hooks.py: 21/28 killed, 0 undecided (timeout), score 75.0%

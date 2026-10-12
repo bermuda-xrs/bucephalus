@@ -1,0 +1,6 @@
+src\agent\execute\diffview.py: 18 mutants, baseline 17.8s, timeout 71s
+  SURVIVED src\agent\execute\diffview.py:9 int          MAX_DIFF_CHARS = 50000
+  SURVIVED src\agent\execute\diffview.py:24 int          after = cps[i + 1]["sha"] if i + 1 < len(cps) else now
+  SURVIVED src\agent\execute\diffview.py:31 return_none  return []
+  SURVIVED src\agent\execute\diffview.py:37 cmp0         return [d["preview"] for d in (json.loads(r[0]) for r in rows) if d.get("step") == step]
+src\agent\execute\diffview.py: 14/18 killed, 0 undecided (timeout), score 77.8%
