@@ -120,3 +120,9 @@ def test_restoring_to_an_empty_scope_keeps_the_scope_directory(repo):
     r.checkpoint("step 1")
     r.restore(sha)
     assert (root / "work").is_dir() and not (root / "work" / "a.txt").exists()
+
+
+def test_a_path_that_does_not_exist_is_not_a_link(tmp_path):
+    from agent.execute.shadow import _is_link
+
+    assert not _is_link(str(tmp_path / "missing"))

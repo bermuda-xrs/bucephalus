@@ -212,3 +212,9 @@ def test_apply_patch_keeps_windows_line_endings(patcher, task, workspace):
 def test_apply_patch_creates_missing_directories(patcher, task, workspace):
     r = tool_apply_patch(patcher, task, path="work/deep/er/new.py", patch="@@\n+x = 1\n")
     assert r["ok"] and (workspace / "deep" / "er" / "new.py").read_text(encoding="utf-8") == "x = 1\n"
+
+
+def test_apply_patch_finds_a_hunk_that_ends_the_file(patcher, task, workspace):
+    (workspace / "a.py").write_text("x = 1\ny = 3\nz = 4\n", encoding="utf-8")
+    r = tool_apply_patch(patcher, task, path="work/a.py", patch="@@\n y = 3\n-z = 4\n+z = 5\n")
+    assert r["ok"] and (workspace / "a.py").read_text(encoding="utf-8") == "x = 1\ny = 3\nz = 5\n"

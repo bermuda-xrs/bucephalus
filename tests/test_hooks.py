@@ -171,3 +171,22 @@ def test_every_profile_runs_them(tmp_path, workspace, task, hook, profile):
     run_task(c, t.id)
     assert not (workspace / "a.txt").exists()
     c.close()
+
+
+def test_a_hook_that_cannot_start_reports_127(tmp_path):
+    from types import SimpleNamespace
+
+    from agent.execute.hooks import _run_one
+
+    code, text = _run_one(SimpleNamespace(argv=[str(tmp_path / "no-such-hook.exe")], timeout_s=5), {}, str(tmp_path))
+    assert code == 127 and text.startswith("could not start")
+
+
+def test_hook_output_keeps_its_full_cap_in_four_byte_characters(hook, tmp_path):
+    from types import SimpleNamespace
+
+    from agent.execute.hooks import MAX_HOOK_TEXT, _run_one
+
+    argv = hook("wide", f"import sys; sys.stdout.buffer.write(('\U0001F600' * {MAX_HOOK_TEXT + 100}).encode('utf-8'))")
+    code, text = _run_one(SimpleNamespace(argv=argv, timeout_s=20), {}, str(tmp_path))
+    assert code == 0 and text == "\U0001F600" * MAX_HOOK_TEXT
