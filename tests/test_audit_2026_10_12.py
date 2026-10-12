@@ -272,3 +272,48 @@ def test_review_a_module_a_hook_runs_is_protected_before_it_exists(ctx, argv):
     for suffix in importlib.machinery.all_suffixes():
         assert is_protected("lintpkg" + suffix, str(root), state), suffix
     assert not is_protected("work/a.py", str(root), state)
+
+
+@pytest.mark.parametrize("v", ["", "a\x00b", "a\nb", "a\rb", "x" * 4097])
+def test_names_something_refuses_what_cannot_be_a_name(tmp_path, v):
+    from agent.security.capabilities import _names_something
+
+    (tmp_path / "d").mkdir()
+    assert not _names_something(v, str(tmp_path)) and not _names_something("d", None)
+
+
+def test_names_something_needs_an_existing_parent_below_the_root(tmp_path):
+    from agent.security.capabilities import _names_something
+
+    (tmp_path / "d").mkdir()
+    (tmp_path / "f.txt").write_text("", encoding="utf-8")
+    assert _names_something("f.txt", str(tmp_path)) and _names_something("d/new.txt", str(tmp_path))
+    assert _names_something("d" + chr(92) + "new.txt", str(tmp_path))
+    assert not _names_something("new.txt", str(tmp_path)) and not _names_something("./new.txt", str(tmp_path))
+    assert not _names_something("nodir/new.txt", str(tmp_path))
+    assert _names_something("x" * 200 + "/../f.txt", str(tmp_path))
+
+
+def test_a_refused_uri_with_no_scope_says_why():
+    from agent.security.capabilities import within_scope
+
+    ok, why = within_scope({"note": "file:///C:/x?y=1"}, [], ".", by_value=True)
+    assert not ok and why.startswith("note: a file: URI with a query")
+
+
+def test_a_unc_file_uri_keeps_its_host():
+    from agent.security.capabilities import _file_uri_path
+
+    want = chr(92) * 2 + chr(92).join(["server", "share", "x.txt"])
+    assert _file_uri_path("file://server/share/x.txt").replace("/", chr(92)) == want
+
+
+@pytest.mark.parametrize("argv, want", [
+    (["python", "-m"], []), (["python", "--m", "x"], []), (["python", "-c", "-m", "x"], []),
+    (["python", "-cprint(1)", "-m", "x"], ["x"]), (["python", "-W", "ignore", "-m", "y"], ["y"]),
+    (["python", "-Wignore", "-m", "y"], ["y"]), (["python", "-m", "a", "-m", "b"], ["a", "b"]),
+])
+def test_modules_parses_short_option_clusters(argv, want):
+    from agent.security.capabilities import _modules
+
+    assert _modules(argv) == want

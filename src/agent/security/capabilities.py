@@ -156,12 +156,6 @@ _PATH_KEYS = frozenset({"path", "file", "filename", "dir", "directory", "dest",
                         "src", "target"})
 
 
-def _looks_like_path(key: str, value, extra: frozenset = frozenset()) -> bool:
-    if not isinstance(value, str):
-        return False
-    return key in _PATH_KEYS or key in extra
-
-
 _DRIVE = re.compile(r"^[A-Za-z]:[\\/]")
 
 
