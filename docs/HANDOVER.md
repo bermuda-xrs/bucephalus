@@ -77,32 +77,33 @@ Before any commit: tests red first, never weaken a check, nothing pushed.
 
 ## Next step
 
-Done, merged to `main`: tool scripts (bench/, packaging/,
-scripts/) refuse the real user directories unless `BUCEPHALUS_DATA_DIR` / `BUCEPHALUS_CONFIG_DIR` are set (a test walks
-every entry point); `read_first` (no answer before the first observation; on for the small profile only); checkpoints only
-before an action that changes something; the console Rewind control clicked through and three bugs fixed. The copy of
-the state directory a smoke run made was deleted (it had one extra empty folder); the real first launch will migrate.
+STOPPED BY THE USAGE LIMIT mid-batch, on branch `harness-10` (NOT merged; main is still the harness-9 state). The
+suite, the frozen gate and the frozen e2e were NOT rerun on this branch; do that before any merge.
 
-Measured (`bench/profile_run.py`, granite4.1:3b, `bench/tasks`, 5 tasks x 3 repetitions = 15 pairs, 2026-10-11,
-`runs/profile-readfirst-20261011/paired.json`): control (full kit, new mechanisms off) 3 of 15, small + read_first 6 of
-15 (extract-json and summarize-untrusted every repetition; control only negative-control); McNemar exact p 0.51.
-Before read_first the small profile was 0 of 15. A sighting, not a result: n is nearer 5 tasks than 15 pairs. Wall clock
-is invalid for repetition 1 of the small arm (the laptop entered Modern Standby three times); without it, mean 57 s vs
-107 s (n = 10 per arm). Recorded with HARNESS_VERSION still reading 8; the code is that of 9.
+Done and committed on `harness-10`: 1a the real memory line forgotten (backup first; blessing intact; old state dir untouched);
+1b old venvs and ~/.alpha-build deleted; 1c keep-awake on every timed runner; 2 runs record the code identity and the
+prompt cannot change without a version bump (HARNESS_VERSION is now 10); v9 paired run on the 3B (valid, no standby):
+control 3 of 15, small+read_first 6 of 15, McNemar p 0.51, wall 74.7 s vs 76.4 s; 3 diagnosis (below); 4 real
+mcp-server-time and mcp-server-git plus a pre_tool hook end to end (`tests/test_mcp_real.py`, opt-in); 5a diff view, 5b `bucephalus say`,
+5c Telegram queue (FakeTransport only), 5d JSON/YAML/TOML/JS diagnostics, 5e expandable tool cards; the MCP gate fixes from two
+automated reviews; 9 the 8B arms and a memory preflight in `bench/profile_run.py` (not yet committed: run
+`git status`, then commit `bench/profile_run.py` and `tests/test_profile_run.py`).
 
-Checkpoint cost (mock backends, 7 steps: 5 reads, 1 write, 1 answer; median of 5): 3.95 s with 7 checkpoints before,
-0.86 s with 1 after, 0.22 s with checkpoints off.
+Diagnosis (3): write-function-002 could never pass in either arm (the runner's scratch root held no graders: fixed);
+handbook-recall-005 hid 60% of the file behind an `expand_artifact` pointer the small kit lacked (fixed: sixth tool and a
+window-sized cap); what remains is the model (it wrote a regex with a NUL character and answered anyway). A rerun of the two
+tasks on harness 10 was in progress (`runs/profile-two-20261012/`, started from a clean worktree under the session scratchpad:
+`git worktree prune` removes it); its result is not read. One control run crashed on a dropped Ollama connection.
 
-Not done: the 8B. granite4.1:8b is 5.1 GB of weights plus the KV cache for num_ctx 8192; 4.0 GB of 15.5 GB was free
-(commit 17.6 GB), held by applications this session did not start. Not working or unverified: symlink case of the
-AGENTS.md check; MCP against a real server; hooks and MCP on POSIX.
+Not done: 6 Linux build and PLATFORMS section 5 in WSL2; 7 mutation testing and the suite wall time before/after; 8 the
+independent audit; 10 rename script; 5f (D16 start check). Open review findings, not fixed: MCP argument names that
+collide after sanitizing (two keys to one), and path strings with no separator or `file:` scheme under a non-path key.
 
-Next three, in order:
-1. Free about 7 GB (close the browser and other apps), keep the machine awake, and run 3B control vs 8B full vs
-   8B small+read_first with `bench/profile_run.py` (add the two 8B arms).
-2. Look at why small + read_first still fails write-function and handbook-recall (the per-arm databases sit beside `paired.json`).
-3. Try an MCP server you actually use (`mcp_servers` in the config) and a pre_tool hook on `write_file`.
+Not working or unverified: the AGENTS.md symlink case; the Telegram queue and the console panels (Changes, tool cards, /say)
+were tested but not clicked through in a browser.
 
-Waiting on the user: D26 credentials; the memory line a test wrote into the real memory
-(`.\bucephalus.ps1 memory --forget "injected instruction"`); a Mac or bare-metal Linux run; renaming the folder, then
-moving its state directory (see Running it); the old venvs and `~/.alpha-build`.
+Next three, in order: (1) commit the 8B prep, run the full suite, the frozen gate and e2e, and read the two-task rerun;
+(2) the Linux build, then mutation testing, then the independent audit; (3) with about 7 GB free and the machine awake, run
+`bench/profile_run.py --preflight --arms control,full8b,small8b`, then the run.
+
+Waiting on the user: D26 credentials; a Mac or bare-metal Linux run; renaming the folder and moving its state directory (see Running it).
