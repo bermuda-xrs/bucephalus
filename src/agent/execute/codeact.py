@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 
 from ..kernel.receipts import execute_once, idempotency_key, rewind_epoch
@@ -73,9 +74,16 @@ def make_tool_handler(ctx, task, step: int = 0):
                 {"tool": name, "key": key, "ok": bool(result.get("ok", True)),
                  "via": "code"},
             )
-            return result
+        else:
+            result = spec.fn(ctx, task, **args)
 
-        return spec.fn(ctx, task, **args)
+        if ctx.config.hooks.post_tool and isinstance(result, dict):
+            from .hooks import run_hooks
+
+            _, text = run_hooks(ctx, task, "post_tool", name, args=args, result=json.dumps(result, default=str)[:2000])
+            if text:
+                result = {**result, "hook_output_untrusted": text}
+        return result
 
     return handler
 

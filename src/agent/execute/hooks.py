@@ -17,22 +17,29 @@ def _env() -> dict:
 
 
 def _run_one(h, payload: dict, cwd: str) -> tuple[int, str]:
-    try:
-        p = subprocess.Popen(  # noqa: S603
-            h.argv, cwd=cwd, env=_env(), stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace")
-    except OSError as e:
-        return 127, f"could not start: {e}"
-    try:
-        out, _ = p.communicate(json.dumps(payload, default=str), timeout=h.timeout_s)
-    except subprocess.TimeoutExpired:
-        kill_tree(p.pid)
-        p.communicate()
-        return 124, f"timed out after {h.timeout_s}s"
-    except OSError as e:
-        kill_tree(p.pid)
-        return 126, str(e)
-    return p.returncode, (out or "").strip()[:MAX_HOOK_TEXT]
+    import tempfile
+
+    with tempfile.TemporaryFile() as out:
+        try:
+            p = subprocess.Popen(  # noqa: S603
+                h.argv, cwd=cwd, env=_env(), stdin=subprocess.PIPE, stdout=out, stderr=subprocess.STDOUT)
+        except OSError as e:
+            return 127, f"could not start: {e}"
+        try:
+            p.communicate(json.dumps(payload, default=str).encode("utf-8"), timeout=h.timeout_s)
+        except subprocess.TimeoutExpired:
+            kill_tree(p.pid)
+            try:
+                p.wait(5)
+            except subprocess.TimeoutExpired:
+                pass
+            return 124, f"timed out after {h.timeout_s}s"
+        except OSError as e:
+            kill_tree(p.pid)
+            return 126, str(e)
+        out.seek(0)
+        text = out.read(MAX_HOOK_TEXT * 4).decode("utf-8", errors="replace")
+    return p.returncode, text.strip()[:MAX_HOOK_TEXT]
 
 
 def run_hooks(ctx, task, event: str, tool: str | None = None, **extra) -> tuple[bool, str]:

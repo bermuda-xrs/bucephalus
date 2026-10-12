@@ -256,3 +256,18 @@ the model as allowed vs refused. Checking every string would refuse ordinary arg
 
 **What closes it:** `mcp_servers.<name>.strict_paths: true` checks every string argument of that server's tools against
 the scope (tested). The default stays off because it breaks text arguments; the user decides per server.
+
+---
+
+## D79 - audit 2026-10-12, findings not fixed in harness 10
+
+Report: `docs/AUDIT-2026-10-12.md`. Fixed red-first, in `tests/test_audit_2026_10_12.py`: P1, H1, H3, M1, M3, M4, R1,
+L3, H2, H4 (files). L2 is closed by M1 (names, types and enums are validated and capped). Open:
+
+| ID | What | What closes it |
+|---|---|---|
+| H4 (part) | fixed: the loaded config and every file in a hook/MCP `argv` are protected. Open: what those scripts import or collect (README says so) | protect the script directories, or run hooks in the sandbox |
+| M2 | a bare new name under a non-path MCP key is not scope-checked (a leading-space `file:` URI is fixed) | see D78; strict by default for writing tools |
+| R2 | rewind/undo can race a paused-but-still-stepping run | per-task run lock taken by rewind and undo; void approvals newer than the checkpoint |
+| L1 | the env scrub for hooks and MCP servers is by name | an allowlist plus `cfg.env` |
+| L4 | `GET /tasks/{id}/diff` commits to the shadow repo and can contend with a live checkpoint | diff against a temporary index, or refuse while running |

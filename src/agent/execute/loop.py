@@ -212,9 +212,6 @@ def run_task(ctx, task_id: str) -> TaskResult:
     except SkillSetChanged:
         set_status(ctx.conn, ctx.log, task, TaskStatus.FAILED, "skill_set_changed")
         raise
-    from .mcp import attach
-
-    attach(ctx, task)
     memory = ctx.freeze_memory(task.id)
     notes = ctx.freeze_project_notes(task)
     exe = ctx.backends.get("cloud")
@@ -237,6 +234,9 @@ def run_task(ctx, task_id: str) -> TaskResult:
     seen: dict[str, int] = {}
 
     try:
+        from .mcp import attach
+
+        attach(ctx, task)
         if plan is not None:
             from ..plan.planner import verify_plan_pin
 
@@ -641,7 +641,7 @@ def _flush_memory(ctx, task, builder, prefix: str, entries, step: int, plan):
             {"flush": "refused", "why": d.reason}
 
     before = ctx.memory.fingerprint()
-    entry = _perform(ctx, task, tool, "memory_write", parsed.args, step)
+    entry, _ = _hooked_perform(ctx, task, tool, "memory_write", parsed.args, step)
     return [entry], {"flush": "written" if ctx.memory.fingerprint() != before
                      else "failed"}
 
@@ -791,9 +791,8 @@ def _release_decided(ctx, task) -> list[LedgerEntry]:
                     taint=Taint.TRUSTED, label="human")
                 outcome = "void"
             else:
-                entry = _perform(ctx, task, tool, tool_name, args,
-                                 int(step_id or 0))
-                outcome = "executed"
+                entry, ran = _hooked_perform(ctx, task, tool, tool_name, args, int(step_id or 0))
+                outcome = "executed" if ran else "void"
         ctx.conn.execute("UPDATE approvals SET consumed_at=? WHERE id=?",
                          (time.time(), approval_id))
         ctx.conn.commit()
@@ -845,26 +844,28 @@ def execute_action(ctx, task, parsed: ParsedAction, step: int, plan=None) -> Led
                 decision.reason, taint=Taint.TRUSTED, label="review"
             )
 
-    if ctx.config.hooks.pre_tool:
-        from .hooks import run_hooks
+    return _hooked_perform(ctx, task, tool, tool_name, args, step)[0]
 
+
+def _hooked_perform(ctx, task, tool, tool_name: str, args: dict, step: int) -> tuple[LedgerEntry, bool]:
+    from .hooks import run_hooks
+
+    if ctx.config.hooks.pre_tool:
         allowed, why = run_hooks(ctx, task, "pre_tool", tool_name, args=args)
         if not allowed:
             ctx.log.append(task.id, "hook.denied", {"tool": tool_name, "step": step, "why": why[:300]})
             return LedgerEntry.observation(
                 f"hook refused {tool_name} (a check the user configured): {why}" + chr(10)
-                + "This is a rule, not a judgment call.", taint=Taint.UNTRUSTED, label="hook")
+                + "This is a rule, not a judgment call.", taint=Taint.UNTRUSTED, label="hook"), False
 
     obs = _perform(ctx, task, tool, tool_name, args, step)
     if ctx.config.hooks.post_tool:
-        from .hooks import run_hooks
-
         _, text = run_hooks(ctx, task, "post_tool", tool_name, args=args, result=obs.content[:2000])
         if text:
             obs.content += chr(10) + chr(10) + "<hook_output taint=untrusted>" + chr(10) + text + chr(10) + "</hook_output>"
             obs.taint = join_taint(obs.taint, Taint.UNTRUSTED)
             obs.n_tokens = count_tokens(obs.content)
-    return obs
+    return obs, True
 
 
 FILE_EDITS = ("write_file", "edit_file", "apply_patch")

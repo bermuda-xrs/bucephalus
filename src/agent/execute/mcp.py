@@ -16,6 +16,11 @@ PROTOCOL = "2024-11-05"
 MAX_RESULT_CHARS = 20000
 _SAFE = re.compile(r"[^A-Za-z0-9_]")
 _PATHISH = re.compile(r"path|file|dir|folder|repo|root|cwd", re.I)
+_NAME = re.compile(r"[A-Za-z0-9_.-]{1,64}")
+_TYPES = {"string", "number", "integer", "boolean", "array", "object", "null"}
+MAX_PAGES = 20
+MAX_TOOLS = 200
+MAX_LINE = 1_000_000
 
 
 class McpError(RuntimeError):
@@ -55,11 +60,16 @@ class McpServer:
         return self.proc is not None and self.proc.poll() is None
 
     def _read(self) -> None:
-        for line in self.proc.stdout:
+        while True:
+            line = self.proc.stdout.readline(MAX_LINE)
+            if not line:
+                break
             try:
-                self._lines.put(json.loads(line))
+                msg = json.loads(line)
             except ValueError:
                 continue
+            if isinstance(msg, dict):
+                self._lines.put(msg)
         self._lines.put(None)
 
     def _drain(self) -> None:
@@ -93,8 +103,12 @@ class McpServer:
                     self._answer(msg)
                 elif msg.get("id") == rid:
                     if "error" in msg:
-                        raise McpError(str(msg["error"].get("message", msg["error"]))[:300])
-                    return msg.get("result") or {}
+                        err = msg["error"]
+                        raise McpError(str(err.get("message", err) if isinstance(err, dict) else err)[:300])
+                    result = msg.get("result") or {}
+                    if not isinstance(result, dict):
+                        raise McpError(f"{method}: the server's result is not an object")
+                    return result
 
     def _answer(self, msg: dict) -> None:
         if "id" not in msg:
@@ -107,20 +121,31 @@ class McpServer:
 
     def list_tools(self) -> list[dict]:
         out, cursor = [], None
-        while True:
-            res = self.request("tools/list", {"cursor": cursor} if cursor else {}, self.cfg.start_timeout_s)
-            out += res.get("tools", [])
+        deadline = time.monotonic() + self.cfg.start_timeout_s
+        for _ in range(MAX_PAGES):
+            res = self.request("tools/list", {"cursor": cursor} if cursor else {},
+                               max(0.1, deadline - time.monotonic()))
+            tools = res.get("tools", [])
+            if not isinstance(tools, list):
+                raise McpError("tools/list: tools is not a list")
+            out += [t for t in tools if isinstance(t, dict)]
+            if len(out) > MAX_TOOLS:
+                raise McpError(f"tools/list: more than {MAX_TOOLS} tools")
             cursor = res.get("nextCursor")
             if not cursor:
                 return out
+        raise McpError(f"tools/list: more than {MAX_PAGES} pages")
 
     def call(self, tool: str, args: dict) -> dict:
         try:
             res = self.request("tools/call", {"name": tool, "arguments": args}, self.cfg.timeout_s)
         except McpError as e:
             return {"ok": False, "error": str(e)}
-        parts = [c.get("text", "") if c.get("type") == "text" else f"[{c.get('type', 'content')} omitted]"
-                 for c in res.get("content", [])]
+        content = res.get("content", [])
+        if not isinstance(content, list):
+            return {"ok": False, "error": "the server's content is not a list"}
+        parts = [str(c.get("text", "")) if c.get("type") == "text" else f"[{str(c.get('type', 'content'))[:20]} omitted]"
+                 for c in content if isinstance(c, dict)]
         text = chr(10).join(parts)[:MAX_RESULT_CHARS]
         if res.get("isError"):
             return {"ok": False, "error": text or "the tool reported an error"}
@@ -137,18 +162,30 @@ class McpServer:
                     pass
 
 
+def _props(raw) -> dict:
+    p = raw.get("properties") if isinstance(raw, dict) else None
+    return p if isinstance(p, dict) else {}
+
+
+def _plain(v) -> bool:
+    return isinstance(v, (int, float, bool)) or (isinstance(v, str) and len(v) <= 64 and v.isprintable())
+
+
 def _schema(raw: dict) -> dict:
     props = {}
-    for k, v in (raw.get("properties") or {}).items():
-        spec = {"type": v.get("type", "string")} if isinstance(v, dict) else {"type": "string"}
-        if isinstance(v, dict) and isinstance(v.get("enum"), list):
-            spec["enum"] = v["enum"]
+    for k, v in _props(raw).items():
+        t = v.get("type") if isinstance(v, dict) else None
+        spec = {"type": t if t in _TYPES else "string"}
+        if isinstance(v, dict) and isinstance(v.get("enum"), list) and all(_plain(e) for e in v["enum"]):
+            spec["enum"] = v["enum"][:50]
         props[_SAFE.sub("_", str(k))] = spec
-    return {"type": "object", "properties": props, "required": [r for r in raw.get("required", []) if r in props]}
+    req = raw.get("required") if isinstance(raw, dict) else None
+    return {"type": "object", "properties": props,
+            "required": [r for r in (req if isinstance(req, list) else []) if r in props]}
 
 
 def _originals(raw: dict) -> dict[str, str]:
-    return {_SAFE.sub("_", str(k)): str(k) for k in (raw.get("properties") or {})}
+    return {_SAFE.sub("_", str(k)): str(k) for k in _props(raw)}
 
 
 def attach(ctx, task) -> None:
@@ -164,14 +201,18 @@ def attach(ctx, task) -> None:
         try:
             server.start()
             tools = server.list_tools()
-        except McpError as e:
-            ctx.log.append(task.id, "mcp.failed", {"server": name, "why": str(e)[:300]})
+        except Exception as e:  # noqa: BLE001
+            server.close()
+            ctx.log.append(task.id, "mcp.failed", {"server": name, "why": f"{type(e).__name__}: {e}"[:300]})
             continue
         ctx.mcp_servers.append(server)
         added = 0
         for t in tools:
             tool = str(t.get("name", ""))
-            props = list(((t.get("inputSchema") or {}).get("properties") or {}))
+            if not _NAME.fullmatch(tool) or len(f"mcp__{name}__{tool}") > 64:
+                ctx.log.append(task.id, "mcp.skipped", {"server": name, "why": f"tool name refused: {tool[:80]!r}"})
+                continue
+            props = list(_props(t.get("inputSchema") or {}))
             if len({_SAFE.sub("_", str(k)) for k in props}) < len(props):
                 ctx.log.append(task.id, "mcp.skipped", {"server": name, "why": f"{tool}: argument names collide once made safe"})
                 continue
@@ -184,7 +225,7 @@ def attach(ctx, task) -> None:
                 side_effecting=writes,
                 max_arg_taint=Taint.USER if writes else Taint.UNTRUSTED,
                 output_taint=Taint.UNTRUSTED,
-                description=f"{tool} of the user-configured MCP server {name}",
+                description=f"{_SAFE.sub('_', tool)} of the user-configured MCP server {_SAFE.sub('_', name)}",
                 path_args=tuple({n for sane, orig in _originals(t.get("inputSchema") or {}).items()
                                  for n in (sane, orig) if _PATHISH.search(n)}),
                 path_values="all" if cfg.strict_paths else True))

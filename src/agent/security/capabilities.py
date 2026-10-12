@@ -57,6 +57,9 @@ def state_paths(ctx) -> tuple[Path, ...]:
     if cfg.state_dir:
         out.append(Path(cfg.state_dir))
     out += [root / rel for rel in PROJECT_STATE]
+    if cfg.source_path:
+        out.append(Path(cfg.source_path))
+    out += _argv_files(cfg, root)
     try:
         stamps = tuple(sorted((c.name, c.stat().st_mtime)
                               for c in root.glob("config*.yaml")))
@@ -71,6 +74,17 @@ def state_paths(ctx) -> tuple[Path, ...]:
 
     out.append(user_config_dir() / TOKEN_FILE)
     return tuple(Path(os.path.abspath(p)) for p in out)
+
+
+def _argv_files(cfg, root: Path) -> list[Path]:
+    hooks = cfg.hooks.pre_tool + cfg.hooks.post_tool + cfg.hooks.stop
+    out = []
+    for argv in [h.argv for h in hooks] + [s.argv for s in cfg.mcp_servers.values()]:
+        for a in argv:
+            p = Path(a) if Path(a).is_absolute() else root / a
+            if p.is_file():
+                out.append(p)
+    return out
 
 
 def task_state_paths(ctx, task) -> tuple[Path, ...]:
@@ -136,6 +150,7 @@ REFUSED_URI = object()
 
 
 def _file_uri_path(v: str):
+    v = v.lstrip("".join(map(chr, range(33))))
     if not v.lower().startswith("file:"):
         return None
     from urllib.parse import urlparse

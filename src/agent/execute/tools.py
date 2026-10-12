@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import re
 import subprocess
 import time
@@ -310,15 +311,31 @@ def tool_parallel(ctx, task, calls: list | None = None, step: int = 0) -> dict:
             return {"ok": False, "denied": name, "error": (
                 f"DENIED by the capability gate: {decision.reason}. The whole "
                 "batch was refused; nothing ran."), "applied": False}
+        if task is not None and ctx.config.hooks.pre_tool:
+            from .hooks import run_hooks
+
+            allowed, why = run_hooks(ctx, task, "pre_tool", name, args=args)
+            if not allowed:
+                ctx.log.append(task.id, "hook.denied", {"tool": name, "step": step, "why": why[:300], "in_batch": True})
+                return {"ok": False, "denied": name, "error": (
+                    f"hook refused {name} (a check the user configured): {why}. The whole batch was refused; "
+                    "nothing ran."), "applied": False}
         planned.append((name, args, spec))
 
     def _one(item):
         name, args, spec = item
         try:
-            return {"tool": name, "args": args, "result": spec.fn(ctx, task, **args)}
+            out = {"tool": name, "args": args, "result": spec.fn(ctx, task, **args)}
         except Exception as e:  # noqa: BLE001
-            return {"tool": name, "args": args,
-                    "result": {"ok": False, "error": f"{type(e).__name__}: {e}"}}
+            out = {"tool": name, "args": args,
+                   "result": {"ok": False, "error": f"{type(e).__name__}: {e}"}}
+        if task is not None and ctx.config.hooks.post_tool:
+            from .hooks import run_hooks
+
+            _, text = run_hooks(ctx, task, "post_tool", name, args=args, result=json.dumps(out["result"], default=str)[:2000])
+            if text:
+                out["hook_output_untrusted"] = text
+        return out
 
     if width == 1 or len(planned) == 1:
         results = [_one(x) for x in planned]

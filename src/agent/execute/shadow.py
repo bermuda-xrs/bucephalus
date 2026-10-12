@@ -13,6 +13,16 @@ class ShadowUnavailable(RuntimeError):
     pass
 
 
+def _is_link(path: str) -> bool:
+    import stat as st
+
+    try:
+        info = os.lstat(path)
+    except OSError:
+        return False
+    return st.S_ISLNK(info.st_mode) or bool(getattr(info, "st_file_attributes", 0) & 0x400)
+
+
 def git_available() -> bool:
     return shutil.which("git") is not None
 
@@ -61,6 +71,23 @@ class ShadowRepo:
             self.git_dir.mkdir(parents=True, exist_ok=True)
             self._git("init", "--quiet")
 
+    def _links(self) -> list[str]:
+        out = []
+        for s in self.scopes:
+            stack = [self.work_tree / s]
+            while stack:
+                d = stack.pop()
+                try:
+                    entries = list(os.scandir(d))
+                except OSError:
+                    continue
+                for e in entries:
+                    if _is_link(e.path):
+                        out.append(Path(e.path).relative_to(self.work_tree).as_posix())
+                    elif e.is_dir(follow_symlinks=False):
+                        stack.append(Path(e.path))
+        return out
+
     def _big_files(self) -> list[str]:
         out = []
         for s in self.scopes:
@@ -76,7 +103,11 @@ class ShadowRepo:
         if not self.scopes:
             return None
         self.ensure()
-        self._git("add", "-A", "-f", "--ignore-errors", "--", *self.scopes, ok_codes=(0, 1))
+        links = self._links()
+        self._git("add", "-A", "-f", "--ignore-errors", "--", *self.scopes,
+                  *(f":(exclude){x}" for x in links), ok_codes=(0, 1))
+        if links:
+            self._git("rm", "-r", "--cached", "-q", "--ignore-unmatch", "--", *links)
         big = self._big_files()
         if big:
             self._git("rm", "--cached", "-q", "--ignore-unmatch", "--", *big)
@@ -84,6 +115,10 @@ class ShadowRepo:
         return self._git("rev-parse", "HEAD").stdout.strip()
 
     def restore(self, sha: str) -> None:
+        links = self._links()
+        if links:
+            raise ShadowUnavailable("the scope contains a link (" + ", ".join(links[:5]) + "); a restore could delete "
+                                    "files where it points. Remove it, then rewind")
         self.ensure()
         dirs = [self.work_tree / s for s in self.scopes if (self.work_tree / s).is_dir()]
         self._git("read-tree", "--reset", "-u", sha)

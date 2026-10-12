@@ -720,7 +720,9 @@ def cmd_exec(ctx, args, console) -> int:
               "answer": answer, **extra})
         if not jsonl:
             if text:
-                print(text)
+                import re
+
+                print(re.sub("[\x00-\x08\x0b-\x1f\x7f-\x9f]", "", text))
             if code:
                 print(f"{status}" + "".join(f" {k}={v}" for k, v in extra.items() if v), file=sys.stderr)
         return code

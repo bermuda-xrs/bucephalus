@@ -185,6 +185,7 @@ class Config(BaseModel):
     grader_held_out: bool = False
     root: str = "."
     state_dir: str = ""
+    source_path: str = ""
     profile_provenance: dict[str, Any] = Field(default_factory=dict)
 
     def resolve(self, relative: str) -> Path:
@@ -212,6 +213,7 @@ def load_config(path: str | Path = "config.yaml",
     raw["root"] = str(state_root(path))
     ensure_state_dirs(raw["root"])
     raw["state_dir"] = _synced_state_dir(raw)
+    raw["source_path"] = str(path.resolve())
     if profile is not None:
         raw["profile"] = profile
     cfg = Config.model_validate(raw)

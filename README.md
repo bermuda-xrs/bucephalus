@@ -399,6 +399,9 @@ tests/         the spec's acceptance tests, per milestone, + source invariants
 - **`hooks`**: commands you declare, run outside the sandbox with secret-looking variables removed. `pre_tool` runs
   after the gate and can only refuse (a hook that fails, hangs or cannot start refuses); `post_tool` output is
   appended as untrusted; `stop` can hold an answer back three times. Each gets the call as JSON on stdin.
+  The config file and every file named in a hook's or MCP server's `argv` are protected state. Anything else they
+  load (a module beside the script, a `conftest.py` that a `pytest` hook collects) is not; keep it out of every
+  task's scope.
 
   ```yaml
   hooks:
