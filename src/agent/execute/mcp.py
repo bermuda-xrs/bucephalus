@@ -154,6 +154,10 @@ class McpServer:
     def close(self) -> None:
         if self.proc is not None and self.proc.poll() is None:
             kill_tree(self.proc.pid)
+            try:
+                self.proc.wait(5)
+            except subprocess.TimeoutExpired:
+                pass
         if self.proc is not None:
             for f in (self.proc.stdin, self.proc.stdout, self.proc.stderr):
                 try:
@@ -175,7 +179,7 @@ def _schema(raw: dict) -> dict:
     props = {}
     for k, v in _props(raw).items():
         t = v.get("type") if isinstance(v, dict) else None
-        spec = {"type": t if t in _TYPES else "string"}
+        spec = {"type": t if isinstance(t, str) and t in _TYPES else "string"}
         if isinstance(v, dict) and isinstance(v.get("enum"), list) and all(_plain(e) for e in v["enum"]):
             spec["enum"] = v["enum"][:50]
         props[_SAFE.sub("_", str(k))] = spec
