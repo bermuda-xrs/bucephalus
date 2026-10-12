@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import functools
+import importlib.machinery
 import inspect
 import os
 import re
@@ -82,7 +83,7 @@ def _argv_files(cfg, root: Path) -> list[Path]:
     for argv in [h.argv for h in hooks] + [s.argv for s in cfg.mcp_servers.values()]:
         for mod in _modules(argv):
             top = root / mod.split(".")[0]
-            out += [top, top.with_suffix(".py")]
+            out += [top] + [top.parent / (top.name + s) for s in importlib.machinery.all_suffixes()]
         for a in argv:
             p = Path(os.path.abspath(a if Path(a).is_absolute() else root / a))
             if p.is_file():

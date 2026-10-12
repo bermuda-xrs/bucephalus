@@ -267,4 +267,8 @@ def test_review_a_module_a_hook_runs_is_protected_before_it_exists(ctx, argv):
     state = state_paths(ctx)
     assert is_protected("lintpkg.py", str(root), state)
     assert is_protected("lintpkg/__init__.py", str(root), state)
+    import importlib.machinery
+
+    for suffix in importlib.machinery.all_suffixes():
+        assert is_protected("lintpkg" + suffix, str(root), state), suffix
     assert not is_protected("work/a.py", str(root), state)
