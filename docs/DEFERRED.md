@@ -5,7 +5,7 @@ An entry is removed in the change that closes it; its history is in git and CHAN
 | entry | state |
 |---|---|
 | D2 | open: diagnosis, no measurement at risk |
-| D16 | open: the check exists in the console for Ollama-served backends; not in `run_task` or for other servers |
+| D16 | open: checked at run start and in the console for Ollama-served backends; not for other servers |
 | D26 | open: needs a bot token and an API key (the user's); D25 and D31 close with it |
 | D27 | open: the bot's queue, with D26 |
 | D32 | known and accepted |
@@ -51,9 +51,10 @@ will not honour, and Ollama truncates without an error.
 `model_server: ollama` (2026-10-10): Ollama's `/api/ps` reports the loaded
 model's `context_length`; the model picker shows a warning when it is under
 the backend's configured window, and Run model returns it. Checked against a
-real Ollama 0.40.2. **Still open:** the CLI and `run_task` do not check at
-start; servers other than Ollama have no such route; two backends asking
-different windows of one server still cannot both be satisfied.
+real Ollama 0.40.2. **Since 2026-10-12** `run_task` checks at start and records
+`model.window_short` (the CLI prints it, the console and `exec` receive it as
+`alert.window`). **Still open:** servers other than Ollama have no such route; two
+backends asking different windows of one server still cannot both be satisfied.
 
 SPEC-DELTA C29.
 

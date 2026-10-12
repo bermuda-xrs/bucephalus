@@ -140,6 +140,9 @@ def cmd_run(ctx, args, console) -> int:
 
     with console.status("working...", spinner="dots"):
         result = run_task(ctx, args.task_id)
+    for (payload,) in ctx.conn.execute(
+            "SELECT payload_json FROM events WHERE task_id=? AND type='model.window_short'", (args.task_id,)):
+        console.print(f"[yellow]{json.loads(payload)['warning']}[/yellow]")
 
     if result.status == "paused":
         console.print(

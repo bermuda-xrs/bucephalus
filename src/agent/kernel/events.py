@@ -94,6 +94,7 @@ EVENT_TYPES = frozenset(
         "read_first.held",
         "human.message",
         "human.message_delivered",
+        "model.window_short",
     }
 )
 

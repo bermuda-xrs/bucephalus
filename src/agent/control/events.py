@@ -15,6 +15,7 @@ CLIENT_EVENTS = {
     "task.status_changed": "task.status",
     "deviation.detected": "deviation.detected",
     "integrity.halt": "alert.integrity",
+    "model.window_short": "alert.window",
 }
 
 FORBIDDEN_PREFIXES = ("monitor.",)

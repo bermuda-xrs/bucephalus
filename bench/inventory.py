@@ -45,6 +45,7 @@ ROWS: list[tuple[str, str, str, str]] = [
     ("an answer before any observation is held back", "read_first.held", "event", ""),
     ("the user speaks to a running task", "human.message", "event", ""),
     ("that message reaches the next step", "human.message_delivered", "event", ""),
+    ("the server holds less context than the config budgets", "model.window_short", "event", ""),
 
     ("compaction tombstones an artifact", "session.opened", "tombstoned", ""),
     ("a session BOUNDARY is crossed", "session.opened", "rotate", ""),

@@ -203,6 +203,7 @@ def run_task(ctx, task_id: str) -> TaskResult:
 
     set_status(ctx.conn, ctx.log, task, TaskStatus.RUNNING)
     checkpoint(ctx.log, ctx.anchor, task.id)
+    _check_window(ctx, task)
 
     stable = ctx.config.mechanisms.prefix_stability
     guard = PrefixGuard() if stable else None
@@ -963,6 +964,21 @@ def _touched_record(touched: dict | None) -> dict:
     return {"code_touched": touched["entries"],
             "code_touched_dropped": touched["dropped"],
             "code_denied": touched["denied"]}
+
+
+def _check_window(ctx, task) -> None:
+    from ..models import local
+
+    b = ctx.backends.get("cloud")
+    endpoint = local.server_of(b.cfg) if b else None
+    if not endpoint:
+        return
+    st = local.status(endpoint)
+    if not st.get("up"):
+        return
+    warn = local.window_warning(st.get("loaded") or [], b.cfg.model, b.cfg.budgeted_window)
+    if warn:
+        ctx.log.append(task.id, "model.window_short", warn)
 
 
 def _inline_cap(ctx) -> int:
