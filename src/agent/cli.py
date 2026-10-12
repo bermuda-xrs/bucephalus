@@ -494,6 +494,18 @@ def cmd_bench_local(ctx, args, console) -> int:
     return 0
 
 
+def cmd_say(ctx, args, console) -> int:
+    from .execute.say import SayError, say
+
+    try:
+        say(ctx, args.task_id, " ".join(args.text))
+    except SayError as e:
+        console.print(f"[red]{e}[/red]")
+        return 1
+    console.print("sent: it reaches the task at its next step")
+    return 0
+
+
 def cmd_steer(ctx, args, console) -> int:
     from .kernel.types import TaskStatus
 
@@ -829,6 +841,11 @@ def build_parser() -> argparse.ArgumentParser:
     sk.add_argument("--decay", action="store_true")
     sk.add_argument("--yes", action="store_true", help="human approval for promotion")
     sk.set_defaults(fn=cmd_skills)
+
+    sy = sub.add_parser("say", help="tell a running task something; it arrives as your words at its next step")
+    sy.add_argument("task_id")
+    sy.add_argument("text", nargs="+")
+    sy.set_defaults(fn=cmd_say)
 
     st = sub.add_parser("steer", help="correct a running task (forks; never mutates)")
     st.add_argument("task_id")

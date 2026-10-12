@@ -47,6 +47,10 @@ class Steer(BaseModel):
     correction: str
 
 
+class Say(BaseModel):
+    text: str
+
+
 class Rewind(BaseModel):
     step: int | None = None
     what: str = "both"
@@ -260,6 +264,16 @@ def create_app(ctx: AgentContext) -> FastAPI:
         )
         set_status(ctx.conn, ctx.log, parent, TaskStatus.PAUSED, "superseded by steer")
         return {"child_task_id": child.id, "parent_task_id": task_id}
+
+    @app.post("/tasks/{task_id}/message")
+    def post_task_message(task_id: str, body: Say) -> dict:
+        from ..execute.say import SayError, say
+
+        _task(task_id)
+        try:
+            return say(ctx, task_id, body.text)
+        except SayError as e:
+            raise HTTPException(409, str(e)) from e
 
     @app.post("/tasks/{task_id}/pause")
     def post_pause(task_id: str) -> dict:

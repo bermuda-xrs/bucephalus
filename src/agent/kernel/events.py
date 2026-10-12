@@ -92,6 +92,8 @@ EVENT_TYPES = frozenset(
         "mcp.failed",
         "mcp.skipped",
         "read_first.held",
+        "human.message",
+        "human.message.delivered",
     }
 )
 

@@ -394,10 +394,19 @@ const SLASH = {
   "/theme": ["Switch light or dark", () => toggleTheme()],
   "/notify": ["Turn on notifications", () => enableNotifications()],
   "/help": ["Open the command palette", () => openPalette()],
+  "/say": ["Tell the running task something: /say your words", () => { $("#ask").value = "/say "; $("#ask").focus(); }],
 };
+async function sayToRunning(text) {
+  const open = ((S.thread && S.thread.items) || []).filter(x => ["running", "paused", "pending"].includes(x.status));
+  if (!open.length) return toast("Nothing is running in this conversation. Send a request instead.", true);
+  try { await post(`/tasks/${open[open.length - 1].task_id}/message`, {text}); $("#ask").value = ""; toast("Sent. It reaches the task at its next step."); }
+  catch (e) { toast(e.message, true); }
+}
 async function send(given) {
   const text = (typeof given === "string" ? given : $("#ask").value).trim();
   if (!text) return $("#ask").focus();
+  const say = /^\/say\s+([\s\S]+)$/i.exec(text);
+  if (say) return sayToRunning(say[1].trim());
   if (/^\/\w+$/.test(text)) {
     const c = SLASH[text.toLowerCase()];
     if (!c) return toast(`No command ${text}. /help lists them; anything else is sent as a request.`, true);

@@ -26,6 +26,7 @@ from ..security.exposure import check as exposure_check
 from ..security.taint import QUARANTINE_PREFIX
 from ..assure.verifiers import inspects
 from ..tokens import Calibration, calibration, count_tokens
+from .say import take as take_messages
 from .schema import build_action_schema
 from .. import stream
 
@@ -240,6 +241,7 @@ def run_task(ctx, task_id: str) -> TaskResult:
         entries.extend(_release_decided(ctx, task))
 
         for step in range(ctx.config.limits.max_steps):
+            entries.extend(take_messages(ctx, task, step))
             elapsed = time.time() - started
             if elapsed > charged_s:
                 spend(ctx.conn, ctx.log, task, seconds=elapsed - charged_s)

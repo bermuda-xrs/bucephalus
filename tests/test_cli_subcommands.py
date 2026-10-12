@@ -473,6 +473,12 @@ def test_rewind_lists_and_goes_back(cli, monkeypatch):
     assert "no checkpoint at step 99" in cli("rewind", tid, "--step", "99", expect=1).stdout
 
 
+def test_say_reaches_a_task_and_is_refused_for_a_finished_one(cli):
+    tid = cli.new_task("tell me")
+    assert "sent" in cli("say", tid, "use", "metric", "units").stdout
+    assert "finished" in cli("say", cli.seeded_task, "late", expect=1).stdout
+
+
 def test_bench_local(cli):
     r = cli("bench-local")
     assert "mock-local" in r.stdout and "mock-laptop" in r.stdout
