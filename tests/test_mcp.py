@@ -150,9 +150,34 @@ def test_the_same_argument_inside_the_scope_goes_through(ctx, mcp, workspace):
     assert "at:work" in calls[1]["tail"]
 
 
-def test_an_argument_that_is_not_path_like_is_left_alone(ctx, mcp):
+def test_a_plain_string_is_left_alone_but_a_path_under_any_key_is_not(ctx, mcp):
+    _, calls = mcp(_call("mcp__fake__where", repo_path="work", note="Europe/London"), FINAL, read_only=["where"])
+    assert "at:work" in calls[1]["tail"]
+
+
+def test_an_absolute_or_traversing_string_is_checked_whatever_its_key(ctx, mcp, tmp_path):
     _, calls = mcp(_call("mcp__fake__where", repo_path="work", note="/etc/passwd"), FINAL, read_only=["where"])
-    assert "outside artifact_scope" not in calls[1]["tail"]
+    assert "outside artifact_scope" in calls[1]["tail"] or "DENIED" in calls[1]["tail"]
+
+
+def test_the_original_key_the_model_may_send_is_checked_too(ctx, mcp, tmp_path):
+    _, calls = mcp(_call("mcp__fake__hyphen", **{"repo-path": str(tmp_path.parent)}), FINAL, read_only=["hyphen"])
+    assert "hyphen-at:" not in calls[1]["tail"]
+
+
+def test_a_list_of_paths_is_checked_element_by_element(ctx, mcp, workspace, tmp_path):
+    _, calls = mcp(_call("mcp__fake__many", files=["work/a.txt", "../outside.txt"]), FINAL, read_only=["many"])
+    assert "many:" not in calls[1]["tail"] and ("outside artifact_scope" in calls[1]["tail"] or "DENIED" in calls[1]["tail"])
+
+
+def test_a_list_of_paths_inside_the_scope_goes_through(ctx, mcp):
+    _, calls = mcp(_call("mcp__fake__many", files=["work/a.txt", "work/b.txt"]), FINAL, read_only=["many"])
+    assert "many:work/a.txt,work/b.txt" in calls[1]["tail"]
+
+
+def test_an_argument_the_servers_schema_does_not_declare_is_refused(ctx, mcp):
+    _, calls = mcp(_call("mcp__fake__where", repo_path="work", surprise="x"), FINAL, read_only=["where"])
+    assert "at:" not in calls[1]["tail"] and "surprise" in calls[1]["tail"]
 
 
 def test_a_sibling_directory_outside_the_scope_is_refused_as_outside_the_scope(ctx, mcp, tmp_path):
@@ -160,3 +185,12 @@ def test_a_sibling_directory_outside_the_scope_is_refused_as_outside_the_scope(c
     other.mkdir()
     _, calls = mcp(_call("mcp__fake__where", repo_path=str(other)), FINAL, read_only=["where"])
     assert "outside artifact_scope" in calls[1]["tail"]
+
+
+def test_what_counts_as_a_path_by_value():
+    from agent.security.capabilities import _pathish_value as p
+
+    bs = chr(92)
+    yes = ["C:" + bs + "x" + bs + "y", "D:/z", "/etc/passwd", "../a", "a/../../b", "~/k", bs + "share" + bs + "x"]
+    no = ["Europe/London", "hello", "work/a.txt", "a..b", "1.5", ""]
+    assert all(p(v) for v in yes) and not any(p(v) for v in no)

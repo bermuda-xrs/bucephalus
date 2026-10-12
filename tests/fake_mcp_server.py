@@ -16,6 +16,10 @@ TOOLS = [
     {"name": "slow", "description": "sleeps", "inputSchema": {"type": "object", "properties": {}}},
     {"name": "pid", "description": "process id", "inputSchema": {"type": "object", "properties": {}}},
     {"name": "boom", "description": "fails", "inputSchema": {"type": "object", "properties": {}}},
+    {"name": "hyphen", "description": "a key with a hyphen", "inputSchema": {"type": "object", "required": ["repo-path"],
+                     "properties": {"repo-path": {"type": "string"}}}},
+    {"name": "many", "description": "a list of files", "inputSchema": {"type": "object", "required": ["files"],
+                     "properties": {"files": {"type": "array", "items": {"type": "string"}}}}},
     {"name": "where", "description": "echo a repo path", "inputSchema": {"type": "object", "required": ["repo_path"],
                      "properties": {"repo_path": {"type": "string"}, "note": {"type": "string"}}}},
 ]
@@ -58,6 +62,10 @@ def main():
                 with open(args["path"], "w", encoding="utf-8") as f:
                     f.write(args["text"])
                 out = {"content": [{"type": "text", "text": "wrote"}]}
+            elif name == "hyphen":
+                out = {"content": [{"type": "text", "text": "hyphen-at:" + args.get("repo-path", "?")}]}
+            elif name == "many":
+                out = {"content": [{"type": "text", "text": "many:" + ",".join(args["files"])}]}
             elif name == "where":
                 out = {"content": [{"type": "text", "text": "at:" + args["repo_path"]}]}
             elif name == "pid":

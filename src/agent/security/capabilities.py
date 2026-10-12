@@ -88,26 +88,25 @@ def _names_a_stream(p: Path) -> bool:
 
 
 def within_scope(args: dict, artifact_scope: list[str], root: str = ".",
-                 extra_keys: frozenset = frozenset()) -> tuple[bool, str]:
+                 extra_keys: frozenset = frozenset(), by_value: bool = False) -> tuple[bool, str]:
     if not artifact_scope:
         for key, value in args.items():
-            if _looks_like_path(key, value, extra_keys):
-                return False, (f"{key}={value!r}: this task declared no "
+            for v in _path_strings(key, value, extra_keys, by_value):
+                return False, (f"{key}={v!r}: this task declared no "
                                "artifact_scope, so no path is permitted - "
                                "declare one (bucephalus new --scope work)")
         return True, ""
     roots = [Path(os.path.abspath(os.path.join(root, s))) for s in artifact_scope]
     real_roots = [_resolved(r) for r in roots]
     for key, value in args.items():
-        if not _looks_like_path(key, value, extra_keys):
-            continue
-        p = Path(os.path.abspath(os.path.join(root, str(value))))
-        if _names_a_stream(p):
-            return False, f"{key}={value!r} names an alternate data stream"
-        real = _resolved(p)
-        if (not any(_is_within(p, r) for r in roots)
-                or not any(_is_within(real, r) for r in real_roots)):
-            return False, f"{key}={value!r} resolves outside artifact_scope"
+        for v in _path_strings(key, value, extra_keys, by_value):
+            p = Path(os.path.abspath(os.path.join(root, v)))
+            if _names_a_stream(p):
+                return False, f"{key}={v!r} names an alternate data stream"
+            real = _resolved(p)
+            if (not any(_is_within(p, r) for r in roots)
+                    or not any(_is_within(real, r) for r in real_roots)):
+                return False, f"{key}={v!r} resolves outside artifact_scope"
     return True, ""
 
 
@@ -119,6 +118,31 @@ def _looks_like_path(key: str, value, extra: frozenset = frozenset()) -> bool:
     if not isinstance(value, str):
         return False
     return key in _PATH_KEYS or key in extra
+
+
+_DRIVE = re.compile(r"^[A-Za-z]:[\\/]")
+
+
+def _pathish_value(v: str) -> bool:
+    return (os.path.isabs(v) or v.startswith(("/", chr(92), "~")) or bool(_DRIVE.match(v))
+            or ".." in re.split(r"[\\/]", v))
+
+
+def _path_strings(key: str, value, extra: frozenset = frozenset(), by_value: bool = False):
+    keyed = key in _PATH_KEYS or key in extra
+
+    def walk(v):
+        if isinstance(v, str):
+            if keyed or (by_value and _pathish_value(v)):
+                yield v
+        elif isinstance(v, (list, tuple)):
+            for x in v:
+                yield from walk(x)
+        elif isinstance(v, dict):
+            for x in v.values():
+                yield from walk(x)
+
+    yield from walk(value)
 
 
 def _effective_args(tool, args: dict) -> dict:
@@ -231,19 +255,19 @@ def gate_tool_call(ctx, task, tool, args: dict, phase: str = "execute") -> GateD
 
     eff = _effective_args(tool, args)
     extra = frozenset(getattr(tool, "path_args", ()))
+    by_value = bool(getattr(tool, "path_values", False))
     state = None
     for key, value in eff.items():
-        if not _looks_like_path(key, value, extra):
-            continue
-        if state is None:
-            state = task_state_paths(ctx, task)
-        if is_protected(str(value), ctx.config.root, state):
-            return GateDecision.deny(
-                f"{key}={value!r} is a protected path: it is, contains, or lies "
-                "inside the agent's own state (databases, anchor, skills, "
-                "memory, graders, run records, config, secrets), which no task "
-                "may read or write"
-            )
+        for v in _path_strings(key, value, extra, by_value):
+            if state is None:
+                state = task_state_paths(ctx, task)
+            if is_protected(v, ctx.config.root, state):
+                return GateDecision.deny(
+                    f"{key}={v!r} is a protected path: it is, contains, or lies "
+                    "inside the agent's own state (databases, anchor, skills, "
+                    "memory, graders, run records, config, secrets), which no task "
+                    "may read or write"
+                )
 
     glob_key = _GLOB_ARGS.get(getattr(tool, "name", ""))
     pattern = eff.get(glob_key) if glob_key else None
@@ -260,7 +284,7 @@ def gate_tool_call(ctx, task, tool, args: dict, phase: str = "execute") -> GateD
                     f"run_code with artifact_scope {s!r}: that scope contains "
                     "the agent's own state, and the sandbox would link it in")
 
-    ok, why = within_scope(eff, task.contract.artifact_scope, ctx.config.root, extra)
+    ok, why = within_scope(eff, task.contract.artifact_scope, ctx.config.root, extra, by_value)
     if not ok:
         return GateDecision.deny(why)
 

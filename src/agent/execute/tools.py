@@ -27,6 +27,7 @@ class ToolSpec:
     required_capability: str | None = None
     description: str = ""
     path_args: tuple = ()
+    path_values: bool = False
 
     def manual_line(self) -> str:
         args = ", ".join(sorted(self.schema.get("properties", {})))

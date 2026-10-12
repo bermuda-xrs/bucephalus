@@ -147,6 +147,10 @@ def _schema(raw: dict) -> dict:
     return {"type": "object", "properties": props, "required": [r for r in raw.get("required", []) if r in props]}
 
 
+def _originals(raw: dict) -> dict[str, str]:
+    return {_SAFE.sub("_", str(k)): str(k) for k in (raw.get("properties") or {})}
+
+
 def attach(ctx, task) -> None:
     cfgs = ctx.config.mcp_servers
     if not cfgs or getattr(ctx, "_mcp_attached", False):
@@ -172,19 +176,24 @@ def attach(ctx, task) -> None:
                 continue
             writes = tool not in cfg.read_only
             ctx.tools.register(ToolSpec(
-                full, _caller(server, tool), _schema(t.get("inputSchema") or {}),
+                full, _caller(server, tool, _originals(t.get("inputSchema") or {})), _schema(t.get("inputSchema") or {}),
                 side_effecting=writes,
                 max_arg_taint=Taint.USER if writes else Taint.UNTRUSTED,
                 output_taint=Taint.UNTRUSTED,
                 description=f"{tool} of the user-configured MCP server {name}",
-                path_args=tuple(k for k in _schema(t.get("inputSchema") or {})["properties"] if _PATHISH.search(k))))
+                path_args=tuple({n for sane, orig in _originals(t.get("inputSchema") or {}).items()
+                                 for n in (sane, orig) if _PATHISH.search(n)}),
+                path_values=True))
             added += 1
         ctx.log.append(task.id, "mcp.started", {"server": name, "tools": added})
 
 
-def _caller(server: McpServer, tool: str):
+def _caller(server: McpServer, tool: str, originals: dict[str, str]):
     def call(ctx, task, **args) -> dict:
-        return server.call(tool, args)
+        unknown = sorted(k for k in args if k not in originals)
+        if unknown:
+            return {"ok": False, "error": f"{tool} takes no argument named {', '.join(unknown)}; it takes {', '.join(sorted(originals))}"}
+        return server.call(tool, {originals[k]: v for k, v in args.items()})
 
     return call
 
