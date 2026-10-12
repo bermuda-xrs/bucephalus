@@ -18,7 +18,8 @@ Windows; Python 3.11 or 3.12; Ollama 0.32.7 or later. Traps:
 - This path has Greek characters: `pip install -e .` and `.cmd` launchers fail. Use the `.ps1`
   scripts and `PYTHONUTF8=1`. Wheel builds: `pip wheel . --no-deps -w dist`.
 - Only the `bucephalus` under `OneDrive\Desktop` is live.
-- To rename the checkout folder, run `scripts/rename_checkout.ps1` from outside it: it renames the folder
+- The checkout was renamed from `alpha-test-1` to `bucephalus` on 2026-10-13. To rename it again, run
+  `scripts/rename_checkout.ps1` from outside it: it renames the folder
   and moves its per-checkout state directory (`<data dir>\checkouts\<folder name>-<hash of its path>`)
   to match. `-WhatIf` shows what it would do.
 - The venv lives at `%USERPROFILE%\.bucephalus-venv` (OneDrive deleted an in-folder one twice).
@@ -83,7 +84,7 @@ layer; 2 runs record the code they loaded, the prompt cannot change without a bu
 (`tests/test_mcp_real.py`, opt-in); 5 diff view, `bucephalus say`, the Telegram queue (FakeTransport), diagnostics, tool
 cards, the D16 window check; 6 WSL2, PLATFORMS section 5 twice (`docs/evidence/wsl-2026-10-12/`); 7 mutation
 (`docs/evidence/mutation-2026-10-12/`); 8 the audit (`docs/AUDIT-2026-10-12.md`): P1 and the mediums fixed red-first,
-the rest is D79; 10 `scripts/rename_checkout.ps1`.
+the rest is D79; 10 the checkout renamed by `scripts/rename_checkout.ps1`, its state directory moved with it.
 
 Diagnosis (3): write-function-002 had no graders under the runner (fixed). handbook-recall-005 hid the middle of the
 file behind a tool the small kit lacked (sixth tool), and a cap above half the compaction ceiling then forced a session
