@@ -113,4 +113,5 @@ def test_a_summary_compares_every_arm_with_the_control(tmp_path):
     assert s["n_pairs"] == 4 and s["arms"]["control"]["passes"] == 1 and s["arms"]["small8b"]["passes"] == 3
     assert s["vs_control"]["small8b"] == {"only_control": 0, "only_arm": 2, "both": 1, "neither": 1, "mcnemar_exact_p": 0.5}
     assert s["vs_control"]["full8b"]["only_control"] == 1 and "control" not in s["vs_control"]
+    assert s["arms"]["control"]["crashed"] == 0
     assert s["code"]["harness_version"] >= 10

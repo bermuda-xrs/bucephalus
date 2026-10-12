@@ -21,6 +21,18 @@ from .stall import (
 )
 
 
+RETRY_AFTER_S = 1.0
+
+
+def _dropped():
+    import httpx
+
+    return (httpx.ConnectError, httpx.ReadError, httpx.WriteError, httpx.RemoteProtocolError)
+
+
+DROPPED = _dropped()
+
+
 class OllamaBackend(BackendBase):
     def __init__(self, name: str, cfg: BackendConfig, client: httpx.Client | None = None):
         super().__init__(name, cfg)
@@ -76,28 +88,35 @@ class OllamaBackend(BackendBase):
             if injecting_timeout(n):
                 raise httpx.ReadTimeout(
                     "INJECTED transport timeout (BUCEPHALUS_INJECT_STALL)")
-            with client.stream("POST", f"{self.endpoint}/api/chat",
-                               timeout=httpx.Timeout(connect=15.0, read=900.0,
-                                                     write=30.0, pool=15.0),
-                               json=body) as r:
-                r.raise_for_status()
-                for line in r.iter_lines():
-                    if not line:
-                        continue
-                    try:
-                        chunk = json.loads(line)
-                    except ValueError:
-                        continue
-                    piece = (chunk.get("message") or {}).get("content") or ""
-                    if piece:
-                        parts.append(piece)
-                        if on_chunk is not None:
-                            on_chunk(piece)
-                    watch.count(piece)
-                    if chunk.get("done"):
-                        final = chunk
-                        break
-                    watch.judge()
+            for attempt in (0, 1):
+                try:
+                    with client.stream("POST", f"{self.endpoint}/api/chat",
+                                       timeout=httpx.Timeout(connect=15.0, read=900.0,
+                                                             write=30.0, pool=15.0),
+                                       json=body) as r:
+                        r.raise_for_status()
+                        for line in r.iter_lines():
+                            if not line:
+                                continue
+                            try:
+                                chunk = json.loads(line)
+                            except ValueError:
+                                continue
+                            piece = (chunk.get("message") or {}).get("content") or ""
+                            if piece:
+                                parts.append(piece)
+                                if on_chunk is not None:
+                                    on_chunk(piece)
+                            watch.count(piece)
+                            if chunk.get("done"):
+                                final = chunk
+                                break
+                            watch.judge()
+                    break
+                except DROPPED:
+                    if attempt or parts:
+                        raise
+                    time.sleep(RETRY_AFTER_S)
         except ModelStall:
             raise
         except httpx.TimeoutException as e:

@@ -154,6 +154,7 @@ def summarise(out: Path, reps: int, arms=DEFAULT_ARMS) -> dict:
     return {
         "code": code_identity(), "n_pairs": len(rows),
         "arms": {a: {"passes": sum(r["passed"][a] for r in rows), "n": len(rows),
+                     "crashed": sum(r["status"][a] == "crashed" for r in rows),
                      "mean_wall_s": round(sum(wall[a]) / len(wall[a]), 1) if wall[a] else None} for a in present},
         "vs_control": vs, "pairs": rows,
         "read_as": "a sighting, not a result: greedy decoding makes repetitions of one task near-copies, "
