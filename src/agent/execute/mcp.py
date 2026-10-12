@@ -171,6 +171,10 @@ def attach(ctx, task) -> None:
         added = 0
         for t in tools:
             tool = str(t.get("name", ""))
+            props = list(((t.get("inputSchema") or {}).get("properties") or {}))
+            if len({_SAFE.sub("_", str(k)) for k in props}) < len(props):
+                ctx.log.append(task.id, "mcp.skipped", {"server": name, "why": f"{tool}: argument names collide once made safe"})
+                continue
             full = f"mcp__{_SAFE.sub('_', name)}__{_SAFE.sub('_', tool)}"
             if not tool or ctx.tools.get(full) is not None:
                 continue

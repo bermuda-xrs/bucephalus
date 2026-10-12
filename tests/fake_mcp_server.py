@@ -20,6 +20,8 @@ TOOLS = [
                      "properties": {"repo-path": {"type": "string"}}}},
     {"name": "many", "description": "a list of files", "inputSchema": {"type": "object", "required": ["files"],
                      "properties": {"files": {"type": "array", "items": {"type": "string"}}}}},
+    {"name": "clash", "description": "two keys that sanitize alike", "inputSchema": {"type": "object",
+                     "properties": {"a-b": {"type": "string"}, "a_b": {"type": "string"}}}},
     {"name": "where", "description": "echo a repo path", "inputSchema": {"type": "object", "required": ["repo_path"],
                      "properties": {"repo_path": {"type": "string"}, "note": {"type": "string"}}}},
 ]

@@ -194,3 +194,27 @@ def test_what_counts_as_a_path_by_value():
     yes = ["C:" + bs + "x" + bs + "y", "D:/z", "/etc/passwd", "../a", "a/../../b", "~/k", bs + "share" + bs + "x"]
     no = ["Europe/London", "hello", "work/a.txt", "a..b", "1.5", ""]
     assert all(p(v) for v in yes) and not any(p(v) for v in no)
+
+
+def test_a_tool_whose_keys_collide_after_sanitizing_is_not_registered(ctx, task, mcp):
+    mcp(FINAL)
+    assert ctx.tools.get("mcp__fake__clash") is None and ctx.tools.get("mcp__fake__where") is not None
+    assert any("clash" in e.get("why", "") for e in _events(ctx, task, "mcp.skipped"))
+
+
+def test_a_file_uri_under_any_key_is_checked(ctx, mcp, tmp_path):
+    uri = (tmp_path.parent / "x").as_uri()
+    _, calls = mcp(_call("mcp__fake__where", repo_path="work", note=uri), FINAL, read_only=["where"])
+    assert "at:" not in calls[1]["tail"]
+
+
+def test_the_bare_name_of_a_file_outside_the_scope_is_checked(ctx, mcp, tmp_path):
+    (tmp_path / "secret.env").write_text("k=v", encoding="utf-8")
+    _, calls = mcp(_call("mcp__fake__where", repo_path="work", note="secret.env"), FINAL, read_only=["where"])
+    assert "at:" not in calls[1]["tail"]
+
+
+def test_a_bare_word_that_names_nothing_is_left_alone(ctx, mcp):
+    _, calls = mcp(_call("mcp__fake__where", repo_path="work", note="hello"), FINAL, read_only=["where"])
+    assert "at:work" in calls[1]["tail"]
+

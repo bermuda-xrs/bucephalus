@@ -91,7 +91,7 @@ def within_scope(args: dict, artifact_scope: list[str], root: str = ".",
                  extra_keys: frozenset = frozenset(), by_value: bool = False) -> tuple[bool, str]:
     if not artifact_scope:
         for key, value in args.items():
-            for v in _path_strings(key, value, extra_keys, by_value):
+            for v in _path_strings(key, value, extra_keys, by_value, root):
                 return False, (f"{key}={v!r}: this task declared no "
                                "artifact_scope, so no path is permitted - "
                                "declare one (bucephalus new --scope work)")
@@ -99,7 +99,7 @@ def within_scope(args: dict, artifact_scope: list[str], root: str = ".",
     roots = [Path(os.path.abspath(os.path.join(root, s))) for s in artifact_scope]
     real_roots = [_resolved(r) for r in roots]
     for key, value in args.items():
-        for v in _path_strings(key, value, extra_keys, by_value):
+        for v in _path_strings(key, value, extra_keys, by_value, root):
             p = Path(os.path.abspath(os.path.join(root, v)))
             if _names_a_stream(p):
                 return False, f"{key}={v!r} names an alternate data stream"
@@ -128,12 +128,34 @@ def _pathish_value(v: str) -> bool:
             or ".." in re.split(r"[\\/]", v))
 
 
-def _path_strings(key: str, value, extra: frozenset = frozenset(), by_value: bool = False):
+def _file_uri_path(v: str) -> str | None:
+    if not v.lower().startswith("file:"):
+        return None
+    from urllib.parse import unquote, urlparse
+    from urllib.request import url2pathname
+
+    u = urlparse(v)
+    return url2pathname(unquote((("//" + u.netloc) if u.netloc else "") + u.path))
+
+
+def _names_something(v: str, root) -> bool:
+    if root is None or not v or len(v) > 260 or any(c in v for c in "\n\r\t*?\"<>|"):
+        return False
+    try:
+        return Path(os.path.join(root, v)).exists()
+    except (OSError, ValueError):
+        return False
+
+
+def _path_strings(key: str, value, extra: frozenset = frozenset(), by_value: bool = False, root=None):
     keyed = key in _PATH_KEYS or key in extra
 
     def walk(v):
         if isinstance(v, str):
-            if keyed or (by_value and _pathish_value(v)):
+            uri = _file_uri_path(v) if by_value else None
+            if uri is not None:
+                yield uri
+            elif keyed or (by_value and (_pathish_value(v) or _names_something(v, root))):
                 yield v
         elif isinstance(v, (list, tuple)):
             for x in v:
@@ -258,7 +280,7 @@ def gate_tool_call(ctx, task, tool, args: dict, phase: str = "execute") -> GateD
     by_value = bool(getattr(tool, "path_values", False))
     state = None
     for key, value in eff.items():
-        for v in _path_strings(key, value, extra, by_value):
+        for v in _path_strings(key, value, extra, by_value, ctx.config.root):
             if state is None:
                 state = task_state_paths(ctx, task)
             if is_protected(v, ctx.config.root, state):
