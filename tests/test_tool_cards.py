@@ -75,3 +75,16 @@ def test_the_console_cards_open_and_escape_what_they_show():
     assert "toggleTool" in js and "/call?key=" in js
     body = js[js.index("function toolDetail"):js.index("function toolCard")] if "function toolDetail" in js else ""
     assert "esc(" in body, "a tool result is untrusted text and must be escaped where it is shown"
+
+
+def test_a_finished_task_lists_its_calls_for_cards_after_a_reload(api):
+    c, task, ctx = api
+    got = c.get(f"/tasks/{task.id}/calls").json()
+    assert [x["tool"] for x in got] == ["read_file", "write_file", "list_dir"]
+    assert all(x["ok"] is True and x["key"] and "preview" in x for x in got)
+    assert got[0]["key"] == _keys(ctx, task)[0]
+
+
+def test_the_console_loads_cards_for_finished_tasks_once():
+    js = (CONTROL / "ui.js").read_text(encoding="utf-8")
+    assert "/calls" in js and "S.callsLoaded" in js

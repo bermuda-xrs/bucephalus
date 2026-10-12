@@ -288,6 +288,22 @@ def create_app(ctx: AgentContext) -> FastAPI:
         _task(task_id)
         return [{"step": c["step"], "sha": c["sha"], "entries": c["entries"]} for c in list_checkpoints(ctx, task_id)]
 
+    @app.get("/tasks/{task_id}/calls")
+    def get_calls(task_id: str) -> list:
+        _task(task_id)
+        out, by_key = [], {}
+        for etype, payload in ctx.conn.execute(
+                "SELECT type, payload_json FROM events WHERE task_id=? AND type IN ('tool.intent', 'tool.receipt') "
+                "ORDER BY seq", (task_id,)):
+            d = json.loads(payload)
+            if etype == "tool.intent":
+                row = {"key": d.get("key", ""), "tool": d.get("tool"), "preview": d.get("preview", "")}
+                out.append(row)
+                by_key[row["key"]] = row
+            elif d.get("key") in by_key:
+                by_key[d["key"]].update(ok=bool(d.get("ok")), ms=d.get("wall_ms"))
+        return out
+
     @app.get("/tasks/{task_id}/call")
     def get_call(task_id: str, key: str) -> dict:
         from ..ledger.artifacts import read_artifact

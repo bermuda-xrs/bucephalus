@@ -329,3 +329,7 @@ td.r, th.r { text-align: right; }
 #modelPick:disabled { opacity: 0.8; }
 .run-model.on { color: var(--done); border-color: color-mix(in srgb, var(--done) 50%, var(--line)); }
 .model-warn { flex-basis: 100%; margin: 0; font-size: 12.5px; }
+
+.tool-detail { grid-column: 1 / -1; min-width: 0; }
+.tool-detail pre.code { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 22rem; overflow: auto; }
+.changes pre.code { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 28rem; overflow: auto; }

@@ -19,7 +19,7 @@ window.addEventListener("hashchange", () => {
 let RETURN_FOCUS = null;           // where focus goes back when a dialog closes
 const S = {conv: null, thread: null, loose: null, archived: false, streams: new Map(), trails: new Map(),
            drafting: new Set(), answers: new Map(), filesTask: null, filesPath: "", pane: "memory",
-           settings: null, lastSide: "", rewind: null, changes: null};
+           settings: null, lastSide: "", rewind: null, changes: null, callsLoaded: new Set()};
 
 function toast(msg, bad) {
   const t = $("#toast"); t.textContent = msg; t.className = "show" + (bad ? " bad" : "");
@@ -186,6 +186,7 @@ async function refreshThread(scroll) {
   updateRing(last ? last.task_id : null);
   if (last && S.filesTask !== last.task_id) loadFiles(last.task_id, "");
   for (const it of th.items) if (["running", "pending", "paused"].includes(it.status) && it.plan && it.plan.status === "approved") openStream(it.task_id);
+  for (const it of th.items) if (TERMINAL(it.status) && !S.streams.has(it.task_id) && !S.callsLoaded.has(it.task_id)) loadCalls(it.task_id);
   if (scroll) $("#items").scrollTop = $("#items").scrollHeight;
 }
 async function renameConversation() {
@@ -543,6 +544,16 @@ async function openStream(taskId) {
 function trail(taskId) {
   if (!S.trails.has(taskId)) S.trails.set(taskId, {tools: [], live: "", waiting: false, step: null});
   return S.trails.get(taskId);
+}
+async function loadCalls(taskId) {
+  S.callsLoaded.add(taskId);
+  let calls;
+  try { calls = await api(`/tasks/${taskId}/calls`); } catch { return; }
+  const tr = trail(taskId);
+  if (tr.tools.length || !calls.length) return;
+  tr.tools = calls.map(c => ({key: c.key, tool: c.tool, preview: c.preview, ok: c.ok, ms: c.ms}));
+  const box = $("#tools-" + taskId);
+  if (box) box.innerHTML = tr.tools.map(x => toolCard(x, taskId)).join("");
 }
 function toolDetail(t) {
   if (!t.open) return "";

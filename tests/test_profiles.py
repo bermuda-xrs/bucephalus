@@ -160,3 +160,55 @@ def test_the_checks_apply_to_every_profile(tmp_path, workspace, task, profile):
     assert "SyntaxError" in calls[1]["tail"]
     assert "change approach" in calls[4]["tail"].lower()
     c.close()
+
+
+def test_apply_patch_refuses_text_that_is_not_hunks(patcher, task, workspace):
+    (workspace / "a.py").write_text("x = 1\n", encoding="utf-8")
+    for bad in ("x = 2\n", "", "   \n"):
+        r = tool_apply_patch(patcher, task, path="work/a.py", patch=bad)
+        assert r["ok"] is False and "hunks" in r["error"], bad
+    r = tool_apply_patch(patcher, task, path="work/a.py", patch="junk before\n@@\n-x = 1\n+x = 2\n")
+    assert r["ok"] is False and "hunks" in r["error"]
+    assert (workspace / "a.py").read_text(encoding="utf-8") == "x = 1\n"
+
+
+def test_apply_patch_names_the_hunk_and_the_line_it_cannot_read(patcher, task, workspace):
+    (workspace / "a.py").write_text("x = 1\ny = 2\n", encoding="utf-8")
+    r = tool_apply_patch(patcher, task, path="work/a.py", patch="@@\n-x = 1\n+x = 3\n@@\n*y = 2\n")
+    assert r["ok"] is False and r["error"].startswith("hunk 2:") and "'*y = 2'" in r["error"]
+    assert (workspace / "a.py").read_text(encoding="utf-8") == "x = 1\ny = 2\n"
+
+
+def test_apply_patch_treats_a_bare_blank_line_as_blank_context(patcher, task, workspace):
+    (workspace / "a.py").write_text("a = 1\n\nb = 2\n", encoding="utf-8")
+    r = tool_apply_patch(patcher, task, path="work/a.py", patch="@@\n a = 1\n\n-b = 2\n+b = 3\n")
+    assert r["ok"] and (workspace / "a.py").read_text(encoding="utf-8") == "a = 1\n\nb = 3\n"
+
+
+def test_apply_patch_adds_at_the_end_before_the_final_newline(patcher, task, workspace):
+    (workspace / "a.py").write_text("a = 1\n", encoding="utf-8")
+    r = tool_apply_patch(patcher, task, path="work/a.py", patch="@@\n+b = 2\n")
+    assert r["ok"] and (workspace / "a.py").read_text(encoding="utf-8") == "a = 1\nb = 2\n"
+    (workspace / "c.py").write_text("a = 1", encoding="utf-8")
+    tool_apply_patch(patcher, task, path="work/c.py", patch="@@\n+b = 2\n")
+    assert (workspace / "c.py").read_text(encoding="utf-8") == "a = 1\nb = 2"
+
+
+def test_apply_patch_matches_the_last_lines_and_shrinks_them(patcher, task, workspace):
+    (workspace / "a.py").write_text("a = 1\nb = 2\nc = 3", encoding="utf-8")
+    r = tool_apply_patch(patcher, task, path="work/a.py", patch="@@\n-b = 2\n-c = 3\n+bc = 5\n")
+    assert r["ok"] and (workspace / "a.py").read_text(encoding="utf-8") == "a = 1\nbc = 5"
+
+
+def test_apply_patch_keeps_windows_line_endings(patcher, task, workspace):
+    (workspace / "a.py").write_bytes(b"a = 1\r\nb = 2\r\n")
+    r = tool_apply_patch(patcher, task, path="work/a.py", patch="@@\n-b = 2\n+b = 3\n")
+    assert r["ok"] and (workspace / "a.py").read_bytes() == b"a = 1\r\nb = 3\r\n"
+    (workspace / "u.py").write_bytes(b"a = 1\nb = 2\n")
+    tool_apply_patch(patcher, task, path="work/u.py", patch="@@\n-b = 2\n+b = 3\n")
+    assert (workspace / "u.py").read_bytes() == b"a = 1\nb = 3\n"
+
+
+def test_apply_patch_creates_missing_directories(patcher, task, workspace):
+    r = tool_apply_patch(patcher, task, path="work/deep/er/new.py", patch="@@\n+x = 1\n")
+    assert r["ok"] and (workspace / "deep" / "er" / "new.py").read_text(encoding="utf-8") == "x = 1\n"
