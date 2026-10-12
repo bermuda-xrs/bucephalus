@@ -195,3 +195,42 @@ def test_the_rewind_panel_survives_the_console_poll():
     body = js[js.index("async function showRewind"):js.index("async function doRewind")]
     assert body.index("await api(") < body.index("getElementById", body.index("await api(")), \
         "after the fetch the panel must be looked up again: a re-render may have replaced it"
+
+
+def test_a_task_with_no_checkpoints_says_so(ctx, task):
+    with pytest.raises(RewindError, match="no checkpoints"):
+        rewind(ctx, task.id)
+
+
+def test_a_checkpoint_without_files_refuses_a_code_rewind_but_allows_the_conversation(ctx, workspace):
+    from agent.kernel.types import Budget, TaskContract
+
+    ctx.config.mechanisms.shadow_checkpoints = True
+    t = create_task(ctx.conn, ctx.log, TaskContract(goal="g", artifact_scope=[]), Budget(usd=1.0, seconds=600))
+    ctx.backends["cloud"].queue(_write("x"), FINAL)
+    run_task(ctx, t.id)
+    assert list_checkpoints(ctx, t.id)[0]["sha"] is None
+    with pytest.raises(RewindError, match="holds no files"):
+        rewind(ctx, t.id, step=0, what="code")
+    assert rewind(ctx, t.id, step=0, what="conversation")["what"] == "conversation"
+
+
+def test_without_git_a_rewind_and_an_undo_are_refused_cleanly(run, monkeypatch):
+    ctx, task, ws = run
+    out = rewind(ctx, task.id, step=1, what="code")
+    assert out["undo"]
+    monkeypatch.setattr(shadow, "git_available", lambda: False)
+    with pytest.raises(RewindError, match="git is not installed"):
+        rewind(ctx, task.id, step=0, what="code")
+    from agent.execute.rewind import undo
+
+    with pytest.raises(RewindError, match="git is not installed"):
+        undo(ctx, task.id)
+
+
+def test_both_points_the_next_run_at_the_saved_conversation(run):
+    ctx, task, ws = run
+    before = len(_events(ctx, task, "task.park_seed"))
+    rewind(ctx, task.id, step=1, what="both")
+    seeds = _events(ctx, task, "task.park_seed")
+    assert len(seeds) == before + 1 and set(seeds[-1]) == {"artifact", "sha256", "entries"}

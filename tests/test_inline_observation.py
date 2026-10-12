@@ -104,3 +104,16 @@ def test_one_long_line_is_cut_not_dropped(ctx, task):
     out = project(ctx.conn, aid, mode="summary", max_tokens=400)
     assert "item-0 value 0" in out and "item-2999 value 2999" in out
     assert 250 <= count_tokens(out) <= 480
+
+
+def test_the_cap_without_an_executor_is_four_hundred_and_never_under_two_hundred(ctx):
+    from agent.execute.loop import _inline_cap
+
+    cloud = ctx.backends.pop("cloud")
+    try:
+        assert _inline_cap(ctx) == 400
+    finally:
+        ctx.backends["cloud"] = cloud
+    cloud.cfg.context_window = cloud.cfg.usable_context_window = 1000
+    ctx.config.limits.context_fill_ratio = 0.28
+    assert _inline_cap(ctx) == 200
