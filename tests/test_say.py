@@ -123,3 +123,11 @@ def test_the_console_has_a_say_command():
 
     js = (Path(__file__).resolve().parents[1] / "src" / "agent" / "control" / "ui.js").read_text(encoding="utf-8")
     assert "/say" in js and "/message" in js
+
+
+def test_a_message_is_pinned_so_compaction_keeps_it(ctx, task):
+    from agent.execute.say import take
+
+    say(ctx, task.id, "keep the tests green")
+    entries = take(ctx, task, 0)
+    assert [e.pinned for e in entries] == [True] and "keep the tests green" in entries[0].content

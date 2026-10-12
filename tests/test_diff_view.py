@@ -98,3 +98,26 @@ def test_the_console_shows_them_escaped_and_keeps_the_poll_off_while_open():
     assert "!S.changes" in poll
     body = js[js.index("function changesBody"):js.index("async function showChanges")]
     assert "esc(" in body
+
+
+def test_a_step_diff_ends_where_the_next_step_starts(run):
+    ctx, task = run
+    d = task_diffs(ctx, task.id)
+    assert "+two" not in d[0]["diff"] and "b.txt" not in d[1]["diff"]
+
+
+def test_each_step_lists_only_its_own_calls(run):
+    ctx, task = run
+    d = task_diffs(ctx, task.id)
+    assert [len(x["tools"]) for x in d] == [1, 1, 1]
+    assert "b.txt" in d[2]["tools"][0] and "b.txt" not in d[0]["tools"][0]
+
+
+def test_without_a_shadow_repo_there_are_no_diffs(run, monkeypatch):
+    ctx, task = run
+
+    def refuse(*a, **k):
+        raise shadow.ShadowUnavailable("no git")
+
+    monkeypatch.setattr(shadow.ShadowRepo, "checkpoint", refuse)
+    assert task_diffs(ctx, task.id) == []

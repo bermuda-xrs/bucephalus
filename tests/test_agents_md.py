@@ -149,3 +149,11 @@ def test_a_parent_of_protected_state_matches_without_regard_to_case_too():
     from agent.security.capabilities import _protected_at
 
     assert _protected_at(P("/R"), (P("/r/shadow"),))
+
+
+def test_the_cut_keeps_exactly_the_limit(ctx, task, tmp_path):
+    from agent.context import MAX_PROJECT_NOTES
+
+    (tmp_path / "AGENTS.md").write_text("x" * 20000, encoding="utf-8")
+    prefix = _prefix(ctx, task)
+    assert "x" * MAX_PROJECT_NOTES + chr(10) + "[truncated]" in prefix and "x" * (MAX_PROJECT_NOTES + 1) not in prefix
