@@ -112,19 +112,35 @@ def alive(pid: int) -> bool:
     return not (f and f[0] == "Z")
 
 
+PROC = "/proc"
+COMM_LEN = 15
+
+
+def _full_name(entry: str, comm: str) -> str:
+    if len(comm) < COMM_LEN:
+        return comm
+    try:
+        with open(f"{PROC}/{entry}/cmdline", "rb") as fh:
+            argv0 = fh.read().split(b"\0", 1)[0].decode("utf-8", "replace")
+    except OSError:
+        return comm
+    base = os.path.basename(argv0.replace(chr(92), "/"))
+    return base if base.startswith(comm) else comm
+
+
 def process_table() -> list[tuple[int, int, str]]:
     rows = []
-    for entry in os.listdir("/proc"):
+    for entry in os.listdir(PROC):
         if not entry.isdigit():
             continue
         try:
-            with open(f"/proc/{entry}/stat", encoding="utf-8") as fh:
+            with open(f"{PROC}/{entry}/stat", encoding="utf-8") as fh:
                 raw = fh.read()
             name = raw[raw.index("(") + 1:raw.rindex(")")]
             after = raw[raw.rindex(")") + 2:].split()
             if after[0] == "Z":
                 continue
-            rows.append((int(entry), int(after[1]), name))
+            rows.append((int(entry), int(after[1]), _full_name(entry, name)))
         except (OSError, ValueError, IndexError):
             continue
     return rows
