@@ -304,7 +304,7 @@ function runCard(it) {
     <div class="budget" aria-hidden="true"><i data-pct="${pct}"></i></div>
     <p class="prefill" id="pre-${esc(it.task_id)}" ${trail(it.task_id).waiting ? "" : "hidden"}><span class="spin"></span> Reading its prompt before the first word. On a CPU this is most of a turn.</p>
     <div class="live" id="live-${esc(it.task_id)}" aria-live="off">${esc(trail(it.task_id).live)}</div>
-    <div class="tools" id="tools-${esc(it.task_id)}">${trail(it.task_id).tools.map(toolCard).join("")}</div>
+    <div class="tools" id="tools-${esc(it.task_id)}">${trail(it.task_id).tools.map(x => toolCard(x, it.task_id)).join("")}</div>
     ${it.status === "running" ? `<div class="row"><button class="btn" data-action="stopTask" ${args(it.task_id)}>Pause</button></div>` : ""}
     ${it.status === "paused" && !(it.approvals || []).length ? `<p class="note">Paused. It carries on from where it left off when you resume it.</p>
       <div class="row"><button class="btn primary" data-action="resumeTask" ${args(it.task_id)}>Resume</button></div>` : ""}
@@ -544,16 +544,36 @@ function trail(taskId) {
   if (!S.trails.has(taskId)) S.trails.set(taskId, {tools: [], live: "", waiting: false, step: null});
   return S.trails.get(taskId);
 }
-function toolCard(t) {
+function toolDetail(t) {
+  if (!t.open) return "";
+  if (!t.detail) return `<div class="tool-detail"><span class="spin"></span></div>`;
+  const d = t.detail;
+  return `<div class="tool-detail"><div class="note">Arguments</div><pre class="code">${esc(JSON.stringify(d.args, null, 2))}</pre>
+    <div class="note">Result${d.taint === "untrusted" ? ", from outside (untrusted)" : ""}${d.truncated ? ", cut at 6,000 characters" : ""}</div>
+    <pre class="code">${esc(d.result)}</pre></div>`;
+}
+async function toggleTool(taskId, key) {
+  const tr = trail(taskId), t = tr.tools.find(x => x.key === key);
+  if (!t) return;
+  t.open = !t.open;
+  if (t.open && !t.detail) {
+    try { t.detail = await api(`/tasks/${taskId}/call?key=${encodeURIComponent(key)}`); }
+    catch (e) { t.open = false; return toast(e.message, true); }
+  }
+  const box = $("#tools-" + taskId);
+  if (box) box.innerHTML = tr.tools.map(x => toolCard(x, taskId)).join("");
+}
+function toolCard(t, taskId) {
   const res = t.ok === undefined ? `<span class="spin"></span>` : `${t.ok ? "done" : "failed"}, ${t.ms} ms`;
+  const open = t.ok !== undefined && t.key && taskId;
   return `<div class="tool ${t.ok === undefined ? "" : t.ok ? "ok" : "bad"}">
-    <span class="name">${esc(t.tool)}</span><span class="pv" title="${esc(t.preview)}">${esc(t.preview)}</span>
-    <span class="res">${res}</span></div>`;
+    <span class="name">${open ? `<button class="quiet" data-action="toggleTool" ${args(taskId, t.key)}>${t.open ? "▾" : "▸"} ${esc(t.tool)}</button>` : esc(t.tool)}</span><span class="pv" title="${esc(t.preview)}">${esc(t.preview)}</span>
+    <span class="res">${res}</span>${toolDetail(t)}</div>`;
 }
 function onEvent(taskId, name, d) {
   const tr = trail(taskId);
   const live = $("#live-" + taskId), pre = $("#pre-" + taskId), tools = $("#tools-" + taskId);
-  const redrawTools = () => { if (tools) tools.innerHTML = tr.tools.map(toolCard).join(""); };
+  const redrawTools = () => { if (tools) tools.innerHTML = tr.tools.map(x => toolCard(x, taskId)).join(""); };
   if (name === "live.waiting") { tr.waiting = true; if (pre) pre.hidden = false; }
   else if (name === "live.token") {
     tr.waiting = false; if (pre) pre.hidden = true;
@@ -1028,7 +1048,7 @@ const ACTIONS = {newConversation, selectConversation, renameConversation, archiv
   toggleFiles, toggleSide, openFile, openControl, closeControl, openPane, openPalette, focusSearch,
   toggleTheme, acceptMemory, createSuite, saveTask, closeSuite, addSkill, savePolicy,
   openSuite, delSuite, delTask, checkGate, pinConversation, exportConversation, enableNotifications,
-  runModel, stopTask, resumeTask, showRewind, showChanges, doRewind, askAgain, editAsk, copyAnswer, copyCode, forgetMemory, addSchedule, removeSchedule, viewSkill};
+  runModel, stopTask, resumeTask, toggleTool, showRewind, showChanges, doRewind, askAgain, editAsk, copyAnswer, copyCode, forgetMemory, addSchedule, removeSchedule, viewSkill};
 document.addEventListener("click", e => {
   const el = e.target.closest("[data-action]");
   if (!el || !ACTIONS[el.dataset.action]) return;

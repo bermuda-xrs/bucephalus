@@ -938,7 +938,7 @@ def _perform(ctx, task, tool, tool_name: str, args: dict, step: int) -> LedgerEn
         ctx.conn, task.id, "tool_output", text, taint, origin,
     )
     ctx.log.append(task.id, "artifact.written",
-                   {"id": aid, "kind": "tool_output", "taint": taint.value})
+                   {"id": aid, "kind": "tool_output", "taint": taint.value, "key": key})
     ctx.taint_tracker(task.id).trust_paths(args)
     ctx.taint_tracker(task.id).observe(text, taint)
 

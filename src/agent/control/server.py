@@ -288,6 +288,27 @@ def create_app(ctx: AgentContext) -> FastAPI:
         _task(task_id)
         return [{"step": c["step"], "sha": c["sha"], "entries": c["entries"]} for c in list_checkpoints(ctx, task_id)]
 
+    @app.get("/tasks/{task_id}/call")
+    def get_call(task_id: str, key: str) -> dict:
+        from ..ledger.artifacts import read_artifact
+
+        _task(task_id)
+        row = ctx.conn.execute(
+            "SELECT json_extract(payload_json, '$.id') FROM events WHERE task_id=? AND type='artifact.written' "
+            "AND json_extract(payload_json, '$.key')=? ORDER BY seq LIMIT 1", (task_id, key)).fetchone()
+        art = read_artifact(ctx.conn, row[0]) if row else None
+        if art is None:
+            raise HTTPException(404, "no such call")
+        rec = ctx.conn.execute(
+            "SELECT payload_json FROM events WHERE task_id=? AND type='tool.receipt' "
+            "AND json_extract(payload_json, '$.key')=? ORDER BY seq LIMIT 1", (task_id, key)).fetchone()
+        receipt = json.loads(rec[0]) if rec else {}
+        origin = json.loads(ctx.conn.execute("SELECT origin_json FROM artifacts WHERE id=?", (art["id"],)).fetchone()[0])
+        text = art["content"]
+        return {"tool": origin.get("tool"), "args": origin.get("args", {}), "result": text[:6000],
+                "truncated": len(text) > 6000, "taint": art["taint"].value, "ok": receipt.get("ok"),
+                "wall_ms": receipt.get("wall_ms")}
+
     @app.get("/tasks/{task_id}/diff")
     def get_diff(task_id: str, step: int | None = None) -> list:
         from ..execute.diffview import task_diffs
