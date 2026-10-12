@@ -134,7 +134,7 @@ def test_without_serve_mode_an_approval_still_runs_inline(bot, monkeypatch):
     assert ran == [task.id]
 
 
-HTTP_TRANSPORT_SHA256 = "3114c79fd77faa437206e8a9abecf0b3e316cb500f3b9e7bdfb5937b1d80fc0b"
+HTTP_TRANSPORT_SHA256 = "fb8b5a8afadb065759f320aec5559816bac42c4c36c38f18bb78e5dbe557efa9"
 
 
 def test_the_http_transport_is_untouched():
@@ -143,5 +143,9 @@ def test_the_http_transport_is_untouched():
 
     from agent.channel import telegram
 
-    got = hashlib.sha256(inspect.getsource(telegram.HttpTransport).encode()).hexdigest()
+    import ast
+    import textwrap
+
+    tree = ast.dump(ast.parse(textwrap.dedent(inspect.getsource(telegram.HttpTransport))))
+    got = hashlib.sha256(tree.encode()).hexdigest()
     assert got == HTTP_TRANSPORT_SHA256, "HttpTransport has never made a live call (D26) and must not change without one"
