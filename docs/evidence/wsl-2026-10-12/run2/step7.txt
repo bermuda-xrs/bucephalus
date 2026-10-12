@@ -1,0 +1,37 @@
+[pywebview] GTK cannot be loaded
+Traceback (most recent call last):
+  File "webview/guilib.py", line 39, in import_gtk
+    import webview.platforms.gtk as guilib
+  File "pyimod02_importers.py", line 457, in exec_module
+  File "webview/platforms/gtk.py", line 28, in <module>
+    import gi  # noqa: E402
+    ^^^^^^^^^
+ModuleNotFoundError: No module named 'gi'
+[pywebview] QT cannot be loaded
+Traceback (most recent call last):
+  File "webview/guilib.py", line 51, in import_qt
+    import webview.platforms.qt as guilib
+  File "pyimod02_importers.py", line 457, in exec_module
+  File "webview/platforms/qt.py", line 14, in <module>
+    from qtpy import PYQT6, PYSIDE6, QtCore
+ModuleNotFoundError: No module named 'qtpy'
+Traceback (most recent call last):
+  File "app_entry.py", line 10, in <module>
+  File "agent/desktop.py", line 124, in main
+  File "webview/__init__.py", line 248, in start
+    guilib = initialize(gui)
+  File "webview/guilib.py", line 124, in initialize
+    raise WebViewException(
+        'You must have either QT or GTK with Python extensions installed in order to use pywebview.'
+    )
+webview.errors.WebViewException: You must have either QT or GTK with Python extensions installed in order to use pywebview.
+[PYI-4788:ERROR] Failed to execute script 'app_entry' due to unhandled exception!
+app exit 1 (124 = still running at 40 s, killed by timeout)
+left after: 0
+agent.local.db
+anchor
+grading
+memory
+runs
+skills_store
+work

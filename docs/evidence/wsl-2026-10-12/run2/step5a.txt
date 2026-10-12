@@ -1,0 +1,7 @@
+bringing up nodes...
+bringing up nodes...
+
+..s....................                                                  [100%]
+=========================== short test summary info ============================
+SKIPPED [1] tests/test_posix_platform.py:270: macOS only - verified on a real Mac by docs/PLATFORMS.md checklist step 5
+22 passed, 1 skipped in 10.06s
