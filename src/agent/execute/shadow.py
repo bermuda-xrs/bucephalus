@@ -74,6 +74,16 @@ class ShadowRepo:
     def _links(self) -> list[str]:
         out = []
         for s in self.scopes:
+            cur = self.work_tree
+            for part in Path(s).parts:
+                cur = cur / part
+                if _is_link(str(cur)):
+                    out.append(cur.relative_to(self.work_tree).as_posix())
+                    break
+            else:
+                cur = None
+            if cur is not None:
+                continue
             stack = [self.work_tree / s]
             while stack:
                 d = stack.pop()

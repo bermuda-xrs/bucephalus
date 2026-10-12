@@ -1,0 +1,88 @@
+bringing up nodes...
+bringing up nodes...
+
+............................................................sss.s.s...s. [  4%]
+........................................................................ [  8%]
+........................................................................ [ 12%]
+.............................s..........s............................... [ 16%]
+........................................................................ [ 21%]
+..s.....s..........................................ssssssss....s........ [ 25%]
+........................................................................ [ 29%]
+.................................................s.....ssss.s........... [ 33%]
+....................................................................F... [ 37%]
+...............................ss..sssssss.s.s..........s...s..s..s..s.. [ 42%]
+.....s.................................................................. [ 46%]
+........................................................................ [ 50%]
+..................s.........s........................................... [ 54%]
+................s..s.................................................... [ 58%]
+........................................................................ [ 63%]
+.......................................................s..s............. [ 67%]
+...........................................s............................ [ 71%]
+..........................sssssssssss................................... [ 75%]
+........................................................................ [ 79%]
+........................................................................ [ 84%]
+........................................................................ [ 88%]
+........................................................................ [ 92%]
+........................................................................ [ 96%]
+.......................................................                  [100%]
+=================================== FAILURES ===================================
+__________________ test_every_path_the_handover_names_exists ___________________
+[gw2] linux -- Python 3.13.5 /home/char1/.buc-venv/bin/python
+
+    def test_every_path_the_handover_names_exists():
+        named = _paths_named()
+        assert named, "the path scan found nothing - the regex has stopped matching"
+        missing = [p for p in named if not (ROOT / p).exists()]
+>       assert not missing, f"handover names paths that do not exist: {missing}"
+E       AssertionError: handover names paths that do not exist: ['runs/profile-two-20261012/']
+E       assert not ['runs/profile-two-20261012/']
+
+tests/test_handover_is_current.py:45: AssertionError
+=========================== short test summary info ============================
+SKIPPED [5] tests/test_audit_iteration_3_fixes.py:26: NTFS data streams
+SKIPPED [1] tests/test_anchor_behind_is_not_tampering.py:127: no local database in this checkout
+SKIPPED [1] tests/test_console_v3.py:133: node is not installed
+SKIPPED [1] tests/test_console_v3.py:140: node is not installed
+SKIPPED [1] tests/test_diagnostics.py:101: node is not installed
+SKIPPED [1] tests/test_diagnostics.py:96: node is not installed
+SKIPPED [9] tests/test_every_verifier_can_fail.py:77: inspects nothing - held by the mesh under measurement
+SKIPPED [1] tests/test_file_browser.py:126: no junctions on this platform
+SKIPPED [1] tests/test_frozen_sandbox.py:42: runs in the frozen probe
+SKIPPED [1] tests/test_frozen_sandbox.py:33: runs in the frozen probe
+SKIPPED [1] tests/test_frozen_sandbox.py:103: runs in the frozen probe
+SKIPPED [1] tests/test_frozen_sandbox.py:119: runs in the frozen probe
+SKIPPED [1] tests/test_frozen_sandbox.py:66: runs in the frozen probe
+SKIPPED [1] tests/test_junction_escape.py:15: Windows junctions
+SKIPPED [1] tests/test_junction_escape.py:49: Windows junctions
+SKIPPED [1] tests/test_junction_escape.py:75: Windows junctions
+SKIPPED [1] tests/test_junction_escape.py:96: Windows junctions
+SKIPPED [1] tests/test_junction_escape.py:39: Windows junctions
+SKIPPED [1] tests/test_junction_escape.py:136: Windows junctions
+SKIPPED [1] tests/test_junction_escape.py:143: Windows junctions
+SKIPPED [1] tests/test_junction_escape.py:86: Windows junctions
+SKIPPED [2] tests/test_junction_escape.py:153: Windows junctions
+SKIPPED [1] tests/test_keep_awake.py:42: Windows power API
+SKIPPED [1] tests/test_junction_escape.py:64: Windows junctions
+SKIPPED [1] tests/test_junction_escape.py:126: Windows junctions
+SKIPPED [2] tests/test_live_credentials.py:57: ANTHROPIC_API_KEY is not set: the Anthropic adapter stays UNVERIFIED (D26)
+SKIPPED [1] tests/test_live_credentials.py:50: BUCEPHALUS_TELEGRAM_TOKEN is not set: the live Telegram path stays UNVERIFIED (D26)
+SKIPPED [1] tests/test_junction_escape.py:26: Windows junctions
+SKIPPED [1] tests/test_mcp_real.py:49: set BUCEPHALUS_REAL_MCP_PYTHON to a python with mcp-server-time and mcp-server-git installed
+SKIPPED [1] tests/test_mcp_real.py:68: set BUCEPHALUS_REAL_MCP_PYTHON to a python with mcp-server-time and mcp-server-git installed
+SKIPPED [1] tests/test_new_code_mutants.py:149: the Windows platform layer
+SKIPPED [1] tests/test_new_code_mutants.py:163: the Windows platform layer
+SKIPPED [1] tests/test_recycled_pids.py:52: could not import 'msvcrt': No module named 'msvcrt'
+SKIPPED [1] tests/test_recycled_pids.py:81: the Windows handle path
+SKIPPED [1] tests/test_posix_platform.py:270: macOS only - verified on a real Mac by docs/PLATFORMS.md checklist step 5
+SKIPPED [1] tests/test_sandbox_limits.py:44: the Windows half of D37
+SKIPPED [1] tests/test_sandbox_limits.py:35: the Windows half of D37
+SKIPPED [1] tests/test_sandbox_limits.py:56: the Windows half of D37
+SKIPPED [1] tests/test_sandbox_limits.py:49: the Windows half of D37
+SKIPPED [1] tests/test_sandbox_limits.py:92: the Windows half of D37
+SKIPPED [1] tests/test_sandbox_limits.py:69: the Windows half of D37
+SKIPPED [1] tests/test_sandbox_limits.py:113: the Windows half of D37
+SKIPPED [1] tests/test_sandbox_limits.py:121: the Windows half of D37
+SKIPPED [1] tests/test_sandbox_limits.py:169: the Windows half of D37
+SKIPPED [1] tests/test_sandbox_limits.py:155: the Windows half of D37
+SKIPPED [1] tests/test_sandbox_limits.py:177: the Windows half of D37
+1 failed, 1650 passed, 60 skipped in 320.78s (0:05:20)

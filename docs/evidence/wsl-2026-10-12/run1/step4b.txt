@@ -1,0 +1,5 @@
+1  Traceback (most recent call last):
+  File "/tmp/bucephalus_sbx_ixd50r77/_run.py", line 358, in <module>
+    b = bytearray(640 * 2**20); print('allocated')
+MemoryError
+

@@ -1,0 +1,38 @@
+s...F..sssssssssss.................................sssssssssssss         [100%]
+=================================== FAILURES ===================================
+________________ test_frozen_no_recursive_spawn_by_process_tree ________________
+
+    @frozen_only
+    def test_frozen_no_recursive_spawn_by_process_tree():
+        exe = os.path.basename(sys.executable).lower()
+        before = {p for p, _ in _descendants(os.getpid())}
+        code = ("import os, time, glob\n"
+                "print('nested', glob.glob(os.path.join(os.getcwd(), 'bucephalus_sbx_*')))\n"
+                "time.sleep(4)\nprint('done')\n")
+        seen: list[list[tuple[int, str]]] = []
+    
+        import threading
+    
+        def watch():
+            t0 = time.time()
+            while time.time() - t0 < 3.5:
+                seen.append(_descendants(os.getpid()))
+                time.sleep(0.25)
+    
+        w = threading.Thread(target=watch)
+        w.start()
+        r = run_sandboxed(code, timeout_s=60)
+        w.join()
+        assert "done" in r["stdout"] and "nested []" in r["stdout"], r
+        copies = max(len([1 for p, img in snap if img.lower() == exe and p not in before])
+                     for snap in seen)
+>       assert copies == 1, f"{copies} copies of {exe} under the app during one sandbox run"
+E       AssertionError: 0 copies of bucephalus-probe under the app during one sandbox run
+E       assert 0 == 1
+
+../.bucephalus-build/dist/bucephalus-probe/_internal/tests/test_frozen_sandbox.py:90: AssertionError
+=========================== short test summary info ============================
+FAILED ../.bucephalus-build/dist/bucephalus-probe/_internal/tests/test_frozen_sandbox.py::test_frozen_no_recursive_spawn_by_process_tree
+1 failed, 38 passed, 25 skipped in 39.98s
+probe exit 1
+probes left: 0

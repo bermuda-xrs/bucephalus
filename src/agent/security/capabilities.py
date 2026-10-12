@@ -80,10 +80,16 @@ def _argv_files(cfg, root: Path) -> list[Path]:
     hooks = cfg.hooks.pre_tool + cfg.hooks.post_tool + cfg.hooks.stop
     out = []
     for argv in [h.argv for h in hooks] + [s.argv for s in cfg.mcp_servers.values()]:
-        for a in argv:
-            p = Path(a) if Path(a).is_absolute() else root / a
+        for i, a in enumerate(argv):
+            if i and argv[i - 1] == "-m":
+                top = root / a.split(".")[0]
+                out += [q for q in (top, top.with_suffix(".py")) if q.exists()]
+                continue
+            p = Path(os.path.abspath(a if Path(a).is_absolute() else root / a))
             if p.is_file():
                 out.append(p)
+                if p.parent != root and p.parent not in root.parents:
+                    out.append(p.parent)
     return out
 
 
@@ -150,7 +156,7 @@ REFUSED_URI = object()
 
 
 def _file_uri_path(v: str):
-    v = v.lstrip("".join(map(chr, range(33))))
+    v = re.sub("[\t\r\n]", "", v).strip("".join(map(chr, range(33))))
     if not v.lower().startswith("file:"):
         return None
     from urllib.parse import urlparse

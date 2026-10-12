@@ -152,7 +152,7 @@ def test_h4_the_files_a_hook_or_mcp_server_runs_are_protected(ctx):
     state = state_paths(ctx)
     assert is_protected("tools/precheck.py", str(root), state)
     assert is_protected("tools/server.py", str(root), state)
-    assert not is_protected("tools/other.py", str(root), state)
+    assert not is_protected("work/other.py", str(root), state)
 
 
 def test_h4_the_loaded_config_is_protected_whatever_its_name(tmp_path):
@@ -201,3 +201,57 @@ def test_m2_a_file_uri_behind_leading_whitespace_is_still_a_path(pad):
     from agent.security.capabilities import _path_strings
 
     assert list(_path_strings("note", pad + "file:///C:/Windows/win.ini", by_value=True)) != []
+
+
+@pytest.mark.parametrize("v", ["fi\tle:///C:/Windows/win.ini", "file\n:///C:/Windows/win.ini", "FILE:///C:/Windows/win.ini \x00"])
+def test_review_a_file_uri_split_by_tabs_or_newlines_is_read_as_a_browser_would(v):
+    from agent.security.capabilities import _path_strings
+
+    got = list(_path_strings("note", v, by_value=True))
+    assert got and all("win.ini" in str(g) and "file" not in str(g).lower() for g in got), got
+
+
+def test_review_what_a_hook_script_imports_beside_it_is_protected_too(ctx):
+    from agent.security.capabilities import is_protected, state_paths
+
+    root = Path(ctx.config.root)
+    (root / "tools").mkdir(exist_ok=True)
+    (root / "tools" / "precheck.py").write_text("", encoding="utf-8")
+    (root / "lintpkg").mkdir(exist_ok=True)
+    (root / "lintpkg" / "__init__.py").write_text("", encoding="utf-8")
+    (root / "top.py").write_text("", encoding="utf-8")
+    ctx.config.hooks = HooksConfig.model_validate({"pre_tool": [{"argv": ["python", "tools/precheck.py"]},
+                                                                {"argv": ["python", "-m", "lintpkg.run"]},
+                                                                {"argv": ["python", "top.py"]}]})
+    state = state_paths(ctx)
+    assert is_protected("tools/helper.py", str(root), state)
+    assert is_protected("lintpkg/run.py", str(root), state)
+    assert is_protected("top.py", str(root), state)
+    assert not is_protected("work/a.txt", str(root), state)
+
+
+def test_review_a_scope_that_is_itself_a_junction_is_neither_captured_nor_restored_through(tmp_path):
+    import shutil
+
+    from agent.execute import shadow
+    from agent.execute.shadow import ShadowRepo, ShadowUnavailable
+
+    if not shadow.git_available():
+        pytest.skip("git is not installed")
+    root = tmp_path / "proj"
+    (root / "work").mkdir(parents=True)
+    (root / "work" / "f.txt").write_text("v1", encoding="utf-8")
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "keep.txt").write_text("precious", encoding="utf-8")
+    repo = ShadowRepo(tmp_path / "shadow", root, ["work"])
+    sha1 = repo.checkpoint("step0")
+    shutil.rmtree(root / "work")
+    r = subprocess.run(["cmd", "/c", "mklink", "/J", str(root / "work"), str(outside)], capture_output=True, text=True)
+    if r.returncode != 0:
+        pytest.skip("cannot make a junction here")
+    sha2 = repo.checkpoint("step1")
+    assert "work/keep.txt" not in repo.changed(sha1, sha2), "a checkpoint copied files from outside the scope"
+    with pytest.raises(ShadowUnavailable, match="link"):
+        repo.restore(sha1)
+    assert (outside / "keep.txt").read_text(encoding="utf-8") == "precious"
