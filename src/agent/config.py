@@ -138,6 +138,7 @@ class TelegramConfig(BaseModel):
     allowed_senders: list[str] = Field(default_factory=list)
     token_env: str = "BUCEPHALUS_TELEGRAM_TOKEN"
     poll_timeout_s: int = 25
+    max_queue: int = 10
     artifact_scope: list[str] = Field(default_factory=lambda: ["work"])
 
 

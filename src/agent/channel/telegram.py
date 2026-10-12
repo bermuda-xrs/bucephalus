@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import collections
 import json
 import os
+import threading
 import time
 import urllib.error
 import urllib.request
@@ -126,6 +128,8 @@ class TelegramBot:
         self.tx = transport
         self.cfg = cfg or ctx.config.channels.telegram
         self.offset = self._resume_offset()
+        self.queued = False
+        self._resume: collections.deque = collections.deque()
 
     def _resume_offset(self) -> int:
         row = self.ctx.conn.execute(
@@ -160,6 +164,12 @@ class TelegramBot:
             (task_id,)).fetchone()
         return row[0] if row else None
 
+    def _waiting(self) -> list[str]:
+        rows = self.ctx.conn.execute(
+            "SELECT id FROM tasks WHERE origin=? AND status IN ('pending', 'running') ORDER BY created_at, rowid",
+            (TELEGRAM,)).fetchall()
+        return [r[0] for r in rows]
+
     def allowed(self, sender) -> bool:
         return str(sender) in {str(x) for x in self.cfg.allowed_senders}
 
@@ -182,6 +192,10 @@ class TelegramBot:
         if not text.strip():
             return {"action": "ignored", "why": "empty message"}
 
+        if len(self._waiting()) >= self.cfg.max_queue:
+            self.tx.send_message(chat, f"the queue is full ({self.cfg.max_queue} waiting); try again later")
+            return {"action": "refused", "why": "queue full"}
+
         contract = TaskContract(
             goal=text,
             success_criterion="always_pass",
@@ -196,9 +210,11 @@ class TelegramBot:
         task = create_task(self.ctx.conn, self.ctx.log, contract, budget,
                            origin=TELEGRAM)
         self._bind(task.id, chat)
+        waiting = self._waiting()
+        ahead = waiting.index(task.id) if task.id in waiting else 0
         self.tx.send_message(
             chat,
-            f"started {task.id}\n"
+            (f"queued {task.id}, {ahead} ahead\n" if ahead else f"started {task.id}\n") +
             f"budget ${budget.usd:.2f} / {budget.seconds}s\n"
             f"restricted: {', '.join(sorted(self.ctx.tool_policy(task.id).denied))}",
         )
@@ -288,7 +304,10 @@ class TelegramBot:
 
         self.tx.answer_callback(cb_id, decision + "d")
         if out["approved"]:
-            self.run(task_id)
+            if self.queued:
+                self._resume.append(task_id)
+            else:
+                self.run(task_id)
         return {"action": decision, "task_id": task_id, "sender": str(sender)}
 
     def poll_once(self, timeout: int | None = None) -> list[dict]:
@@ -316,12 +335,40 @@ class TelegramBot:
             asked.append(a["id"])
         return asked
 
-    def serve_forever(self) -> None:  # pragma: no cover - needs a live token
+    def drain_once(self) -> str | None:
+        if self._resume:
+            task_id = self._resume.popleft()
+        else:
+            row = self.ctx.conn.execute(
+                "SELECT id FROM tasks WHERE origin=? AND status='pending' ORDER BY created_at, rowid LIMIT 1",
+                (TELEGRAM,)).fetchone()
+            if row is None:
+                return None
+            task_id = row[0]
+        self.run(task_id)
+        return task_id
+
+    def work_queue(self, stop: threading.Event, idle_s: float = 0.5) -> None:
+        self.queued = True
         self.resend_pending()
-        while True:
-            for r in self.poll_once():
-                if r.get("action") == "created":
-                    self.run(r["task_id"])
+
+        def worker() -> None:
+            while not stop.is_set():
+                if self.drain_once() is None:
+                    stop.wait(0.05)
+
+        w = threading.Thread(target=worker, name="telegram-queue", daemon=True)
+        w.start()
+        try:
+            while not stop.is_set():
+                self.poll_once()
+                stop.wait(idle_s)
+        finally:
+            stop.set()
+            w.join(60)
+
+    def serve_forever(self) -> None:  # pragma: no cover - needs a live token
+        self.work_queue(threading.Event())
 
 
 def build(ctx, transport: Transport | None = None) -> TelegramBot:
