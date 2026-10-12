@@ -109,6 +109,7 @@ class McpServerConfig(BaseModel):
     argv: list[str]
     env: dict[str, str] = Field(default_factory=dict)
     read_only: list[str] = Field(default_factory=list)
+    strict_paths: bool = False
     timeout_s: int = 30
     start_timeout_s: int = 20
 

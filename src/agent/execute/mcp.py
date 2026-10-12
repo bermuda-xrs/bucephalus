@@ -187,7 +187,7 @@ def attach(ctx, task) -> None:
                 description=f"{tool} of the user-configured MCP server {name}",
                 path_args=tuple({n for sane, orig in _originals(t.get("inputSchema") or {}).items()
                                  for n in (sane, orig) if _PATHISH.search(n)}),
-                path_values=True))
+                path_values="all" if cfg.strict_paths else True))
             added += 1
         ctx.log.append(task.id, "mcp.started", {"server": name, "tools": added})
 

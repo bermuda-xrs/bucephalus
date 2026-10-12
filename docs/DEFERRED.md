@@ -10,6 +10,7 @@ An entry is removed in the change that closes it; its history is in git and CHAN
 | D27 | open: the bot's queue, with D26 |
 | D32 | known and accepted |
 | D33 | open: a HARNESS_VERSION change; its criterion is measured at zero |
+| D78 | known: an MCP argument under a non-path key is checked by heuristics; `strict_paths` closes it per server |
 
 ---
 
@@ -240,3 +241,18 @@ Both live paths now have a test that runs the moment the credential exists:
 (`ANTHROPIC_API_KEY`, one small paid call per Anthropic backend). Both skip
 without it. The same bodies run every suite against local fakes. The STOP is
 unchanged: supplying either credential is the user's decision.
+
+---
+
+## D78 - an MCP argument under a non-path key is checked by heuristics (2026-10-12)
+
+**Found:** by the automated commit review, three rounds, while closing the MCP gate.
+
+For MCP tools the gate checks keys that look like paths, every string that is absolute, drive-lettered, home- or
+traversal-looking, `file:` URIs (single decode; a query, fragment, params or encoded separator fails closed), names of
+existing files, and separated names whose parent directory exists. **Still open:** a bare new name with no separator
+under a non-path key (`note="new.env"`) is not checked, and the difference between "exists" and "does not" is visible to
+the model as allowed vs refused. Checking every string would refuse ordinary arguments such as commit messages.
+
+**What closes it:** `mcp_servers.<name>.strict_paths: true` checks every string argument of that server's tools against
+the scope (tested). The default stays off because it breaks text arguments; the user decides per server.

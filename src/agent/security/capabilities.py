@@ -131,13 +131,13 @@ def _pathish_value(v: str) -> bool:
 def _file_uri_path(v: str) -> str | None:
     if not v.lower().startswith("file:"):
         return None
-    from urllib.parse import unquote, urlparse
+    from urllib.parse import urlparse
     from urllib.request import url2pathname
 
     u = urlparse(v)
-    if u.query or u.fragment or u.params:
+    if u.query or u.fragment or u.params or re.search(r"%(2[ef5]|5c)", v, re.I):
         return v
-    return url2pathname(unquote((("//" + u.netloc) if u.netloc else "") + u.path))
+    return url2pathname((("//" + u.netloc) if u.netloc else "") + u.path)
 
 
 def _names_something(v: str, root) -> bool:
@@ -150,8 +150,8 @@ def _names_something(v: str, root) -> bool:
         return False
 
 
-def _path_strings(key: str, value, extra: frozenset = frozenset(), by_value: bool = False, root=None):
-    keyed = key in _PATH_KEYS or key in extra
+def _path_strings(key: str, value, extra: frozenset = frozenset(), by_value=False, root=None):
+    keyed = key in _PATH_KEYS or key in extra or by_value == "all"
 
     def walk(v):
         if isinstance(v, str):
@@ -280,7 +280,7 @@ def gate_tool_call(ctx, task, tool, args: dict, phase: str = "execute") -> GateD
 
     eff = _effective_args(tool, args)
     extra = frozenset(getattr(tool, "path_args", ()))
-    by_value = bool(getattr(tool, "path_values", False))
+    by_value = getattr(tool, "path_values", False)
     state = None
     for key, value in eff.items():
         for v in _path_strings(key, value, extra, by_value, ctx.config.root):

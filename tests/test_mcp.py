@@ -235,3 +235,25 @@ def test_a_new_file_in_an_existing_directory_outside_the_scope_is_checked(ctx, m
 def test_a_new_file_inside_the_scope_is_fine(ctx, mcp, workspace):
     _, calls = mcp(_call("mcp__fake__where", repo_path="work", note="work/new.txt"), FINAL, read_only=["where"])
     assert "at:work" in calls[1]["tail"]
+
+
+def test_an_encoded_separator_or_double_encoding_in_a_file_uri_is_refused(ctx, mcp, workspace):
+    base = (workspace / "x").as_uri()
+    for tail in ("%2F..%2F..%2Fsecret", "%252F..%252Fsecret"):
+        ctx.backends["cloud"].queue(_call("mcp__fake__where", repo_path="work", note=base + tail))
+    _, calls = mcp(FINAL, read_only=["where"])
+    for c in calls[1:3]:
+        assert "at:" not in c["tail"]
+
+
+def test_strict_mode_checks_every_string_argument(ctx, task, workspace):
+    import sys as _sys
+
+    from agent.config import McpServerConfig
+    from agent.execute.loop import run_task as _run
+
+    ctx.config.autonomy.approve_scoped_writes = True
+    ctx.config.mcp_servers = {"fake": McpServerConfig(argv=[_sys.executable, FAKE], read_only=["where"], strict_paths=True)}
+    ctx.backends["cloud"].queue(_call("mcp__fake__where", repo_path="work", note="brand-new-name.env"), FINAL)
+    _run(ctx, task.id)
+    assert "at:" not in ctx.backends["cloud"].calls[1]["tail"]
