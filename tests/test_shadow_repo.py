@@ -126,3 +126,32 @@ def test_a_path_that_does_not_exist_is_not_a_link(tmp_path):
     from agent.execute.shadow import _is_link
 
     assert not _is_link(str(tmp_path / "missing"))
+
+
+def test_the_whole_root_and_protected_state_are_never_scopes(ctx):
+    from agent.kernel.tasks import create_task
+    from agent.kernel.types import Budget, TaskContract
+
+    t = create_task(ctx.conn, ctx.log, TaskContract(goal="g", artifact_scope=[".", "anchor", "work"]), Budget(usd=1.0, seconds=60))
+    assert ShadowRepo.for_task(ctx, t).scopes == ["work"]
+
+
+def test_a_git_failure_is_shadow_unavailable_and_a_new_repo_has_no_log(tmp_path):
+    from agent.execute.shadow import ShadowUnavailable
+
+    (tmp_path / "w" / "work").mkdir(parents=True)
+    repo = ShadowRepo(tmp_path / "s", tmp_path / "w", ["work"])
+    assert repo.log() == []
+    repo.checkpoint("one")
+    with pytest.raises(ShadowUnavailable, match="git diff failed"):
+        repo.diff("0" * 40, "1" * 40)
+
+
+def test_a_link_two_levels_down_is_found(tmp_path):
+    (tmp_path / "w" / "work" / "sub").mkdir(parents=True)
+    (tmp_path / "out").mkdir()
+    r = subprocess.run(["cmd", "/c", "mklink", "/J", str(tmp_path / "w" / "work" / "sub" / "d"), str(tmp_path / "out")],
+                       capture_output=True, text=True)
+    if r.returncode != 0:
+        pytest.skip("cannot make a junction here")
+    assert ShadowRepo(tmp_path / "s", tmp_path / "w", ["work"])._links() == ["work/sub/d"]
