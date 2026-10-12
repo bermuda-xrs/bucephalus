@@ -412,7 +412,9 @@ tests/         the spec's acceptance tests, per milestone, + source invariants
   ```
 - **`mcp_servers`**: stdio MCP servers whose tools join the registry as `mcp__<server>__<tool>`. A tool writes
   unless listed in `read_only`; output is untrusted; the server's own descriptions never reach the prompt; path-like
-  arguments are scope-checked (`strict_paths: true` checks every string). Unattended origins cannot call them.
+  arguments are scope-checked, and for a writing tool so is any string without whitespace that has a path separator
+  or ends in a file extension (`https://` URLs excepted). `strict_paths: true` checks every string; `false` drops the
+  writing-tool check. Unattended origins cannot call them.
 
   ```yaml
   mcp_servers:

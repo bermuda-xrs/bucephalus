@@ -180,6 +180,16 @@ def _file_uri_path(v: str):
     return url2pathname((("//" + u.netloc) if u.netloc else "") + u.path)
 
 
+_URL = re.compile(r"[A-Za-z][A-Za-z0-9+.-]*://")
+_EXT = re.compile(r"\.[A-Za-z][A-Za-z0-9]{0,7}$")
+
+
+def _file_like(v: str) -> bool:
+    if not v or len(v) > 4096 or any(c.isspace() for c in v) or _URL.match(v):
+        return False
+    return "/" in v or chr(92) in v or bool(_EXT.search(v))
+
+
 def _names_something(v: str, root) -> bool:
     if root is None or not v or chr(0) in v or "\n" in v or "\r" in v or len(v) > 4096:
         return False
@@ -198,7 +208,8 @@ def _path_strings(key: str, value, extra: frozenset = frozenset(), by_value=Fals
             uri = _file_uri_path(v) if by_value else None
             if uri is not None:
                 yield uri
-            elif keyed or (by_value and (_pathish_value(v) or _names_something(v, root))):
+            elif keyed or (by_value and (_pathish_value(v) or _names_something(v, root)
+                                         or (by_value == "write" and _file_like(v)))):
                 yield v
         elif isinstance(v, (list, tuple)):
             for x in v:

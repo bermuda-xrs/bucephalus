@@ -36,6 +36,8 @@ Harness 10 lived for one diagnostic run (two tasks, 3B). Its prompt digest is ke
   `exec` strips control characters. The loaded config and hook/MCP scripts are protected state. Audit:
   `docs/AUDIT-2026-10-12.md`; what is open is D79.
 - POSIX process names longer than 15 characters are read from `cmdline`; keep-awake goes through the platform layer.
+- 2026-10-13: a run holds a per-task lock; rewind and undo refuse while it is held, and a rewind voids the approvals of
+  the steps it undoes (D79 R2). A writing MCP tool's file-like strings are scope-checked under any key (D79 M2).
 
 ## Harness 10 - 2026-10-12 (HARNESS_VERSION 9 -> 10)
 

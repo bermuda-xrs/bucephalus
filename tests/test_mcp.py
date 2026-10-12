@@ -29,9 +29,10 @@ def _events(ctx, task, kind):
 def mcp(ctx, task, workspace):
     ctx.config.autonomy.approve_scoped_writes = True
 
-    def go(*script, read_only=(), timeout_s=30, env=None, argv=None):
+    def go(*script, read_only=(), timeout_s=30, env=None, argv=None, strict=None):
         ctx.config.mcp_servers = {"fake": McpServerConfig(
-            argv=argv or [sys.executable, FAKE], read_only=list(read_only), timeout_s=timeout_s, env=env or {})}
+            argv=argv or [sys.executable, FAKE], read_only=list(read_only), timeout_s=timeout_s, env=env or {},
+            strict_paths=strict)}
         ctx.backends["cloud"].queue(*script)
         res = run_task(ctx, task.id)
         return res, ctx.backends["cloud"].calls
@@ -281,3 +282,26 @@ def test_on_posix_too_a_file_uri_with_a_query_is_refused_with_a_whole_root_scope
     for v in ("file:///etc/passwd?x=1", "file:///etc/passwd#f", "file:///a%2F..%2Fb"):
         ok, why = cap.within_scope({"note": v}, ["."], str(tmp_path), by_value=True)
         assert not ok and "file: URI" in why, (v, why)
+
+
+@pytest.mark.parametrize("note", ["escaped.txt", "newdir/x.txt", "newdir" + chr(92) + "x"])
+def test_a_writing_tool_has_a_file_like_string_under_any_key_scope_checked(ctx, mcp, note):
+    _, calls = mcp(_call("mcp__fake__where", repo_path="work", note=note), FINAL)
+    assert "DENIED by the capability gate" in calls[1]["tail"] and "at:" not in calls[1]["tail"]
+
+
+@pytest.mark.parametrize("note", ["hello", "fix the bug in a.py", "line one" + chr(10) + "x/y.txt", "https://example.com/a.txt",
+                                  "v1.2"])
+def test_a_writing_tools_text_and_urls_are_left_alone(ctx, mcp, note):
+    _, calls = mcp(_call("mcp__fake__where", repo_path="work", note=note), FINAL)
+    assert "at:work" in calls[1]["tail"]
+
+
+def test_a_writing_tools_strings_inside_the_scope_go_through(ctx, mcp):
+    _, calls = mcp(_call("mcp__fake__where", repo_path="work", note="work/new.txt"), FINAL)
+    assert "at:work" in calls[1]["tail"]
+
+
+def test_strict_paths_false_gives_a_writing_tool_the_narrower_check(ctx, mcp):
+    _, calls = mcp(_call("mcp__fake__where", repo_path="work", note="escaped.txt"), FINAL, strict=False)
+    assert "at:work" in calls[1]["tail"]
