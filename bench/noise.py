@@ -649,6 +649,7 @@ def _noise_floor(args) -> int:
     report = {
         "date": time.strftime("%Y-%m-%d"),
         "harness_version": HARNESS_VERSION,
+        "code": __import__("agent.provenance", fromlist=["code_identity"]).code_identity(),
         "budget_scale": args.budget_scale,
         "memory_suspect_keys": [r["key"] for r in rows if r.get("memory_suspect")],
         "cache_hit_ratio_median": _median_or_none(

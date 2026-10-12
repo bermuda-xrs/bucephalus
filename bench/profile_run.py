@@ -78,7 +78,10 @@ def summarise(out: Path, reps: int) -> dict:
                 wall["small"].append(s["wall_s"])
     b = sum(r["control"] and not r["small"] for r in rows)
     c = sum(r["small"] and not r["control"] for r in rows)
+    from agent.provenance import code_identity
+
     return {
+        "code": code_identity(),
         "n_pairs": len(rows), "control_passes": sum(r["control"] for r in rows),
         "small_passes": sum(r["small"] for r in rows), "only_control": b, "only_small": c,
         "both": sum(r["control"] and r["small"] for r in rows),

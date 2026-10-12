@@ -90,6 +90,7 @@ def _provenance(ctx, arm: str) -> dict:
         "arm": arm,
         "date": time.strftime("%Y-%m-%d"),
         "harness_version": HARNESS_VERSION,
+        "code": __import__("agent.provenance", fromlist=["code_identity"]).code_identity(),
         "models": {n: b.cfg.model for n, b in ctx.backends.items()},
         "scaffold_version": __import__("agent").__version__,
         "local_tier": ctx.config.active_local_tier,

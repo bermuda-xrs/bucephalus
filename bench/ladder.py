@@ -256,6 +256,7 @@ def _main() -> int:
         {"task": args.task, "model": args.model, "expected": expected,
          "tolerance": tol, "samples": args.samples,
          "harness_version": HARNESS_VERSION,
+         "code": __import__("agent.provenance", fromlist=["code_identity"]).code_identity(),
          "step_by_step": args.step_by_step,
          "step_by_step_text": data["step_by_step"] if args.step_by_step else None,
          "suite": args.suite, "bare_prompts": args.bare_prompts,
