@@ -180,7 +180,7 @@ def test_the_handover_stays_short():
 
 
 def test_the_posix_claim_is_still_true():
-    assert "POSIX has run twice, in WSL2" in FLAT
+    assert "POSIX has run four times, in WSL2" in FLAT
     assert "darwin.py`) has never executed anywhere" in FLAT
 
 
