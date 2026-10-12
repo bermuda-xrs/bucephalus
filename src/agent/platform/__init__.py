@@ -28,6 +28,7 @@ INTERFACE = {
     "lock_file": "exclusive, non-blocking lock on an open file; raises OSError if held",
     "unlock_file": "release lock_file's lock",
     "background_popen_flags": "Popen keyword arguments for a helper server that runs with no window",
+    "hold_awake": "keep the machine from sleeping while on is True, from the calling thread; no-op where not needed",
 }
 
 

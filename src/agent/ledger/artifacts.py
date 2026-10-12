@@ -57,7 +57,7 @@ def read_artifact(conn: sqlite3.Connection, aid: str) -> dict | None:
 
 
 def project(
-    conn: sqlite3.Connection, aid: str, mode: str = "summary", max_tokens: int = 400
+    conn: sqlite3.Connection, aid: str, mode: str = "summary", max_tokens: int = 400, hint: str = ""
 ) -> str:
     art = read_artifact(conn, aid)
     if art is None:
@@ -75,17 +75,22 @@ def project(
     content: str = art["content"]
     if art["n_tokens"] <= max_tokens:
         return content
-    lines = content.splitlines()
-    head_n = max(6, int(len(lines) * 0.25))
-    tail_n = max(4, int(len(lines) * 0.15))
-    if head_n + tail_n >= len(lines):
+    cpt = max(1.0, len(content) / max(1, art["n_tokens"]))
+    hb, tb = int(max_tokens * 0.6 * cpt), int(max_tokens * 0.4 * cpt)
+    if hb + tb >= len(content):
         return content
-    head = "\n".join(lines[:head_n])
-    tail = "\n".join(lines[-tail_n:])
-    dropped = len(lines) - head_n - tail_n
+    head = content[:hb]
+    cut = head.rfind("\n")
+    if cut > hb * 0.7:
+        head = head[:cut]
+    tail = content[-tb:]
+    cut = tail.find("\n")
+    if 0 <= cut < tb * 0.3:
+        tail = tail[cut + 1:]
+    dropped = len(content) - len(head) - len(tail)
     return (
         f"{head}\n"
-        f"[... {dropped} lines elided · full text in artifact {aid} · "
-        f'expand_artifact("{aid}") ...]\n'
+        f"[... {dropped:,} characters elided · full text in artifact {aid} · "
+        f'expand_artifact("{aid}"){hint} ...]\n'
         f"{tail}"
     )

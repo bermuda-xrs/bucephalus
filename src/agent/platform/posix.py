@@ -271,6 +271,10 @@ def background_popen_flags() -> dict:
     return {}
 
 
+def hold_awake(on: bool) -> None:
+    return None
+
+
 def lock_file(fh) -> None:
     import fcntl
 

@@ -967,17 +967,23 @@ def _touched_record(touched: dict | None) -> dict:
 
 def _inline_cap(ctx) -> int:
     b = ctx.backends.get("cloud")
-    return b.cfg.inline_observation_tokens if b else 400
+    cap = b.cfg.inline_observation_tokens if b else 400
+    ceiling = int(ctx.window_for("cloud") * ctx.config.limits.context_fill_ratio * 0.5)
+    return max(200, min(cap, ceiling))
+
+
+def _elision_hint(ctx) -> str:
+    return " or search for the lines you need" if "search" in ctx.tools.names() else ""
 
 
 def condense_observation(ctx, task, text: str, taint: Taint, aid: str) -> tuple[str, str | None]:
     n = count_tokens(text)
     if n <= ctx.config.compress_observations_over_tokens:
-        return project(ctx.conn, aid, mode="summary", max_tokens=_inline_cap(ctx)), None
+        return project(ctx.conn, aid, mode="summary", max_tokens=_inline_cap(ctx), hint=_elision_hint(ctx)), None
 
     backend = ctx.router.choose("compress_tool_output", task)
     if backend.cfg.trust_tier != "local":
-        return project(ctx.conn, aid, mode="summary", max_tokens=_inline_cap(ctx)), None
+        return project(ctx.conn, aid, mode="summary", max_tokens=_inline_cap(ctx), hint=_elision_hint(ctx)), None
 
     quarantined = taint == Taint.UNTRUSTED
     prefix = QUARANTINE_PREFIX if quarantined else COMPRESS_PREFIX
@@ -1010,7 +1016,7 @@ def condense_observation(ctx, task, text: str, taint: Taint, aid: str) -> tuple[
             {"backend": backend.name, "purpose": "compress_tool_output",
              "error": f"{type(e).__name__}"},
         )
-        return project(ctx.conn, aid, mode="summary", max_tokens=_inline_cap(ctx)), None
+        return project(ctx.conn, aid, mode="summary", max_tokens=_inline_cap(ctx), hint=_elision_hint(ctx)), None
 
     note = "quarantined summary" if quarantined else "compressed"
     if cache_hit["v"]:

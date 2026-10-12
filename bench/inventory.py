@@ -44,7 +44,7 @@ ROWS: list[tuple[str, str, str, str]] = [
     ("MCP is left out for the small kit", "mcp.skipped", "event", ""),
     ("an answer before any observation is held back", "read_first.held", "event", ""),
     ("the user speaks to a running task", "human.message", "event", ""),
-    ("that message reaches the next step", "human.message.delivered", "event", ""),
+    ("that message reaches the next step", "human.message_delivered", "event", ""),
 
     ("compaction tombstones an artifact", "session.opened", "tombstoned", ""),
     ("a session BOUNDARY is crossed", "session.opened", "rotate", ""),

@@ -56,6 +56,7 @@ def _ctx(tmp: Path, window: int | None = None, items: int = 90, **mechanisms):
         update={"trust_tier": "local"})
     if window:
         cfg.backends["cloud"].usable_context_window = window
+    cfg.backends["cloud"].observation_tokens = 10 ** 6
     ctx = AgentContext(cfg)
     ctx.memory = MemoryStore(tmp / "memory")
     record_fingerprint(ctx.memory)

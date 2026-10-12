@@ -273,3 +273,13 @@ def lock_file(fh) -> None:
 def unlock_file(fh) -> None:
     fh.seek(0)
     msvcrt.locking(fh.fileno(), msvcrt.LK_UNLCK, 1)
+
+
+ES_CONTINUOUS = 0x80000000
+ES_SYSTEM_REQUIRED = 0x00000001
+
+
+def hold_awake(on: bool) -> None:
+    k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    k32.SetThreadExecutionState.restype = ctypes.c_uint
+    k32.SetThreadExecutionState(ES_CONTINUOUS | (ES_SYSTEM_REQUIRED if on else 0))

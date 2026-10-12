@@ -29,13 +29,13 @@ def say(ctx, task_id: str, text: str) -> dict:
 def take(ctx, task, step: int) -> list[LedgerEntry]:
     done = ctx.conn.execute(
         "SELECT COALESCE(MAX(json_extract(payload_json, '$.upto')), -1) FROM events "
-        "WHERE task_id=? AND type='human.message.delivered'", (task.id,)).fetchone()[0]
+        "WHERE task_id=? AND type='human.message_delivered'", (task.id,)).fetchone()[0]
     rows = ctx.conn.execute(
         "SELECT seq, payload_json FROM events WHERE task_id=? AND type='human.message' AND seq>? ORDER BY seq",
         (task.id, done)).fetchall()
     if not rows:
         return []
-    ctx.log.append(task.id, "human.message.delivered", {"upto": rows[-1][0], "count": len(rows), "step": step})
+    ctx.log.append(task.id, "human.message_delivered", {"upto": rows[-1][0], "count": len(rows), "step": step})
     tracker = ctx.taint_tracker(task.id)
     out = []
     for _, payload in rows:

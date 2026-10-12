@@ -10,13 +10,11 @@ FINAL = '<final>{"answer": "ok"}</final>'
 READ = '<action tool="read_file">{"path": "work/big.txt"}</action>'
 
 
-def _big(workspace, lines=900):
-    text = chr(10).join(f"line {i}: filler words to take up room in the context window" for i in range(lines))
-    (workspace / "big.txt").write_text(text + chr(10) + "NEEDLE-IN-THE-MIDDLE" if False else
-                                       chr(10).join([*(f"line {i}: filler words to take up room" for i in range(450)),
-                                                     "NEEDLE-IN-THE-MIDDLE",
-                                                     *(f"line {i}: filler words to take up room" for i in range(450, 900))]),
-                                       encoding="utf-8")
+def _big(workspace, lines=300):
+    half = lines // 2
+    body = [*(f"line {i}: filler words to take up room" for i in range(half)), "NEEDLE-IN-THE-MIDDLE",
+            *(f"line {i}: filler words to take up room" for i in range(half, lines))]
+    (workspace / "big.txt").write_text(chr(10).join(body), encoding="utf-8")
 
 
 def test_the_cap_follows_the_profile_and_the_window():
@@ -57,3 +55,52 @@ def test_a_small_model_is_never_told_to_call_a_tool_it_does_not_have(small, task
     tail = small.backends["cloud"].calls[1]["tail"]
     assert "expand_artifact" not in tail or "expand_artifact" in small.tools.names()
     assert json.dumps(small.tools.names())
+
+
+def test_a_long_read_never_forces_a_session_boundary_that_drops_it(small, task, workspace):
+    _big(workspace, 3000)
+    cfg = small.backends["cloud"].cfg
+    cfg.context_window, cfg.usable_context_window = 16384, 16384
+    small.config.limits.context_fill_ratio = 0.28
+    t = create_task(small.conn, small.log, task.contract, task.budget)
+    small.backends["cloud"].queue(READ, FINAL)
+    run_task(small, t.id)
+    opened = [r[0] for r in small.conn.execute(
+        "SELECT json_extract(payload_json, '$.reason') FROM events WHERE task_id=? AND type='session.opened'", (t.id,))]
+    assert opened == ["start"], f"the observation pushed the context over the ceiling: {opened}"
+    tail = small.backends["cloud"].calls[1]["tail"]
+    assert "elided" in tail and "search" in tail.split("elided")[1][:300]
+
+
+def test_the_cap_stays_under_the_compaction_ceiling(small):
+    from agent.execute.loop import _inline_cap
+
+    small.backends["cloud"].cfg.context_window = 16384
+    small.backends["cloud"].cfg.usable_context_window = 16384
+    small.config.limits.context_fill_ratio = 0.28
+    assert _inline_cap(small) <= int(16384 * 0.28 * 0.5)
+
+
+def test_an_elided_summary_fits_its_budget_however_long_the_output(ctx, task):
+    from agent.kernel.types import Taint
+    from agent.ledger.artifacts import project, write_artifact
+    from agent.tokens import count_tokens
+
+    for lines in (100, 3000, 30000):
+        text = chr(10).join(f"row {i} with some words in it" for i in range(lines))
+        aid = write_artifact(ctx.conn, task.id, "tool_output", text, Taint.UNTRUSTED, {})
+        out = project(ctx.conn, aid, mode="summary", max_tokens=400)
+        assert count_tokens(out) <= 400 + 80, (lines, count_tokens(out))
+        assert out.startswith("row 0 ") and out.rstrip().endswith(f"row {lines - 1} with some words in it")
+
+
+def test_one_long_line_is_cut_not_dropped(ctx, task):
+    from agent.kernel.types import Taint
+    from agent.ledger.artifacts import project, write_artifact
+    from agent.tokens import count_tokens
+
+    text = '{"ok": true}' + chr(10) + "---" + chr(10) + " ".join(f"item-{k} value {k}" for k in range(3000))
+    aid = write_artifact(ctx.conn, task.id, "tool_output", text, Taint.UNTRUSTED, {})
+    out = project(ctx.conn, aid, mode="summary", max_tokens=400)
+    assert "item-0 value 0" in out and "item-2999 value 2999" in out
+    assert 250 <= count_tokens(out) <= 480

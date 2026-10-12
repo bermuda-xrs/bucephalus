@@ -16,34 +16,27 @@ def test_it_holds_the_system_awake_and_releases_it(monkeypatch):
     from agent import awake
 
     calls = []
-    monkeypatch.setattr(awake, "_set", lambda flags: calls.append(flags) or 0)
-    monkeypatch.setattr(sys, "platform", "win32")
+    monkeypatch.setattr(awake.current, "hold_awake", calls.append)
     with awake.keep_awake():
-        assert calls == [ES_CONTINUOUS | ES_SYSTEM_REQUIRED]
-    assert calls == [ES_CONTINUOUS | ES_SYSTEM_REQUIRED, ES_CONTINUOUS]
+        assert calls == [True]
+    assert calls == [True, False]
 
 
 def test_it_releases_when_the_run_raises(monkeypatch):
     from agent import awake
 
     calls = []
-    monkeypatch.setattr(awake, "_set", lambda flags: calls.append(flags) or 0)
-    monkeypatch.setattr(sys, "platform", "win32")
+    monkeypatch.setattr(awake.current, "hold_awake", calls.append)
     with pytest.raises(RuntimeError):
         with awake.keep_awake():
             raise RuntimeError("boom")
-    assert calls[-1] == ES_CONTINUOUS
+    assert calls == [True, False]
 
 
-def test_elsewhere_it_does_nothing(monkeypatch):
-    from agent import awake
+def test_posix_does_nothing():
+    from agent.platform import posix
 
-    calls = []
-    monkeypatch.setattr(awake, "_set", lambda flags: calls.append(flags) or 0)
-    monkeypatch.setattr(sys, "platform", "linux")
-    with awake.keep_awake():
-        pass
-    assert calls == []
+    assert posix.hold_awake(True) is None and posix.hold_awake(False) is None
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="Windows power API")

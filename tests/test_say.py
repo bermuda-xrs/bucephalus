@@ -52,7 +52,7 @@ def test_a_message_sent_during_step_one_is_in_step_two_as_the_users_words(ctx, t
 
 def test_it_is_delivered_once_and_recorded(ctx, task, during):
     during({0: ["one", "two"]}, LIST, LIST, FINAL)
-    got = _events(ctx, task, "human.message.delivered")
+    got = _events(ctx, task, "human.message_delivered")
     assert len(got) == 1 and got[0]["count"] == 2 and got[0]["step"] == 1
     assert len(_events(ctx, task, "human.message")) == 2
 

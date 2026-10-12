@@ -7,7 +7,7 @@ import time
 
 from . import posix
 from .posix import (  # noqa: F401
-    WATCH_INTERVAL_S, adopted, alive, background_popen_flags, exit_note, has_data_streams, kill_tree_signal,
+    WATCH_INTERVAL_S, adopted, alive, background_popen_flags, exit_note, has_data_streams, hold_awake, kill_tree_signal,
     link_names, lock_file, over_limits, spawn_denied_processes, unlock_file)
 
 RUSAGE_INFO_V4 = 4
