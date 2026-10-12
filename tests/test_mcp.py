@@ -257,3 +257,27 @@ def test_strict_mode_checks_every_string_argument(ctx, task, workspace):
     ctx.backends["cloud"].queue(_call("mcp__fake__where", repo_path="work", note="brand-new-name.env"), FINAL)
     _run(ctx, task.id)
     assert "at:" not in ctx.backends["cloud"].calls[1]["tail"]
+
+
+def test_a_file_uri_with_a_query_is_refused_even_when_the_scope_is_the_whole_root(ctx, task, workspace):
+    import sys as _sys
+
+    from agent.config import McpServerConfig
+    from agent.execute.loop import run_task as _run
+    from agent.kernel.tasks import create_task as _create
+    from agent.kernel.types import Budget, TaskContract
+
+    t = _create(ctx.conn, ctx.log, TaskContract(goal="g", artifact_scope=["."]), Budget(usd=1.0, seconds=600))
+    ctx.config.mcp_servers = {"fake": McpServerConfig(argv=[_sys.executable, FAKE], read_only=["where"])}
+    ctx.backends["cloud"].queue(_call("mcp__fake__where", repo_path="work", note="file:///etc/passwd?x=1"), FINAL)
+    _run(ctx, t.id)
+    assert "at:" not in ctx.backends["cloud"].calls[1]["tail"]
+
+
+def test_on_posix_too_a_file_uri_with_a_query_is_refused_with_a_whole_root_scope(tmp_path, monkeypatch):
+    from agent.security import capabilities as cap
+
+    monkeypatch.setattr(cap, "_names_a_stream", lambda p: False)
+    for v in ("file:///etc/passwd?x=1", "file:///etc/passwd#f", "file:///a%2F..%2Fb"):
+        ok, why = cap.within_scope({"note": v}, ["."], str(tmp_path), by_value=True)
+        assert not ok and "file: URI" in why, (v, why)

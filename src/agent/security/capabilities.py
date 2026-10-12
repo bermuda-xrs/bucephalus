@@ -92,6 +92,8 @@ def within_scope(args: dict, artifact_scope: list[str], root: str = ".",
     if not artifact_scope:
         for key, value in args.items():
             for v in _path_strings(key, value, extra_keys, by_value, root):
+                if v is REFUSED_URI:
+                    return False, f"{key}: a file: URI with a query, fragment, params or encoded separator is refused"
                 return False, (f"{key}={v!r}: this task declared no "
                                "artifact_scope, so no path is permitted - "
                                "declare one (bucephalus new --scope work)")
@@ -100,6 +102,8 @@ def within_scope(args: dict, artifact_scope: list[str], root: str = ".",
     real_roots = [_resolved(r) for r in roots]
     for key, value in args.items():
         for v in _path_strings(key, value, extra_keys, by_value, root):
+            if v is REFUSED_URI:
+                return False, f"{key}: a file: URI with a query, fragment, params or encoded separator is refused"
             p = Path(os.path.abspath(os.path.join(root, v)))
             if _names_a_stream(p):
                 return False, f"{key}={v!r} names an alternate data stream"
@@ -128,7 +132,10 @@ def _pathish_value(v: str) -> bool:
             or ".." in re.split(r"[\\/]", v))
 
 
-def _file_uri_path(v: str) -> str | None:
+REFUSED_URI = object()
+
+
+def _file_uri_path(v: str):
     if not v.lower().startswith("file:"):
         return None
     from urllib.parse import urlparse
@@ -136,7 +143,7 @@ def _file_uri_path(v: str) -> str | None:
 
     u = urlparse(v)
     if u.query or u.fragment or u.params or re.search(r"%(2[ef5]|5c)", v, re.I):
-        return v
+        return REFUSED_URI
     return url2pathname((("//" + u.netloc) if u.netloc else "") + u.path)
 
 
@@ -284,6 +291,8 @@ def gate_tool_call(ctx, task, tool, args: dict, phase: str = "execute") -> GateD
     state = None
     for key, value in eff.items():
         for v in _path_strings(key, value, extra, by_value, ctx.config.root):
+            if v is REFUSED_URI:
+                return GateDecision.deny(f"{key}: a file: URI with a query, fragment, params or encoded separator is refused")
             if state is None:
                 state = task_state_paths(ctx, task)
             if is_protected(v, ctx.config.root, state):
