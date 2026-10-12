@@ -1,6 +1,7 @@
 import json
 import os
 import sys
+import time
 
 S = json.loads(os.environ.get("MCP_SCRIPT", "{}"))
 
@@ -36,6 +37,7 @@ for line in sys.stdin:
     elif method == "initialize":
         send({"jsonrpc": "2.0", "id": rid, "result": {}})
     elif method == "tools/list":
+        time.sleep(S.get("list_delay_s", 0))
         pages = S.get("pages", 1)
         page = int((m.get("params") or {}).get("cursor", "0"))
         res = {"tools": S.get("tools", []) if page == 0 else []}

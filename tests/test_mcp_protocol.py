@@ -176,3 +176,15 @@ def test_an_undeclared_argument_fails_the_call(ctx, task):
     _attach(ctx, task, {"s": {"tools": [{"name": "t", "inputSchema": {"properties": {"a": {}}}}]}})
     r = ctx.tools.get("mcp__s__t").fn(ctx, task, b=1)
     assert r == {"ok": False, "error": "t takes no argument named b; it takes a"}
+
+
+def test_a_slow_list_is_waited_for_within_the_start_timeout(server):
+    s = server(tools=[{"name": "a"}], list_delay_s=1.0)
+    s.start()
+    assert [t["name"] for t in s.list_tools()] == ["a"]
+
+
+def test_a_server_that_cannot_start_says_so(tmp_path):
+    s = McpServer("s", McpServerConfig(argv=[str(tmp_path / "no-such-server.exe")]), str(tmp_path))
+    with pytest.raises(McpError, match="could not start"):
+        s.start()
