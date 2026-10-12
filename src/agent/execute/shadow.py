@@ -91,6 +91,12 @@ class ShadowRepo:
         for d in dirs:
             d.mkdir(parents=True, exist_ok=True)
 
+    def diff(self, a: str, b: str) -> str:
+        return self._git("diff", "--no-color", "--no-ext-diff", a, b, "--", *self.scopes).stdout
+
+    def changed(self, a: str, b: str) -> list[str]:
+        return self._git("diff", "--name-only", a, b, "--", *self.scopes).stdout.split()
+
     def log(self) -> list[tuple[str, str]]:
         if not (self.git_dir / "HEAD").exists():
             return []

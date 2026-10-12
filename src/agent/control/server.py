@@ -288,6 +288,13 @@ def create_app(ctx: AgentContext) -> FastAPI:
         _task(task_id)
         return [{"step": c["step"], "sha": c["sha"], "entries": c["entries"]} for c in list_checkpoints(ctx, task_id)]
 
+    @app.get("/tasks/{task_id}/diff")
+    def get_diff(task_id: str, step: int | None = None) -> list:
+        from ..execute.diffview import task_diffs
+
+        _task(task_id)
+        return task_diffs(ctx, task_id, step)
+
     @app.post("/tasks/{task_id}/rewind")
     def post_rewind(task_id: str, body: Rewind) -> dict:
         from ..execute.rewind import RewindError, rewind, undo

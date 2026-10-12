@@ -524,6 +524,20 @@ def cmd_steer(ctx, args, console) -> int:
     return 0
 
 
+def cmd_diff(ctx, args, console) -> int:
+    from .execute.diffview import task_diffs
+
+    got = task_diffs(ctx, args.task_id, args.step)
+    for d in got:
+        print(f"step {d['step']}: {'; '.join(d['tools']) or '(no call recorded)'}")
+        print(d["diff"] or "  (no file changed)")
+        if d["truncated"]:
+            print("  [cut at 50000 characters]")
+    if not got:
+        console.print("no checkpoints: this task changed nothing, or checkpoints were off")
+    return 0
+
+
 def cmd_rewind(ctx, args, console) -> int:
     from .execute.rewind import RewindError, list_checkpoints, rewind, undo
 
@@ -862,6 +876,11 @@ def build_parser() -> argparse.ArgumentParser:
     ex.add_argument("--approve-plan", action="store_true",
                     help="your approval of the plan it drafts; without it exec stops at the plan")
     ex.set_defaults(fn=cmd_exec)
+
+    df = sub.add_parser("diff", help="what each step of a task changed, from its checkpoints")
+    df.add_argument("task_id")
+    df.add_argument("--step", type=int)
+    df.set_defaults(fn=cmd_diff)
 
     rw = sub.add_parser("rewind", help="put a task's files, conversation or both back to a step")
     rw.add_argument("task_id")

@@ -19,7 +19,7 @@ window.addEventListener("hashchange", () => {
 let RETURN_FOCUS = null;           // where focus goes back when a dialog closes
 const S = {conv: null, thread: null, loose: null, archived: false, streams: new Map(), trails: new Map(),
            drafting: new Set(), answers: new Map(), filesTask: null, filesPath: "", pane: "memory",
-           settings: null, lastSide: "", rewind: null};
+           settings: null, lastSide: "", rewind: null, changes: null};
 
 function toast(msg, bad) {
   const t = $("#toast"); t.textContent = msg; t.className = "show" + (bad ? " bad" : "");
@@ -308,7 +308,8 @@ function runCard(it) {
     ${it.status === "running" ? `<div class="row"><button class="btn" data-action="stopTask" ${args(it.task_id)}>Pause</button></div>` : ""}
     ${it.status === "paused" && !(it.approvals || []).length ? `<p class="note">Paused. It carries on from where it left off when you resume it.</p>
       <div class="row"><button class="btn primary" data-action="resumeTask" ${args(it.task_id)}>Resume</button></div>` : ""}
-    ${it.status !== "running" && it.status !== "pending" ? `<div class="row"><button class="quiet" data-action="showRewind" ${args(it.task_id)}>Rewind…</button></div>
+    ${it.status !== "running" && it.status !== "pending" ? `<div class="row"><button class="quiet" data-action="showRewind" ${args(it.task_id)}>Rewind…</button><button class="quiet" data-action="showChanges" ${args(it.task_id)}>Changes</button></div>
+      <div class="changes" id="ch-${esc(it.task_id)}" ${S.changes && S.changes.task === it.task_id ? "" : "hidden"}>${S.changes && S.changes.task === it.task_id ? changesBody() : ""}</div>
       <div class="rewind" id="rw-${esc(it.task_id)}" ${S.rewind && S.rewind.task === it.task_id ? "" : "hidden"}>${S.rewind && S.rewind.task === it.task_id ? rewindBody() : ""}</div>` : ""}
     ${!live && !it.answer && TERMINAL(it.status) ? `<p class="note">It finished without an answer.</p>` : ""}
   </section>
@@ -335,6 +336,21 @@ async function stopTask(taskId) {
 async function resumeTask(taskId) {
   try { await post(`/tasks/${taskId}/run`); toast("Resumed."); await afterChange(); openStream(taskId); }
   catch (e) { toast(e.message, true); }
+}
+function changesBody() {
+  const {steps} = S.changes;
+  if (!steps.length) return `<p class="note">No file changed in this task, or checkpoints were off.</p>`;
+  return steps.map(d => `<details open><summary>Step ${d.step}: ${esc((d.tools || []).join("; ") || "no call recorded")}</summary>
+    <pre class="code">${d.diff ? esc(d.diff) : "No file changed."}</pre>${d.truncated ? `<p class="note">Cut at 50,000 characters.</p>` : ""}</details>`).join("");
+}
+async function showChanges(taskId) {
+  if (S.changes && S.changes.task === taskId) { S.changes = null; const b = document.getElementById(`ch-${taskId}`); if (b) b.hidden = true; return; }
+  try {
+    const steps = await api(`/tasks/${taskId}/diff`);
+    S.changes = {task: taskId, steps};
+    const now = document.getElementById(`ch-${taskId}`);
+    if (now) { now.innerHTML = changesBody(); now.hidden = false; }
+  } catch (e) { toast(e.message, true); }
 }
 function rewindBody() {
   const {task, cps, step} = S.rewind;
@@ -1012,7 +1028,7 @@ const ACTIONS = {newConversation, selectConversation, renameConversation, archiv
   toggleFiles, toggleSide, openFile, openControl, closeControl, openPane, openPalette, focusSearch,
   toggleTheme, acceptMemory, createSuite, saveTask, closeSuite, addSkill, savePolicy,
   openSuite, delSuite, delTask, checkGate, pinConversation, exportConversation, enableNotifications,
-  runModel, stopTask, resumeTask, showRewind, doRewind, askAgain, editAsk, copyAnswer, copyCode, forgetMemory, addSchedule, removeSchedule, viewSkill};
+  runModel, stopTask, resumeTask, showRewind, showChanges, doRewind, askAgain, editAsk, copyAnswer, copyCode, forgetMemory, addSchedule, removeSchedule, viewSkill};
 document.addEventListener("click", e => {
   const el = e.target.closest("[data-action]");
   if (!el || !ACTIONS[el.dataset.action]) return;
@@ -1051,5 +1067,5 @@ new MutationObserver(() => document.querySelectorAll("i[data-pct]").forEach(i =>
   }
   if (OPEN.pane && PANES[OPEN.pane]) openPane(OPEN.pane);
   setInterval(loadModels, 20000);
-  setInterval(() => { loadAlerts(); loadSide(); if (S.conv && !S.streams.size && !S.drafting.size && !S.rewind) refreshThread(); }, 6000);
+  setInterval(() => { loadAlerts(); loadSide(); if (S.conv && !S.streams.size && !S.drafting.size && !S.rewind && !S.changes) refreshThread(); }, 6000);
 })();

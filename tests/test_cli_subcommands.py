@@ -479,6 +479,10 @@ def test_say_reaches_a_task_and_is_refused_for_a_finished_one(cli):
     assert "finished" in cli("say", cli.seeded_task, "late", expect=1).stdout
 
 
+def test_diff_says_when_a_task_changed_nothing(cli):
+    assert "no checkpoints" in cli("diff", cli.seeded_task).stdout
+
+
 def test_bench_local(cli):
     r = cli("bench-local")
     assert "mock-local" in r.stdout and "mock-laptop" in r.stdout
