@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import time
+from contextlib import contextmanager
 
 from ..kernel.tasks import load_task, set_status
 from ..kernel.types import TaskStatus
@@ -19,9 +21,39 @@ def list_checkpoints(ctx, task_id: str) -> list[dict]:
     return [json.loads(r[0]) for r in rows]
 
 
+@contextmanager
+def _exclusive(ctx, task_id: str):
+    from ..runlock import RunLockBusy, task_lock
+
+    try:
+        lock = task_lock(ctx, task_id).acquire()
+    except RunLockBusy:
+        raise RewindError("the task is still running a step; wait for it to stop, then rewind") from None
+    try:
+        yield
+    finally:
+        lock.release()
+
+
+def _void_approvals(ctx, task_id: str, step: int) -> None:
+    rows = ctx.conn.execute(
+        "SELECT id, tool FROM approvals WHERE task_id=? AND consumed_at IS NULL AND status IN ('pending', 'approved') "
+        "AND CAST(step_id AS INTEGER) >= ?", (task_id, step)).fetchall()
+    for aid, tool in rows:
+        ctx.conn.execute("UPDATE approvals SET status='void', consumed_at=? WHERE id=?", (time.time(), aid))
+        ctx.log.append(task_id, "approval.consumed",
+                       {"approval_id": aid, "tool": tool, "decision": "void", "outcome": "void", "why": "rewound"})
+    ctx.conn.commit()
+
+
 def rewind(ctx, task_id: str, step: int | None = None, what: str = "both") -> dict:
     if what not in MODES:
         raise RewindError(f"what must be one of {', '.join(MODES)}")
+    with _exclusive(ctx, task_id):
+        return _rewind(ctx, task_id, step, what)
+
+
+def _rewind(ctx, task_id: str, step: int | None, what: str) -> dict:
     task = load_task(ctx.conn, task_id)
     if task.status == TaskStatus.RUNNING:
         raise RewindError("the task is running; pause it first")
@@ -45,12 +77,18 @@ def rewind(ctx, task_id: str, step: int | None = None, what: str = "both") -> di
     if what in ("conversation", "both"):
         ctx.log.append(task_id, "task.park_seed",
                        {k: cp[k] for k in ("artifact", "sha256", "entries")})
+    _void_approvals(ctx, task_id, cp["step"])
     ctx.log.append(task_id, "task.rewound", {"step": cp["step"], "what": what, "sha": cp.get("sha"), "undo": undo})
     set_status(ctx.conn, ctx.log, task, TaskStatus.PAUSED, f"rewound to step {cp['step']} ({what})")
     return {"step": cp["step"], "what": what, "undo": undo}
 
 
 def undo(ctx, task_id: str) -> dict:
+    with _exclusive(ctx, task_id):
+        return _undo(ctx, task_id)
+
+
+def _undo(ctx, task_id: str) -> dict:
     last = ctx.conn.execute(
         "SELECT payload_json FROM events WHERE task_id=? AND type='task.rewound' ORDER BY seq DESC LIMIT 1",
         (task_id,)).fetchone()

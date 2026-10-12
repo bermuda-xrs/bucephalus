@@ -234,3 +234,43 @@ def test_both_points_the_next_run_at_the_saved_conversation(run):
     rewind(ctx, task.id, step=1, what="both")
     seeds = _events(ctx, task, "task.park_seed")
     assert len(seeds) == before + 1 and set(seeds[-1]) == {"artifact", "sha256", "entries"}
+
+
+def test_a_rewind_or_undo_waits_for_no_one_while_a_run_holds_the_task(run):
+    from agent.execute.rewind import undo
+    from agent.runlock import task_lock
+
+    ctx, task, ws = run
+    rewind(ctx, task.id, step=1, what="code")
+    with task_lock(ctx, task.id):
+        with pytest.raises(RewindError, match="still running"):
+            rewind(ctx, task.id, step=0)
+        with pytest.raises(RewindError, match="still running"):
+            undo(ctx, task.id)
+    assert (ws / "a.txt").read_text(encoding="utf-8") == "one"
+
+
+def test_a_task_held_by_another_run_is_not_run_twice(run):
+    from agent.runlock import RunLockBusy, task_lock
+
+    ctx, task, _ = run
+    before = load_task(ctx.conn, task.id).status
+    with task_lock(ctx, task.id):
+        with pytest.raises(RunLockBusy):
+            run_task(ctx, task.id)
+    assert load_task(ctx.conn, task.id).status == before
+
+
+def test_a_rewind_voids_the_approvals_of_the_steps_it_undoes(run):
+    ctx, task, _ = run
+    tool = ctx.tools.get("write_file")
+    keep = ctx.request_approval(task, tool, {"path": "work/k", "content": "k"}, "r", 0)
+    pending = ctx.request_approval(task, tool, {"path": "work/p", "content": "p"}, "r", 1)
+    approved = ctx.request_approval(task, tool, {"path": "work/a", "content": "a"}, "r", 2)
+    ctx.resolve_approval(approved, True)
+    rewind(ctx, task.id, step=1)
+    status = dict(ctx.conn.execute("SELECT id, status FROM approvals WHERE task_id=?", (task.id,)).fetchall())
+    assert status[keep] == "pending" and status[pending] == "void" and status[approved] == "void"
+    assert ctx.resolve_approval(pending, True)["already_decided"] is True
+    voided = [e["approval_id"] for e in _events(ctx, task, "approval.consumed") if e["outcome"] == "void"]
+    assert sorted(voided) == sorted([pending, approved])

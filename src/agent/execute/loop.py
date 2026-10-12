@@ -192,6 +192,13 @@ def _verified_state(ctx, task_id: str) -> dict:
 
 
 def run_task(ctx, task_id: str) -> TaskResult:
+    from ..runlock import task_lock
+
+    with task_lock(ctx, task_id):
+        return _run_task(ctx, task_id)
+
+
+def _run_task(ctx, task_id: str) -> TaskResult:
     task = load_task(ctx.conn, task_id)
 
     try:

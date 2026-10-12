@@ -23,7 +23,7 @@ PROJECT_STATE = (
     "runs", "docs/evidence",
     ".bucephalus_token", ".env", "policy.md",
     "cal.json", ".token_calibration.json", ".measurement.lock",
-    "checkouts", "shadow", "AGENTS.md",
+    "checkouts", "shadow", "tasklocks", "AGENTS.md",
 )
 
 

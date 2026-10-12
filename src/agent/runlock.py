@@ -24,6 +24,10 @@ def measurement_lock_path(root) -> Path:
     return Path(root) / ".measurement.lock"
 
 
+def task_lock(ctx, task_id: str) -> "RunLock":
+    return RunLock(ctx.config.resolve_state("tasklocks") / f"{task_id}.lock", label="task run")
+
+
 def lock_status(lock_path) -> dict:
     try:
         info = json.loads(status_path(lock_path).read_text(encoding="utf-8"))
@@ -61,13 +65,13 @@ class RunLock:
                 pass
             self._fh.close()
             self._fh = None
+            why = ("Two measurement processes on one database corrupt the "
+                   "result: tasks get measured under CPU contention, which can "
+                   "manufacture `budget_exhausted` on a task that would "
+                   "otherwise finish.\n") if self.label == "measurement" else ""
             raise RunLockBusy(
                 f"another {self.label} process holds {self.path.name} "
-                f"(started by PID {holder}).\n"
-                "Two measurement processes on one database corrupt the "
-                "result: tasks get measured under CPU contention, which can "
-                "manufacture `budget_exhausted` on a task that would "
-                "otherwise finish.\n"
+                f"(started by PID {holder}).\n" + why +
                 "Wait for it, or kill it and retry — the lock releases "
                 "automatically when the process dies."
             ) from None
