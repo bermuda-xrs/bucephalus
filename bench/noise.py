@@ -310,7 +310,7 @@ def write_report(dest: Path, report: dict) -> None:
     os.replace(tmp, dest)
 
 
-def main() -> int:
+def _main() -> int:
     ap = argparse.ArgumentParser(description="measure the suite's noise floor")
     ap.add_argument("--config", default="config.local.yaml")
     ap.add_argument("--profile", default="local",
@@ -788,6 +788,15 @@ def _noise_floor(args) -> int:
         print("\nSuite looks usable. Next: the calibration skill through the gate.")
     ctx.close()
     return verdict
+
+
+def main(argv=None) -> int:
+    import sys
+    sys.path.insert(0, str(__import__('pathlib').Path(__file__).resolve().parents[1] / 'src'))
+    from agent.awake import keep_awake
+
+    with keep_awake():
+        return _main()
 
 
 if __name__ == "__main__":

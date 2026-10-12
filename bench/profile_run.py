@@ -91,7 +91,7 @@ def summarise(out: Path, reps: int) -> dict:
     }
 
 
-def main(argv=None) -> int:
+def _main(argv=None) -> int:
     from agent.config import load_config
     from agent.models import local
 
@@ -130,6 +130,15 @@ def main(argv=None) -> int:
     (out / "paired.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
     print(json.dumps({k: v for k, v in summary.items() if k != "pairs"}, indent=2))
     return 0
+
+
+def main(argv=None) -> int:
+    import sys
+    sys.path.insert(0, str(__import__('pathlib').Path(__file__).resolve().parents[1] / 'src'))
+    from agent.awake import keep_awake
+
+    with keep_awake():
+        return _main(argv)
 
 
 if __name__ == "__main__":

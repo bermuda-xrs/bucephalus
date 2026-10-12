@@ -273,7 +273,7 @@ def firerate() -> dict:
     return {"per_mechanism": tally, "tasks": len(detail), "detail": detail}
 
 
-def main(argv=None) -> int:
+def _main(argv=None) -> int:
     sys.path.insert(0, str(ROOT / "src"))
     p = argparse.ArgumentParser()
     p.add_argument("what", choices=["savings", "firerate"])
@@ -286,6 +286,15 @@ def main(argv=None) -> int:
     print(text if args.what == "savings" else json.dumps(
         {k: v for k, v in result.items() if k != "detail"}, indent=2))
     return 0
+
+
+def main(argv=None) -> int:
+    import sys
+    sys.path.insert(0, str(__import__('pathlib').Path(__file__).resolve().parents[1] / 'src'))
+    from agent.awake import keep_awake
+
+    with keep_awake():
+        return _main(argv)
 
 
 if __name__ == "__main__":

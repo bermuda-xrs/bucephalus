@@ -53,7 +53,7 @@ def write_configs(base: Path, out: Path) -> dict[str, Path]:
     return paths
 
 
-def main(argv=None) -> int:
+def _main(argv=None) -> int:
     p = argparse.ArgumentParser(description="G1 ablation arms, one per mechanism")
     p.add_argument("--suite", required=True, help="path to the task tree")
     p.add_argument("--base", default=str(ROOT / "config.local.yaml"))
@@ -106,6 +106,15 @@ def main(argv=None) -> int:
     print("\n" + json.dumps(summary, indent=2))
     print(f"\nwritten to {out}")
     return 0
+
+
+def main(argv=None) -> int:
+    import sys
+    sys.path.insert(0, str(__import__('pathlib').Path(__file__).resolve().parents[1] / 'src'))
+    from agent.awake import keep_awake
+
+    with keep_awake():
+        return _main(argv)
 
 
 if __name__ == "__main__":

@@ -130,7 +130,6 @@ def run_rung(ctx, rung: str, key: str, model: str, samples: int,
              step_by_step: bool = False, data: dict | None = None,
              suite: str = "", grading_dir: str | Path = "grading") -> list[dict]:
     out_key, expected, tol = expected_for(key, grading_dir)
-    goal = goal_text(ctx, key)
     out = []
 
     for i in range(samples):
@@ -202,7 +201,7 @@ def run_rung(ctx, rung: str, key: str, model: str, samples: int,
     return out
 
 
-def main() -> int:
+def _main() -> int:
     ap = argparse.ArgumentParser(description="the scaffold ladder")
     ap.add_argument("--config", default="config.local.yaml")
     ap.add_argument("--task", required=True,
@@ -273,6 +272,15 @@ def main() -> int:
     print(f"\nwritten to {dest}")
     ctx.close()
     return 0
+
+
+def main(argv=None) -> int:
+    import sys
+    sys.path.insert(0, str(__import__('pathlib').Path(__file__).resolve().parents[1] / 'src'))
+    from agent.awake import keep_awake
+
+    with keep_awake():
+        return _main()
 
 
 if __name__ == "__main__":

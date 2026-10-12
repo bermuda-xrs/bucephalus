@@ -363,7 +363,7 @@ def _print_arm(label: str, d: dict) -> None:
     print()
 
 
-def main() -> int:
+def _main() -> int:
     p = argparse.ArgumentParser(description="Bucephalus benchmark harness")
     p.add_argument("--config", default="config.yaml")
     p.add_argument("--profile", choices=["local", "mixed"],
@@ -400,6 +400,15 @@ def main() -> int:
 
     args = p.parse_args()
     return args.fn(args)
+
+
+def main(argv=None) -> int:
+    import sys
+    sys.path.insert(0, str(__import__('pathlib').Path(__file__).resolve().parents[1] / 'src'))
+    from agent.awake import keep_awake
+
+    with keep_awake():
+        return _main()
 
 
 if __name__ == "__main__":
