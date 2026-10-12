@@ -20,6 +20,23 @@ and the platformdirs app name. No aliases for the old names. On first use `user_
 left as it was). Entries below this one use the old name. The import package is still `agent`. Prompt
 bytes changed with the name ("the execution core of Bucephalus"): HARNESS_VERSION 8.
 
+## Harness 11 - 2026-10-12 (HARNESS_VERSION 10 -> 11)
+
+Harness 10 lived for one diagnostic run (two tasks, 3B). Its prompt digest is kept in `tests/harness_prompts.json`.
+
+- The planner's survey of the files in scope is stored as an untrusted artifact and taints the run; `PLANNER_PREFIX` says
+  it is data (audit P1). `exec --approve-plan` prints the plan it approved.
+- The inline observation cap is also at most half the compaction ceiling: a larger observation forced a session
+  boundary that dropped the handbook. `project()` keeps to its budget by characters, so a few long lines are cut too.
+- A run warns (`model.window_short`) when the server holds less context than the config budgets (D16).
+- Ollama: a connection dropped before the first token is retried once; `profile_run` summaries count crashed runs.
+- Hooks run on every execution path (parallel, released approvals, memory flush, inside programs); hook output is read
+  from a file, so a grandchild cannot hold the timeout. MCP: names, types and enums validated; pages, tools and line
+  length capped; a malformed reply fails the attach, not the run. Rewind neither captures nor restores through links.
+  `exec` strips control characters. The loaded config and hook/MCP scripts are protected state. Audit:
+  `docs/AUDIT-2026-10-12.md`; what is open is D79.
+- POSIX process names longer than 15 characters are read from `cmdline`; keep-awake goes through the platform layer.
+
 ## Harness 10 - 2026-10-12 (HARNESS_VERSION 9 -> 10)
 
 - The small tool kit gains `expand_artifact` (six tools): observations over 400 tokens are shown as head and tail with a

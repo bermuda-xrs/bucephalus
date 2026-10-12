@@ -58,7 +58,7 @@ window (see the Branch row for whether it reached `main`).
 | Fact | Value | Regenerate with |
 |---|---|---|
 | Branch | `main`, fast-forwarded from `harness-9` after the suite, the frozen gate (63) and the frozen e2e passed; no remote | `git branch --show-current` |
-| Harness version | **10**, bumped 2026-10-12 for the small kit's sixth tool and the inline observation cap (CHANGELOG "Harness 10"); numbers from 8 and earlier do not compare | `grep HARNESS_VERSION src/agent/__init__.py` |
+| Harness version | **11**, bumped 2026-10-12 for the planner survey rule (CHANGELOG "Harness 11"); numbers from 10 and earlier do not compare | `grep HARNESS_VERSION src/agent/__init__.py` |
 | Toolset version | **7** | `grep TOOLSET_VERSION src/agent/__init__.py` |
 | Tests | not written down | `python -m pytest tests -q`; skips are live-credential tests (D26) and other-OS tests |
 | Lint | bug rules only | `python -m ruff check src tests scripts packaging demo.py` |
