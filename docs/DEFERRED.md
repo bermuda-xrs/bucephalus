@@ -266,7 +266,7 @@ L3, H2, H4 (files). L2 is closed by M1 (names, types and enums are validated and
 
 | ID | What | What closes it |
 |---|---|---|
-| H4 (part) | fixed: the loaded config, every file in a hook/MCP `argv`, its directory and a `-m` package are protected. Open: a script in the project root (its siblings), and what a hook collects (`pytest`, README says so) | run hooks in the sandbox |
+| H4 (part) | fixed: the loaded config, every file in a hook/MCP `argv`, its directory and a `-m` module (also before it exists, `-mfoo` and `-Im foo` parsed) are protected. Open: a script in the project root, whose siblings it can import (a root-level `json.py` shadows the stdlib), and what a hook collects (`pytest`, README says so) | run hooks in the sandbox, or with `-I` and the root off `sys.path` |
 | M2 | a bare new name under a non-path MCP key is not scope-checked (a leading-space `file:` URI is fixed) | see D78; strict by default for writing tools |
 | R2 | rewind/undo can race a paused-but-still-stepping run | per-task run lock taken by rewind and undo; void approvals newer than the checkpoint |
 | L1 | the env scrub for hooks and MCP servers is by name | an allowlist plus `cfg.env` |

@@ -80,16 +80,33 @@ def _argv_files(cfg, root: Path) -> list[Path]:
     hooks = cfg.hooks.pre_tool + cfg.hooks.post_tool + cfg.hooks.stop
     out = []
     for argv in [h.argv for h in hooks] + [s.argv for s in cfg.mcp_servers.values()]:
-        for i, a in enumerate(argv):
-            if i and argv[i - 1] == "-m":
-                top = root / a.split(".")[0]
-                out += [q for q in (top, top.with_suffix(".py")) if q.exists()]
-                continue
+        for mod in _modules(argv):
+            top = root / mod.split(".")[0]
+            out += [top, top.with_suffix(".py")]
+        for a in argv:
             p = Path(os.path.abspath(a if Path(a).is_absolute() else root / a))
             if p.is_file():
                 out.append(p)
                 if p.parent != root and p.parent not in root.parents:
                     out.append(p.parent)
+    return out
+
+
+def _modules(argv: list[str]) -> list[str]:
+    out, skip = [], False
+    for i, a in enumerate(argv[1:], 1):
+        if skip:
+            skip = False
+            continue
+        if not a.startswith("-") or a.startswith("--"):
+            continue
+        for j, ch in enumerate(a[1:], 2):
+            if ch in "cWXm":
+                rest = a[j:]
+                if ch == "m" and (rest or i + 1 < len(argv)):
+                    out.append(rest or argv[i + 1])
+                skip = not rest
+                break
     return out
 
 

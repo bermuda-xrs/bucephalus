@@ -255,3 +255,16 @@ def test_review_a_scope_that_is_itself_a_junction_is_neither_captured_nor_restor
     with pytest.raises(ShadowUnavailable, match="link"):
         repo.restore(sha1)
     assert (outside / "keep.txt").read_text(encoding="utf-8") == "precious"
+
+
+@pytest.mark.parametrize("argv", [["python", "-m", "lintpkg.run"], ["python", "-mlintpkg.run"], ["python", "-Im", "lintpkg"],
+                                  ["python", "-Imlintpkg"], ["python", "-X", "utf8", "-m", "lintpkg"]])
+def test_review_a_module_a_hook_runs_is_protected_before_it_exists(ctx, argv):
+    from agent.security.capabilities import is_protected, state_paths
+
+    root = Path(ctx.config.root)
+    ctx.config.hooks = HooksConfig.model_validate({"pre_tool": [{"argv": argv}]})
+    state = state_paths(ctx)
+    assert is_protected("lintpkg.py", str(root), state)
+    assert is_protected("lintpkg/__init__.py", str(root), state)
+    assert not is_protected("work/a.py", str(root), state)
