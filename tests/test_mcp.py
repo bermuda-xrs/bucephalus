@@ -138,3 +138,25 @@ def test_unattended_origins_cannot_use_them(ctx, task, mcp, origin):
     ctx._origin.pop(task.id, None)
     _, calls = mcp(_call("mcp__fake__add", a=1, b=1), FINAL, read_only=["add"])
     assert "not available to this agent" in calls[1]["tail"]
+
+
+def test_a_path_like_argument_under_any_name_is_scope_checked(ctx, mcp, tmp_path):
+    _, calls = mcp(_call("mcp__fake__where", repo_path=str(tmp_path.parent)), FINAL, read_only=["where"])
+    assert "DENIED by the capability gate" in calls[1]["tail"] and "at:" not in calls[1]["tail"]
+
+
+def test_the_same_argument_inside_the_scope_goes_through(ctx, mcp, workspace):
+    _, calls = mcp(_call("mcp__fake__where", repo_path="work"), FINAL, read_only=["where"])
+    assert "at:work" in calls[1]["tail"]
+
+
+def test_an_argument_that_is_not_path_like_is_left_alone(ctx, mcp):
+    _, calls = mcp(_call("mcp__fake__where", repo_path="work", note="/etc/passwd"), FINAL, read_only=["where"])
+    assert "outside artifact_scope" not in calls[1]["tail"]
+
+
+def test_a_sibling_directory_outside_the_scope_is_refused_as_outside_the_scope(ctx, mcp, tmp_path):
+    other = tmp_path / "elsewhere"
+    other.mkdir()
+    _, calls = mcp(_call("mcp__fake__where", repo_path=str(other)), FINAL, read_only=["where"])
+    assert "outside artifact_scope" in calls[1]["tail"]

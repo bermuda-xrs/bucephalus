@@ -26,6 +26,7 @@ class ToolSpec:
     output_taint: Taint
     required_capability: str | None = None
     description: str = ""
+    path_args: tuple = ()
 
     def manual_line(self) -> str:
         args = ", ".join(sorted(self.schema.get("properties", {})))

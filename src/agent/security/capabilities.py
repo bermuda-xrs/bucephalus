@@ -87,10 +87,11 @@ def _names_a_stream(p: Path) -> bool:
     return current.has_data_streams() and any(":" in part for part in p.parts[1:])
 
 
-def within_scope(args: dict, artifact_scope: list[str], root: str = ".") -> tuple[bool, str]:
+def within_scope(args: dict, artifact_scope: list[str], root: str = ".",
+                 extra_keys: frozenset = frozenset()) -> tuple[bool, str]:
     if not artifact_scope:
         for key, value in args.items():
-            if _looks_like_path(key, value):
+            if _looks_like_path(key, value, extra_keys):
                 return False, (f"{key}={value!r}: this task declared no "
                                "artifact_scope, so no path is permitted - "
                                "declare one (bucephalus new --scope work)")
@@ -98,7 +99,7 @@ def within_scope(args: dict, artifact_scope: list[str], root: str = ".") -> tupl
     roots = [Path(os.path.abspath(os.path.join(root, s))) for s in artifact_scope]
     real_roots = [_resolved(r) for r in roots]
     for key, value in args.items():
-        if not _looks_like_path(key, value):
+        if not _looks_like_path(key, value, extra_keys):
             continue
         p = Path(os.path.abspath(os.path.join(root, str(value))))
         if _names_a_stream(p):
@@ -114,10 +115,10 @@ _PATH_KEYS = frozenset({"path", "file", "filename", "dir", "directory", "dest",
                         "src", "target"})
 
 
-def _looks_like_path(key: str, value) -> bool:
+def _looks_like_path(key: str, value, extra: frozenset = frozenset()) -> bool:
     if not isinstance(value, str):
         return False
-    return key in _PATH_KEYS
+    return key in _PATH_KEYS or key in extra
 
 
 def _effective_args(tool, args: dict) -> dict:
@@ -229,9 +230,10 @@ def gate_tool_call(ctx, task, tool, args: dict, phase: str = "execute") -> GateD
         )
 
     eff = _effective_args(tool, args)
+    extra = frozenset(getattr(tool, "path_args", ()))
     state = None
     for key, value in eff.items():
-        if not _looks_like_path(key, value):
+        if not _looks_like_path(key, value, extra):
             continue
         if state is None:
             state = task_state_paths(ctx, task)
@@ -258,7 +260,7 @@ def gate_tool_call(ctx, task, tool, args: dict, phase: str = "execute") -> GateD
                     f"run_code with artifact_scope {s!r}: that scope contains "
                     "the agent's own state, and the sandbox would link it in")
 
-    ok, why = within_scope(eff, task.contract.artifact_scope, ctx.config.root)
+    ok, why = within_scope(eff, task.contract.artifact_scope, ctx.config.root, extra)
     if not ok:
         return GateDecision.deny(why)
 

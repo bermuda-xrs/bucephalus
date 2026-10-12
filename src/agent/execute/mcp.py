@@ -15,6 +15,7 @@ from .tools import ToolSpec
 PROTOCOL = "2024-11-05"
 MAX_RESULT_CHARS = 20000
 _SAFE = re.compile(r"[^A-Za-z0-9_]")
+_PATHISH = re.compile(r"path|file|dir|folder|repo|root|cwd", re.I)
 
 
 class McpError(RuntimeError):
@@ -175,7 +176,8 @@ def attach(ctx, task) -> None:
                 side_effecting=writes,
                 max_arg_taint=Taint.USER if writes else Taint.UNTRUSTED,
                 output_taint=Taint.UNTRUSTED,
-                description=f"{tool} of the user-configured MCP server {name}"))
+                description=f"{tool} of the user-configured MCP server {name}",
+                path_args=tuple(k for k in _schema(t.get("inputSchema") or {})["properties"] if _PATHISH.search(k))))
             added += 1
         ctx.log.append(task.id, "mcp.started", {"server": name, "tools": added})
 
