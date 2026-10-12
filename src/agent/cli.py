@@ -739,6 +739,7 @@ def cmd_exec(ctx, args, console) -> int:
                 return done("plan_required", EXIT_PLAN_REQUIRED, plan_id=plan.id,
                             next=f"bucephalus approve {task.id} {plan.id} && bucephalus run {task.id}")
             approve_plan(ctx, task, plan)
+            print("approved this plan (--approve-plan):" + chr(10) + plan.render(), file=sys.stderr)
             flush()
         unsubscribe = stream.subscribe(task.id, on_live)
         try:

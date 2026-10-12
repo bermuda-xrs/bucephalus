@@ -223,6 +223,9 @@ def run_task(ctx, task_id: str) -> TaskResult:
                    {"backend": "cloud", "model": exe.cfg.model if exe else None,
                     "n": cal.n, "slope": round(cal.slope, 4),
                     "intercept": round(cal.intercept, 1), "fitted": cal.fitted})
+    from ..plan.planner import observe_survey
+
+    observe_survey(ctx, task)
     entries: list[LedgerEntry] = list(ctx.seed_entries(task))
     plan = ctx.approved_plan(task)
     started = time.time()

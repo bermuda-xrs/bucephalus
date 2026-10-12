@@ -64,9 +64,10 @@ def test_the_version_must_move_when_the_prompt_does():
     from agent.ledger.prefix import system_contract
     from agent.execute.loop import ACTION_SCHEMA_HINT, ACTION_SCHEMA_HINT_NO_CODE, ACTION_TAG_HINT, READ_FIRST_NOTE
     from agent.execute.tools import apply_profile, default_registry
+    from agent.plan.planner import PLANNER_PREFIX
 
     parts = [system_contract(True), system_contract(False), ACTION_SCHEMA_HINT, ACTION_SCHEMA_HINT_NO_CODE,
-             ACTION_TAG_HINT, READ_FIRST_NOTE]
+             ACTION_TAG_HINT, READ_FIRST_NOTE, PLANNER_PREFIX]
     for profile in ("full", "patch", "small"):
         parts.append(apply_profile(default_registry(), profile).manual())
     digest = hashlib.sha256("\x1e".join(parts).encode("utf-8")).hexdigest()
