@@ -393,6 +393,37 @@ tests/         the spec's acceptance tests, per milestone, + source invariants
 - **`local_allowlist`** starts at five purposes. Expand it only from
   `skill_trials` data. `plan` and `review` are deliberately absent.
 
+- **`backends.<slot>.tool_profile`**: `full` (default, `edit_file`), `patch` (`apply_patch` instead) or
+  `small` (six tools, no code-as-action, `read_first` on). Only the executor slot's profile applies. `read_first`
+  and `observation_tokens` override the profile's defaults.
+- **`hooks`**: commands you declare, run outside the sandbox with secret-looking variables removed. `pre_tool` runs
+  after the gate and can only refuse (a hook that fails, hangs or cannot start refuses); `post_tool` output is
+  appended as untrusted; `stop` can hold an answer back three times. Each gets the call as JSON on stdin.
+
+  ```yaml
+  hooks:
+    pre_tool:
+      - argv: ["python", "C:/tools/no_secrets.py"]
+        tools: [write_file]
+        timeout_s: 10
+  ```
+- **`mcp_servers`**: stdio MCP servers whose tools join the registry as `mcp__<server>__<tool>`. A tool writes
+  unless listed in `read_only`; output is untrusted; the server's own descriptions never reach the prompt; path-like
+  arguments are scope-checked (`strict_paths: true` checks every string). Unattended origins cannot call them.
+
+  ```yaml
+  mcp_servers:
+    time:
+      argv: ["C:/venvs/mcp/Scripts/python.exe", "-m", "mcp_server_time"]
+      read_only: [get_current_time, convert_time]
+  ```
+- **`AGENTS.md`** beside the config enters the prompt as project notes, frozen per task, unless the task could write
+  it (inside the scope, a link, or a hard link); tasks cannot write it.
+- **New commands**: `bucephalus exec "goal" --scope work [--output-format stream-json] [--approve-plan]` runs one
+  task headless (exit 0 done, 2 not done, 3 plan needed, 4 parked); `bucephalus say <task> text` speaks to a running
+  task; `bucephalus diff <task>` shows what each step changed; `bucephalus rewind <task> [--step N] [--what
+  code|conversation|both] [--undo]` puts it back. The console has the same as Changes, Rewind and `/say`.
+
 `policy.md` is the deputy's rule book, in plain text, edited by you. Its
 default is deny: a category you have not written a rule for is refused, and a
 missing policy file refuses everything.
