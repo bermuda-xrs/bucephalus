@@ -51,7 +51,7 @@ One measurement process at a time (`src/agent/runlock.py`); nothing else runs du
 
 ## State
 
-Verified 2026-10-13 against commit `e891eb8` on `harness-10`: Windows suite, ruff, the frozen gate and a task through the
+Verified 2026-10-13 against commit `4fa0dfc` on `harness-10`: Windows suite, ruff, the frozen gate and a task through the
 rebuilt `bucephalus.exe`'s window (see the Branch row for whether it reached `main`).
 
 | Fact | Value | Regenerate with |
@@ -88,13 +88,18 @@ the rest is D79; 10 the checkout renamed by `scripts/rename_checkout.ps1`, its s
 
 Diagnosis (3): write-function-002 had no graders under the runner (fixed). handbook-recall-005 hid the middle of the
 file behind a tool the small kit lacked (sixth tool), and a cap above half the compaction ceiling then forced a session
-boundary that dropped the handbook (fixed in harness 11). In the two-task rerun before that fix (harness 10), 0 of 6
-pairs passed in either arm; harness 11 is not measured.
+boundary that dropped the handbook (fixed in harness 11). Rerun on harness 11 (2026-10-13, 3B, 3 reps): still none of
+6 pairs passed in either arm. No session boundary now; the handbook is about 5.5k tokens against an inline cap of
+16384 x 0.28 x 0.5, about 2.3k, so its middle is elided, and the 3B answers without paging it in (no `expand_artifact`
+or `search` call). One small-arm run crashed on a connection reset by Ollama 8 s into a call; the record does not say
+whether tokens had streamed (no retry then) or the retry also failed.
 
-Not working: the desktop app on Linux without GTK or Qt (this WSL has neither); D79's open findings.
+Not working: handbook-recall on the 3B (above); the desktop app on Linux without GTK or Qt (this WSL has neither);
+D79's open findings (R2 fixed and M2 in part, 2026-10-13).
 
 Needs the user: D26 credentials; the 8B run (`bench/profile_run.py --preflight --arms control,full8b,small8b`, about
 7 GB free and the machine awake); a Mac or bare-metal Linux run.
 
-Next three: (1) rerun the two tasks on harness 11 with `bench/profile_run.py` to see whether handbook-recall moves;
-(2) D79: strict paths by default for writing MCP tools (M2) and a run lock for rewind (R2); (3) the 8B run.
+Next three: (1) a decision for the user: let the small profile show a long file whole (a higher `context_fill_ratio`
+for it) or have `read_file` return numbered pages the model is told to continue, then rerun the two tasks; (2) the 8B
+run; (3) D79's rest: an environment allowlist for hooks and MCP servers (L1), a side-effect-free diff view (L4).
