@@ -101,6 +101,8 @@ def measurement(ctx) -> dict:
 
 
 def settings(ctx) -> dict:
+    from ..config import LONG_FILES
+
     c = ctx.config
     return {"profile": c.profile,
             "backends": [{"name": n, "kind": b.cfg.kind, "model": b.cfg.model,
@@ -109,6 +111,7 @@ def settings(ctx) -> dict:
             "limits": json.loads(c.limits.model_dump_json()),
             "autonomy": json.loads(c.autonomy.model_dump_json()),
             "mechanisms": json.loads(c.mechanisms.model_dump_json()),
+            "long_files": {"mode": c.long_files, "choices": list(LONG_FILES)},
             "root": c.root, "state_dir": c.state_dir or c.root}
 
 
@@ -122,7 +125,9 @@ def logs(ctx, limit: int = 200) -> dict:
 
 def context_meter(ctx, task_id: str | None = None) -> dict:
     window = ctx.window_for("cloud")
-    ratio = ctx.config.limits.context_fill_ratio
+    from ..config import fill_ratio
+
+    ratio = fill_ratio(ctx.config)
     used = 0
     if task_id:
         r = ctx.conn.execute(

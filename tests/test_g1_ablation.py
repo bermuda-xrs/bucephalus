@@ -30,6 +30,7 @@ def _ctx(tmp_path, **mechanisms):
     cfg = make_config(tmp_path)
     for k, v in mechanisms.items():
         setattr(cfg.mechanisms, k, v)
+    cfg.long_files = "elide"
     ctx = AgentContext(cfg)
     ctx.memory = MemoryStore(tmp_path / "memory")
     record_fingerprint(ctx.memory)

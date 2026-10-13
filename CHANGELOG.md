@@ -20,6 +20,17 @@ and the platformdirs app name. No aliases for the old names. On first use `user_
 left as it was). Entries below this one use the old name. The import package is still `agent`. Prompt
 bytes changed with the name ("the execution core of Bucephalus"): HARNESS_VERSION 8.
 
+## Harness 12 - 2026-10-13 (HARNESS_VERSION 11 -> 12)
+
+- `long_files` (config, and a selector in the console's Settings for new tasks): `pages` (default) makes `read_file`
+  return a long file one page at a time, each ending with the call for the next (`page=2`, ...). A page is sized to the
+  context (at most 4000 tokens, and within half the compaction ceiling) and is neither cut nor summarised. `elide` is
+  the harness 11 behaviour (head and tail, the middle behind `expand_artifact`); `whole` raises the fill ratio to 0.75 so
+  a long file fits in full. A run records its mode in `session.opened`. On the 3B, harness 11 elided the middle of a
+  5.5k-token handbook and the model never paged it in.
+- In `pages` mode a file read is no longer summarised by the local tier (a summary lost the content a page keeps).
+  `bench/g1_close.py` and the compression tests pin `elide`, the mode they measure.
+
 ## Harness 11 - 2026-10-12 (HARNESS_VERSION 10 -> 11)
 
 Harness 10 lived for one diagnostic run (two tasks, 3B). Its prompt digest is kept in `tests/harness_prompts.json`.

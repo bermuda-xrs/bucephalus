@@ -7,6 +7,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Any
 
+from ..config import fill_ratio
 from ..kernel.events import canonical, sha256_hex
 from ..kernel.integrity import IntegrityError, checkpoint, resume
 from ..kernel.receipts import execute_once, idempotency_key, rewind_epoch
@@ -287,7 +288,7 @@ def _run_task(ctx, task_id: str) -> TaskResult:
             action = enforce_ceiling(
                 *cal.apply(count_tokens(prefix), sum_tokens(entries)),
                 window,
-                ctx.config.limits.context_fill_ratio,
+                fill_ratio(ctx.config),
             )
             if ctx.config.compaction_probe_step == step and action != "compact":
                 ctx.log.append(task.id, "compaction.skipped",
@@ -304,7 +305,7 @@ def _run_task(ctx, task_id: str) -> TaskResult:
                                 "prefix_tokens": count_tokens(prefix),
                                 "tail_tokens": sum_tokens(entries),
                                 "window": window,
-                                "fill_ratio": ctx.config.limits.context_fill_ratio,
+                                "fill_ratio": fill_ratio(ctx.config),
                                 "reason": "compaction ablated (G1 arm)"})
             elif action == "compact":
                 entries, memory, guard, builder, prefix = _session_boundary(
@@ -954,7 +955,10 @@ def _perform(ctx, task, tool, tool_name: str, args: dict, step: int) -> LedgerEn
     ctx.taint_tracker(task.id).trust_paths(args)
     ctx.taint_tracker(task.id).observe(text, taint)
 
-    rendered, via = condense_observation(ctx, task, text, taint, aid)
+    if tool_name == "read_file" and isinstance(result, dict) and result.get("pages"):
+        rendered, via = project(ctx.conn, aid, mode="summary", max_tokens=_ceiling_half(ctx), hint=_elision_hint(ctx)), None
+    else:
+        rendered, via = condense_observation(ctx, task, text, taint, aid)
     label = f"{tool_name} via {via}" if via else tool_name
     return LedgerEntry.observation(rendered, artifact_id=aid, taint=taint, label=label)
 
@@ -992,11 +996,21 @@ def _check_window(ctx, task) -> None:
         ctx.log.append(task.id, "model.window_short", warn)
 
 
+PAGE_MAX_TOKENS = 4000
+
+
+def _ceiling_half(ctx) -> int:
+    return int(ctx.window_for("cloud") * fill_ratio(ctx.config) * 0.5)
+
+
 def _inline_cap(ctx) -> int:
     b = ctx.backends.get("cloud")
     cap = b.cfg.inline_observation_tokens if b else 400
-    ceiling = int(ctx.window_for("cloud") * ctx.config.limits.context_fill_ratio * 0.5)
-    return max(200, min(cap, ceiling))
+    return max(200, min(cap, _ceiling_half(ctx)))
+
+
+def page_tokens(ctx) -> int:
+    return max(200, min(PAGE_MAX_TOKENS, int(_ceiling_half(ctx) * 0.8)))
 
 
 def _elision_hint(ctx) -> str:

@@ -189,7 +189,8 @@ class AgentContext:
                 self._memory_frozen[task_id] = json.loads(open_row["memory_json"])
             else:
                 snap = self._snapshot_memory(task_id)
-                sessions.open_session(self.conn, self.log, task_id, snap)
+                sessions.open_session(self.conn, self.log, task_id, snap,
+                                      detail={"long_files": self.config.long_files})
                 self._memory_frozen[task_id] = snap
         return self._memory_frozen[task_id]
 

@@ -396,6 +396,9 @@ tests/         the spec's acceptance tests, per milestone, + source invariants
 - **`backends.<slot>.tool_profile`**: `full` (default, `edit_file`), `patch` (`apply_patch` instead) or
   `small` (six tools, no code-as-action, `read_first` on). Only the executor slot's profile applies. `read_first`
   and `observation_tokens` override the profile's defaults.
+- **`long_files`**: how a file longer than the model can take at once reaches it. `pages` (default): `read_file`
+  returns one page sized to the context, ending with the call for the next. `elide`: head and tail, the middle on
+  request. `whole`: the fill ratio rises to 0.75 so it fits in full. The console's Settings can change it for new tasks.
 - **`hooks`**: commands you declare, run outside the sandbox with secret-looking variables removed. `pre_tool` runs
   after the gate and can only refuse (a hook that fails, hangs or cannot start refuses); `post_tool` output is
   appended as untrusted; `stop` can hold an answer back three times. Each gets the call as JSON on stdin.

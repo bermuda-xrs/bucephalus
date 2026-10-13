@@ -41,6 +41,7 @@ def test_large_observations_route_to_the_local_tier(ctx, workspace, scripted):
     from agent.kernel.types import Budget, TaskContract
 
     ctx.config.compress_observations_over_tokens = 50
+    ctx.config.long_files = "elide"
     big = "alpha beta gamma delta epsilon zeta eta theta iota kappa " * 200
     (workspace / "big.txt").write_text(big, encoding="utf-8")
 
@@ -115,6 +116,7 @@ def test_the_semantic_cache_is_reachable_and_hits(ctx, task, workspace, scripted
 
     _same_model_local_tier(ctx)
     ctx.config.compress_observations_over_tokens = 50
+    ctx.config.long_files = "elide"
     ctx.config.autonomy.auto_review = False
     ctx.config.autonomy.approve_scoped_writes = True
     (workspace / "a.txt").write_text(

@@ -7,6 +7,8 @@ from pathlib import Path
 
 from fastapi import FastAPI, Header, HTTPException
 from fastapi.responses import HTMLResponse, StreamingResponse
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 from ..assure.monitor import flags as monitor_flags
@@ -97,6 +99,10 @@ class PatchConversation(BaseModel):
     title: str | None = None
     archived: bool | None = None
     pinned: bool | None = None
+
+
+class LongFilesIn(BaseModel):
+    mode: Literal["pages", "elide", "whole"]
 
 
 class ModelIn(BaseModel):
@@ -550,6 +556,14 @@ def create_app(ctx: AgentContext) -> FastAPI:
             b.model = body.model
         ctx.config.backends[body.slot].model = body.model
         return {"slot": body.slot, "model": body.model}
+
+    @app.post("/settings/long_files")
+    def post_long_files(body: LongFilesIn) -> dict:
+        if any(t.is_alive() for t in _runs.values()):
+            raise HTTPException(409, "a task is running; change this when it has finished")
+        ctx.config.long_files = body.mode
+        ctx.config.profile_provenance["long_files"] = body.mode
+        return {"mode": body.mode}
 
     @app.post("/memory/forget")
     def post_memory_forget(body: Forget) -> dict:

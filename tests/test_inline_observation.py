@@ -39,6 +39,7 @@ def test_the_small_profile_sees_the_whole_file_it_read(small, task, workspace):
 
 
 def test_the_full_profile_still_gets_the_head_and_the_tail(ctx, task, workspace):
+    ctx.config.long_files = "elide"
     _big(workspace)
     ctx.backends["cloud"].queue(READ, FINAL)
     run_task(ctx, task.id)
@@ -62,6 +63,7 @@ def test_a_long_read_never_forces_a_session_boundary_that_drops_it(small, task, 
     cfg = small.backends["cloud"].cfg
     cfg.context_window, cfg.usable_context_window = 16384, 16384
     small.config.limits.context_fill_ratio = 0.28
+    small.config.long_files = "elide"
     t = create_task(small.conn, small.log, task.contract, task.budget)
     small.backends["cloud"].queue(READ, FINAL)
     run_task(small, t.id)

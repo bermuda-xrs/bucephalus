@@ -57,7 +57,7 @@ rebuilt `bucephalus.exe`'s window (see the Branch row for whether it reached `ma
 | Fact | Value | Regenerate with |
 |---|---|---|
 | Branch | `main`, fast-forwarded from `harness-10` after the suite, the frozen gate and the frozen e2e passed; no remote | `git branch --show-current` |
-| Harness version | **11**, bumped 2026-10-12 for the planner survey rule (CHANGELOG "Harness 11"); numbers from 10 and earlier do not compare | `grep HARNESS_VERSION src/agent/__init__.py` |
+| Harness version | **12**, bumped 2026-10-13 for paged `read_file` (CHANGELOG "Harness 12"); numbers from 11 and earlier do not compare | `grep HARNESS_VERSION src/agent/__init__.py` |
 | Toolset version | **7** | `grep TOOLSET_VERSION src/agent/__init__.py` |
 | Tests | not written down | `python -m pytest tests -q`; skips are live-credential tests (D26) and other-OS tests |
 | Lint | bug rules only | `python -m ruff check src tests scripts packaging demo.py` |

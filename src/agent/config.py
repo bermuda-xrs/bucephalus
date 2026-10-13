@@ -186,6 +186,7 @@ class Config(BaseModel):
     root: str = "."
     state_dir: str = ""
     source_path: str = ""
+    long_files: Literal["pages", "elide", "whole"] = "pages"
     profile_provenance: dict[str, Any] = Field(default_factory=dict)
 
     def resolve(self, relative: str) -> Path:
@@ -202,6 +203,15 @@ class Config(BaseModel):
             raise ValueError(
                 f"autonomy.auto_review_backend={name!r} is not a configured backend"
             )
+
+
+LONG_FILES = ("pages", "elide", "whole")
+WHOLE_FILL_RATIO = 0.75
+
+
+def fill_ratio(cfg) -> float:
+    r = cfg.limits.context_fill_ratio
+    return max(r, WHOLE_FILL_RATIO) if cfg.long_files == "whole" else r
 
 
 def load_config(path: str | Path = "config.yaml",
@@ -224,6 +234,7 @@ def load_config(path: str | Path = "config.yaml",
     cfg.profile_provenance = enforce(cfg, cfg.profile)
     cfg.profile_provenance["mechanisms"] = cfg.mechanisms.model_dump()
     cfg.profile_provenance["ablated"] = cfg.mechanisms.ablated()
+    cfg.profile_provenance["long_files"] = cfg.long_files
     cfg.profile_provenance["compaction_boundary"] = (
         f"SYNTHETIC: forced at step {cfg.compaction_probe_step}, whatever the "
         "real context fill. Measures what compaction costs when it fires, and "

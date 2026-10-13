@@ -818,6 +818,10 @@ What to do, in the words a model reads.</textarea></label>
       <h4>Notifications</h4><p class="note">A desktop notification when something needs you or a watched task finishes,
       only while this tab is in the background. ${"Notification" in window ? `Now: ${esc(Notification.permission)}.` : "Not available here."}</p>
       <button class="btn" data-action="enableNotifications">Turn on notifications</button>
+      <h4>Long files</h4><p class="note">How a file longer than the model can take at once reaches it. For new tasks;
+      your config file is not changed.</p>
+      <label class="field"><select id="longFiles" data-change="longFiles">${d.long_files.choices.map(c =>
+        `<option value="${esc(c)}"${c === d.long_files.mode ? " selected" : ""}>${esc(LONG_FILES[c] || c)}</option>`).join("")}</select></label>
       <h4>Models</h4><table><tr><th>Name</th><th>Kind</th><th>Model</th><th>Trust</th><th class="r">Window</th></tr>
       ${d.backends.map(b => `<tr><td>${esc(b.name)}</td><td>${esc(b.kind)}</td><td><code>${esc(b.model)}</code></td>
         <td>${esc(b.tier)}</td><td class="r">${ktok(b.window)}</td></tr>`).join("")}</table>
@@ -891,6 +895,15 @@ $("#modelPick").addEventListener("change", async e => {
   catch (err) { toast(err.message, true); }
   loadModels();
 });
+const LONG_FILES = {
+  pages: "In pages (default): one page at a time, the context stays small",
+  elide: "Head and tail: the middle only if the model asks for it",
+  whole: "Whole: in full, using more of the context window",
+};
+async function setLongFiles(mode) {
+  try { await post("/settings/long_files", {mode}); toast(`New tasks read long files: ${LONG_FILES[mode]}.`); }
+  catch (err) { toast(err.message, true); openPane("settings"); }
+}
 async function acceptMemory() {
   try { const r = await post("/memory/accept"); toast(`Accepted (was ${r.before}).`); openPane("memory"); }
   catch (e) { toast(e.message, true); }
@@ -1068,6 +1081,7 @@ document.addEventListener("click", e => {
 document.addEventListener("change", e => {
   if (e.target.dataset.change === "critChanged") critChanged();
   if (e.target.dataset.change === "rewindStep" && S.rewind) S.rewind.step = Number(e.target.value);
+  if (e.target.dataset.change === "longFiles") setLongFiles(e.target.value);
 });
 new MutationObserver(() => document.querySelectorAll("i[data-pct]").forEach(i => {
   i.style.width = i.dataset.pct + "%";

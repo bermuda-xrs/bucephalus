@@ -89,12 +89,42 @@ def _resolve(ctx, path: str) -> Path:
     return p if p.is_absolute() else Path(ctx.config.root) / p
 
 
-def tool_read_file(ctx, task, path: str) -> dict:
+def tool_read_file(ctx, task, path: str, page: int | None = None) -> dict:
     p = _resolve(ctx, path)
     if not p.exists():
         return {"ok": False, "error": f"no such file: {path}"}
     text = p.read_text(encoding="utf-8", errors="replace")[:MAX_READ_CHARS]
-    return {"ok": True, "path": str(p), "content": text, "bytes": p.stat().st_size}
+    out = {"ok": True, "path": str(p), "content": text, "bytes": p.stat().st_size}
+    if page is None and ctx.config.long_files != "pages":
+        return out
+    pages = _pages(ctx, text)
+    try:
+        n = 1 if page is None else int(page)
+    except (TypeError, ValueError):
+        n = 0
+    if not 1 <= n <= len(pages):
+        return {"ok": False, "error": f"no page {page}: {path} has {len(pages)} pages"}
+    content = pages[n - 1]
+    if n < len(pages):
+        content += f"\n[page {n} of {len(pages)}; the next is read_file(path={path!r}, page={n + 1})]"
+    return {**out, "content": content, "page": n, "pages": len(pages)}
+
+
+def _pages(ctx, text: str) -> list[str]:
+    from ..tokens import count_tokens
+    from .loop import page_tokens
+
+    budget = page_tokens(ctx)
+    pages, cur, n = [], [], 0
+    for line in text.splitlines(keepends=True):
+        t = count_tokens(line)
+        if cur and n + t > budget:
+            pages.append("".join(cur))
+            cur, n = [], 0
+        cur.append(line)
+        n += t
+    pages.append("".join(cur))
+    return pages
 
 
 def tool_list_dir(ctx, task, path: str = ".") -> dict:
@@ -625,11 +655,11 @@ def default_registry() -> ToolRegistry:
         ToolSpec(
             "read_file",
             tool_read_file,
-            _s(path=_STR),
+            {"type": "object", "properties": {"path": _STR, "page": {"type": "integer"}}, "required": ["path"]},
             side_effecting=False,
             max_arg_taint=Taint.UNTRUSTED,
             output_taint=Taint.UNTRUSTED,
-            description="read a UTF-8 file from disk",
+            description="read a UTF-8 file from disk; a long one comes in pages, read the next with page=2, 3, ...",
         )
     )
     r.register(
