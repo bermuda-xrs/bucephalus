@@ -51,7 +51,7 @@ One measurement process at a time (`src/agent/runlock.py`); nothing else runs du
 
 ## State
 
-Verified 2026-10-13 against commit `4fa0dfc` on `harness-10`: Windows suite, ruff, the frozen gate and a task through the
+Verified 2026-10-13 against commit `b531fe5` on `harness-10`: Windows suite, ruff, the frozen gate and a task through the
 rebuilt `bucephalus.exe`'s window (see the Branch row for whether it reached `main`).
 
 | Fact | Value | Regenerate with |
@@ -92,7 +92,9 @@ boundary that dropped the handbook (fixed in harness 11). Rerun on harness 11 (2
 6 pairs passed in either arm. No session boundary now; the handbook is about 5.5k tokens against an inline cap of
 16384 x 0.28 x 0.5, about 2.3k, so its middle is elided, and the 3B answers without paging it in (no `expand_artifact`
 or `search` call). One small-arm run crashed on a connection reset by Ollama 8 s into a call; the record does not say
-whether tokens had streamed (no retry then) or the retry also failed.
+whether tokens had streamed (no retry then) or the retry also failed. Harness 12 (`long_files: pages`, default): still
+none of 6 pairs; the small arm now reads page 1 and reports its ticket (1 of 3, every rep) but never asks for page 2,
+and the control arm answers without reading the file.
 
 Not working: handbook-recall on the 3B (above); the desktop app on Linux without GTK or Qt (this WSL has neither);
 D79's open findings (R2 fixed and M2 in part, 2026-10-13).
@@ -100,6 +102,7 @@ D79's open findings (R2 fixed and M2 in part, 2026-10-13).
 Needs the user: D26 credentials; the 8B run (`bench/profile_run.py --preflight --arms control,full8b,small8b`, about
 7 GB free and the machine awake); a Mac or bare-metal Linux run.
 
-Next three: (1) a decision for the user: let the small profile show a long file whole (a higher `context_fill_ratio`
-for it) or have `read_file` return numbered pages the model is told to continue, then rerun the two tasks; (2) the 8B
-run; (3) D79's rest: an environment allowlist for hooks and MCP servers (L1), a side-effect-free diff view (L4).
+Next three: (1) a decision for the user: should the small profile refuse a final answer while a file it opened has
+unread pages (as `read_first` refuses one before any tool call)? A prompt change, so harness 13; then rerun the two
+tasks; (2) the 8B run; (3) D79's rest: an environment allowlist for hooks and MCP servers (L1), a side-effect-free diff
+view (L4).
