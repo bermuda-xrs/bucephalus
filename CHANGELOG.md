@@ -10,6 +10,35 @@
 Dates are commit dates. `0.1.0` is not released yet — see "Unreleased" for
 what still stands between here and a first iteration.
 
+## Iteration 3 - 2026-10-12/14 (HARNESS_VERSION 9 -> 13, TOOLSET_VERSION 7)
+
+Shipped:
+- Run records name the code they loaded (commit, source hash, dirty flag); a prompt change without a version bump fails
+  the suite (`tests/harness_prompts.json`).
+- Small kit: `expand_artifact` (six tools); the inline cap stays under half the compaction ceiling; `long_files`
+  (`pages` default, `elide`, `whole`; also in the console's Settings); `read_all_pages`, on for the small profile: an
+  answer while an opened file has unread pages becomes a reminder naming them, three at most.
+- Console: read-only per-step diff view, tool cards, `bucephalus say`; rewind and undo take a per-task run lock and void
+  the approvals of undone steps. Telegram queue (fake transport only). JSON/YAML/TOML/JS diagnostics. A short model
+  window warns at run start (D16).
+- Security, from `docs/AUDIT-2026-10-12.md` (open: D78, D80): the planner's survey is untrusted; hooks run on every
+  execution path, isolated (`-I`) with an allowlisted environment; MCP names, types and I/O are validated and bounded,
+  `path_args` declares path arguments and an undeclared writing tool parks for a human; rewind follows no links; the
+  config and hook/MCP scripts are protected; `exec` strips control characters.
+- Ollama retries a connection dropped before the first token; POSIX reads long process names; keep-awake goes through
+  the platform layer; the checkout is renamed `bucephalus`.
+
+Versions: 10 the sixth small tool and the cap (one diagnostic run only), 11 the planner survey rule, 12 paged
+`read_file`, 13 the unread-pages reminder.
+
+Numbers (granite4.1:3b, greedy, paired control vs small; sightings, not results):
+- v9 paired run, harness 9, n = 15 pairs: control 3, small 6, McNemar p 0.51.
+- write-function-002 and handbook-recall-005, 3 reps, n = 6 pairs per harness: harness 10, 11, 12 and 13 each 0 of 6
+  in both arms. Harness 12: the small arm reads page 1 and reports 1 of 3 tickets in every rep; 13: the reminder fires
+  three times per run and the model never reads page 2; the control arm never opens the file.
+- 8B: not run. The preflight needs 7.23 GB; 4.69 GB was free of 15.47 GB with no model loaded (2026-10-14).
+- Mutation, code added since harness 8: path gate 60% to 91% of mutants killed, MCP 58% to 80%, Telegram 78% to 91%.
+
 ## Renamed to Bucephalus - 2026-10-10
 
 Product `alpha` / `alpha-test-1` is now `bucephalus`: the CLI and `bucephalus.ps1`/`.cmd`, the wheel, the
@@ -19,46 +48,6 @@ and the platformdirs app name. No aliases for the old names. On first use `user_
 `user_config_dir()` copy the old directory to the new one once, when the new one is absent (the old one is
 left as it was). Entries below this one use the old name. The import package is still `agent`. Prompt
 bytes changed with the name ("the execution core of Bucephalus"): HARNESS_VERSION 8.
-
-## Harness 12 - 2026-10-13 (HARNESS_VERSION 11 -> 12)
-
-- `long_files` (config, and a selector in the console's Settings for new tasks): `pages` (default) makes `read_file`
-  return a long file one page at a time, each ending with the call for the next (`page=2`, ...). A page is sized to the
-  context (at most 4000 tokens, and within half the compaction ceiling) and is neither cut nor summarised. `elide` is
-  the harness 11 behaviour (head and tail, the middle behind `expand_artifact`); `whole` raises the fill ratio to 0.75 so
-  a long file fits in full. A run records its mode in `session.opened`. On the 3B, harness 11 elided the middle of a
-  5.5k-token handbook and the model never paged it in.
-- In `pages` mode a file read is no longer summarised by the local tier (a summary lost the content a page keeps).
-  `bench/g1_close.py` and the compression tests pin `elide`, the mode they measure.
-
-## Harness 11 - 2026-10-12 (HARNESS_VERSION 10 -> 11)
-
-Harness 10 lived for one diagnostic run (two tasks, 3B). Its prompt digest is kept in `tests/harness_prompts.json`.
-
-- The planner's survey of the files in scope is stored as an untrusted artifact and taints the run; `PLANNER_PREFIX` says
-  it is data (audit P1). `exec --approve-plan` prints the plan it approved.
-- The inline observation cap is also at most half the compaction ceiling: a larger observation forced a session
-  boundary that dropped the handbook. `project()` keeps to its budget by characters, so a few long lines are cut too.
-- A run warns (`model.window_short`) when the server holds less context than the config budgets (D16).
-- Ollama: a connection dropped before the first token is retried once; `profile_run` summaries count crashed runs.
-- Hooks run on every execution path (parallel, released approvals, memory flush, inside programs); hook output is read
-  from a file, so a grandchild cannot hold the timeout. MCP: names, types and enums validated; pages, tools and line
-  length capped; a malformed reply fails the attach, not the run. Rewind neither captures nor restores through links.
-  `exec` strips control characters. The loaded config and hook/MCP scripts are protected state. Audit:
-  `docs/AUDIT-2026-10-12.md`; what is open is D79.
-- POSIX process names longer than 15 characters are read from `cmdline`; keep-awake goes through the platform layer.
-- 2026-10-13: a run holds a per-task lock; rewind and undo refuse while it is held, and a rewind voids the approvals of
-  the steps it undoes (D79 R2). A writing MCP tool's file-like strings are scope-checked under any key (D79 M2).
-
-## Harness 10 - 2026-10-12 (HARNESS_VERSION 9 -> 10)
-
-- The small tool kit gains `expand_artifact` (six tools): observations over 400 tokens are shown as head and tail with a
-  pointer to it, and the small profile had no such tool, so the 3B never saw the middle of a long file.
-- The small profile's inline observation cap is 40% of the window (`observation_tokens` overrides it); other profiles keep 400.
-- Non-Python diagnostics (JSON, YAML, TOML, JavaScript via node), `bucephalus say`, diff view, the Telegram queue.
-- Found while diagnosing: `bench/profile_run.py` rooted each arm in a scratch directory with no graders, so the
-  `verify_program` task could not pass in either arm; it now copies the graders in. The earlier tables (3 of 15 vs 6 of
-  15) count that task as failed in both arms.
 
 ## Harness 9 - 2026-10-11 (HARNESS_VERSION 8 -> 9)
 

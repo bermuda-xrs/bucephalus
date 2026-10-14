@@ -51,19 +51,19 @@ One measurement process at a time (`src/agent/runlock.py`); nothing else runs du
 
 ## State
 
-Verified 2026-10-13 against commit `b531fe5` on `harness-10`: Windows suite, ruff, the frozen gate and a task through the
+Verified 2026-10-14 against commit `9edff64` on `harness-10`: Windows suite, ruff, the frozen gate and a task through the
 rebuilt `bucephalus.exe`'s window (see the Branch row for whether it reached `main`).
 
 | Fact | Value | Regenerate with |
 |---|---|---|
-| Branch | `main`, fast-forwarded from `harness-10` after the suite, the frozen gate and the frozen e2e passed; no remote | `git branch --show-current` |
+| Branch | `main`, fast-forwarded from `harness-10` after the suite, the frozen gate, the frozen e2e and the WSL2 suite passed; tag `iteration-3-closed`; no remote | `git branch --show-current` |
 | Harness version | **13**, bumped 2026-10-14 for the unread-pages reminder (CHANGELOG "Iteration 3"); numbers from 12 and earlier do not compare | `grep HARNESS_VERSION src/agent/__init__.py` |
 | Toolset version | **7** | `grep TOOLSET_VERSION src/agent/__init__.py` |
 | Tests | not written down | `python -m pytest tests -q`; skips are live-credential tests (D26) and other-OS tests |
 | Lint | bug rules only | `python -m ruff check src tests scripts packaging demo.py` |
 | Open issues | `docs/DEFERRED.md`, open entries only | its state table |
 | CLI | 29 subcommands, each smoke-tested | `.\bucephalus.ps1 --help` |
-| Platforms | Windows. POSIX has run four times, in WSL2 (`docs/evidence/wsl-2026-10-12/` is the latest); bare-metal Linux never, and macOS (`src/agent/platform/darwin.py`) has never executed anywhere | `docs/PLATFORMS.md` section 5 is the checklist |
+| Platforms | Windows. POSIX has run six times, in WSL2 (`docs/evidence/wsl-2026-10-12/` is the last full checklist; the suite passed again 2026-10-14); bare-metal Linux never, and macOS (`src/agent/platform/darwin.py`) has never executed anywhere | `docs/PLATFORMS.md` section 5 is the checklist |
 | Security posture | the capability gate is the boundary; the sandbox (Job Object limits, advisory path/network fence) constrains a mistaken agent, not a hostile one: D32 | |
 | Phase program | complete | `RELEASE.md`, "ITERATION TWO: COMPLETE" |
 | Running now | nothing | `Get-Process python, ollama -ErrorAction SilentlyContinue` |
@@ -76,33 +76,17 @@ Before any commit: tests red first, never weaken a check, nothing pushed.
 
 ## Next step
 
-The 2026-10-12 brief is done except item 9 (the 8B run, prepared only).
+Iteration 3 is closed (tag `iteration-3-closed`; CHANGELOG "Iteration 3" has what shipped and the numbers).
 
-Done: 1 the injected memory line forgotten, old venvs and `~/.alpha-build` deleted, keep-awake through the platform
-layer; 2 runs record the code they loaded, the prompt cannot change without a bump, v9 paired run on the 3B (control 3 of
-15, small+read_first 6 of 15, McNemar p 0.51); 3 diagnosis (below); 4 real MCP servers and a pre_tool hook end to end
-(`tests/test_mcp_real.py`, opt-in); 5 diff view, `bucephalus say`, the Telegram queue (FakeTransport), diagnostics, tool
-cards, the D16 window check; 6 WSL2, PLATFORMS section 5 twice (`docs/evidence/wsl-2026-10-12/`); 7 mutation
-(`docs/evidence/mutation-2026-10-12/`); 8 the audit (`docs/AUDIT-2026-10-12.md`): P1 and the mediums fixed red-first,
-the rest closed 2026-10-14; 10 the checkout renamed by `scripts/rename_checkout.ps1`, its state directory moved with it.
-
-Diagnosis (3): write-function-002 had no graders under the runner (fixed). handbook-recall-005 hid the middle of the
-file behind a tool the small kit lacked (sixth tool), and a cap above half the compaction ceiling then forced a session
-boundary that dropped the handbook (fixed in harness 11). Rerun on harness 11 (2026-10-13, 3B, 3 reps): still none of
-6 pairs passed in either arm. No session boundary now; the handbook is about 5.5k tokens against an inline cap of
-16384 x 0.28 x 0.5, about 2.3k, so its middle is elided, and the 3B answers without paging it in (no `expand_artifact`
-or `search` call). One small-arm run crashed on a connection reset by Ollama 8 s into a call; the record does not say
-whether tokens had streamed (no retry then) or the retry also failed. Harness 12 (`long_files: pages`, default): still
-none of 6 pairs; the small arm now reads page 1 and reports its ticket (1 of 3, every rep) but never asks for page 2,
-and the control arm answers without reading the file.
-
-Not working: handbook-recall on the 3B (above); the desktop app on Linux without GTK or Qt (this WSL has neither);
+Not working: write-function-002 and handbook-recall-005 on the 3B (none of 6 pairs in either arm on harness 13; the
+model never reads past page 1, and the control arm never opens the file); the desktop app on Linux without GTK or Qt;
 D78 and D80.
 
-Needs the user: D26 credentials; the 8B run (`bench/profile_run.py --preflight --arms control,full8b,small8b`, about
-7 GB free and the machine awake); a Mac or bare-metal Linux run.
+Needs the user: D26 credentials; about 2.6 GB more free memory (or a smaller 8B quantisation) for the 8B run, which the
+preflight refused at 4.69 GB free; a Mac or bare-metal Linux run.
 
-Next three: (1) a decision for the user: should the small profile refuse a final answer while a file it opened has
-unread pages (as `read_first` refuses one before any tool call)? A prompt change, so harness 13; then rerun the two
-tasks; (2) the 8B run; (3) close the iteration (diff
-view (L4).
+Next iteration, first three steps: (1) handbook-recall: while an opened file has unread pages, leave the final branch
+out of the constrained schema, as `read_first` does before the first observation (harness 14), and rerun the pair;
+(2) write-function: read one control and one small trace, separate the harness's part from the model's, rerun;
+(3) the 8B run (`bench/profile_run.py --preflight --arms control,full8b,small8b`, then without `--preflight`) once it
+fits.
