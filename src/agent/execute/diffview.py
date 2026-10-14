@@ -16,7 +16,7 @@ def task_diffs(ctx, task_id: str, step: int | None = None) -> list[dict]:
         return []
     repo = ShadowRepo.for_task(ctx, task)
     try:
-        now = repo.checkpoint(f"{task_id} diff view")
+        now = repo.snapshot()
         out = []
         for i, c in enumerate(cps):
             if step is not None and c["step"] != step:

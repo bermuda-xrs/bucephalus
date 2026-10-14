@@ -44,5 +44,7 @@ for line in sys.stdin:
         if page + 1 < pages:
             res["nextCursor"] = str(page + 1)
         send({"jsonrpc": "2.0", "id": rid, "result": res})
+    elif method == "tools/call" and S.get("echo_env"):
+        send({"jsonrpc": "2.0", "id": rid, "result": {"content": [{"type": "text", "text": ",".join(sorted(os.environ))}]}})
     elif method == "tools/call":
         send({"jsonrpc": "2.0", "id": rid, "result": S.get("call", {"content": []})})

@@ -84,7 +84,7 @@ layer; 2 runs record the code they loaded, the prompt cannot change without a bu
 (`tests/test_mcp_real.py`, opt-in); 5 diff view, `bucephalus say`, the Telegram queue (FakeTransport), diagnostics, tool
 cards, the D16 window check; 6 WSL2, PLATFORMS section 5 twice (`docs/evidence/wsl-2026-10-12/`); 7 mutation
 (`docs/evidence/mutation-2026-10-12/`); 8 the audit (`docs/AUDIT-2026-10-12.md`): P1 and the mediums fixed red-first,
-the rest is D79; 10 the checkout renamed by `scripts/rename_checkout.ps1`, its state directory moved with it.
+the rest closed 2026-10-14; 10 the checkout renamed by `scripts/rename_checkout.ps1`, its state directory moved with it.
 
 Diagnosis (3): write-function-002 had no graders under the runner (fixed). handbook-recall-005 hid the middle of the
 file behind a tool the small kit lacked (sixth tool), and a cap above half the compaction ceiling then forced a session
@@ -97,12 +97,12 @@ none of 6 pairs; the small arm now reads page 1 and reports its ticket (1 of 3, 
 and the control arm answers without reading the file.
 
 Not working: handbook-recall on the 3B (above); the desktop app on Linux without GTK or Qt (this WSL has neither);
-D79's open findings (R2 fixed and M2 in part, 2026-10-13).
+D78 and D80.
 
 Needs the user: D26 credentials; the 8B run (`bench/profile_run.py --preflight --arms control,full8b,small8b`, about
 7 GB free and the machine awake); a Mac or bare-metal Linux run.
 
 Next three: (1) a decision for the user: should the small profile refuse a final answer while a file it opened has
 unread pages (as `read_first` refuses one before any tool call)? A prompt change, so harness 13; then rerun the two
-tasks; (2) the 8B run; (3) D79's rest: an environment allowlist for hooks and MCP servers (L1), a side-effect-free diff
+tasks; (2) the 8B run; (3) close the iteration (diff
 view (L4).

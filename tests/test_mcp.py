@@ -29,10 +29,10 @@ def _events(ctx, task, kind):
 def mcp(ctx, task, workspace):
     ctx.config.autonomy.approve_scoped_writes = True
 
-    def go(*script, read_only=(), timeout_s=30, env=None, argv=None, strict=None):
+    def go(*script, read_only=(), timeout_s=30, env=None, argv=None, strict=None, path_args=None):
         ctx.config.mcp_servers = {"fake": McpServerConfig(
             argv=argv or [sys.executable, FAKE], read_only=list(read_only), timeout_s=timeout_s, env=env or {},
-            strict_paths=strict)}
+            strict_paths=strict, path_args=path_args or {})}
         ctx.backends["cloud"].queue(*script)
         res = run_task(ctx, task.id)
         return res, ctx.backends["cloud"].calls
@@ -76,9 +76,15 @@ def test_a_path_argument_still_has_to_be_inside_the_scope(ctx, mcp, tmp_path):
     assert "outside artifact_scope" in calls[1]["tail"] and not (tmp_path.parent / "escape.txt").exists()
 
 
-def test_a_writing_call_inside_the_scope_goes_through(ctx, mcp, workspace):
-    mcp(_call("mcp__fake__write_note", path=str(workspace / "n.txt"), text="hello"), FINAL)
+def test_a_declared_writing_call_inside_the_scope_goes_through(ctx, mcp, workspace):
+    mcp(_call("mcp__fake__write_note", path=str(workspace / "n.txt"), text="hello"), FINAL,
+        path_args={"write_note": ["path"]})
     assert (workspace / "n.txt").read_text(encoding="utf-8") == "hello"
+
+
+def test_an_undeclared_writing_call_waits_for_a_human(ctx, mcp, workspace):
+    res, _ = mcp(_call("mcp__fake__write_note", path=str(workspace / "n.txt"), text="hello world"), FINAL)
+    assert res.status == "paused" and not (workspace / "n.txt").exists()
 
 
 def test_a_server_error_comes_back_as_a_failed_result(ctx, mcp):
@@ -292,16 +298,16 @@ def test_a_writing_tool_has_a_file_like_string_under_any_key_scope_checked(ctx, 
 
 @pytest.mark.parametrize("note", ["hello", "fix the bug in a.py", "line one" + chr(10) + "x/y.txt", "https://example.com/a.txt",
                                   "v1.2"])
-def test_a_writing_tools_text_and_urls_are_left_alone(ctx, mcp, note):
-    _, calls = mcp(_call("mcp__fake__where", repo_path="work", note=note), FINAL)
+def test_a_declared_writing_tools_text_and_urls_are_left_alone(ctx, mcp, note):
+    _, calls = mcp(_call("mcp__fake__where", repo_path="work", note=note), FINAL, path_args={"where": ["repo_path"]})
     assert "at:work" in calls[1]["tail"]
 
 
-def test_a_writing_tools_strings_inside_the_scope_go_through(ctx, mcp):
-    _, calls = mcp(_call("mcp__fake__where", repo_path="work", note="work/new.txt"), FINAL)
-    assert "at:work" in calls[1]["tail"]
+def test_an_undeclared_writing_tools_strings_inside_the_scope_wait_for_a_human(ctx, mcp):
+    res, _ = mcp(_call("mcp__fake__where", repo_path="work", note="work/new.txt"), FINAL)
+    assert res.status == "paused"
 
 
-def test_strict_paths_false_gives_a_writing_tool_the_narrower_check(ctx, mcp):
-    _, calls = mcp(_call("mcp__fake__where", repo_path="work", note="escaped.txt"), FINAL, strict=False)
-    assert "at:work" in calls[1]["tail"]
+def test_strict_paths_false_gives_an_undeclared_writing_tool_the_narrower_check_but_still_a_human(ctx, mcp):
+    res, calls = mcp(_call("mcp__fake__where", repo_path="work", note="escaped.txt"), FINAL, strict=False)
+    assert res.status == "paused" and "DENIED" not in calls[0]["tail"]

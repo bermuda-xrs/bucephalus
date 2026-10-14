@@ -181,13 +181,10 @@ def _file_uri_path(v: str):
 
 
 _URL = re.compile(r"[A-Za-z][A-Za-z0-9+.-]*://")
-_EXT = re.compile(r"\.[A-Za-z][A-Za-z0-9]{0,7}$")
 
 
 def _file_like(v: str) -> bool:
-    if not v or len(v) > 4096 or any(c.isspace() for c in v) or _URL.match(v):
-        return False
-    return "/" in v or chr(92) in v or bool(_EXT.search(v))
+    return bool(v) and len(v) <= 4096 and not any(c.isspace() for c in v) and not _URL.match(v)
 
 
 def _names_something(v: str, root) -> bool:
@@ -371,6 +368,9 @@ def gate_tool_call(ctx, task, tool, args: dict, phase: str = "execute") -> GateD
             f"{tool.name} is a trusted-tier action and always parks for a human",
             preview=render_preview(tool, args),
         )
+
+    if getattr(tool, "always_ask", ""):
+        return GateDecision.needs_approval(tool.always_ask, preview=render_preview(tool, args))
 
     if tool.side_effecting and arg_taint != Taint.TRUSTED:
         if (getattr(ctx.config.autonomy, "approve_scoped_writes", False)

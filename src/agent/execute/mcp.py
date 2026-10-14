@@ -224,15 +224,23 @@ def attach(ctx, task) -> None:
             if not tool or ctx.tools.get(full) is not None:
                 continue
             writes = tool not in cfg.read_only
+            originals = _originals(t.get("inputSchema") or {})
+            declared = cfg.path_args.get(tool)
+            if declared is not None:
+                names = {n for d in declared for n in (_SAFE.sub("_", d), d)}
+                values, ask = "all" if cfg.strict_paths else True, ""
+            else:
+                names = {n for sane, orig in originals.items() for n in (sane, orig) if _PATHISH.search(n)}
+                values = "all" if cfg.strict_paths else "write" if cfg.strict_paths is None and writes else True
+                ask = (f"{full} writes, and which of its arguments are paths is not declared "
+                       f"(mcp_servers.{name}.path_args)") if writes else ""
             ctx.tools.register(ToolSpec(
-                full, _caller(server, tool, _originals(t.get("inputSchema") or {})), _schema(t.get("inputSchema") or {}),
+                full, _caller(server, tool, originals), _schema(t.get("inputSchema") or {}),
                 side_effecting=writes,
                 max_arg_taint=Taint.USER if writes else Taint.UNTRUSTED,
                 output_taint=Taint.UNTRUSTED,
                 description=f"{_SAFE.sub('_', tool)} of the user-configured MCP server {_SAFE.sub('_', name)}",
-                path_args=tuple({n for sane, orig in _originals(t.get("inputSchema") or {}).items()
-                                 for n in (sane, orig) if _PATHISH.search(n)}),
-                path_values="all" if cfg.strict_paths else "write" if cfg.strict_paths is None and writes else True))
+                path_args=tuple(names), path_values=values, always_ask=ask))
             added += 1
         ctx.log.append(task.id, "mcp.started", {"server": name, "tools": added})
 

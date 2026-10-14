@@ -9,11 +9,25 @@ import time
 from ..proc import kill_tree
 
 MAX_HOOK_TEXT = 1500
-SECRETISH = re.compile(r"KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL", re.I)
+ENV_ALLOW = frozenset({
+    "PATH", "PATHEXT", "SYSTEMROOT", "SYSTEMDRIVE", "WINDIR", "COMSPEC", "TEMP", "TMP", "TMPDIR",
+    "HOME", "USERPROFILE", "HOMEDRIVE", "HOMEPATH", "APPDATA", "LOCALAPPDATA", "PROGRAMDATA",
+    "PROGRAMFILES", "PROGRAMFILES(X86)", "COMMONPROGRAMFILES", "USERNAME", "USER", "LOGNAME", "SHELL",
+    "TERM", "LANG", "LANGUAGE", "TZ", "NUMBER_OF_PROCESSORS", "PROCESSOR_ARCHITECTURE", "OS",
+    "PYTHONUTF8", "PYTHONIOENCODING",
+})
+_PYTHON = re.compile(r"python[0-9.]*w?(\.exe)?", re.I)
 
 
-def _env() -> dict:
-    return {k: v for k, v in os.environ.items() if not SECRETISH.search(k)}
+def _env(extra: dict | None = None) -> dict:
+    base = {k: v for k, v in os.environ.items() if k.upper() in ENV_ALLOW or k.upper().startswith("LC_")}
+    return {**base, **(extra or {})}
+
+
+def _isolated(argv: list[str]) -> list[str]:
+    if argv and _PYTHON.fullmatch(os.path.basename(argv[0])) and argv[1:2] != ["-I"]:
+        return [argv[0], "-I", *argv[1:]]
+    return list(argv)
 
 
 def _run_one(h, payload: dict, cwd: str) -> tuple[int, str]:
@@ -22,7 +36,8 @@ def _run_one(h, payload: dict, cwd: str) -> tuple[int, str]:
     with tempfile.TemporaryFile() as out:
         try:
             p = subprocess.Popen(  # noqa: S603
-                h.argv, cwd=cwd, env=_env(), stdin=subprocess.PIPE, stdout=out, stderr=subprocess.STDOUT)
+                _isolated(h.argv), cwd=cwd, env=_env(getattr(h, "env", None)), stdin=subprocess.PIPE, stdout=out,
+                stderr=subprocess.STDOUT)
         except OSError as e:
             return 127, f"could not start: {e}"
         try:

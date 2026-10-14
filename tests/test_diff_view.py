@@ -119,5 +119,5 @@ def test_without_a_shadow_repo_there_are_no_diffs(run, monkeypatch):
     def refuse(*a, **k):
         raise shadow.ShadowUnavailable("no git")
 
-    monkeypatch.setattr(shadow.ShadowRepo, "checkpoint", refuse)
+    monkeypatch.setattr(shadow.ShadowRepo, "snapshot", refuse)
     assert task_diffs(ctx, task.id) == []

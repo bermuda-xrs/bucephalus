@@ -10,7 +10,8 @@ An entry is removed in the change that closes it; its history is in git and CHAN
 | D27 | open: the bot's queue, with D26 |
 | D32 | known and accepted |
 | D33 | open: a HARNESS_VERSION change; its criterion is measured at zero |
-| D78 | known: an MCP argument under a non-path key is checked by heuristics (wider for writing tools); `strict_paths` closes it per server |
+| D78 | known: a read-only MCP tool's arguments are checked by heuristics; `path_args` or `strict_paths` closes it per server |
+| D80 | known: what a hook collects from the workspace (a `conftest.py`) runs outside the sandbox |
 
 ---
 
@@ -244,33 +245,21 @@ unchanged: supplying either credential is the user's decision.
 
 ---
 
-## D78 - an MCP argument under a non-path key is checked by heuristics (2026-10-12)
+## D78 - a read-only MCP tool's arguments are checked by heuristics (2026-10-12)
 
-**Found:** by the automated commit review, three rounds, while closing the MCP gate.
+A writing MCP tool either declares its path arguments (`mcp_servers.<name>.path_args`), or every string without
+whitespace is scope-checked and the call parks for a human (2026-10-14). **Still open:** a read-only tool keeps the
+narrower check (path-like keys, absolute, traversal, `file:` URIs, existing names, separated names under an existing
+directory), so a bare new name under a non-path key is not checked, and "exists" vs "does not" shows as allowed vs
+refused.
 
-For MCP tools the gate checks keys that look like paths, every string that is absolute, drive-lettered, home- or
-traversal-looking, `file:` URIs (single decode; a query, fragment, params or encoded separator fails closed), names of
-existing files, and separated names whose parent directory exists. **Still open:** a bare new name with no separator
-under a non-path key (`note="new.env"`) is not checked, and the difference between "exists" and "does not" is visible to
-the model as allowed vs refused. Checking every string would refuse ordinary arguments such as commit messages.
-
-2026-10-13 (D79 M2): for a writing tool, a string without whitespace that has a separator or ends in a file extension is
-also checked (`escaped.txt`, `newdir/x.txt`). Still open: a bare name without an extension (`escaped`), and a name with
-a space in it, under a non-path key of a writing tool; any of these under a read-only tool.
-
-**What closes it:** `mcp_servers.<name>.strict_paths: true` checks every string argument of that server's tools against
-the scope (tested). The default stays off because it breaks text arguments; the user decides per server.
+**What closes it:** `path_args` or `strict_paths: true` for that server (both tested).
 
 ---
 
-## D79 - audit 2026-10-12, findings not fixed in harness 10
+## D80 - what a hook collects is not protected (2026-10-14)
 
-Report: `docs/AUDIT-2026-10-12.md`. Fixed red-first, in `tests/test_audit_2026_10_12.py`: P1, H1, H3, M1, M3, M4, R1,
-L3, H2, H4 (files); R2 in `tests/test_rewind.py` (2026-10-13). L2 is closed by M1 (names, types and enums are validated and capped). Open:
-
-| ID | What | What closes it |
-|---|---|---|
-| H4 (part) | fixed: the loaded config, every file in a hook/MCP `argv`, its directory and a `-m` module (also before it exists, `-mfoo` and `-Im foo` parsed) are protected. Open: a script in the project root, whose siblings it can import (a root-level `json.py` shadows the stdlib), and what a hook collects (`pytest`, README says so) | run hooks in the sandbox, or with `-I` and the root off `sys.path` |
-| M2 (part) | fixed: a writing tool's file-like strings are checked under any key (2026-10-13). Open: a bare name without an extension or with a space; strict by default refused every content argument (`write_note(text=...)`) | see D78; `strict_paths: true` per server |
-| L1 | the env scrub for hooks and MCP servers is by name | an allowlist plus `cfg.env` |
-| L4 | `GET /tasks/{id}/diff` commits to the shadow repo and can contend with a live checkpoint | diff against a temporary index, or refuse while running |
+A hook runs isolated (`-I`: no script directory, no user site, no `PYTHON*` variables) with an allowlisted environment,
+and the files it names are protected state. What it loads on purpose from the workspace is not: a `pytest` hook collects
+a model-written `conftest.py` and runs it outside the sandbox. README says so. **What closes it:** run hooks in the
+sandbox.

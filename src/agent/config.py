@@ -100,6 +100,7 @@ class GateConfig(BaseModel):
 
 class HookConfig(BaseModel):
     argv: list[str]
+    env: dict[str, str] = Field(default_factory=dict)
     tools: list[str] = Field(default_factory=list)
     timeout_s: int = 10
 
@@ -115,6 +116,7 @@ class McpServerConfig(BaseModel):
     env: dict[str, str] = Field(default_factory=dict)
     read_only: list[str] = Field(default_factory=list)
     strict_paths: bool | None = None
+    path_args: dict[str, list[str]] = Field(default_factory=dict)
     timeout_s: int = 30
     start_timeout_s: int = 20
 

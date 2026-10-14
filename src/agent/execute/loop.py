@@ -1118,7 +1118,7 @@ def _adjudicate(ctx, task, tool, args, decision: GateDecision, step: int, plan,
     tracker = ctx.taint_tracker(task.id)
     arg_taint = tracker.args_taint(args)
     tier = tier_of(ctx, tool.name)
-    human_only = tier == "trusted" or tier in ctx.config.autonomy.human_only_tiers
+    human_only = tier == "trusted" or tier in ctx.config.autonomy.human_only_tiers or bool(getattr(tool, "always_ask", ""))
 
     if is_unattended(task.origin):
         ctx.log.append(task.id, "review.skipped",

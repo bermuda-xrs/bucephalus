@@ -400,7 +400,8 @@ tests/         the spec's acceptance tests, per milestone, + source invariants
 - **`long_files`**: how a file longer than the model can take at once reaches it. `pages` (default): `read_file`
   returns one page sized to the context, ending with the call for the next. `elide`: head and tail, the middle on
   request. `whole`: the fill ratio rises to 0.75 so it fits in full. The console's Settings can change it for new tasks.
-- **`hooks`**: commands you declare, run outside the sandbox with secret-looking variables removed. `pre_tool` runs
+- **`hooks`**: commands you declare, run outside the sandbox with an allowlisted environment (`PATH`, temp and home
+  directories, locale) plus the hook's own `env`; a Python hook runs with `-I`. `pre_tool` runs
   after the gate and can only refuse (a hook that fails, hangs or cannot start refuses); `post_tool` output is
   appended as untrusted; `stop` can hold an answer back three times. Each gets the call as JSON on stdin.
   The config file, every file named in a hook's or MCP server's `argv`, its directory (unless that is the project
@@ -416,9 +417,10 @@ tests/         the spec's acceptance tests, per milestone, + source invariants
   ```
 - **`mcp_servers`**: stdio MCP servers whose tools join the registry as `mcp__<server>__<tool>`. A tool writes
   unless listed in `read_only`; output is untrusted; the server's own descriptions never reach the prompt; path-like
-  arguments are scope-checked, and for a writing tool so is any string without whitespace that has a path separator
-  or ends in a file extension (`https://` URLs excepted). `strict_paths: true` checks every string; `false` drops the
-  writing-tool check. Unattended origins cannot call them.
+  arguments are scope-checked. A writing tool should declare its path arguments in `path_args` (`{tool: [arg, ...]}`);
+  one that does not parks every call for a human and has any string without whitespace (`https://` URLs excepted)
+  scope-checked. `strict_paths: true` checks every string. A server gets the hooks' environment allowlist plus its own
+  `env`. Unattended origins cannot call them.
 
   ```yaml
   mcp_servers:

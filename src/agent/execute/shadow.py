@@ -51,11 +51,12 @@ class ShadowRepo:
             scopes.append(rel.as_posix())
         return cls(ctx.config.resolve_state("shadow") / task.id, root, scopes)
 
-    def _git(self, *args: str, stdin: str | None = None, ok_codes: tuple = (0,)) -> subprocess.CompletedProcess:
+    def _git(self, *args: str, stdin: str | None = None, ok_codes: tuple = (0,),
+             index: str | None = None) -> subprocess.CompletedProcess:
         if not git_available():
             raise ShadowUnavailable("git is not installed")
         env = {**os.environ, "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": os.devnull,
-               "GIT_TERMINAL_PROMPT": "0"}
+               "GIT_TERMINAL_PROMPT": "0", **({"GIT_INDEX_FILE": index} if index else {})}
         cmd = ["git", "--git-dir", str(self.git_dir), "--work-tree", str(self.work_tree),
                "-c", f"core.hooksPath={os.devnull}", "-c", "core.autocrlf=false", "-c", "core.safecrlf=false",
                "-c", "core.quotepath=off", "-c", "user.name=bucephalus", "-c", "user.email=bucephalus@localhost",
@@ -109,20 +110,32 @@ class ShadowRepo:
                     continue
         return out
 
+    def _stage(self, index: str | None = None) -> None:
+        links = self._links()
+        self._git("add", "-A", "-f", "--ignore-errors", "--", *self.scopes,
+                  *(f":(exclude){x}" for x in links), ok_codes=(0, 1), index=index)
+        if links:
+            self._git("rm", "-r", "--cached", "-q", "--ignore-unmatch", "--", *links, index=index)
+        big = self._big_files()
+        if big:
+            self._git("rm", "--cached", "-q", "--ignore-unmatch", "--", *big, index=index)
+
     def checkpoint(self, label: str) -> str | None:
         if not self.scopes:
             return None
         self.ensure()
-        links = self._links()
-        self._git("add", "-A", "-f", "--ignore-errors", "--", *self.scopes,
-                  *(f":(exclude){x}" for x in links), ok_codes=(0, 1))
-        if links:
-            self._git("rm", "-r", "--cached", "-q", "--ignore-unmatch", "--", *links)
-        big = self._big_files()
-        if big:
-            self._git("rm", "--cached", "-q", "--ignore-unmatch", "--", *big)
+        self._stage()
         self._git("commit", "--allow-empty", "--no-verify", "-q", "-m", label)
         return self._git("rev-parse", "HEAD").stdout.strip()
+
+    def snapshot(self) -> str:
+        import tempfile
+
+        self.ensure()
+        with tempfile.TemporaryDirectory(prefix="bucephalus-idx-") as d:
+            index = str(Path(d) / "index")
+            self._stage(index)
+            return self._git("write-tree", index=index).stdout.strip()
 
     def restore(self, sha: str) -> None:
         links = self._links()
