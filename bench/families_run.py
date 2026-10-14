@@ -1,0 +1,100 @@
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import random
+import sys
+import time
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "src"))
+
+SMALL = {"backend.tool_profile": "small"}
+ARMS: dict[str, dict] = {"base": SMALL}
+
+
+def arm_raw(raw: dict, arm: str) -> dict:
+    from agent import evals
+
+    return evals.apply_overrides(raw, ARMS[arm])
+
+
+def load_done(path: Path) -> dict:
+    if not path.exists():
+        return {}
+    rows = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    return {r["key"]: r for r in rows}
+
+
+def _main(argv=None) -> int:
+    import yaml
+
+    from agent import evals, families
+    from agent.models import local
+    from agent.runlock import RunLock, RunLockBusy, measurement_lock_path
+
+    p = argparse.ArgumentParser(description="paired arms over generated task families, one run per distinct instance")
+    p.add_argument("--families", default=",".join(families.FAMILIES))
+    p.add_argument("--split", default="heldout", choices=("dev", "heldout"))
+    p.add_argument("--n", type=int, default=10, help="instances per family")
+    p.add_argument("--arms", default="base")
+    p.add_argument("--base", default=str(ROOT / "config.local.yaml"))
+    p.add_argument("--model", default=None)
+    p.add_argument("--out", default=None)
+    p.add_argument("--seed", type=int, default=1)
+    args = p.parse_args(argv)
+    arms = [a.strip() for a in args.arms.split(",") if a.strip()]
+    if "base" not in arms or any(a not in ARMS for a in arms):
+        p.error(f"--arms must include base and name known arms: {sorted(ARMS)}")
+    fams = [f.strip() for f in args.families.split(",") if f.strip()]
+    out = Path(args.out) if args.out else ROOT / "runs" / f"families-{time.strftime('%Y%m%d-%H%M')}"
+    out.mkdir(parents=True, exist_ok=True)
+    os.environ.setdefault("BUCEPHALUS_DATA_DIR", str(out / "data" / "runner"))
+    os.environ.setdefault("BUCEPHALUS_CONFIG_DIR", str(out / "data" / "runner" / "config"))
+    raw = evals.measurement_raw(yaml.safe_load(Path(args.base).read_text(encoding="utf-8")), model=args.model)
+    specs = families.instances(fams, args.split, args.n)
+    try:
+        lock = RunLock(measurement_lock_path(ROOT), "measurement").acquire()
+    except RunLockBusy as e:
+        print(f"REFUSING TO START.\n{e}")
+        return 2
+    endpoint = raw["backends"]["cloud"].get("endpoint")
+    try:
+        local.start_server(endpoint, ROOT)
+        print("model loaded:", local.run(endpoint, raw["backends"]["cloud"]["model"], ROOT), flush=True)
+        cards = {a: evals.card_for(arm_raw(raw, a), out / "cards" / a) for a in arms}
+        (out / "cards.json").write_text(json.dumps(cards, indent=2, default=str), encoding="utf-8")
+        done = {a: load_done(out / f"{a}.jsonl") for a in arms}
+        for i, spec in enumerate(specs):
+            order = list(arms)
+            random.Random(args.seed + i).shuffle(order)
+            for a in order:
+                if spec["key"] in done[a]:
+                    continue
+                r = evals.run_instance(arm_raw(raw, a), spec, out / "data" / a / spec["key"])
+                done[a][spec["key"]] = r
+                with (out / f"{a}.jsonl").open("a", encoding="utf-8") as fh:
+                    fh.write(json.dumps(r) + "\n")
+                print(f"[{i + 1}/{len(specs)}] {a} {spec['key']}: {r['status']} ({r['wall_s']} s)", flush=True)
+    finally:
+        local.stop_owned()
+        lock.release()
+    summary = evals.summarise({a: list(done[a].values()) for a in arms}, "base")
+    summary.update(split=args.split, per_family=args.n, families=summary["families"], arms_defined={a: ARMS[a] for a in arms},
+                   family_version=families.FAMILY_VERSION, card=cards)
+    (out / "summary.json").write_text(json.dumps(summary, indent=2, default=str), encoding="utf-8")
+    print(json.dumps({k: summary[k] for k in ("n", "n_families", "arms", "vs_base")}, indent=2))
+    return 0
+
+
+def main(argv=None) -> int:
+    from agent.awake import keep_awake
+
+    with keep_awake():
+        return _main(argv)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

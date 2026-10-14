@@ -581,6 +581,14 @@ def test_serve_binds_and_answers_health(cli):
             p.kill()
 
 
+def test_tune_searches_dev_and_confirms_on_heldout(cli):
+    out = cli.root / "tune-out"
+    r = cli("tune", "mock-cloud", "--flags", "read_all_pages", "--families", "needle", "--dev-per-family", "1",
+            "--heldout-per-family", "1", "--out", str(out))
+    assert "2 configurations (factorial)" in r.stdout and (out / "profile.yaml").exists()
+    assert json.loads((out / "tune.json").read_text(encoding="utf-8"))["heldout"]["n"] == 1
+
+
 def test_every_subcommand_is_entered_by_a_test_here():
     from agent.cli import build_parser
 

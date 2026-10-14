@@ -770,6 +770,46 @@ def cmd_monitor(ctx, args, console) -> int:
     return 0
 
 
+def cmd_tune(ctx, args, console) -> int:
+    import yaml
+
+    from . import evals, families
+    from .models import local
+    from .paths import user_data_dir
+
+    raw = evals.measurement_raw(yaml.safe_load(Path(ctx.config.source_path).read_text(encoding="utf-8")), model=args.model)
+    names = [f.strip() for f in args.flags.split(",") if f.strip()] if args.flags else list(evals.TUNABLE)
+    unknown = [n for n in names if n not in evals.TUNABLE]
+    if unknown:
+        console.print(f"unknown flags {unknown}; known: {sorted(evals.TUNABLE)}")
+        return 2
+    flags = {n: evals.TUNABLE[n] for n in names}
+    fams = [f.strip() for f in args.families.split(",") if f.strip()] if args.families else list(families.FAMILIES)
+    dev = families.instances(fams, "dev", args.dev_per_family)
+    held = families.instances(fams, "heldout", args.heldout_per_family)
+    configs, how = evals.design(flags, args.max_configs)
+    console.print(f"{len(configs)} configurations ({how}) on {len(dev)} dev instances, then base and winner on "
+                  f"{len(held)} held-out instances")
+    out = Path(args.out) if args.out else user_data_dir() / "tune" / f"{args.model.replace(':', '_')}-{int(time.time())}"
+    endpoint = raw["backends"]["cloud"].get("endpoint")
+    managed = bool(endpoint) and local.status(endpoint)["managed"]
+    try:
+        if managed:
+            local.start_server(endpoint, Path(ctx.config.root))
+        result = evals.tune(raw, flags, dev, held, out, max_configs=args.max_configs, profile=None)
+    finally:
+        if managed:
+            local.stop_owned()
+    (out / "profile.yaml").write_text(yaml.safe_dump(result["profile"], sort_keys=False), encoding="utf-8")
+    for row in result["dev"]:
+        console.print(f"dev {row['passes']}/{row['n']}  {row['overrides'] or 'base'}")
+    h = result["heldout"]
+    console.print(f"held-out n={h['n']}: base {h['arms']['base']['passes']}, winner {h['arms']['winner']['passes']}, "
+                  f"McNemar p {h['vs_base']['winner']['mcnemar_exact_p']}")
+    console.print(f"winner {result['winner'] or 'base'}; profile written to {out / 'profile.yaml'}")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="bucephalus", description="Bucephalus")
     from .paths import default_config_path
@@ -934,6 +974,16 @@ def build_parser() -> argparse.ArgumentParser:
 
     ch = sub.add_parser("channel", help="run the Telegram bot (long poll)")
     ch.set_defaults(fn=cmd_channel)
+
+    tn = sub.add_parser("tune", help="search profile flags on the dev families, confirm the winner on held-out")
+    tn.add_argument("model")
+    tn.add_argument("--flags", default="")
+    tn.add_argument("--families", default="")
+    tn.add_argument("--dev-per-family", type=int, default=4)
+    tn.add_argument("--heldout-per-family", type=int, default=4)
+    tn.add_argument("--max-configs", type=int, default=16)
+    tn.add_argument("--out", default="")
+    tn.set_defaults(fn=cmd_tune)
 
     sv = sub.add_parser("serve", help="run the control plane")
     sv.add_argument("--host", default="127.0.0.1")

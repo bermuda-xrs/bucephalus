@@ -231,6 +231,10 @@ def load_config(path: str | Path = "config.yaml",
     ensure_state_dirs(raw["root"])
     raw["state_dir"] = _synced_state_dir(raw)
     raw["source_path"] = str(path.resolve())
+    return config_from_raw(raw, profile)
+
+
+def config_from_raw(raw: dict, profile: str | None = None) -> Config:
     if profile is not None:
         raw["profile"] = profile
     cfg = Config.model_validate(raw)

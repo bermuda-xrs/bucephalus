@@ -96,6 +96,7 @@ def _provenance(ctx, arm: str) -> dict:
         "local_tier": ctx.config.active_local_tier,
         "effort": {n: b.cfg.effort for n, b in ctx.backends.items()},
         "caveats": CAVEATS,
+        "card": __import__("agent.card", fromlist=["harness_card"]).harness_card(ctx),
     }
 
 
