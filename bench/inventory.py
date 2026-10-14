@@ -53,6 +53,9 @@ ROWS: list[tuple[str, str, str, str]] = [
     ("the model's carried notes were updated", "carry.updated", "event", ""),
     ("a fresh reviewer returned the answer once", "evaluator.returned", "event", ""),
     ("a fresh reviewer accepted the answer", "evaluator.accepted", "event", ""),
+    ("git mode committed the task on its own branch", "git.committed", "event", ""),
+    ("git mode could not commit the task", "git.skipped", "event", ""),
+    ("git mode gave a delegated child its own worktree", "git.worktree", "event", ""),
 
     ("compaction tombstones an artifact", "session.opened", "tombstoned", ""),
     ("a session BOUNDARY is crossed", "session.opened", "rotate", ""),

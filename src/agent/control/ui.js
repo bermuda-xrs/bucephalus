@@ -586,7 +586,10 @@ function onEvent(taskId, name, d) {
   const live = $("#live-" + taskId), pre = $("#pre-" + taskId), tools = $("#tools-" + taskId);
   const redrawTools = () => { if (tools) tools.innerHTML = tr.tools.map(x => toolCard(x, taskId)).join(""); };
   if (name === "live.waiting") { tr.waiting = true; if (pre) pre.hidden = false; }
-  else if (name === "live.token") {
+  else if (name === "live.tool_output") {
+    tr.live = (tr.live + (d.text || "")).slice(-6000);
+    if (live) { live.textContent = tr.live; live.scrollTop = live.scrollHeight; }
+  } else if (name === "live.token") {
     tr.waiting = false; if (pre) pre.hidden = true;
     tr.live = (tr.live + (d.text || "")).slice(-6000);
     if (live) { live.textContent = tr.live; live.scrollTop = live.scrollHeight; }

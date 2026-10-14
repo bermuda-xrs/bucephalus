@@ -89,7 +89,7 @@ def make_tool_handler(ctx, task, step: int = 0):
 
 
 def run_code_action(
-    ctx, task, code: str, timeout_s: int = 30, step: int = 0, live_tools: bool = True
+    ctx, task, code: str, timeout_s: int = 30, step: int = 0, live_tools: bool = True, on_output=None
 ) -> dict:
     scope = [(str(ctx.config.resolve(s)), s.replace("\\", "/").strip("/"))
              for s in task.contract.artifact_scope]
@@ -123,6 +123,7 @@ def run_code_action(
         preamble=CALL_TOOL_PREAMBLE,
         tool_handler=handler,
         protected_paths=[str(p) for p in task_state_paths(ctx, task)],
+        on_output=on_output,
     )
     result["ok"] = result["returncode"] == 0
     touched = result.get("touched")

@@ -64,7 +64,7 @@ class RunState:
     def apply_live(self, kind: str, data: dict) -> None:
         if kind == "waiting":
             self.waiting = True
-        elif kind == "token":
+        elif kind in ("token", "tool_output"):
             self.waiting = False
             self.output.append(data.get("text", ""))
         elif kind == "step":

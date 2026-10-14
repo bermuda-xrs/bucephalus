@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import dataclass, field
 
 from ..kernel.types import Budget, TaskContract
@@ -96,15 +97,29 @@ def run_delegated(ctx, parent_task, subtask_plan: SubtaskPlan) -> DelegationResu
     if not ok:
         raise ValueError(f"delegation refused: {why}")
 
+    from ..kernel.tasks import new_task_id
+
+    scope = subtask_plan.artifact_scope or parent_task.contract.artifact_scope
+    child_id, worktree = new_task_id(), None
+    if ctx.config.git_mode:
+        from ..gitmode import WORKTREES, add_worktree, toplevel
+
+        if toplevel(ctx.config.root) is not None:
+            path, rel = add_worktree(ctx.config.root, child_id, f"bucephalus/{child_id}")
+            inner = [os.path.normpath(os.path.join(rel, s)) for s in scope]
+            worktree = {"path": str(path), "scopes": inner, "branch": f"bucephalus/{child_id}"}
+            scope = [os.path.join(WORKTREES, child_id, s).replace(os.sep, "/") for s in inner]
     contract = TaskContract(
         goal=subtask_plan.goal,
         output_schema=subtask_plan.output_schema or {},
         success_criterion=subtask_plan.success_criterion or "always_pass",
-        artifact_scope=subtask_plan.artifact_scope or parent_task.contract.artifact_scope,
+        artifact_scope=scope,
     )
     child = create_task(
-        ctx.conn, ctx.log, contract, subtask_plan.budget, parent_id=parent_task.id
+        ctx.conn, ctx.log, contract, subtask_plan.budget, parent_id=parent_task.id, task_id=child_id
     )
+    if worktree is not None:
+        ctx.log.append(child.id, "git.worktree", worktree)
 
     policy = child_policy(ctx.tool_policy(parent_task.id))
     ctx.restrict_tools(child.id, policy)

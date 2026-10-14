@@ -102,6 +102,9 @@ EVENT_TYPES = frozenset(
         "carry.updated",
         "evaluator.returned",
         "evaluator.accepted",
+        "git.committed",
+        "git.skipped",
+        "git.worktree",
     }
 )
 

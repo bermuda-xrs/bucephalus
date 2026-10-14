@@ -216,6 +216,7 @@ class Config(BaseModel):
     state_dir: str = ""
     source_path: str = ""
     long_files: Literal["pages", "elide", "whole"] = "pages"
+    git_mode: bool = False
     profile_provenance: dict[str, Any] = Field(default_factory=dict)
 
     def resolve(self, relative: str) -> Path:

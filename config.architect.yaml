@@ -1,0 +1,63 @@
+# Architect / editor: granite4.1:8b plans and reviews, granite4.1:3b edits in the small profile.
+# Needs about 7.3 GB free for the 8B beside the 3B (bench/profile_run.py --preflight reports it).
+# Run:  .\bucephalus.ps1 --config config.architect.yaml exec "..." --scope work
+db_path: "./agent.architect.db"
+anchor_path: "./anchor/chain.architect.anchor"
+skills_path: "./skills_store"
+
+backends:
+  cloud:
+    kind: ollama
+    model: "granite4.1:3b"
+    endpoint: "http://localhost:11435"
+    model_server: ollama
+    context_window: 131072
+    usable_context_window: 16384
+    thinking: "disabled"
+    accepts_temperature: true
+    max_output_tokens: 512
+    trust_tier: local
+    tool_profile: small
+    evaluator_pass: true
+
+  local:
+    kind: ollama
+    model: "granite4.1:8b"
+    endpoint: "http://localhost:11435"
+    model_server: ollama
+    context_window: 131072
+    usable_context_window: 8192
+    thinking: "disabled"
+    accepts_temperature: true
+    max_output_tokens: 1024
+    trust_tier: local
+
+  review:
+    kind: ollama
+    model: "granite4.1:8b"
+    endpoint: "http://localhost:11435"
+    model_server: ollama
+    context_window: 131072
+    usable_context_window: 8192
+    thinking: "disabled"
+    accepts_temperature: true
+    max_output_tokens: 128
+    trust_tier: local
+
+active_local_tier: local
+local_allowlist: [plan, evaluate]
+laptop_allowlist: []
+compress_observations_over_tokens: 100000
+
+limits:
+  context_fill_ratio: 0.28
+  default_task_budget_usd: 0.0
+  default_task_budget_seconds: 2400
+  max_steps: 12
+
+autonomy:
+  mode: "plan_then_run"
+  plan_required: true
+  auto_review: true
+  auto_review_backend: "review"
+  auto_review_policy: "./policy.md"

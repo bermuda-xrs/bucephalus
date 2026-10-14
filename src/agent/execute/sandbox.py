@@ -520,6 +520,7 @@ def run_sandboxed(
     preamble: str = "",
     tool_handler: ToolHandler | None = None,
     protected_paths=(),
+    on_output=None,
 ) -> dict:
     allowed_paths = allowed_paths or []
     notes: list[str] = []
@@ -558,7 +559,9 @@ def run_sandboxed(
         env = _build_env(workdir)
         argv = [*interpreter_argv(), str(script)]
 
-        if tool_handler is None:
+        if tool_handler is None and on_output is not None:
+            result = _run_streaming(argv, workdir, env, timeout_s, on_output, limits)
+        elif tool_handler is None:
             result = _run_batch(argv, workdir, env, timeout_s, limits)
         else:
             result = _run_with_bridge(argv, workdir, env, timeout_s, tool_handler, limits)
@@ -600,6 +603,57 @@ def _run_batch(argv: list[str], workdir: str, env: dict, timeout_s: int,
         "stderr": ((err or "") + _platform.exit_note(proc, timeout_s))[-OUTPUT_CAP:],
         "returncode": proc.returncode,
     }
+
+
+LIVE_CAP = 20_000
+
+
+def _run_streaming(argv: list[str], workdir: str, env: dict, timeout_s: int, on_output, limits: dict = _LIMITS) -> dict:
+    try:
+        proc, close = _platform.spawn_limited(
+            argv, timeout_s=timeout_s, **limits, cwd=workdir, env=env, stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace", bufsize=1)
+    except LimitsRefused as e:
+        return _limits_refused(e)
+    parts = {"out": [], "err": []}
+    sent = {"n": 0}
+    lock = threading.Lock()
+
+    def pump(pipe, name: str) -> None:
+        try:
+            for line in pipe:
+                parts[name].append(line)
+                with lock:
+                    if sent["n"] < LIVE_CAP:
+                        sent["n"] += len(line)
+                        try:
+                            on_output(line)
+                        except Exception:  # noqa: BLE001
+                            pass
+        except (OSError, ValueError):
+            pass
+
+    readers = [threading.Thread(target=pump, args=(proc.stdout, "out"), daemon=True),
+               threading.Thread(target=pump, args=(proc.stderr, "err"), daemon=True)]
+    for r in readers:
+        r.start()
+    try:
+        try:
+            proc.wait(timeout=timeout_s)
+        except subprocess.TimeoutExpired:
+            close()
+            proc.kill()
+            proc.wait()
+            for r in readers:
+                r.join(5)
+            return {"stdout": "", "stderr": "TIMEOUT", "returncode": -1}
+        for r in readers:
+            r.join(30)
+    finally:
+        close()
+    return {"stdout": "".join(parts["out"])[-OUTPUT_CAP:],
+            "stderr": ("".join(parts["err"]) + _platform.exit_note(proc, timeout_s))[-OUTPUT_CAP:],
+            "returncode": proc.returncode}
 
 
 def _run_with_bridge(

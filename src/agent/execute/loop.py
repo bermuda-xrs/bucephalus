@@ -715,6 +715,7 @@ def _evaluate(ctx, task, backend, parsed, step: int) -> str | None:
     tail = (f"<objective>{chr(10)}{task.contract.goal}{chr(10)}</objective>{chr(10)}<answer>{chr(10)}{answer[:2000]}"
             f"{chr(10)}</answer>{chr(10)}<artifacts>{chr(10)}{(chr(10).join(shown) or 'none')}{chr(10)}</artifacts>"
             f"{chr(10)}<diagnostics>{chr(10)}{diag or 'none'}{chr(10)}</diagnostics>")
+    backend = ctx.router.choose("evaluate", task)
     resp = ctx.call_model(task, backend, "evaluate", prefix=EVALUATOR_PREFIX, tail=tail, tools=None, max_tokens=256,
                           temperature=0.0, schema=EVALUATOR_SCHEMA if _schema_route(ctx, backend) else None)
     m = re.search(r"\{.*\}", resp.text, re.S)
@@ -761,6 +762,24 @@ def _update_progress(ctx, task, entries: list, step: int) -> None:
     note.pinned = True
     ctx.taint_tracker(task.id).observe(text, taint)
     entries[:] = [e for e in entries if e.label != "progress"] + [note]
+
+
+def _git_commit(ctx, task) -> None:
+    if not ctx.config.git_mode:
+        return
+    from ..gitmode import GitModeError, commit_scope
+
+    row = ctx.conn.execute("SELECT payload_json FROM events WHERE task_id=? AND type='git.worktree'", (task.id,)).fetchone()
+    where, scopes = (json.loads(row[0])["path"], json.loads(row[0])["scopes"]) if row else (ctx.config.root,
+                                                                                         task.contract.artifact_scope)
+    branch = f"bucephalus/{task.id}"
+    try:
+        sha = commit_scope(where, scopes, branch, f"bucephalus {task.id}: {task.contract.goal[:72]}")
+    except (GitModeError, OSError, subprocess.TimeoutExpired) as e:
+        ctx.log.append(task.id, "git.skipped", {"why": str(e)[:300]})
+        return
+    if sha:
+        ctx.log.append(task.id, "git.committed", {"branch": branch, "sha": sha})
 
 
 def _keep_final_state(ctx, task) -> None:
@@ -1458,6 +1477,7 @@ def finish(
     ctx, task, status: str, answer: Any = None, steps: int = 0
 ) -> TaskResult:
     _keep_final_state(ctx, task)
+    _git_commit(ctx, task)
     mapping = {
         "done": TaskStatus.DONE,
         "done_unannounced": TaskStatus.DONE,

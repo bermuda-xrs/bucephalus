@@ -179,7 +179,7 @@ class BucephalusTUI(App):
 
     def _apply_live(self, kind: str, data: dict) -> None:
         self.state.apply_live(kind, data)
-        if kind == "token":
+        if kind in ("token", "tool_output"):
             self.query_one("#output", RichLog).write(data.get("text", ""))
         else:
             self.refresh_budget()
