@@ -318,8 +318,7 @@ def _run_task(ctx, task_id: str) -> TaskResult:
             backend = ctx.router.choose("step", task, step)
             ctx.executing_backend = backend.name
 
-            tail, step_schema = _envelope(
-                ctx, backend, tail, not backend.cfg.requires_observation or _observed(ctx, task))
+            tail, step_schema = _envelope(ctx, backend, tail, _final_withheld(ctx, task, backend, step))
             ctx.log.append(
                 task.id,
                 "model.called",
@@ -381,10 +380,8 @@ def _run_task(ctx, task_id: str) -> TaskResult:
                     n = _page_holds(ctx, task) + 1
                     ctx.log.append(task.id, "pages.unread_held",
                                    {"step": step, "n": n, "unread": {k: v[1] for k, v in unread.items()}})
-                    named = "; ".join("pages " + ", ".join(map(str, pages)) + " of " + shown
-                                      for shown, pages in unread.values())
                     entries.append(LedgerEntry.observation(
-                        UNREAD_PAGES_NOTE.format(unread=named, left=MAX_PAGE_HOLDS - n),
+                        UNREAD_PAGES_NOTE.format(unread=_named(unread), left=MAX_PAGE_HOLDS - n),
                         taint=Taint.TRUSTED, label="unread-pages"))
                     continue
 
@@ -520,6 +517,51 @@ def _observed(ctx, task) -> bool:
                             (task.id,)).fetchone() is not None
 
 
+VERIFY_NOTE = ("You changed files and have not run a test, lint or the program since: run one now with "
+               "run_command.")
+
+
+def _keep_final_state(ctx, task) -> None:
+    if not ctx.config.mechanisms.shadow_checkpoints:
+        return
+    from .shadow import ShadowRepo, ShadowUnavailable
+
+    try:
+        sha = ShadowRepo.for_task(ctx, task).checkpoint(f"{task.id} final")
+    except ShadowUnavailable:
+        return
+    if sha:
+        ctx.log.append(task.id, "workspace.final", {"sha": sha})
+
+
+def _schema_route(ctx, backend) -> bool:
+    return (backend.cfg.needs_action_envelope and getattr(backend.cfg, "action_protocol", "json") != "tags"
+            and ctx.config.mechanisms.constrained_calls and backend.cfg.model_server == "ollama")
+
+
+def _named(unread: dict) -> str:
+    return "; ".join("pages " + ", ".join(map(str, pages)) + " of " + shown for shown, pages in unread.values())
+
+
+def _final_withheld(ctx, task, backend, step: int) -> str | None:
+    if not _schema_route(ctx, backend):
+        return None
+    if backend.cfg.requires_observation and not _observed(ctx, task):
+        return READ_FIRST_NOTE
+    if backend.cfg.requires_all_pages and _page_holds(ctx, task) < MAX_PAGE_HOLDS:
+        unread = _unread_pages(ctx, task)
+        if unread:
+            n = _page_holds(ctx, task) + 1
+            ctx.log.append(task.id, "pages.unread_held",
+                           {"step": step, "n": n, "unread": {k: v[1] for k, v in unread.items()}, "via": "schema"})
+            return UNREAD_PAGES_NOTE.format(unread=_named(unread), left=MAX_PAGE_HOLDS - n)
+    if _must_verify_first(ctx, task):
+        n = _verify_continuations(ctx, task) + 1
+        ctx.log.append(task.id, "verify.continued", {"step": step, "n": n, "via": "schema"})
+        return VERIFY_NOTE
+    return None
+
+
 def _page_holds(ctx, task) -> int:
     return ctx.conn.execute("SELECT COUNT(*) FROM events WHERE task_id=? AND type='pages.unread_held'",
                             (task.id,)).fetchone()[0]
@@ -627,15 +669,15 @@ def _verify(ctx, task, artifact: str):
     return r.passed, r
 
 
-def _envelope(ctx, backend, tail: str, allow_final: bool = True) -> tuple[str, dict | None]:
+def _envelope(ctx, backend, tail: str, withheld: str | None = None) -> tuple[str, dict | None]:
     if backend.cfg.needs_action_envelope:
         if getattr(backend.cfg, "action_protocol", "json") == "tags":
             return tail + "\n" + ACTION_TAG_HINT, None
         if ctx.config.mechanisms.constrained_calls and backend.cfg.model_server == "ollama":
             hint = ACTION_SCHEMA_HINT if ctx.code_as_action else ACTION_SCHEMA_HINT_NO_CODE
-            if not allow_final:
-                hint += chr(10) + READ_FIRST_NOTE
-            return tail + "\n" + hint, build_action_schema(ctx.tools, ctx.code_as_action, allow_final)
+            if withheld:
+                hint += chr(10) + withheld
+            return tail + "\n" + hint, build_action_schema(ctx.tools, ctx.code_as_action, withheld is None)
         return tail + "\n" + ACTION_SCHEMA_HINT, ACTION_SCHEMA
     return tail, None
 
@@ -1164,6 +1206,7 @@ def _render_result(result: dict) -> str:
 def finish(
     ctx, task, status: str, answer: Any = None, steps: int = 0
 ) -> TaskResult:
+    _keep_final_state(ctx, task)
     mapping = {
         "done": TaskStatus.DONE,
         "done_unannounced": TaskStatus.DONE,

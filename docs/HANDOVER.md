@@ -57,7 +57,7 @@ rebuilt `bucephalus.exe`'s window (see the Branch row for whether it reached `ma
 | Fact | Value | Regenerate with |
 |---|---|---|
 | Branch | `main`, fast-forwarded from `harness-10` after the suite, the frozen gate, the frozen e2e and the WSL2 suite passed; tag `iteration-3-closed`; no remote | `git branch --show-current` |
-| Harness version | **13**, bumped 2026-10-14 for the unread-pages reminder (CHANGELOG "Iteration 3"); numbers from 12 and earlier do not compare | `grep HARNESS_VERSION src/agent/__init__.py` |
+| Harness version | **14**, bumped 2026-10-14: the final answer is withheld from the schema while pages are unread or changes unverified (CHANGELOG "Harness 14"); numbers from 13 and earlier do not compare | `grep HARNESS_VERSION src/agent/__init__.py` |
 | Toolset version | **7** | `grep TOOLSET_VERSION src/agent/__init__.py` |
 | Tests | not written down | `python -m pytest tests -q`; skips are live-credential tests (D26) and other-OS tests |
 | Lint | bug rules only | `python -m ruff check src tests scripts packaging demo.py` |

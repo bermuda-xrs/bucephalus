@@ -97,6 +97,7 @@ EVENT_TYPES = frozenset(
         "model.window_short",
         "plan.survey",
         "pages.unread_held",
+        "workspace.final",
     }
 )
 

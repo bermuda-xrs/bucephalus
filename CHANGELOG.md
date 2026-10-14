@@ -10,6 +10,14 @@
 Dates are commit dates. `0.1.0` is not released yet — see "Unreleased" for
 what still stands between here and a first iteration.
 
+## Harness 14 - 2026-10-14 (HARNESS_VERSION 13 -> 14)
+
+- On the constrained-schema route (Ollama with `constrained_calls`), the final branch is left out of the schema while an
+  opened file has unread pages (`read_all_pages`) or changed files have not been run (`verify_before_stop`), three
+  steps each at most, as `read_first` does before the first observation. The 3B ignored the same requests as text.
+- The workspace at the end of a task is committed to its shadow repo (`workspace.final`, not a rewind point): the graded
+  file of a failed run could not be read back once the next task reset `work/`.
+
 ## Iteration 3 - 2026-10-12/14 (HARNESS_VERSION 9 -> 13, TOOLSET_VERSION 7)
 
 Shipped:
