@@ -156,3 +156,34 @@ def test_review_the_resolved_git_directory_is_protected_when_the_checkout_is_a_s
     sub.mkdir()
     ctx.config.root = str(sub)
     assert is_protected(str(repo / ".git" / "config"), str(sub), state_paths(ctx))
+
+
+@pytest.mark.parametrize("name, ok", [
+    ("work/x.txt", True), (".git/config", False), ("a/.GIT/hooks/x", False), ("git~1/config", False),
+    ("a/con.txt", False), ("a/NUL", False), ("a:b/x", False), ("a\b", False), ("dir./x", False), ("x /y", False),
+    (".git‌/config", False), ("..", False), ("a/./b", False), ("a" + chr(92) + "b", False), ("a" + chr(1), False),
+])
+def test_review_only_safe_tree_names_are_written_into_a_worktree(name, ok):
+    from agent.gitmode import safe_name
+
+    assert safe_name(name) is ok
+
+
+def test_review_each_file_is_hashed_from_the_bytes_that_were_checked(monkeypatch, tmp_path):
+    from agent import gitmode
+
+    seen = []
+    real = gitmode._git
+
+    def spy(where, *args, **kw):
+        seen.append(args)
+        return real(where, *args, **kw)
+
+    root = tmp_path / "r"
+    (root / "work").mkdir(parents=True)
+    _git(root, "init", "-q", "-b", "main")
+    (root / "work" / "a.txt").write_text("a\n", encoding="utf-8")
+    monkeypatch.setattr(gitmode, "_git", spy)
+    gitmode.commit_scope(root, ["work"], "bucephalus/t", "m")
+    hashes = [a for a in seen if a and a[0] == "hash-object"]
+    assert hashes and all("--stdin-paths" not in a and "--stdin" in a for a in hashes)

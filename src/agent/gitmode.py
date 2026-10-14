@@ -81,15 +81,34 @@ def _stage(top: Path, rels: list[str], env: dict) -> None:
                               env=env).stdout.split(chr(0)) if f]
     files = [f for f in dict.fromkeys(cached + others) if chr(10) not in f and _inside(top, top / f)]
     info = "".join(f"0 {'0' * 40}\t{f}" + chr(0) for f in cached if f not in files)
-    if files:
-        shas = _git(top, "hash-object", "--no-filters", "-w", "--stdin-paths",
-                    data=(chr(10).join(files) + chr(10)).encode("utf-8")).stdout.split()
-        info += "".join(f"100644 {sha}\t{f}" + chr(0) for sha, f in zip(shas, files))
+    for f in files:
+        p = top / f
+        if not _inside(top, p):
+            continue
+        sha = _git(top, "hash-object", "--no-filters", "-w", "--stdin", data=p.read_bytes()).stdout.strip()
+        info += f"100644 {sha}\t{f}" + chr(0)
     if info:
         _git(top, "update-index", "-z", "--add", "--remove", "--index-info", env=env, data=info.encode("utf-8"))
 
 
+RESERVED = {"con", "prn", "aux", "nul", *(f"com{i}" for i in range(1, 10)), *(f"lpt{i}" for i in range(1, 10))}
+IGNORABLE = dict.fromkeys([*range(0x200B, 0x2010), *range(0x202A, 0x202F), *range(0x2060, 0x2065), 0xFEFF])
+
+
+def safe_name(name: str) -> bool:
+    for part in name.split("/"):
+        bare = part.translate(IGNORABLE)
+        low = bare.lower()
+        if (not part or bare != part or part in (".", "..") or ":" in part or chr(92) in part
+                or any(ord(c) < 32 or ord(c) == 127 for c in part)
+                or part != part.rstrip(". ") or low == ".git" or low.startswith("git~")
+                or low.split(".", 1)[0] in RESERVED):
+            return False
+    return True
+
+
 def _populate(top: Path, path: Path, branch: str) -> None:
+    before = git_dirs(path)[1]
     listing = _git(top, "ls-tree", "-r", "-z", branch).stdout
     entries = []
     for item in listing.split(chr(0)):
@@ -97,7 +116,7 @@ def _populate(top: Path, path: Path, branch: str) -> None:
             continue
         meta, _, name = item.partition("\t")
         mode, kind, sha = meta.split()
-        if kind == "blob" and mode in ("100644", "100755"):
+        if kind == "blob" and mode in ("100644", "100755") and safe_name(name):
             entries.append((sha, name))
     for sha, name in entries:
         blob = _git(top, "cat-file", "blob", sha, text=False).stdout
@@ -106,6 +125,8 @@ def _populate(top: Path, path: Path, branch: str) -> None:
             continue
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(blob)
+    if git_dirs(path)[1] != before:
+        raise GitModeError("filling the worktree changed where its git dir points")
     _git(path, "read-tree", branch)
 
 
