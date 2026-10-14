@@ -25,7 +25,7 @@ def _env(extra: dict | None = None) -> dict:
 
 
 def _isolated(argv: list[str]) -> list[str]:
-    if argv and _PYTHON.fullmatch(os.path.basename(argv[0])) and argv[1:2] != ["-I"]:
+    if argv and _PYTHON.fullmatch(re.split(r"[\\/]", argv[0])[-1]) and argv[1:2] != ["-I"]:
         return [argv[0], "-I", *argv[1:]]
     return list(argv)
 

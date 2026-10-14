@@ -192,3 +192,16 @@ def scripted(ctx):
 @pytest.fixture
 def python_exe() -> str:
     return sys.executable
+
+
+def make_dir_link(link, target) -> bool:
+    import os
+    import subprocess
+
+    if os.name == "nt":
+        return subprocess.run(["cmd", "/c", "mklink", "/J", str(link), str(target)], capture_output=True).returncode == 0
+    try:
+        os.symlink(target, link, target_is_directory=True)
+    except OSError:
+        return False
+    return True

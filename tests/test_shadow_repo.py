@@ -150,8 +150,8 @@ def test_a_git_failure_is_shadow_unavailable_and_a_new_repo_has_no_log(tmp_path)
 def test_a_link_two_levels_down_is_found(tmp_path):
     (tmp_path / "w" / "work" / "sub").mkdir(parents=True)
     (tmp_path / "out").mkdir()
-    r = subprocess.run(["cmd", "/c", "mklink", "/J", str(tmp_path / "w" / "work" / "sub" / "d"), str(tmp_path / "out")],
-                       capture_output=True, text=True)
-    if r.returncode != 0:
+    from conftest import make_dir_link
+
+    if not make_dir_link(tmp_path / "w" / "work" / "sub" / "d", tmp_path / "out"):
         pytest.skip("cannot make a junction here")
     assert ShadowRepo(tmp_path / "s", tmp_path / "w", ["work"])._links() == ["work/sub/d"]

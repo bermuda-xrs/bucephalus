@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-import subprocess
+import os
 import sys
 import time
 import types
@@ -118,8 +118,9 @@ def test_r1_a_junction_swapped_into_the_scope_is_neither_captured_nor_restored_t
     repo = ShadowRepo(tmp_path / "shadow", root, ["work"])
     sha1 = repo.checkpoint("step0")
     shutil.rmtree(root / "work" / "d")
-    r = subprocess.run(["cmd", "/c", "mklink", "/J", str(root / "work" / "d"), str(outside)], capture_output=True, text=True)
-    if r.returncode != 0:
+    from conftest import make_dir_link
+
+    if not make_dir_link(root / "work" / "d", outside):
         pytest.skip("cannot make a junction here")
     sha2 = repo.checkpoint("step1")
     assert "work/d/keep.txt" not in repo.changed(sha1, sha2), "a checkpoint copied files from outside the scope"
@@ -247,8 +248,9 @@ def test_review_a_scope_that_is_itself_a_junction_is_neither_captured_nor_restor
     repo = ShadowRepo(tmp_path / "shadow", root, ["work"])
     sha1 = repo.checkpoint("step0")
     shutil.rmtree(root / "work")
-    r = subprocess.run(["cmd", "/c", "mklink", "/J", str(root / "work"), str(outside)], capture_output=True, text=True)
-    if r.returncode != 0:
+    from conftest import make_dir_link
+
+    if not make_dir_link(root / "work", outside):
         pytest.skip("cannot make a junction here")
     sha2 = repo.checkpoint("step1")
     assert "work/keep.txt" not in repo.changed(sha1, sha2), "a checkpoint copied files from outside the scope"
@@ -288,7 +290,8 @@ def test_names_something_needs_an_existing_parent_below_the_root(tmp_path):
     (tmp_path / "d").mkdir()
     (tmp_path / "f.txt").write_text("", encoding="utf-8")
     assert _names_something("f.txt", str(tmp_path)) and _names_something("d/new.txt", str(tmp_path))
-    assert _names_something("d" + chr(92) + "new.txt", str(tmp_path))
+    if os.name == "nt":
+        assert _names_something("d" + chr(92) + "new.txt", str(tmp_path))
     assert not _names_something("new.txt", str(tmp_path)) and not _names_something("./new.txt", str(tmp_path))
     assert not _names_something("nodir/new.txt", str(tmp_path))
     assert _names_something("x" * 200 + "/../f.txt", str(tmp_path))
