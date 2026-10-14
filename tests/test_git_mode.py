@@ -116,3 +116,43 @@ def test_review_the_git_directory_is_protected_state(ctx, repo):
     from agent.security.capabilities import is_protected, state_paths
 
     assert is_protected(".git/config", str(repo), state_paths(ctx))
+
+
+@pytest.mark.parametrize("how", ["dotted", "included"])
+def test_review_no_filter_runs_whatever_its_name_or_where_it_is_defined(ctx, task, repo, tmp_path, how):
+    marker = tmp_path / "ran.txt"
+    cmd = f"echo ran > '{marker.as_posix()}'; cat"
+    if how == "dotted":
+        _git(repo, "config", "filter.ev.il.clean", cmd)
+        attr = "ev.il"
+    else:
+        inc = tmp_path / "extra.cfg"
+        inc.write_text(f"[filter \"inc\"]\n\tclean = {cmd}\n", encoding="utf-8")
+        _git(repo, "config", "include.path", inc.as_posix())
+        attr = "inc"
+    (repo / ".gitattributes").write_text(f"*.txt filter={attr}\n", encoding="utf-8")
+    ctx.config.git_mode = True
+    ctx.backends["cloud"].queue(_write("work/a.txt", "x\n"), FINAL)
+    run_task(ctx, task.id)
+    assert not marker.exists(), "git mode ran a filter command"
+    assert _git(repo, "show", f"bucephalus/{task.id}:work/a.txt") == "x"
+
+
+def test_review_an_ignored_file_stays_out_and_a_deleted_one_goes(ctx, task, repo):
+    (repo / ".gitignore").write_text("work/*.log\n", encoding="utf-8")
+    ctx.config.git_mode = True
+    ctx.backends["cloud"].queue(_write("work/keep.txt", "k\n"), _write("work/noise.log", "n\n"), FINAL)
+    (repo / "work" / "base.txt").unlink()
+    run_task(ctx, task.id)
+    files = _git(repo, "ls-tree", "-r", "--name-only", f"bucephalus/{task.id}").splitlines()
+    assert "work/keep.txt" in files and "work/noise.log" not in files and "work/base.txt" not in files
+
+
+def test_review_the_resolved_git_directory_is_protected_when_the_checkout_is_a_subdirectory(ctx, repo):
+    from agent.security.capabilities import is_protected, state_paths
+
+    ctx.config.git_mode = True
+    sub = repo / "inner"
+    sub.mkdir()
+    ctx.config.root = str(sub)
+    assert is_protected(str(repo / ".git" / "config"), str(sub), state_paths(ctx))

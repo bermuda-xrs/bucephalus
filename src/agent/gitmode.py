@@ -16,24 +16,14 @@ class GitModeError(RuntimeError):
     pass
 
 
-def _filters_off(where) -> list[str]:
-    r = subprocess.run(["git", "-C", str(where), *HARDEN, "config", "--local", "--name-only", "--get-regexp",  # noqa: S603, S607
-                        r"^filter\."], capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60,
-                       env={**os.environ, **IDENTITY})
-    names = {line.split(".")[1] for line in r.stdout.splitlines() if line.count(".") >= 2}
-    out: list[str] = []
-    for n in sorted(names):
-        out += ["-c", f"filter.{n}.clean=", "-c", f"filter.{n}.smudge=", "-c", f"filter.{n}.process=",
-                "-c", f"filter.{n}.required=false"]
-    return out
-
-
-def _git(where, *args, env: dict | None = None, check: bool = True) -> subprocess.CompletedProcess:
-    r = subprocess.run(["git", "-C", str(where), *HARDEN, *_filters_off(where), *args],  # noqa: S603, S607
-                       capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=120,
-                       env={**os.environ, **IDENTITY, **(env or {})})
+def _git(where, *args, env: dict | None = None, check: bool = True, data: bytes | None = None,
+         text: bool = True) -> subprocess.CompletedProcess:
+    r = subprocess.run(["git", "-C", str(where), *HARDEN, *args], input=data, capture_output=True,  # noqa: S603, S607
+                       timeout=120, env={**os.environ, **IDENTITY, **(env or {})})
     if check and r.returncode != 0:
-        raise GitModeError(f"git {args[0]} failed: {(r.stderr or r.stdout).strip()[:300]}")
+        raise GitModeError(f"git {args[0]} failed: {r.stderr.decode('utf-8', 'replace').strip()[:300]}")
+    if text:
+        r.stdout = r.stdout.decode("utf-8", "replace")
     return r
 
 
@@ -71,11 +61,52 @@ def commit_scope(root, scopes: list[str], branch: str, message: str, expect_comm
         if head:
             _git(top, "read-tree", head, env=env)
         rels = [os.path.relpath(Path(root).resolve() / s, top) for s in scopes]
-        _git(top, "add", "-A", "--", *rels, env=env)
+        _stage(top, rels, env)
         tree = _git(top, "write-tree", env=env).stdout.strip()
         sha = _git(top, "commit-tree", tree, "-m", message, *(["-p", head] if head else []), env=env).stdout.strip()
     _git(top, "update-ref", f"refs/heads/{branch}", sha)
     return sha
+
+
+def _inside(top: Path, p: Path) -> bool:
+    try:
+        return not p.is_symlink() and p.resolve().is_relative_to(top) and p.is_file()
+    except OSError:
+        return False
+
+
+def _stage(top: Path, rels: list[str], env: dict) -> None:
+    cached = [f for f in _git(top, "ls-files", "-z", "--cached", "--", *rels, env=env).stdout.split(chr(0)) if f]
+    others = [f for f in _git(top, "ls-files", "-z", "--others", "--exclude-standard", "--", *rels,
+                              env=env).stdout.split(chr(0)) if f]
+    files = [f for f in dict.fromkeys(cached + others) if chr(10) not in f and _inside(top, top / f)]
+    info = "".join(f"0 {'0' * 40}\t{f}" + chr(0) for f in cached if f not in files)
+    if files:
+        shas = _git(top, "hash-object", "--no-filters", "-w", "--stdin-paths",
+                    data=(chr(10).join(files) + chr(10)).encode("utf-8")).stdout.split()
+        info += "".join(f"100644 {sha}\t{f}" + chr(0) for sha, f in zip(shas, files))
+    if info:
+        _git(top, "update-index", "-z", "--add", "--remove", "--index-info", env=env, data=info.encode("utf-8"))
+
+
+def _populate(top: Path, path: Path, branch: str) -> None:
+    listing = _git(top, "ls-tree", "-r", "-z", branch).stdout
+    entries = []
+    for item in listing.split(chr(0)):
+        if not item:
+            continue
+        meta, _, name = item.partition("\t")
+        mode, kind, sha = meta.split()
+        if kind == "blob" and mode in ("100644", "100755"):
+            entries.append((sha, name))
+    for sha, name in entries:
+        blob = _git(top, "cat-file", "blob", sha, text=False).stdout
+        target = (path / name)
+        if not target.resolve().is_relative_to(path.resolve()):
+            continue
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(blob)
+    _git(path, "read-tree", branch)
 
 
 def add_worktree(root, name: str, branch: str) -> tuple[Path, str, str]:
@@ -83,7 +114,8 @@ def add_worktree(root, name: str, branch: str) -> tuple[Path, str, str]:
     if top is None:
         raise GitModeError(f"{root} is not inside a git repository")
     path = Path(root).resolve() / WORKTREES / name
-    _git(top, "worktree", "add", "-q", "-b", branch, str(path), "HEAD")
+    _git(top, "worktree", "add", "-q", "--no-checkout", "-b", branch, str(path), "HEAD")
+    _populate(top, path, branch)
     _, common = git_dirs(top)
     exclude = common / "info" / "exclude"
     exclude.parent.mkdir(parents=True, exist_ok=True)

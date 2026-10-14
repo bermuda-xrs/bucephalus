@@ -49,6 +49,17 @@ def _sibling_state(root: str, stamps: tuple) -> tuple[str, ...]:
     return tuple(out)
 
 
+@functools.lru_cache(maxsize=32)
+def _repo_dirs(root: str) -> tuple[Path, ...]:
+    from ..gitmode import GitModeError, git_dirs, toplevel
+
+    try:
+        top = toplevel(root)
+        return tuple(git_dirs(top)) if top is not None else ()
+    except (GitModeError, OSError):
+        return ()
+
+
 def state_paths(ctx) -> tuple[Path, ...]:
     cfg = ctx.config
     root = Path(os.path.abspath(cfg.root))
@@ -59,6 +70,8 @@ def state_paths(ctx) -> tuple[Path, ...]:
         out.append(Path(cfg.state_dir))
     out += [root / rel for rel in PROJECT_STATE]
     out += list((root / ".bucephalus-worktrees").glob("*/.git"))
+    if getattr(cfg, "git_mode", False):
+        out += _repo_dirs(str(root))
     if cfg.source_path:
         out.append(Path(cfg.source_path))
     out += _argv_files(cfg, root)
