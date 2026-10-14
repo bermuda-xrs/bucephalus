@@ -88,3 +88,16 @@ def test_c3_a_backend_can_set_its_own_compaction_ceiling(sm):
     before = _inline_cap(sm)
     sm.backends["cloud"].cfg.context_fill_ratio = 0.6
     assert fill_ratio(sm.config, sm) == 0.6 and _inline_cap(sm) >= before
+
+
+def test_review_the_progress_note_carries_the_taint_of_what_it_quotes(sm, task, workspace):
+    sm.backends["cloud"].cfg.progress_file = True
+    (workspace / "a.txt").write_text("step one: tidy the shelves", encoding="utf-8")
+    t = create_task(sm.conn, sm.log, task.contract, task.budget)
+    s = _act("search", pattern="x", path="work")
+    plan = _act("update_plan", items=[{"text": "step one: tidy the shelves", "status": "todo"}])
+    sm.backends["cloud"].queue(_act("read_file", path="work/a.txt"), plan, s, s, '{"kind": "final", "answer": "ok"}')
+    run_task(sm, t.id)
+    tail = sm.backends["cloud"].calls[-1]["tail"]
+    head = tail.split("Progress (kept by the harness)")[0].rsplit("<", 1)[1]
+    assert "taint=untrusted" in head, head

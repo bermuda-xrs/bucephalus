@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
 import time
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 from ..config import fill_ratio
@@ -629,7 +631,7 @@ def _update_carry(ctx, task, entries: list, text: str) -> None:
 STUCK_SAY = {
     "alternation": "You are alternating between the same two calls and nothing changes. Stop and try a different "
                    "approach, or answer with what you have.",
-    "same_error": "The last three calls to {tool} failed the same way ({error}). Do not retry it as it is: change the "
+    "same_error": "The last three calls to {tool} failed the same way. Do not retry it as it is: change the "
                   "arguments, use another tool, or answer.",
     "no_tool": "Four steps have passed without a tool call. Call a tool now, in the required format, or answer.",
 }
@@ -663,7 +665,7 @@ def _stuck_patterns(ctx, task, entries: list, history: list, warned: set, step: 
     ran = [x for x in h if x["ran"]][-3:]
     sig = [(x["tool"], re.sub(r"\S*[/\\]\S*|\d+", "#", x["error"])) for x in ran if x["error"]]
     if len(sig) == 3 and len(ran) == 3 and len(set(sig)) == 1:
-        found["same_error"] = {"tool": sig[0][0], "error": ran[-1]["error"][:120]}
+        found["same_error"] = {"tool": sig[0][0]}
     if len(h) >= 4 and not any(x["ran"] for x in h[-4:]):
         found["no_tool"] = {}
     warned.intersection_update(found)
@@ -682,21 +684,31 @@ def _evaluated(ctx, task) -> bool:
 
 
 def _evaluate(ctx, task, backend, parsed, step: int) -> str | None:
+    from ..security.capabilities import is_protected, task_state_paths, within_scope
+
     files, diag = [], ""
     for content, origin in ctx.conn.execute("SELECT content, origin_json FROM artifacts WHERE task_id=? AND "
                                             "kind='tool_output' ORDER BY created_at, rowid", (task.id,)):
         o = json.loads(origin)
-        path = (o.get("args") or {}).get("path")
-        if o.get("tool") in WRITERS and path and path not in files:
-            files.append(path)
+        if o.get("tool") in WRITERS:
+            try:
+                head = json.loads(content.split(chr(10) + "---" + chr(10), 1)[0])
+            except ValueError:
+                head = {}
+            path = head.get("path") if isinstance(head, dict) and head.get("ok") else None
+            if path and path not in files:
+                files.append(path)
         if o.get("tool") in WRITERS + ("run_command",):
             diag = content[:1000]
-    shown = []
+    shown, state, root = [], task_state_paths(ctx, task), str(ctx.config.root)
     for path in files[-3:]:
-        from .tools import _resolve
-
+        whole = os.path.abspath(path)
+        if (str(Path(whole).resolve()) != whole or not within_scope({"path": whole}, task.contract.artifact_scope, root)[0]
+                or is_protected(whole, root, state)):
+            shown.append(f"--- {path} (not shown: outside the scope, protected, or reached through a link)")
+            continue
         try:
-            shown.append(f"--- {path}" + chr(10) + _resolve(ctx, path).read_text(encoding="utf-8")[:1500])
+            shown.append(f"--- {path}" + chr(10) + Path(whole).read_text(encoding="utf-8")[:1500])
         except OSError:
             shown.append(f"--- {path} (could not be read)")
     answer = parsed.payload if isinstance(parsed.payload, str) else json.dumps(parsed.payload)
@@ -739,11 +751,15 @@ def _update_progress(ctx, task, entries: list, step: int) -> None:
              "- files read: " + (", ".join(read) or "none"), "- files written: " + (", ".join(written) or "none")]
     if unread:
         lines.append("- unread pages: " + _named(unread))
-    checklist = next((e.content for e in entries if e.label == "checklist"), None)
-    if checklist:
-        lines.append("- checklist: " + checklist.split(chr(10), 1)[-1].replace(chr(10), "; ")[:300])
-    note = LedgerEntry.note(chr(10).join(lines), pinned=True)
-    note.label = "progress"
+    checklist = next((e for e in entries if e.label == "checklist"), None)
+    if checklist is not None:
+        lines.append("- checklist: " + checklist.content.split(chr(10), 1)[-1].replace(chr(10), "; ")[:300])
+    taint = join_taint(Taint.USER, *([checklist.taint] if checklist is not None else []),
+                       ctx.taint_tracker(task.id).args_taint({"paths": read + written}))
+    text = chr(10).join(lines)
+    note = LedgerEntry.observation(text, taint=taint, label="progress")
+    note.pinned = True
+    ctx.taint_tracker(task.id).observe(text, taint)
     entries[:] = [e for e in entries if e.label != "progress"] + [note]
 
 

@@ -143,3 +143,41 @@ def test_d3_a_run_shows_the_escape_check_only_when_declared(sm, task, workspace)
     sm.backends["cloud"].queue(_act("write_file", path="work/m2.py", content=bad), FINAL)
     run_task(sm, t2.id)
     assert "TAB character" in sm.backends["cloud"].calls[-1]["tail"]
+
+
+def test_review_the_evaluator_never_reads_through_a_link_or_outside_the_scope(sm, task, workspace, tmp_path):
+    import shutil
+
+    from conftest import make_dir_link
+
+    sm.backends["cloud"].cfg.evaluator_pass = True
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "x.txt").write_text("SECRET-OUTSIDE", encoding="utf-8")
+    t = _task(sm, task)
+    script = iter([_act("write_file", path="work/d/x.txt", content="mine"), "SWAP",
+                   json.dumps({"verdict": "accept", "reason": "fine"})])
+
+    def responder(prefix, tail):
+        step = next(script, FINAL)
+        if step == "SWAP":
+            shutil.rmtree(workspace / "d")
+            if not make_dir_link(workspace / "d", outside):
+                pytest.skip("cannot make a link here")
+            return FINAL
+        return step
+
+    sm.backends["cloud"]._responder = responder
+    run_task(sm, t.id)
+    review = next(c for c in sm.backends["cloud"].calls if "<objective>" in c["tail"])
+    assert "SECRET-OUTSIDE" not in review["tail"]
+
+
+def test_review_a_repeated_error_is_named_by_tool_without_quoting_it(sm, task, workspace):
+    sm.backends["cloud"].cfg.stuck_patterns = True
+    t = _task(sm, task)
+    sm.backends["cloud"].queue(*[_act("read_file", path=f"work/missing{i}.txt") for i in range(3)], FINAL)
+    run_task(sm, t.id)
+    note = [c["tail"] for c in sm.backends["cloud"].calls if "failed the same way" in c["tail"]][0]
+    stuck = note.split("failed the same way")[0].rsplit("<observation", 1)[1] + note.split("failed the same way")[1][:200]
+    assert "read_file" in stuck and "no such file" not in stuck
