@@ -23,7 +23,7 @@ PROJECT_STATE = (
     "runs", "docs/evidence",
     ".bucephalus_token", ".env", "policy.md",
     "cal.json", ".token_calibration.json", ".measurement.lock",
-    "checkouts", "shadow", "tasklocks", "AGENTS.md",
+    "checkouts", "shadow", "tasklocks", "AGENTS.md", ".git",
 )
 
 
@@ -58,6 +58,7 @@ def state_paths(ctx) -> tuple[Path, ...]:
     if cfg.state_dir:
         out.append(Path(cfg.state_dir))
     out += [root / rel for rel in PROJECT_STATE]
+    out += list((root / ".bucephalus-worktrees").glob("*/.git"))
     if cfg.source_path:
         out.append(Path(cfg.source_path))
     out += _argv_files(cfg, root)

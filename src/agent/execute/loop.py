@@ -770,11 +770,12 @@ def _git_commit(ctx, task) -> None:
     from ..gitmode import GitModeError, commit_scope
 
     row = ctx.conn.execute("SELECT payload_json FROM events WHERE task_id=? AND type='git.worktree'", (task.id,)).fetchone()
-    where, scopes = (json.loads(row[0])["path"], json.loads(row[0])["scopes"]) if row else (ctx.config.root,
-                                                                                         task.contract.artifact_scope)
+    wt = json.loads(row[0]) if row else None
+    where, scopes = (wt["path"], wt["scopes"]) if wt else (ctx.config.root, task.contract.artifact_scope)
     branch = f"bucephalus/{task.id}"
     try:
-        sha = commit_scope(where, scopes, branch, f"bucephalus {task.id}: {task.contract.goal[:72]}")
+        sha = commit_scope(where, scopes, branch, f"bucephalus {task.id}: {task.contract.goal[:72]}",
+                           expect_common=wt.get("common") if wt else None)
     except (GitModeError, OSError, subprocess.TimeoutExpired) as e:
         ctx.log.append(task.id, "git.skipped", {"why": str(e)[:300]})
         return

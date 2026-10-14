@@ -85,3 +85,34 @@ def _child_path(ctx):
     row = ctx.conn.execute("SELECT contract_json FROM tasks WHERE parent_id IS NOT NULL ORDER BY rowid DESC").fetchone()
     scope = json.loads(row[0])["artifact_scope"][0]
     return f"{scope}/child.txt"
+
+
+def test_review_a_filter_in_the_repository_config_never_runs(ctx, task, repo, tmp_path):
+    marker = tmp_path / "ran.txt"
+    _git(repo, "config", "filter.evil.clean", f"echo ran > '{marker.as_posix()}'; cat")
+    (repo / ".gitattributes").write_text("*.txt filter=evil\n", encoding="utf-8")
+    ctx.config.git_mode = True
+    ctx.backends["cloud"].queue(_write("work/a.txt", "x\n"), FINAL)
+    run_task(ctx, task.id)
+    assert not marker.exists(), "git mode ran a filter command from the repository's config"
+    assert _git(repo, "show", f"bucephalus/{task.id}:work/a.txt") == "x"
+
+
+def test_review_a_scope_that_covers_the_git_directory_is_refused(ctx, repo):
+    from agent.kernel.tasks import create_task
+    from agent.kernel.types import Budget, TaskContract
+
+    ctx.config.git_mode = True
+    t = create_task(ctx.conn, ctx.log, TaskContract(goal="g", artifact_scope=["."]), Budget(usd=1.0, seconds=60))
+    ctx.backends["cloud"].queue(FINAL)
+    run_task(ctx, t.id)
+    assert "bucephalus/" not in _git(repo, "branch", "--list")
+    why = [json.loads(r[0])["why"] for r in ctx.conn.execute(
+        "SELECT payload_json FROM events WHERE task_id=? AND type='git.skipped'", (t.id,))]
+    assert why and ".git" in why[0]
+
+
+def test_review_the_git_directory_is_protected_state(ctx, repo):
+    from agent.security.capabilities import is_protected, state_paths
+
+    assert is_protected(".git/config", str(repo), state_paths(ctx))

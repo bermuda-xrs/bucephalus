@@ -105,9 +105,9 @@ def run_delegated(ctx, parent_task, subtask_plan: SubtaskPlan) -> DelegationResu
         from ..gitmode import WORKTREES, add_worktree, toplevel
 
         if toplevel(ctx.config.root) is not None:
-            path, rel = add_worktree(ctx.config.root, child_id, f"bucephalus/{child_id}")
+            path, rel, common = add_worktree(ctx.config.root, child_id, f"bucephalus/{child_id}")
             inner = [os.path.normpath(os.path.join(rel, s)) for s in scope]
-            worktree = {"path": str(path), "scopes": inner, "branch": f"bucephalus/{child_id}"}
+            worktree = {"path": str(path), "scopes": inner, "branch": f"bucephalus/{child_id}", "common": common}
             scope = [os.path.join(WORKTREES, child_id, s).replace(os.sep, "/") for s in inner]
     contract = TaskContract(
         goal=subtask_plan.goal,
