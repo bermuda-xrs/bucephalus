@@ -102,12 +102,17 @@ def run_delegated(ctx, parent_task, subtask_plan: SubtaskPlan) -> DelegationResu
     scope = subtask_plan.artifact_scope or parent_task.contract.artifact_scope
     child_id, worktree = new_task_id(), None
     if ctx.config.git_mode:
-        from ..gitmode import WORKTREES, add_worktree, toplevel
+        from ..gitmode import WORKTREES, GitModeError, add_worktree, toplevel
 
-        if toplevel(ctx.config.root) is not None:
-            path, rel, common = add_worktree(ctx.config.root, child_id, f"bucephalus/{child_id}")
+        try:
+            top = toplevel(ctx.config.root)
+        except GitModeError as e:
+            top = None
+            ctx.log.append(parent_task.id, "git.skipped", {"why": str(e)[:300]})
+        if top is not None:
+            path, rel, ident = add_worktree(ctx.config.root, child_id, f"bucephalus/{child_id}")
             inner = [os.path.normpath(os.path.join(rel, s)) for s in scope]
-            worktree = {"path": str(path), "scopes": inner, "branch": f"bucephalus/{child_id}", "common": common}
+            worktree = {"path": str(path), "scopes": inner, "branch": f"bucephalus/{child_id}", "identity": ident}
             scope = [os.path.join(WORKTREES, child_id, s).replace(os.sep, "/") for s in inner]
     contract = TaskContract(
         goal=subtask_plan.goal,

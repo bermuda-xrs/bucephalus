@@ -158,32 +158,33 @@ def test_review_the_resolved_git_directory_is_protected_when_the_checkout_is_a_s
     assert is_protected(str(repo / ".git" / "config"), str(sub), state_paths(ctx))
 
 
-@pytest.mark.parametrize("name, ok", [
-    ("work/x.txt", True), (".git/config", False), ("a/.GIT/hooks/x", False), ("git~1/config", False),
-    ("a/con.txt", False), ("a/NUL", False), ("a:b/x", False), ("a\b", False), ("dir./x", False), ("x /y", False),
-    (".git‌/config", False), ("..", False), ("a/./b", False), ("a" + chr(92) + "b", False), ("a" + chr(1), False),
-])
-def test_review_only_safe_tree_names_are_written_into_a_worktree(name, ok):
-    from agent.gitmode import safe_name
+def test_review_a_child_worktree_is_checked_out_by_git_without_running_a_filter(ctx, task, repo, tmp_path):
+    from agent.gitmode import add_worktree
 
-    assert safe_name(name) is ok
+    marker = tmp_path / "ran.txt"
+    _git(repo, "config", "filter.evil.smudge", f"echo ran > '{marker.as_posix()}'; cat")
+    (repo / ".gitattributes").write_text("*.txt filter=evil" + chr(10), encoding="utf-8")
+    _git(repo, "add", ".gitattributes")
+    _git(repo, "-c", "filter.evil.clean=cat", "commit", "-q", "-m", "attrs")
+    path, _, ident = add_worktree(repo, "c1", "bucephalus/c1")
+    assert not marker.exists() and (path / "work" / "base.txt").read_text(encoding="utf-8") == "base" + chr(10)
+    assert set(ident) == {"gitdir", "common", "dotgit"}
 
 
-def test_review_each_file_is_hashed_from_the_bytes_that_were_checked(monkeypatch, tmp_path):
+def test_review_a_worktree_whose_git_file_changed_is_refused(ctx, task, repo):
+    from agent.gitmode import GitModeError, add_worktree, commit_scope
+
+    path, _, ident = add_worktree(repo, "c2", "bucephalus/c2")
+    with open(path / ".git", "r+", encoding="utf-8") as fh:
+        fh.seek(0, 2)
+        fh.write(chr(10))
+    with pytest.raises(GitModeError, match="no longer points"):
+        commit_scope(path, ["work"], "bucephalus/c2", "m", expect=ident)
+
+
+def test_review_git_older_than_the_attribute_source_is_refused(monkeypatch, repo):
     from agent import gitmode
 
-    seen = []
-    real = gitmode._git
-
-    def spy(where, *args, **kw):
-        seen.append(args)
-        return real(where, *args, **kw)
-
-    root = tmp_path / "r"
-    (root / "work").mkdir(parents=True)
-    _git(root, "init", "-q", "-b", "main")
-    (root / "work" / "a.txt").write_text("a\n", encoding="utf-8")
-    monkeypatch.setattr(gitmode, "_git", spy)
-    gitmode.commit_scope(root, ["work"], "bucephalus/t", "m")
-    hashes = [a for a in seen if a and a[0] == "hash-object"]
-    assert hashes and all("--stdin-paths" not in a and "--stdin" in a for a in hashes)
+    monkeypatch.setattr(gitmode, "git_version", lambda: (2, 39))
+    with pytest.raises(gitmode.GitModeError, match="2.40"):
+        gitmode.commit_scope(repo, ["work"], "bucephalus/x", "m")

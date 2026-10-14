@@ -775,7 +775,7 @@ def _git_commit(ctx, task) -> None:
     branch = f"bucephalus/{task.id}"
     try:
         sha = commit_scope(where, scopes, branch, f"bucephalus {task.id}: {task.contract.goal[:72]}",
-                           expect_common=wt.get("common") if wt else None)
+                           expect=wt.get("identity") if wt else None)
     except (GitModeError, OSError, subprocess.TimeoutExpired) as e:
         ctx.log.append(task.id, "git.skipped", {"why": str(e)[:300]})
         return
