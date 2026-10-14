@@ -99,3 +99,30 @@ def test_too_many_combinations_fall_back_to_one_factor_at_a_time():
     assert design == "one_at_a_time" and len(configs) == 7 and configs[0] == {}
     configs, design = evals.design({k: flags[k] for k in ("f0", "f1")}, max_configs=16)
     assert design == "factorial" and len(configs) == 4
+
+
+def test_an_arm_on_a_subset_of_families_is_paired_on_its_own_instances():
+    base = [{"key": f"a{i}", "family": "a", "passed": False} for i in range(4)] + \
+           [{"key": f"b{i}", "family": "b", "passed": True} for i in range(4)]
+    arm = [{"key": f"a{i}", "family": "a", "passed": i < 3} for i in range(4)]
+    s = evals.summarise({"base": base, "arm": arm}, "base")
+    assert s["n"] == 8 and s["arms"]["arm"]["n"] == 4 and s["vs_base"]["arm"]["n"] == 4
+    assert s["vs_base"]["arm"]["only_arm"] == 3 and s["vs_base"]["arm"]["base_passes"] == 0
+
+
+def test_every_bench_arm_is_base_plus_one_declared_item():
+    import sys
+    from pathlib import Path
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "bench"))
+    import families_run as fr
+
+    from agent.config import BackendConfig
+
+    base = fr.ARMS["base"]["overrides"]
+    for name, arm in fr.ARMS.items():
+        extra = {k: v for k, v in arm["overrides"].items() if base.get(k) != v}
+        assert name == "base" or len(extra) == 1, (name, extra)
+        for k in extra:
+            assert k.split(".", 1)[1] in BackendConfig.model_fields, k
+        assert arm["families"] is None or set(arm["families"]) <= set(F.FAMILIES)

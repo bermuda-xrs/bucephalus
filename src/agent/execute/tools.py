@@ -8,6 +8,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
+import hashlib
+
 from ..kernel.types import Taint
 
 MAX_READ_CHARS = 200_000
@@ -63,6 +65,12 @@ class ToolRegistry:
             for t in sorted(self._tools.values(), key=lambda t: t.name)
         ]
 
+    def native(self, names: dict | None = None) -> list[dict]:
+        names = names or {}
+        return [{"type": "function", "function": {"name": names.get(t.name, t.name), "description": t.description,
+                                                  "parameters": t.schema}}
+                for t in sorted(self._tools.values(), key=lambda t: t.name)]
+
     def manual(self) -> str:
         lines = [
             t.manual_line() for t in sorted(self._tools.values(), key=lambda t: t.name)
@@ -77,6 +85,23 @@ class ToolRegistry:
                 "rather than computing it in your head.")
         return "\n".join(lines)
 
+FAMILIAR = {"run_command": "bash", "read_file": "read", "write_file": "write", "search": "grep", "list_dir": "ls",
+            "edit_file": "edit", "apply_patch": "patch", "expand_artifact": "expand", "update_plan": "plan"}
+
+
+def aliases(ctx) -> dict[str, str]:
+    b = ctx.backends.get("cloud") if hasattr(ctx, "backends") else None
+    if b is None or getattr(b.cfg, "tool_names", "internal") != "familiar":
+        return {}
+    return {k: v for k, v in FAMILIAR.items() if k in ctx.tools}
+
+
+def say(ctx, text: str) -> str:
+    for name, alias in sorted(aliases(ctx).items(), key=lambda kv: -len(kv[0])):
+        text = re.sub(rf"\b{name}\b", alias, text)
+    return text
+
+
 def _library_manual() -> str:
     try:
         from .libraries import REGISTRY
@@ -90,11 +115,53 @@ def _resolve(ctx, path: str) -> Path:
     return p if p.is_absolute() else Path(ctx.config.root) / p
 
 
+def line_anchor(n: int, line: str) -> str:
+    return f"{n}:{hashlib.sha1(line.encode('utf-8')).hexdigest()[:2]}"
+
+
+def _anchored(text: str) -> str:
+    out = []
+    for i, line in enumerate(text.splitlines(keepends=True), 1):
+        out.append(line_anchor(i, line.rstrip(chr(13) + chr(10))) + "|" + line)
+    return "".join(out)
+
+
+def hashline(ctx) -> bool:
+    b = ctx.backends.get("cloud") if hasattr(ctx, "backends") else None
+    return b is not None and getattr(b.cfg, "edit_format", "default") == "hashline"
+
+
+def tool_edit_lines(ctx, task, path: str, start: str, end: str, content: str) -> dict:
+    p = _resolve(ctx, path)
+    if not p.is_file():
+        return {"ok": False, "error": f"no such file: {path}"}
+    lines = p.read_text(encoding="utf-8").splitlines(keepends=True)
+
+    def at(anchor: str):
+        try:
+            n = int(str(anchor).split(":", 1)[0])
+        except ValueError:
+            return None
+        ok = 1 <= n <= len(lines) and line_anchor(n, lines[n - 1].rstrip(chr(13) + chr(10))) == str(anchor)
+        return n if ok else None
+
+    s, e = at(start), at(end)
+    if s is None or e is None or e < s:
+        bad = start if s is None else end
+        return {"ok": False, "error": f"anchor {bad} does not match the file now: read the file again and use its "
+                                      "current anchors"}
+    new = content if content.endswith(chr(10)) or not content else content + chr(10)
+    p.write_text("".join(lines[:s - 1] + [new] + lines[e:]), encoding="utf-8")
+    return {"ok": True, "path": str(p), "replaced": f"lines {s} to {e}"}
+
+
 def tool_read_file(ctx, task, path: str, page: int | None = None) -> dict:
     p = _resolve(ctx, path)
     if not p.exists():
         return {"ok": False, "error": f"no such file: {path}"}
     text = p.read_text(encoding="utf-8", errors="replace")[:MAX_READ_CHARS]
+    if hashline(ctx):
+        text = _anchored(text)
     out = {"ok": True, "path": str(p), "content": text, "bytes": p.stat().st_size}
     if page is None and ctx.config.long_files != "pages":
         return out
@@ -107,7 +174,7 @@ def tool_read_file(ctx, task, path: str, page: int | None = None) -> dict:
         return {"ok": False, "error": f"no page {page}: {path} has {len(pages)} pages"}
     content = pages[n - 1]
     if n < len(pages):
-        content += f"\n[page {n} of {len(pages)}; the next is read_file(path={path!r}, page={n + 1})]"
+        content += say(ctx, f"\n[page {n} of {len(pages)}; the next is read_file(path={path!r}, page={n + 1})]")
     return {**out, "content": content, "page": n, "pages": len(pages)}
 
 
@@ -588,6 +655,16 @@ def tool_git_push(ctx, task, remote: str = "origin", branch: str | None = None) 
 SMALL_TOOLS = ("read_file", "write_file", "search", "run_command", "update_plan", "expand_artifact")
 SMALL_ONLY = ("search", "run_command", "update_plan")
 PATCH_ONLY = ("apply_patch",)
+
+
+EDIT_LINES = ToolSpec(
+    "edit_lines", tool_edit_lines,
+    {"type": "object", "properties": {"path": {"type": "string"}, "start": {"type": "string"},
+                                      "end": {"type": "string"}, "content": {"type": "string"}},
+     "required": ["path", "start", "end", "content"]},
+    side_effecting=True, max_arg_taint=Taint.USER, output_taint=Taint.TRUSTED,
+    description="replace the lines from anchor start to anchor end (anchors like 12:a3, as read_file shows them) "
+                "with content")
 
 
 def apply_profile(registry: ToolRegistry, profile: str) -> ToolRegistry:

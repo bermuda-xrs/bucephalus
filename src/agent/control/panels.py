@@ -127,7 +127,7 @@ def context_meter(ctx, task_id: str | None = None) -> dict:
     window = ctx.window_for("cloud")
     from ..config import fill_ratio
 
-    ratio = fill_ratio(ctx.config)
+    ratio = fill_ratio(ctx.config, ctx)
     used = 0
     if task_id:
         r = ctx.conn.execute(

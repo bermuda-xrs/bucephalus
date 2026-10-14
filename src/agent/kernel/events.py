@@ -98,6 +98,10 @@ EVENT_TYPES = frozenset(
         "plan.survey",
         "pages.unread_held",
         "workspace.final",
+        "action.body_fetched",
+        "carry.updated",
+        "evaluator.returned",
+        "evaluator.accepted",
     }
 )
 

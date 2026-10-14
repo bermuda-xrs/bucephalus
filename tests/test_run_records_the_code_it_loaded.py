@@ -62,12 +62,16 @@ def test_a_profile_run_summary_carries_it(tmp_path):
 
 def test_the_version_must_move_when_the_prompt_does():
     from agent.ledger.prefix import system_contract
-    from agent.execute.loop import (ACTION_SCHEMA_HINT, ACTION_SCHEMA_HINT_NO_CODE, ACTION_TAG_HINT, READ_FIRST_NOTE,
-                                    UNREAD_PAGES_NOTE, VERIFY_NOTE)
+    from agent.execute.loop import (ACTION_SCHEMA_HINT, ACTION_SCHEMA_HINT_NO_CODE, ACTION_TAG_HINT, BODY_NOTE,
+                                    CARRY_NOTE, EVALUATOR_PREFIX, EVALUATOR_RETURN, NATIVE_HINT, READ_FIRST_NOTE,
+                                    STUCK_SAY, UNREAD_PAGES_NOTE, VERIFY_NOTE)
+    from agent.ledger.compact import EVIDENCE_HEAD
     from agent.execute.tools import apply_profile, default_registry
     from agent.plan.planner import PLANNER_PREFIX
 
-    parts = [system_contract(True), system_contract(False), ACTION_SCHEMA_HINT, ACTION_SCHEMA_HINT_NO_CODE,
+    parts = [system_contract(True), system_contract(False), system_contract(False, compact=True), BODY_NOTE,
+             CARRY_NOTE, NATIVE_HINT, EVALUATOR_PREFIX, EVALUATOR_RETURN, EVIDENCE_HEAD, *STUCK_SAY.values(),
+             ACTION_SCHEMA_HINT, ACTION_SCHEMA_HINT_NO_CODE,
              ACTION_TAG_HINT, READ_FIRST_NOTE, PLANNER_PREFIX, UNREAD_PAGES_NOTE, VERIFY_NOTE]
     for profile in ("full", "patch", "small"):
         parts.append(apply_profile(default_registry(), profile).manual())

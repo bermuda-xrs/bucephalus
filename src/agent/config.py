@@ -36,6 +36,20 @@ class BackendConfig(BaseModel):
     tool_profile: Literal["full", "patch", "small"] = "full"
     read_first: bool | None = None
     read_all_pages: bool | None = None
+    reasoning_field: bool | None = None
+    carry_field: bool | None = None
+    code_out_of_json: bool = False
+    tool_call_mode: Literal["constrained", "native"] = "constrained"
+    tool_names: Literal["internal", "familiar"] = "internal"
+    compact_prompt: bool = False
+    evidence_pins: bool = False
+    progress_file: bool = False
+    context_fill_ratio: float | None = None
+    stuck_patterns: bool = False
+    evaluator_pass: bool = False
+    edit_format: Literal["default", "hashline"] = "default"
+    send_tool_list: bool = False
+    escape_check: bool = False
     observation_tokens: int | None = None
     assumed_tokens_per_sec: float = 5.0
 
@@ -63,6 +77,14 @@ class BackendConfig(BaseModel):
     @property
     def requires_observation(self) -> bool:
         return self.tool_profile == "small" if self.read_first is None else self.read_first
+
+    @property
+    def requires_thought(self) -> bool:
+        return self.tool_profile == "small" if self.reasoning_field is None else self.reasoning_field
+
+    @property
+    def requires_carry(self) -> bool:
+        return self.tool_profile == "small" if self.carry_field is None else self.carry_field
 
     @property
     def requires_all_pages(self) -> bool:
@@ -216,8 +238,11 @@ LONG_FILES = ("pages", "elide", "whole")
 WHOLE_FILL_RATIO = 0.75
 
 
-def fill_ratio(cfg) -> float:
-    r = cfg.limits.context_fill_ratio
+def fill_ratio(cfg, ctx=None) -> float:
+    b = ctx.backends.get("cloud") if ctx is not None else None
+    own = b.cfg.context_fill_ratio if b is not None else (cfg.backends["cloud"].context_fill_ratio
+                                                         if "cloud" in cfg.backends else None)
+    r = own if own is not None else cfg.limits.context_fill_ratio
     return max(r, WHOLE_FILL_RATIO) if cfg.long_files == "whole" else r
 
 

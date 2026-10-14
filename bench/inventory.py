@@ -49,6 +49,10 @@ ROWS: list[tuple[str, str, str, str]] = [
     ("what the planner read is kept as untrusted", "plan.survey", "event", ""),
     ("an answer with unread pages became a continuation", "pages.unread_held", "event", ""),
     ("the workspace at the end is kept in the shadow repo", "workspace.final", "event", ""),
+    ("a long text argument came back outside the JSON", "action.body_fetched", "event", ""),
+    ("the model's carried notes were updated", "carry.updated", "event", ""),
+    ("a fresh reviewer returned the answer once", "evaluator.returned", "event", ""),
+    ("a fresh reviewer accepted the answer", "evaluator.accepted", "event", ""),
 
     ("compaction tombstones an artifact", "session.opened", "tombstoned", ""),
     ("a session BOUNDARY is crossed", "session.opened", "rotate", ""),

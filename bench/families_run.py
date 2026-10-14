@@ -11,14 +11,41 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-SMALL = {"backend.tool_profile": "small"}
-ARMS: dict[str, dict] = {"base": SMALL}
+BASE = {"backend.tool_profile": "small", "backend.reasoning_field": False, "backend.carry_field": False}
+
+
+def _arm(families, **over):
+    return {"overrides": {**BASE, **{f"backend.{k}": v for k, v in over.items()}}, "families": families}
+
+
+ARMS: dict[str, dict] = {
+    "base": {"overrides": BASE, "families": None},
+    "L14": _arm(["write_function", "needle"], send_tool_list=True),
+    "B1": _arm(["write_function", "multipage"], reasoning_field=True),
+    "B2": _arm(["multipage", "needle"], carry_field=True),
+    "B3": _arm(["write_function", "config_edit"], code_out_of_json=True),
+    "B4": _arm(["write_function", "needle"], tool_call_mode="native"),
+    "B5": _arm(["write_function", "arithmetic"], tool_names="familiar"),
+    "B6": _arm(["needle", "extract_json"], compact_prompt=True),
+    "C1": _arm(["multipage", "needle"], evidence_pins=True),
+    "C2": _arm(["multipage", "config_edit"], progress_file=True),
+    "C3": _arm(["multipage", "needle"], context_fill_ratio=0.5),
+    "D1": _arm(["write_function", "unanswerable"], evaluator_pass=True),
+    "D2": _arm(["multi_file", "arithmetic"], stuck_patterns=True),
+    "D3": _arm(["write_function", "config_edit"], escape_check=True),
+    "E1": _arm(["config_edit", "write_function"], edit_format="hashline"),
+}
 
 
 def arm_raw(raw: dict, arm: str) -> dict:
     from agent import evals
 
-    return evals.apply_overrides(raw, ARMS[arm])
+    return evals.apply_overrides(raw, ARMS[arm]["overrides"])
+
+
+def runs_on(arm: str, spec: dict) -> bool:
+    fams = ARMS[arm]["families"]
+    return fams is None or spec["family"] in fams
 
 
 def load_done(path: Path) -> dict:
@@ -71,7 +98,7 @@ def _main(argv=None) -> int:
             order = list(arms)
             random.Random(args.seed + i).shuffle(order)
             for a in order:
-                if spec["key"] in done[a]:
+                if spec["key"] in done[a] or not runs_on(a, spec):
                     continue
                 r = evals.run_instance(arm_raw(raw, a), spec, out / "data" / a / spec["key"])
                 done[a][spec["key"]] = r

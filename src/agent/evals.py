@@ -126,8 +126,7 @@ def mcnemar_exact(b: int, c: int) -> float:
 
 
 def summarise(by_arm: dict[str, list[dict]], base: str) -> dict:
-    keys = set.intersection(*({r["key"] for r in rows} for rows in by_arm.values())) if by_arm else set()
-    index = {a: {r["key"]: r for r in rows if r["key"] in keys} for a, rows in by_arm.items()}
+    index = {a: {r["key"]: r for r in rows} for a, rows in by_arm.items()}
     families: dict = {}
     for a, rows in index.items():
         for r in rows.values():
@@ -137,13 +136,17 @@ def summarise(by_arm: dict[str, list[dict]], base: str) -> dict:
     for a in index:
         if a == base:
             continue
-        b = sum(index[base][k]["passed"] and not index[a][k]["passed"] for k in keys)
-        c = sum(index[a][k]["passed"] and not index[base][k]["passed"] for k in keys)
-        vs[a] = {"only_base": b, "only_arm": c, "both": sum(index[base][k]["passed"] and index[a][k]["passed"] for k in keys),
-                 "neither": sum(not index[base][k]["passed"] and not index[a][k]["passed"] for k in keys),
+        keys = index[a].keys() & index.get(base, {}).keys()
+        B, A = index[base], index[a]
+        b = sum(B[k]["passed"] and not A[k]["passed"] for k in keys)
+        c = sum(A[k]["passed"] and not B[k]["passed"] for k in keys)
+        vs[a] = {"n": len(keys), "base_passes": sum(B[k]["passed"] for k in keys),
+                 "arm_passes": sum(A[k]["passed"] for k in keys), "only_base": b, "only_arm": c,
+                 "both": sum(B[k]["passed"] and A[k]["passed"] for k in keys),
+                 "neither": sum(not B[k]["passed"] and not A[k]["passed"] for k in keys),
                  "mcnemar_exact_p": round(mcnemar_exact(b, c), 4)}
-    return {"n": len(keys), "n_families": len(families),
-            "arms": {a: {"passes": sum(r["passed"] for r in rows.values()), "n": len(rows)} for a, rows in index.items()},
+    return {"n": len(index.get(base, {})), "n_families": len(families),
+            "arms": {a: {"passes": sum(bool(r["passed"]) for r in rows.values()), "n": len(rows)} for a, rows in index.items()},
             "families": families, "vs_base": vs}
 
 

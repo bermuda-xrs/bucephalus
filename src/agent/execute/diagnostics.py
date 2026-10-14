@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import importlib.util
+import io
 import json
+import tokenize
+import warnings
 import shutil
 import subprocess
 import sys
@@ -21,8 +24,44 @@ def ruff_command() -> list[str] | None:
     return None
 
 
-def _python(p: Path) -> list[str]:
+CONTROL = {0: "NUL", 9: "TAB", 13: "carriage return"}
+
+
+def escapes(source: str) -> str:
+    found = []
+    try:
+        for tok in tokenize.generate_tokens(io.StringIO(source).readline):
+            if tok.type != tokenize.STRING:
+                continue
+            bad = next((ord(c) for c in tok.string if ord(c) < 32 and c != NL), None)
+            if bad is not None:
+                name = CONTROL.get(bad, f"control character U+{bad:04X}")
+                found.append(f"line {tok.start[0]}: a {name} character inside a string literal; if a regex, path or "
+                             "escape was meant, write it escaped or as a raw string")
+    except (tokenize.TokenError, SyntaxError, ValueError):
+        pass
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        try:
+            compile(source, "<written>", "exec")
+        except (SyntaxError, ValueError):
+            pass
+    for w in caught:
+        msg = str(w.message)
+        if "invalid escape sequence" in msg:
+            found.append(f"line {w.lineno}: {msg}; use a raw string (r'...') or double the backslash")
+    if not found and chr(0) in source:
+        found.append(f"line {source[:source.index(chr(0))].count(NL) + 1}: a NUL character in the file")
+    return "escapes: " + ("; ".join(dict.fromkeys(found)) if found else "ok")
+
+
+def _python(p: Path, check_escapes: bool = True) -> list[str]:
     lines = []
+    if check_escapes:
+        try:
+            lines.append(escapes(p.read_text(encoding="utf-8")))
+        except (UnicodeDecodeError, OSError):
+            pass
     try:
         compile(p.read_text(encoding="utf-8"), str(p), "exec")
         lines.append("py_compile: ok")
@@ -95,9 +134,10 @@ CHECKS = {".py": _python, ".json": _json, ".yaml": _yaml, ".yml": _yaml, ".toml"
           ".js": _node, ".mjs": _node, ".cjs": _node}
 
 
-def diagnose(path: str | Path) -> str | None:
+def diagnose(path: str | Path, escapes: bool = True) -> str | None:
     p = Path(path)
     check = CHECKS.get(p.suffix.lower())
     if check is None or not p.is_file():
         return None
-    return ("diagnostics:" + NL + NL.join(check(p)))[:LIMIT]
+    found = _python(p, escapes) if check is _python else check(p)
+    return ("diagnostics:" + NL + NL.join(found))[:LIMIT]

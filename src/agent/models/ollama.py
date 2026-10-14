@@ -83,6 +83,7 @@ class OllamaBackend(BackendBase):
 
         client = self._client or httpx
         parts: list[str] = []
+        calls: list[dict] = []
         final: dict = {}
         try:
             if injecting_timeout(n):
@@ -102,6 +103,7 @@ class OllamaBackend(BackendBase):
                                 chunk = json.loads(line)
                             except ValueError:
                                 continue
+                            calls += (chunk.get("message") or {}).get("tool_calls") or []
                             piece = (chunk.get("message") or {}).get("content") or ""
                             if piece:
                                 parts.append(piece)
@@ -125,6 +127,15 @@ class OllamaBackend(BackendBase):
             raise BackendError(f"ollama call failed at {self.endpoint}: {e}") from e
 
         text = "".join(parts)
+        if calls and isinstance(calls[0], dict) and not text.strip():
+            fn = calls[0].get("function") or {}
+            args = fn.get("arguments") or {}
+            if isinstance(args, str):
+                try:
+                    args = json.loads(args)
+                except ValueError:
+                    args = {}
+            text = json.dumps({"kind": "action", "tool": fn.get("name", ""), "args": args})
         out_tokens = final.get("eval_count", 0) or watch.n
         watch.finish(out_tokens)
         return self._response(

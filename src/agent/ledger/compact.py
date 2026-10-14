@@ -15,6 +15,33 @@ EXACT_PATTERNS = [
 ]
 
 _COMPILED = [re.compile(p) for p in EXACT_PATTERNS]
+ID_RX = re.compile(r"\b[A-Z][A-Z0-9]+-\d{2,}\b")
+WORD_RX = re.compile(r"[a-z]{4,}")
+STOP = frozenset("with from that this have into each their what which about only answer json file work task report "
+                 "find read write when then them they there these those your".split())
+EVIDENCE_MAX = 800
+EVIDENCE_HEAD = "Evidence kept verbatim from observations that compaction dropped:"
+
+
+def evidence_lines(text: str, objective: str) -> list[str]:
+    terms = {w for w in WORD_RX.findall(objective.lower()) if w not in STOP}
+    ids, overlaps = [], []
+    for line in text.splitlines():
+        s = line.strip()
+        if not s:
+            continue
+        if ID_RX.search(s):
+            ids.append(s[:240])
+        elif len(terms & set(WORD_RX.findall(s.lower()))) >= 2:
+            overlaps.append(s[:240])
+    return ids + overlaps
+
+
+def _merge_evidence(old: list[str], new: list[str]) -> list[str]:
+    merged = list(dict.fromkeys(old + new))
+    while merged and sum(len(x) + 1 for x in merged) > EVIDENCE_MAX:
+        merged.pop(0)
+    return merged
 
 
 def extract_exact_strings(content: str, limit: int = 12) -> list[str]:
@@ -96,9 +123,13 @@ def _fold_tombstones(entries: list[LedgerEntry], budget: int) -> list[LedgerEntr
             if i == first or i not in folded_set]
 
 
-def compact(entries: list[LedgerEntry], target_tokens: int) -> list[LedgerEntry]:
+def compact(entries: list[LedgerEntry], target_tokens: int, objective: str | None = None) -> list[LedgerEntry]:
+    from ..kernel.types import join_taint
+
     keep: list[LedgerEntry] = []
     running = 0
+    pins: list[str] = []
+    sources = []
     for e in reversed(entries):
         if e.kind == "tombstone":
             keep.append(e)
@@ -112,8 +143,18 @@ def compact(entries: list[LedgerEntry], target_tokens: int) -> list[LedgerEntry]
             t = tombstone(e, exact)
             keep.append(t)
             running += t.n_tokens
-    return _fold_tombstones(list(reversed(keep)),
-                            max(200, int(target_tokens * TOMBSTONE_SHARE)))
+            if objective and e.kind == "observation":
+                pins = evidence_lines(e.content, objective) + pins
+                sources.append(e.taint)
+    out = _fold_tombstones(list(reversed(keep)), max(200, int(target_tokens * TOMBSTONE_SHARE)))
+    if not pins:
+        return out
+    old = next((e for e in out if e.label == "evidence"), None)
+    lines = _merge_evidence(old.content.split(chr(10))[1:] if old else [], pins)
+    note = LedgerEntry.observation(EVIDENCE_HEAD + chr(10) + chr(10).join(lines),
+                                   taint=join_taint(*sources, *( [old.taint] if old else [])), label="evidence")
+    note.pinned = True
+    return [e for e in out if e.label != "evidence"] + [note]
 
 
 def enforce_ceiling(

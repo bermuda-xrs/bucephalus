@@ -194,7 +194,7 @@ NOT_PATHS = {
     "run_code": {"code", "timeout_s"},
     "search_history": {"query", "limit", "offset"}, "web_fetch": {"url"},
     "web_search": {"query", "limit"}, "write_file": {"content"},
-    "grep": {"pattern"}, "read_file": {"page"},
+    "grep": {"pattern"}, "read_file": {"page"}, "edit_lines": {"start", "end", "content"},
 }
 
 
