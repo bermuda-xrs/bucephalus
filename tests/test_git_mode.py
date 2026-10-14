@@ -182,9 +182,16 @@ def test_review_a_worktree_whose_git_file_changed_is_refused(ctx, task, repo):
         commit_scope(path, ["work"], "bucephalus/c2", "m", expect=ident)
 
 
-def test_review_git_older_than_the_attribute_source_is_refused(monkeypatch, repo):
+def test_review_a_git_that_does_not_honour_the_empty_attribute_source_is_refused(monkeypatch, repo):
     from agent import gitmode
 
-    monkeypatch.setattr(gitmode, "git_version", lambda: (2, 39))
-    with pytest.raises(gitmode.GitModeError, match="2.40"):
+    monkeypatch.setattr(gitmode, "attr_source_honoured", lambda: False)
+    with pytest.raises(gitmode.GitModeError, match="attribute source"):
         gitmode.commit_scope(repo, ["work"], "bucephalus/x", "m")
+
+
+def test_review_this_git_is_probed_and_honours_it():
+    from agent import gitmode
+
+    gitmode.attr_source_honoured.cache_clear()
+    assert gitmode.attr_source_honoured() is True

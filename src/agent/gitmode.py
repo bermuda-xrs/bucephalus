@@ -3,14 +3,12 @@ from __future__ import annotations
 import functools
 import hashlib
 import os
-import re
 import subprocess
 import tempfile
 from pathlib import Path
 
 WORKTREES = ".bucephalus-worktrees"
 EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
-MIN_GIT = (2, 40)
 IDENTITY = {"GIT_AUTHOR_NAME": "bucephalus", "GIT_AUTHOR_EMAIL": "bucephalus@localhost",
             "GIT_COMMITTER_NAME": "bucephalus", "GIT_COMMITTER_EMAIL": "bucephalus@localhost",
             "GIT_TERMINAL_PROMPT": "0", "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": os.devnull,
@@ -24,16 +22,23 @@ class GitModeError(RuntimeError):
 
 
 @functools.lru_cache(maxsize=1)
-def git_version() -> tuple[int, ...]:
-    out = subprocess.run(["git", "version"], capture_output=True, text=True, timeout=30).stdout  # noqa: S603, S607
-    m = re.search(r"(\d+)\.(\d+)", out)
-    return (int(m.group(1)), int(m.group(2))) if m else (0, 0)
+def attr_source_honoured() -> bool:
+    env = {**os.environ, **IDENTITY}
+    try:
+        with tempfile.TemporaryDirectory(prefix="bucephalus-attrprobe-") as d:
+            subprocess.run(["git", "init", "-q", d], capture_output=True, timeout=30, env=env, check=True)  # noqa: S603, S607
+            Path(d, ".gitattributes").write_text("probe filter=probe" + chr(10), encoding="utf-8")
+            out = subprocess.run(["git", "-C", d, "check-attr", "filter", "--", "probe"], capture_output=True,  # noqa: S603, S607
+                                 text=True, timeout=30, env=env).stdout
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return out.strip().endswith("filter: unspecified")
 
 
 def _git(where, *args, env: dict | None = None, check: bool = True) -> subprocess.CompletedProcess:
-    if git_version() < MIN_GIT:
-        raise GitModeError(f"git mode needs git {MIN_GIT[0]}.{MIN_GIT[1]} or later: older git ignores the empty "
-                           "attribute source, so a filter in the repository's config could run")
+    if not attr_source_honoured():
+        raise GitModeError("this git does not honour an empty attribute source (GIT_ATTR_SOURCE), so a filter in the "
+                           "repository's config could run; git mode refuses")
     r = subprocess.run(["git", "-C", str(where), *HARDEN, *args], capture_output=True, text=True,  # noqa: S603, S607
                        encoding="utf-8", errors="replace", timeout=120, env={**os.environ, **IDENTITY, **(env or {})})
     if check and r.returncode != 0:
