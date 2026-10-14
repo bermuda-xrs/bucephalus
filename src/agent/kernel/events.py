@@ -96,6 +96,7 @@ EVENT_TYPES = frozenset(
         "human.message_delivered",
         "model.window_short",
         "plan.survey",
+        "pages.unread_held",
     }
 )
 

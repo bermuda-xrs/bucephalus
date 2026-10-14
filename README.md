@@ -394,8 +394,9 @@ tests/         the spec's acceptance tests, per milestone, + source invariants
   `skill_trials` data. `plan` and `review` are deliberately absent.
 
 - **`backends.<slot>.tool_profile`**: `full` (default, `edit_file`), `patch` (`apply_patch` instead) or
-  `small` (six tools, no code-as-action, `read_first` on). Only the executor slot's profile applies. `read_first`
-  and `observation_tokens` override the profile's defaults.
+  `small` (six tools, no code-as-action, `read_first` and `read_all_pages` on). Only the executor slot's profile
+  applies. `read_first`, `read_all_pages` and `observation_tokens` override the profile's defaults; `read_all_pages`
+  turns an answer given while an opened file has unread pages into a reminder naming them, three times at most.
 - **`long_files`**: how a file longer than the model can take at once reaches it. `pages` (default): `read_file`
   returns one page sized to the context, ending with the call for the next. `elide`: head and tail, the middle on
   request. `whole`: the fill ratio rises to 0.75 so it fits in full. The console's Settings can change it for new tasks.

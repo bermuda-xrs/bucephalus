@@ -47,6 +47,7 @@ ROWS: list[tuple[str, str, str, str]] = [
     ("that message reaches the next step", "human.message_delivered", "event", ""),
     ("the server holds less context than the config budgets", "model.window_short", "event", ""),
     ("what the planner read is kept as untrusted", "plan.survey", "event", ""),
+    ("an answer with unread pages became a continuation", "pages.unread_held", "event", ""),
 
     ("compaction tombstones an artifact", "session.opened", "tombstoned", ""),
     ("a session BOUNDARY is crossed", "session.opened", "rotate", ""),

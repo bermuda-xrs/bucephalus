@@ -375,6 +375,19 @@ def _run_task(ctx, task_id: str) -> TaskResult:
                 entries.append(LedgerEntry.observation(READ_FIRST_NOTE, taint=Taint.TRUSTED, label="read-first"))
                 continue
 
+            if parsed.kind == "final" and backend.cfg.requires_all_pages and _page_holds(ctx, task) < MAX_PAGE_HOLDS:
+                unread = _unread_pages(ctx, task)
+                if unread:
+                    n = _page_holds(ctx, task) + 1
+                    ctx.log.append(task.id, "pages.unread_held",
+                                   {"step": step, "n": n, "unread": {k: v[1] for k, v in unread.items()}})
+                    named = "; ".join("pages " + ", ".join(map(str, pages)) + " of " + shown
+                                      for shown, pages in unread.values())
+                    entries.append(LedgerEntry.observation(
+                        UNREAD_PAGES_NOTE.format(unread=named, left=MAX_PAGE_HOLDS - n),
+                        taint=Taint.TRUSTED, label="unread-pages"))
+                    continue
+
             if parsed.kind == "final" and _must_verify_first(ctx, task):
                 n = _verify_continuations(ctx, task) + 1
                 ctx.log.append(task.id, "verify.continued", {"step": step, "n": n})
@@ -495,6 +508,9 @@ def _run_task(ctx, task_id: str) -> TaskResult:
 
 MAX_VERIFY_CONTINUATIONS = 3
 MAX_STOP_BLOCKS = 3
+MAX_PAGE_HOLDS = 3
+UNREAD_PAGES_NOTE = ("Not yet: you have not read {unread}. Read each with read_file(path, page=N), then answer "
+                     "({left} reminder(s) left).")
 READ_FIRST_NOTE = ("No answer is accepted yet: look at something first with a tool (read a file, search, "
                    "run a command), then answer from what you saw.")
 
@@ -502,6 +518,32 @@ READ_FIRST_NOTE = ("No answer is accepted yet: look at something first with a to
 def _observed(ctx, task) -> bool:
     return ctx.conn.execute("SELECT 1 FROM events WHERE task_id=? AND type='tool.receipt' LIMIT 1",
                             (task.id,)).fetchone() is not None
+
+
+def _page_holds(ctx, task) -> int:
+    return ctx.conn.execute("SELECT COUNT(*) FROM events WHERE task_id=? AND type='pages.unread_held'",
+                            (task.id,)).fetchone()[0]
+
+
+def _unread_pages(ctx, task) -> dict[str, tuple[str, list[int]]]:
+    seen: dict[str, tuple[str, int, set]] = {}
+    for content, origin in ctx.conn.execute(
+            "SELECT content, origin_json FROM artifacts WHERE task_id=? AND kind='tool_output' ORDER BY created_at, rowid",
+            (task.id,)):
+        o = json.loads(origin)
+        if o.get("tool") != "read_file":
+            continue
+        try:
+            head = json.loads(content.split(chr(10) + "---" + chr(10), 1)[0])
+        except ValueError:
+            continue
+        if not isinstance(head, dict) or not head.get("pages"):
+            continue
+        shown, _, read = seen.get(head["path"], (o.get("args", {}).get("path", head["path"]), 0, set()))
+        read.add(head["page"])
+        seen[head["path"]] = (shown, head["pages"], read)
+    return {k: (shown, [p for p in range(1, total + 1) if p not in read])
+            for k, (shown, total, read) in seen.items() if len(read) < total}
 
 
 def _stop_blocks(ctx, task) -> int:

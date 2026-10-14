@@ -35,6 +35,7 @@ class BackendConfig(BaseModel):
     keep_alive: str = "30m"
     tool_profile: Literal["full", "patch", "small"] = "full"
     read_first: bool | None = None
+    read_all_pages: bool | None = None
     observation_tokens: int | None = None
     assumed_tokens_per_sec: float = 5.0
 
@@ -62,6 +63,10 @@ class BackendConfig(BaseModel):
     @property
     def requires_observation(self) -> bool:
         return self.tool_profile == "small" if self.read_first is None else self.read_first
+
+    @property
+    def requires_all_pages(self) -> bool:
+        return self.tool_profile == "small" if self.read_all_pages is None else self.read_all_pages
 
     @property
     def needs_action_envelope(self) -> bool:
