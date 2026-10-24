@@ -111,10 +111,11 @@ def _read_only_survey(ctx, task) -> str:
         if is_protected(str(scope), ctx.config.root, state):
             out.append(f"{scope}: protected state - not read (the gate refuses it too)")
         elif p.is_dir():
-            names = sorted(x.name for x in list(p.iterdir())[:80])
+            names = sorted(x.name for x in p.iterdir())[:80]
             out.append(f"{scope}/ -> {', '.join(names)}")
         elif p.is_file():
-            head = p.read_text(encoding="utf-8", errors="replace")[:2000]
+            with p.open(encoding="utf-8", errors="replace") as fh:
+                head = fh.read(2000)
             out.append(f"{scope}:\n{head}")
         else:
             out.append(f"{scope}: does not exist yet")
