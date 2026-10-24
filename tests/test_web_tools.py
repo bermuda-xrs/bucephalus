@@ -186,9 +186,15 @@ def test_an_unreachable_robots_txt_allows_rather_than_blocks(monkeypatch):
     import agent.net.politeness as pol
 
     pol.reset()
-    monkeypatch.setattr(pol.httpx, "get",
-                        lambda *a, **k: (_ for _ in ()).throw(OSError("down")))
-    pol.check_robots("https://example.com/anything")
+    asked = []
+
+    def down(*a, **k):
+        asked.append(a[1] if len(a) > 1 else k.get("url"))
+        raise OSError("down")
+
+    monkeypatch.setattr(pol.httpx, "stream", down)
+    pol.check_robots("https://example.com/anything")  # no RobotsRefused: unreachable allows
+    assert asked == ["https://example.com/robots.txt"] and pol._robots["https://example.com"][1] is None  # noqa: SLF001
     pol.reset()
 
 
