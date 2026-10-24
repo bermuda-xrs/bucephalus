@@ -186,29 +186,26 @@ def run_with_backend_retry(ctx, spec: dict, run_ix: int, key: str) -> dict:
                 "free_tokens": 0, "cost_usd": 0.0,
                 "cache_hit_ratio": None,
             }
-        except BackendError:
+        except BackendError as e:
+            print(f"    {key}: backend error, retrying once - {e}", flush=True)
+            time.sleep(10)
             break
 
-    for attempt in (1, 2):
-        try:
-            return run_once(ctx, spec, run_ix)
-        except BackendError as e:
-            if attempt == 1:
-                print(f"    {key}: backend error, retrying once - {e}", flush=True)
-                time.sleep(10)
-                continue
-            print(f"    {key}: backend error again, recording as UNMEASURED",
-                  flush=True)
-            return {
-                "run": run_ix, "task_id": None, "status": "backend_error",
-                "passed": False, "unmeasured": True, "wall_s": 0.0,
-                "free_gb_before": None, "free_gb_after": None,
-                "memory_suspect": False, "commit_ratio": None,
-                "commit_ratio_high": False, "wall_outlier": False,
-                "worker_rss_before_gb": None, "worker_rss_after_gb": None,
-                "free_tokens": 0, "cost_usd": 0.0, "error": str(e),
-                "cache_hit_ratio": None,
-            }
+    try:
+        return run_once(ctx, spec, run_ix)
+    except BackendError as e:
+        print(f"    {key}: backend error again, recording as UNMEASURED",
+              flush=True)
+        return {
+            "run": run_ix, "task_id": None, "status": "backend_error",
+            "passed": False, "unmeasured": True, "wall_s": 0.0,
+            "free_gb_before": None, "free_gb_after": None,
+            "memory_suspect": False, "commit_ratio": None,
+            "commit_ratio_high": False, "wall_outlier": False,
+            "worker_rss_before_gb": None, "worker_rss_after_gb": None,
+            "free_tokens": 0, "cost_usd": 0.0, "error": str(e),
+            "cache_hit_ratio": None,
+        }
 
 
 def assert_machine_fault_never_scored_as_failure(row: dict) -> None:

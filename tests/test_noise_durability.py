@@ -243,3 +243,20 @@ def test_resume_refuses_a_ledger_written_under_a_different_task_order(tmp_path):
 
     same = noise.load_completed(led, noise.run_signature(SeedA(), 2))
     assert len(same) == 1, "the SAME seed must still resume, or nothing resumes"
+
+
+def test_a_backend_error_is_retried_once_not_twice(monkeypatch):
+    import noise
+
+    from agent.models.base import BackendError
+
+    runs = []
+
+    def failing(ctx, spec, run_ix):
+        runs.append(run_ix)
+        raise BackendError("server went away")
+
+    monkeypatch.setattr(noise, "run_once", failing)
+    monkeypatch.setattr(noise.time, "sleep", lambda s: None)
+    row = noise.run_with_backend_retry(None, {}, 0, "k")
+    assert row["status"] == "backend_error" and len(runs) == 2
