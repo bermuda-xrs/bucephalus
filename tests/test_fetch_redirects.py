@@ -38,3 +38,19 @@ def test_a_redirect_loop_stops(monkeypatch):
     _client_with(monkeypatch, lambda req: httpx.Response(302, headers={"location": "http://public.example/again"}))
     with pytest.raises(F.FetchError, match="redirect"):
         F.fetch_with_provenance("http://public.example/x", polite=False)
+
+
+def test_a_robots_txt_that_redirects_is_not_followed(monkeypatch):
+    import agent.net.politeness as pol
+
+    pol.reset()
+    seen = []
+
+    def handler(req):
+        seen.append(str(req.url))
+        return httpx.Response(302, headers={"location": "http://127.0.0.1:9/internal"})
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    monkeypatch.setattr(pol.httpx, "stream", client.stream)
+    pol.check_robots("http://public.example/page")
+    assert seen == ["http://public.example/robots.txt"]

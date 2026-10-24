@@ -42,7 +42,7 @@ def _robots_for(url: str, timeout_s: float = 5.0):
         body = ""
         with httpx.stream("GET", f"{root}/robots.txt", timeout=timeout_s,
                           headers={"User-Agent": USER_AGENT},
-                          follow_redirects=True) as r:
+                          follow_redirects=False) as r:
             if r.status_code == 200:
                 for chunk in r.iter_text():
                     body += chunk
