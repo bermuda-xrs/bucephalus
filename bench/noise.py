@@ -362,12 +362,9 @@ def _main(argv=None) -> int:
     else:
         print(f"task order seed (given): {args.order_seed}")
 
-    try:
-        _out = Path(args.out)
-        if not _out.is_absolute():
-            _out = Path(args.config).resolve().parent / _out
-        from agent.runlock import measurement_lock_path
+    from agent.runlock import measurement_lock_path
 
+    try:
         lock = RunLock(measurement_lock_path(Path(args.config).resolve().parent),
                        "noise floor").acquire()
     except RunLockBusy as e:
@@ -418,8 +415,6 @@ def _noise_floor(args) -> int:
             print("WARNING: already at or above the suspect commit ratio "
                   "before the first task. Paging rewrites a seconds-based "
                   "measurement - one call has been seen 18x slower.")
-
-    ctx.config.isolate_retrieval = True
 
     if args.executor:
         from agent.models.registry import build_backends
