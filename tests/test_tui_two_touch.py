@@ -140,3 +140,16 @@ def test_closing_the_tui_mid_task_pauses_it_and_waits_for_its_thread(ctx, worksp
     tid = asyncio.run(go())
     assert not [t for t in threading.enumerate() if t.name.startswith("tui-")], "a TUI thread outlived the app"
     assert _status(ctx, tid) in ("paused", "done")
+
+
+def test_a_timer_tick_after_the_app_closed_touches_no_widget(ctx, workspace):
+    async def go():
+        app = BucephalusTUI(ctx)
+        async with app.run_test(size=(140, 44)) as pilot:
+            await pilot.pause(0.2)
+        return app
+
+    app = asyncio.run(go())
+    app._spin()  # noqa: SLF001
+    app.refresh_side()
+    app.refresh_budget()

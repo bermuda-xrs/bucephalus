@@ -73,6 +73,8 @@ class BucephalusTUI(App):
         self._unsubscribe = None
         self._side: dict[str, list] = {}
         self._threads: list[tuple[threading.Thread, str | None]] = []
+        self._gone = False  # set on unmount: a timer tick or a posted call after it finds no widgets
+        self._ticks: list = []
         self._tick = 0
         self._model = self._executor_model()
 
@@ -110,8 +112,7 @@ class BucephalusTUI(App):
         yield Footer()
 
     def on_mount(self) -> None:
-        self.set_interval(0.12, self._spin)
-        self.set_interval(5.0, self.refresh_side)
+        self._ticks = [self.set_interval(0.12, self._spin), self.set_interval(5.0, self.refresh_side)]
         self.refresh_side()
         self.refresh_budget()
         self.query_one("#plan", Static).display = False
@@ -120,6 +121,8 @@ class BucephalusTUI(App):
             self.attach(self.task_id)
 
     def refresh_side(self) -> None:
+        if self._gone:
+            return
         from ..control import conversations as conv
 
         rows = {"#needs": [(f"wants {a['tool']}: parked", f"task:{a['task_id']}") for a in self.ctx.pending_approvals()],
@@ -254,12 +257,15 @@ class BucephalusTUI(App):
         panel.display = True
 
     def _spin(self) -> None:
-        if self.state.waiting:
+        if self.state.waiting and not self._gone:
             self._tick += 1
             self.refresh_budget()
 
     def refresh_budget(self) -> None:
         from ..control.panels import context_meter
+
+        if self._gone:
+            return
 
         b = self.state.budget
         bar_w = 16
@@ -412,7 +418,8 @@ class BucephalusTUI(App):
         self.post_message(UiCall(fn, args, kw))
 
     def on_ui_call(self, m: UiCall) -> None:
-        m.fn(*m.args, **m.kw)
+        if not self._gone:
+            m.fn(*m.args, **m.kw)
 
     def _spawn(self, target, arg, name: str, runs: str | None = None) -> None:
         t = threading.Thread(target=target, args=() if arg is None else (arg,), daemon=True, name=name)
@@ -423,6 +430,9 @@ class BucephalusTUI(App):
         from ..kernel.tasks import load_task, set_status
         from ..kernel.types import TaskStatus
 
+        self._gone = True
+        for timer in self._ticks:
+            timer.stop()
         if self._unsubscribe is not None:
             self._unsubscribe()
         for t, tid in self._threads:
