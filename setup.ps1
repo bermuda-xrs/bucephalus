@@ -32,7 +32,7 @@ if (-not (Test-Path "$venv\Scripts\python.exe")) {
 }
 & "$venv\Scripts\python.exe" -m pip install --quiet --upgrade pip
 & "$venv\Scripts\python.exe" -m pip install --quiet `
-    pydantic httpx anthropic pyyaml fastapi uvicorn scipy rich textual platformdirs pytest pytest-asyncio pytest-xdist ruff `
+    pydantic httpx anthropic pyyaml fastapi uvicorn scipy rich textual platformdirs pytest pytest-asyncio pytest-xdist pytest-cov ruff pywebview `
     "sympy==1.13.3"
 
 Write-Host "`nverifying..." -ForegroundColor Cyan
