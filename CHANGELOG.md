@@ -10,6 +10,23 @@
 Dates are commit dates. `0.1.0` is not released yet — see "Unreleased" for
 what still stands between here and a first iteration.
 
+## Harness 16 - 2026-10-25 (HARNESS_VERSION 15 -> 16; a second whole-code review)
+
+Prompt bytes are unchanged; the version moves because the planner is now offered fewer criteria. Each fix red first:
+- Broken: a Telegram refusal left its task parked for good, and the button read "denyd"; the console's Measurement
+  pane showed no counts (it read `r.count`, the inventory returns `n`); `bucephalus.ps1` returned 0 under `-File`
+  whatever `exec` returned; a suite import with one bad file left a half-imported suite; `execution` and
+  `citation_check` were registered with no script and no sources, so no task could pass them (removed).
+- Unsafe: a misspelled config key is now named on stderr and in the run's provenance, its value never kept (a
+  misspelled secret would otherwise reach the Harness Card and run records).
+- Wasteful: routing took a median by fetching every call row each decision, and the loop's per-type event counts
+  scanned a task's whole log; both are indexed now. `noise.py` ran a task three times on a backend error it
+  "retried once"; `mutate.py` leaked a file handle per mutant.
+- Slop: a link URL in an answer could carry `<em>` in its href; a suite goal was cut after escaping; three bench
+  `main(argv)` ignored argv; a copied McNemar test; unused state and paths; the tier-3 memory interface no code used.
+- Undeclared: `pywebview` (the desktop app) is the `desktop` extra; `setup.ps1` installs what `pyproject.toml`
+  declares, held by a test. A robots test that fetched example.com for real now simulates the outage it names.
+
 ## Harness 15 - 2026-10-15/24 (HARNESS_VERSION 14 -> 15; iteration 4, the S-tier items needing no training)
 
 Measurement: eight generated task families (`src/agent/families.py`, 40 seeds each, even seeds dev, odd held-out),
