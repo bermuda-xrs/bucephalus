@@ -38,6 +38,7 @@ CREATE TABLE IF NOT EXISTS events (
     UNIQUE(task_id, seq)
 );
 CREATE INDEX IF NOT EXISTS idx_events_task ON events(task_id, seq);
+CREATE INDEX IF NOT EXISTS idx_events_type ON events(task_id, type);
 
 CREATE TABLE IF NOT EXISTS artifacts (
     id           TEXT PRIMARY KEY,
