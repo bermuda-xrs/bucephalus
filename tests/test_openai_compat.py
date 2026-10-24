@@ -255,3 +255,18 @@ def test_the_configs_differ_only_where_they_are_meant_to():
     for key in ("limits", "gate", "autonomy", "active_local_tier",
                 "compress_observations_over_tokens"):
         assert a[key] == b[key], f"{key} differs"
+
+
+def test_a_streamed_native_tool_call_becomes_the_action_the_loop_reads():
+    import json
+
+    lines = sse(
+        '{"choices":[{"delta":{"tool_calls":[{"index":0,"id":"c1","type":"function",'
+        '"function":{"name":"read_file","arguments":""}}]}}]}',
+        '{"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{\\"path\\": "}}]}}]}',
+        '{"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"\\"work/a.txt\\"}"}}]}}]}',
+        '{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}',
+    )
+    b, _ = backend(lines)
+    got = json.loads(b.complete("s", "u", [{"name": "read_file", "input_schema": {}}], 64, 0.0).text)
+    assert got == {"kind": "action", "tool": "read_file", "args": {"path": "work/a.txt"}}

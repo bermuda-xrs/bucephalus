@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import os
+import json
 import time
 
 from ..config import BackendConfig
@@ -21,8 +21,6 @@ class AnthropicBackend(BackendBase):
                 import anthropic
             except ImportError as e:  # pragma: no cover
                 raise BackendError("pip install anthropic") from e
-            if not os.environ.get("ANTHROPIC_API_KEY"):
-                pass
             self._client = anthropic.Anthropic()
         return self._client
 
@@ -83,12 +81,19 @@ class AnthropicBackend(BackendBase):
             cache_write_tokens=getattr(resp.usage, "cache_creation_input_tokens", 0) or 0,
         )
         return self._response(
-            extract_text(resp),
+            action_or_text(resp),
             usage,
             t0,
             {"stop_reason": getattr(resp, "stop_reason", None),
              "model": getattr(resp, "model", self.model)},
         )
+
+
+def action_or_text(resp) -> str:
+    call = next((b for b in getattr(resp, "content", []) or [] if getattr(b, "type", None) == "tool_use"), None)
+    if call is None:
+        return extract_text(resp)
+    return json.dumps({"kind": "action", "tool": call.name, "args": call.input or {}})
 
 
 def extract_text(resp) -> str:

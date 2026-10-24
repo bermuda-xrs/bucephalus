@@ -84,3 +84,15 @@ def test_a_refusal_is_still_reported_after_streaming():
     b, _ = backend([], final("", stop="refusal"))
     with pytest.raises(BackendError):
         b.complete("PREFIX", "tail", on_chunk=lambda t: None)
+
+
+def test_a_native_tool_call_becomes_the_action_the_loop_reads():
+    import json
+
+    msg = NS(content=[NS(type="text", text="I'll read it."),
+                      NS(type="tool_use", id="t1", name="read_file", input={"path": "work/a.txt"})],
+             stop_reason="tool_use", stop_details=None, model="claude-opus-5",
+             usage=NS(input_tokens=10, output_tokens=5, cache_read_input_tokens=0, cache_creation_input_tokens=0))
+    b, _ = backend(["I'll read it."], msg)
+    got = json.loads(b.complete("P", "t", tools=[{"name": "read_file", "input_schema": {}}]).text)
+    assert got == {"kind": "action", "tool": "read_file", "args": {"path": "work/a.txt"}}

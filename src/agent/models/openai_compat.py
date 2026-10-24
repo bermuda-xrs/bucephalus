@@ -111,6 +111,7 @@ class OpenAICompatibleBackend(BackendBase):
 
         client = self._client or httpx
         parts: list[str] = []
+        calls: dict[int, dict] = {}
         usage_block: dict = {}
         finish_reason: str | None = None
         try:
@@ -143,7 +144,13 @@ class OpenAICompatibleBackend(BackendBase):
                     choices = chunk.get("choices") or []
                     piece = ""
                     if choices:
-                        piece = (choices[0].get("delta") or {}).get("content") or ""
+                        delta = choices[0].get("delta") or {}
+                        piece = delta.get("content") or ""
+                        for tc in delta.get("tool_calls") or []:
+                            fn = tc.get("function") or {}
+                            c = calls.setdefault(tc.get("index", 0), {"name": "", "arguments": ""})
+                            c["name"] = fn.get("name") or c["name"]
+                            c["arguments"] += fn.get("arguments") or ""
                         finish_reason = choices[0].get("finish_reason") or finish_reason
                     if piece:
                         parts.append(piece)
@@ -153,7 +160,7 @@ class OpenAICompatibleBackend(BackendBase):
                     if finish_reason:
                         continue
                     watch.judge()
-                if not done and not finish_reason and not parts:
+                if not done and not finish_reason and not parts and not calls:
                     raise BackendError(
                         f"stream from {self.base_url} ended with no content "
                         "and no finish_reason"
@@ -169,6 +176,13 @@ class OpenAICompatibleBackend(BackendBase):
                 f"openai-compatible call failed at {self.base_url}: {e}") from e
 
         text = "".join(parts)
+        if calls:
+            first = calls[min(calls)]
+            try:
+                args = json.loads(first["arguments"] or "{}")
+            except ValueError:
+                args = {}
+            text = json.dumps({"kind": "action", "tool": first["name"], "args": args if isinstance(args, dict) else {}})
         out_tokens = int(usage_block.get("completion_tokens") or 0) or watch.n
         watch.finish(out_tokens)
         return self._response(
