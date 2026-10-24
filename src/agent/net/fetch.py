@@ -5,13 +5,14 @@ import re
 import socket
 import time
 from html.parser import HTMLParser
-from urllib.parse import urlparse
+from urllib.parse import urljoin, urlparse
 
 import httpx
 
 from ..kernel.events import sha256_hex
 
 MAX_BYTES = 400_000
+MAX_REDIRECTS = 5
 TIMEOUT_S = 20.0
 ALLOWED_SCHEMES = ("http", "https")
 TEXTY = (
@@ -87,22 +88,35 @@ def fetch_with_provenance(url: str, *, max_bytes: int = MAX_BYTES,
     fetched_at = time.time()
     final_url = url
     try:
-        with httpx.Client(follow_redirects=True, timeout=timeout_s,
+        with httpx.Client(follow_redirects=False, timeout=timeout_s,
                           headers={"User-Agent": "bucephalus/0.1 (personal agent)"}) as c:
-            with c.stream("GET", url) as r:
-                r.raise_for_status()
-                final_url = str(r.url)
-                ctype = r.headers.get("content-type", "").lower()
-                if ctype and not any(t in ctype for t in TEXTY):
-                    raise FetchError(f"content-type {ctype!r} is not text")
-                chunks, total = [], 0
-                for chunk in r.iter_bytes():
-                    total += len(chunk)
-                    if total > max_bytes:
-                        chunks.append(chunk[: max_bytes - (total - len(chunk))])
-                        break
-                    chunks.append(chunk)
-                raw = b"".join(chunks).decode("utf-8", errors="replace")
+            for _ in range(MAX_REDIRECTS + 1):
+                with c.stream("GET", final_url) as r:
+                    if r.is_redirect:
+                        # each hop is checked as the first was: a public page may redirect to loopback or the LAN
+                        nxt = urlparse(urljoin(final_url, r.headers.get("location", "")))
+                        if nxt.scheme not in ALLOWED_SCHEMES or not nxt.hostname:
+                            raise FetchError(f"redirect to {nxt.geturl()!r} refused: not http(s)")
+                        if not allow_private and not _is_public(nxt.hostname):
+                            raise FetchError(f"refusing to follow a redirect to a private/loopback address: "
+                                             f"{nxt.hostname}")
+                        final_url = nxt.geturl()
+                        continue
+                    r.raise_for_status()
+                    ctype = r.headers.get("content-type", "").lower()
+                    if ctype and not any(t in ctype for t in TEXTY):
+                        raise FetchError(f"content-type {ctype!r} is not text")
+                    chunks, total = [], 0
+                    for chunk in r.iter_bytes():
+                        total += len(chunk)
+                        if total > max_bytes:
+                            chunks.append(chunk[: max_bytes - (total - len(chunk))])
+                            break
+                        chunks.append(chunk)
+                    raw = b"".join(chunks).decode("utf-8", errors="replace")
+                    break
+            else:
+                raise FetchError(f"more than {MAX_REDIRECTS} redirects")
     except FetchError:
         raise
     except Exception as e:  # noqa: BLE001

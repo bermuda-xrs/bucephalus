@@ -119,47 +119,20 @@ def test_web_output_is_always_untrusted():
 def test_provenance_is_recorded_on_the_artifact(tmp_path, monkeypatch):
     ctx = make_ctx(tmp_path)
 
-    class FakeResp:
-        status_code = 200
-        headers = {"content-type": "text/plain"}
-        url = "https://example.com/final"
-
-        def raise_for_status(self):
-            pass
-
-        def iter_bytes(self):
-            yield b"the page body"
-
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *a):
-            return False
+    import httpx
 
     import agent.net.fetch as fetch_mod
 
     monkeypatch.setattr(fetch_mod, "_is_public", lambda host: True)
 
-    class FakeClient:
-        def __init__(self, *a, **k):
-            pass
+    def handler(req):
+        if req.url.path == "/x":
+            return httpx.Response(302, headers={"location": "/final"})
+        return httpx.Response(200, headers={"content-type": "text/plain"}, content=b"the page body")
 
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *a):
-            return False
-
-        def stream(self, *a, **k):
-            return FakeResp()
-
-    orig = fetch_mod.httpx.Client
-    fetch_mod.httpx.Client = FakeClient
-    try:
-        got = fetch_mod.fetch_with_provenance("https://example.com/x",
-                                              polite=False)
-    finally:
-        fetch_mod.httpx.Client = orig
+    real = httpx.Client
+    monkeypatch.setattr(fetch_mod.httpx, "Client", lambda **kw: real(transport=httpx.MockTransport(handler), **kw))
+    got = fetch_mod.fetch_with_provenance("https://example.com/x", polite=False)
 
     prov = got["provenance"]
     assert prov["url"] == "https://example.com/x"
