@@ -51,20 +51,19 @@ One measurement process at a time (`src/agent/runlock.py`); nothing else runs du
 
 ## State
 
-Verified 2026-10-24 against commit `cab8a64` on `harness-14`: Windows suite, ruff, the frozen gate and a task through the
-rebuilt `bucephalus.exe`'s window, and the WSL2 suite; the review fixes after it are gated before `main` moves (see the
-Branch row).
+Verified 2026-10-25 against commit `f2ed634` on `harness-14`: Windows suite, ruff, the frozen gate and a task through the
+rebuilt `bucephalus.exe`'s window, and the WSL2 suite (see the Branch row for whether it reached `main`).
 
 | Fact | Value | Regenerate with |
 |---|---|---|
-| Branch | `harness-14` (iteration 4 and the whole-source review); `main` is at tag `iteration-3-closed` and is fast-forwarded only after the suite, the frozen gate, the frozen e2e and the WSL2 suite pass on the tip; no remote | `git branch --show-current` |
+| Branch | `main`, fast-forwarded from `harness-14` (iteration 4 and the whole-source review) after the suite, the frozen gate, the frozen e2e and the WSL2 suite passed; tag `iteration-4-closed`; no remote | `git branch --show-current` |
 | Harness version | **15**, bumped 2026-10-15 for iteration 4 (CHANGELOG "Iteration 4"); numbers from 14 and earlier do not compare | `grep HARNESS_VERSION src/agent/__init__.py` |
 | Toolset version | **7** | `grep TOOLSET_VERSION src/agent/__init__.py` |
 | Tests | not written down | `python -m pytest tests -q`; skips are live-credential tests (D26) and other-OS tests |
 | Lint | bug rules only | `python -m ruff check src tests scripts packaging demo.py` |
 | Open issues | `docs/DEFERRED.md`, open entries only | its state table |
 | CLI | 30 subcommands, each smoke-tested | `.\bucephalus.ps1 --help` |
-| Platforms | Windows. POSIX has run six times, in WSL2 (`docs/evidence/wsl-2026-10-12/` is the last full checklist; the suite passed again 2026-10-24); bare-metal Linux never, and macOS (`src/agent/platform/darwin.py`) has never executed anywhere | `docs/PLATFORMS.md` section 5 is the checklist |
+| Platforms | Windows. POSIX has run six times, in WSL2 (`docs/evidence/wsl-2026-10-12/` is the last full checklist; the suite passed again 2026-10-25); bare-metal Linux never, and macOS (`src/agent/platform/darwin.py`) has never executed anywhere | `docs/PLATFORMS.md` section 5 is the checklist |
 | Security posture | the capability gate is the boundary; the sandbox (Job Object limits, advisory path/network fence) constrains a mistaken agent, not a hostile one: D32 | |
 | Phase program | complete | `RELEASE.md`, "ITERATION TWO: COMPLETE" |
 | Running now | nothing | `Get-Process python, ollama -ErrorAction SilentlyContinue` |
