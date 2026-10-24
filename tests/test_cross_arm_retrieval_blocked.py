@@ -176,17 +176,17 @@ def test_an_arm_can_expand_an_artifact_whose_bytes_another_arm_wrote_first(conn)
     make_attempt(conn, "t_second", "same goal")
     SAME = chr(10).join(["work/", "output/", "input.json"])
 
-    aid = write_artifact(conn, "t_first", "tool_output", SAME,
-                         Taint.UNTRUSTED, {"tool": "list_dir"})
-    again = write_artifact(conn, "t_second", "tool_output", SAME,
+    first = write_artifact(conn, "t_first", "tool_output", SAME,
                            Taint.UNTRUSTED, {"tool": "list_dir"})
-    assert aid == again, "content addressing means one row"
+    aid = write_artifact(conn, "t_second", "tool_output", SAME,
+                         Taint.UNTRUSTED, {"tool": "list_dir"})
+    assert aid != first, "each attempt has its own row, whoever wrote the bytes first"
 
-    for tid in ("t_first", "t_second"):
+    for tid, art in (("t_first", first), ("t_second", aid)):
         conn.execute(
             "INSERT INTO events(task_id, seq, type, payload_json, prev_hash,"
             " hash, created_at) VALUES (?,?,?,?,?,?,?)",
-            (tid, 99, "artifact.written", json.dumps({"id": aid,
+            (tid, 99, "artifact.written", json.dumps({"id": art,
                                                       "kind": "tool_output"}),
              "x", "y", _t.time()))
     conn.commit()
@@ -195,6 +195,8 @@ def test_an_arm_can_expand_an_artifact_whose_bytes_another_arm_wrote_first(conn)
     assert tool_expand_artifact(ctx, Task("t_second"), aid)["ok"] is True, (
         "an arm must be able to expand output it produced, even when an "
         "earlier arm produced the same bytes first")
+    assert tool_expand_artifact(ctx, Task("t_second"), first)["ok"] is False, (
+        "and not the other arm's copy")
 
     make_attempt(conn, "t_stranger", "unrelated")
     assert tool_expand_artifact(ctx, Task("t_stranger"), aid)["ok"] is False, (

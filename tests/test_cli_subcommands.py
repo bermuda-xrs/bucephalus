@@ -405,7 +405,8 @@ def test_skills_lists_the_store(cli):
 
 
 def test_skills_add_stores_a_candidate_and_warns_about_provenance(cli):
-    r = cli("skills", "--add", str(cli.root / "a_skill.md"), "--name", "added")
+    (cli.root / "another_skill.md").write_text("# dates\n\nWrite dates as YYYY-MM-DD.\n", encoding="utf-8")
+    r = cli("skills", "--add", str(cli.root / "another_skill.md"), "--name", "added")
     assert "as a candidate" in r.stdout
     assert "refuses every paired trial" in r.stdout, (
         "an undeclared drafting set must be stated when the skill is created")
@@ -413,6 +414,14 @@ def test_skills_add_stores_a_candidate_and_warns_about_provenance(cli):
     n = c.execute("SELECT COUNT(*) FROM skills WHERE name='added'").fetchone()[0]
     c.close()
     assert n == 1
+
+
+def test_skills_add_of_a_body_already_stored_is_refused_and_leaves_it_as_it_was(cli):
+    r = cli("skills", "--add", str(cli.root / "a_skill.md"), "--name", "renamed", expect=1)
+    assert "already stored" in r.stdout
+    c = cli.conn()
+    assert c.execute("SELECT name FROM skills WHERE id=?", (cli.skill_id,)).fetchone()[0] == "units"
+    c.close()
 
 
 def test_skills_add_of_a_missing_file_is_exit_1(cli):
