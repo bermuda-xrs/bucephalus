@@ -133,3 +133,12 @@ def spend(
             "total_usd": round(task.budget.spent_usd, 8),
         },
     )
+
+
+def steer(conn: sqlite3.Connection, log: EventLog, task_id: str, correction: str) -> Task:
+    parent = load_task(conn, task_id)
+    log.append(task_id, "human.steered", {"correction": correction})
+    contract = parent.contract.model_copy(update={"goal": parent.contract.goal + f"\n\n[steered] {correction}"})
+    child = create_task(conn, log, contract, parent.budget.model_copy(), parent_id=task_id)
+    set_status(conn, log, parent, TaskStatus.PAUSED, "superseded by steer")
+    return child

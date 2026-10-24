@@ -18,7 +18,7 @@ from .context import AgentContext
 from .execute.loop import run_task
 from .instrument.report import pareto_points, run_report, write_calls_csv, write_run_json
 from .kernel.integrity import verify_all
-from .kernel.tasks import create_task, load_task, set_status
+from .kernel.tasks import create_task, load_task
 from .kernel.types import Budget, TaskContract
 from .plan.planner import approve_plan, draft_plan, load_plan, reject_plan
 from .skills.gate import decay_pass, evaluate_skill, promote
@@ -510,18 +510,9 @@ def cmd_say(ctx, args, console) -> int:
 
 
 def cmd_steer(ctx, args, console) -> int:
-    from .kernel.types import TaskStatus
+    from .kernel.tasks import steer
 
-    parent = load_task(ctx.conn, args.task_id)
-    ctx.log.append(args.task_id, "human.steered", {"correction": args.correction})
-    child_contract = parent.contract.model_copy(
-        update={"goal": parent.contract.goal + f"\n\n[steered] {args.correction}"}
-    )
-    child = create_task(
-        ctx.conn, ctx.log, child_contract, parent.budget.model_copy(),
-        parent_id=args.task_id,
-    )
-    set_status(ctx.conn, ctx.log, parent, TaskStatus.PAUSED, "superseded by steer")
+    child = steer(ctx.conn, ctx.log, args.task_id, args.correction)
     console.print(f"forked into [bold]{child.id}[/bold]; parent paused, history intact")
     console.print(f"next: bucephalus run {child.id}")
     return 0

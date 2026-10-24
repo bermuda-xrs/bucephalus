@@ -256,15 +256,10 @@ def create_app(ctx: AgentContext) -> FastAPI:
 
     @app.post("/tasks/{task_id}/steer")
     def post_steer(task_id: str, body: Steer) -> dict:
-        parent = _task(task_id)
-        ctx.log.append(task_id, "human.steered", {"correction": body.correction})
-        child_contract = parent.contract.model_copy(
-            update={"goal": parent.contract.goal + f"\n\n[steered] {body.correction}"}
-        )
-        child = create_task(
-            ctx.conn, ctx.log, child_contract, parent.budget.model_copy(), parent_id=task_id
-        )
-        set_status(ctx.conn, ctx.log, parent, TaskStatus.PAUSED, "superseded by steer")
+        from ..kernel.tasks import steer
+
+        _task(task_id)
+        child = steer(ctx.conn, ctx.log, task_id, body.correction)
         return {"child_task_id": child.id, "parent_task_id": task_id}
 
     @app.post("/tasks/{task_id}/message")
