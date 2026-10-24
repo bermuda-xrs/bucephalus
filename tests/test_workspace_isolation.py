@@ -80,3 +80,12 @@ def test_the_paired_trial_spec_carries_fixtures():
     spec = TaskSpec(key="E01", goal="g", fixtures={"work/E01/x": "1"})
     assert spec.fixtures == {"work/E01/x": "1"}
     assert TaskSpec(key="E02", goal="g").fixtures == {}
+
+
+@pytest.mark.parametrize("rel", ["../outside.txt", "work/../../outside.txt", "src/agent/evil.py", ".git/hooks/x"])
+def test_a_fixture_may_not_land_outside_the_root_or_in_protected_folders(tmp_path, rel):
+    root = tmp_path / "root"
+    root.mkdir()
+    with pytest.raises(UnsafeScope):
+        reset_workspace(root, ["work"], {rel: "x"})
+    assert not (tmp_path / "outside.txt").exists() and not (root / "src").exists() and not (root / ".git").exists()

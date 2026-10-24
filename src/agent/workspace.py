@@ -14,38 +14,36 @@ def _resolve(root: Path, rel: str) -> Path:
     return Path(root, rel).resolve()
 
 
+PROTECTED = frozenset({"anchor", "skills_store", "src", "tests", "bench", "spec", "docs", "examples", ".git", "themes",
+                       "assets"})
+
+
+def _inside(root: Path, rel: str, what: str) -> Path:
+    target = _resolve(root, rel)
+    if target == root:
+        raise UnsafeScope(f"{what} {rel!r} resolves to the project root")
+    try:
+        inside = target.relative_to(root)
+    except ValueError as e:
+        raise UnsafeScope(f"{what} {rel!r} resolves outside the project root") from e
+    if inside.parts[0] in PROTECTED:
+        raise UnsafeScope(f"refusing {what} {rel!r}: {inside.parts[0]!r} is protected")
+    return target
+
+
 def reset_workspace(root: str | Path, artifact_scope: list[str],
                     fixtures: dict[str, str] | None) -> list[Path]:
     root = Path(root).resolve()
-    protected = {"anchor", "skills_store", "src", "tests", "bench", "spec",
-                 "docs", "examples", ".git", "themes", "assets"}
+    files = [(_inside(root, rel, "fixture"), content) for rel, content in (fixtures or {}).items()]
     cleared: list[Path] = []
-
     for rel in artifact_scope or []:
-        target = _resolve(root, rel)
-        if target == root:
-            raise UnsafeScope(f"artifact_scope {rel!r} resolves to the project root")
-        try:
-            inside = target.relative_to(root)
-        except ValueError as e:
-            raise UnsafeScope(
-                f"artifact_scope {rel!r} resolves outside the project root"
-            ) from e
-        if not inside.parts:
-            raise UnsafeScope(f"artifact_scope {rel!r} is empty")
-        if inside.parts[0] in protected:
-            raise UnsafeScope(
-                f"refusing to clear {rel!r}: {inside.parts[0]!r} is protected"
-            )
+        target = _inside(root, rel, "artifact_scope")
         if target.exists():
             _empty(target)
             cleared.append(target)
-
-    for rel, content in (fixtures or {}).items():
-        path = _resolve(root, rel)
+    for path, content in files:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content, encoding="utf-8")
-
     return cleared
 
 

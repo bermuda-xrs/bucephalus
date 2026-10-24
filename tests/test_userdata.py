@@ -127,3 +127,12 @@ def test_empty_policy_is_refused(ctx):
 def test_grounding_notes_are_gone(ctx):
     with pytest.raises(ValidationError):
         ctx.userdata.put_document("grounding", "tps", "thermal protection notes about tiles")
+
+
+@pytest.mark.parametrize("key", ["../escape", "a/b", "a" + chr(92) + "b", "..", " "])
+def test_a_key_that_is_not_a_plain_name_is_refused(key):
+    assert any("Key" in p for p in validate_task(_task(task_key=key), VERIFIERS))
+
+
+def test_a_plain_key_is_fine():
+    assert validate_task(_task(task_key="E01-retry_2.v1"), VERIFIERS) == []

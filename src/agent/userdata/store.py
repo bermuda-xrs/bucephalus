@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -88,6 +89,8 @@ def validate_task(t: SuiteTask, known_verifiers: set[str] | None = None) -> list
     problems: list[str] = []
     if not t.task_key.strip():
         problems.append("Key is required — it identifies the paired trial.")
+    elif not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]*", t.task_key):
+        problems.append("Key must be a plain name (letters, digits, '.', '_', '-'): it names the task's grader folder.")
     if not t.goal.strip():
         problems.append("Goal is required.")
 
