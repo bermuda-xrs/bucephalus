@@ -136,3 +136,18 @@ def test_a_key_that_is_not_a_plain_name_is_refused(key):
 
 def test_a_plain_key_is_fine():
     assert validate_task(_task(task_key="E01-retry_2.v1"), VERIFIERS) == []
+
+
+def test_an_import_with_one_bad_task_writes_nothing(ctx, tmp_path):
+    import json
+
+    folder = tmp_path / "suite"
+    folder.mkdir()
+    good = {"key": "a1", "goal": "g", "success_criterion": "expected_value",
+            "output_schema": {"type": "object", "x-expected": {"v": 1}}}
+    (folder / "a1.json").write_text(json.dumps(good), encoding="utf-8")
+    (folder / "b2.json").write_text(json.dumps({**good, "key": "b2", "success_criterion": "always_pass"}),
+                                    encoding="utf-8")
+    with pytest.raises(ValidationError, match="b2"):
+        ctx.userdata.import_suite_from_dir("imported", folder)
+    assert ctx.userdata.get_suite_by_name("imported") is None

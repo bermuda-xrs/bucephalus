@@ -250,12 +250,10 @@ class UserStore:
         folder = Path(folder)
         if not folder.is_dir():
             raise ValidationError(f"{folder} is not a directory.")
-        suite = self.get_suite_by_name(name) or self.create_suite(
-            name, f"imported from {folder.name}"
-        )
+        tasks = []
         for p in sorted(folder.glob("*.json")):
             spec = json.loads(p.read_text(encoding="utf-8"))
-            self.upsert_task(suite.id, SuiteTask(
+            tasks.append(SuiteTask(
                 task_key=spec.get("key", p.stem),
                 goal=spec.get("goal", ""),
                 success_criterion=spec.get("success_criterion", "expected_value"),
@@ -266,6 +264,12 @@ class UserStore:
                 budget_seconds=spec.get("budget_seconds"),
                 catastrophic=bool(spec.get("catastrophic", False)),
             ))
+        bad = [f"{t.task_key}: {' '.join(problems)}" for t in tasks if (problems := validate_task(t))]
+        if bad:  # all or nothing: a half-imported suite would be measured as if it were whole
+            raise ValidationError("Nothing was imported. " + " | ".join(bad))
+        suite = self.get_suite_by_name(name) or self.create_suite(name, f"imported from {folder.name}")
+        for t in tasks:
+            self.upsert_task(suite.id, t)
         return self.get_suite(suite.id)  # type: ignore[return-value]
 
     def get_active_policy(self) -> str | None:
