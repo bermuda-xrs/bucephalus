@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, Field, PrivateAttr, model_validator
 
 
 SMALL_FILL_RATIO = 0.5
@@ -14,12 +14,20 @@ MECHANISMS = ("compact_prompt", "evidence_pins", "stuck_patterns", "escape_check
 
 
 class _Section(BaseModel):
-    # unknown keys are kept only so they can be named: a misspelled key would otherwise be dropped in silence
-    model_config = ConfigDict(extra="allow")
+    # a misspelled key would be dropped in silence; its NAME is kept to be reported, never its value (it may be a key)
+    _unknown: list[str] = PrivateAttr(default_factory=list)
+
+    @model_validator(mode="wrap")
+    @classmethod
+    def _note_unknown(cls, data, handler):
+        unknown = [k for k in data if k not in cls.model_fields] if isinstance(data, dict) else []
+        m = handler({k: v for k, v in data.items() if k not in unknown} if unknown else data)
+        m._unknown = [str(k) for k in unknown]
+        return m
 
 
 def ignored_keys(m: BaseModel, path: str = "") -> list[str]:
-    out = [path + k for k in (m.model_extra or {})]
+    out = [path + k for k in getattr(m, "_unknown", [])]
     for name in type(m).model_fields:
         v = getattr(m, name)
         items = v.items() if isinstance(v, dict) else enumerate(v) if isinstance(v, list) else [(None, v)]
