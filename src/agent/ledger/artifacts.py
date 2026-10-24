@@ -17,7 +17,8 @@ def write_artifact(
     taint: Taint,
     origin: dict,
 ) -> str:
-    aid = sha256_hex(content)[:32]
+    # per task, kind and taint: one row per id, so a shared id hid the second task's row, or kept the first taint
+    aid = sha256_hex(canonical([task_id, kind, taint.value, content]))[:32]
     conn.execute(
         """INSERT OR IGNORE INTO artifacts(id, task_id, kind, content, taint,
                                            origin_json, n_tokens, created_at)

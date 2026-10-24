@@ -70,3 +70,14 @@ def test_without_pages_there_is_nothing_to_hold(small, task, workspace):
     small.backends["cloud"].queue(_read(), FINAL)
     assert run_task(small, t.id).status.startswith("done")
     assert _events(small, t, "pages.unread_held") == []
+
+
+def test_a_second_task_reading_the_same_page_is_held_like_the_first(small, task, workspace):
+    _long(workspace)
+    holds = []
+    for _ in range(2):
+        t = create_task(small.conn, small.log, task.contract, task.budget.model_copy(update={"usd": 10.0}))
+        small.backends["cloud"].queue(_read(), *[FINAL] * (MAX_PAGE_HOLDS + 1))
+        run_task(small, t.id)
+        holds.append(len(_events(small, t, "pages.unread_held")))
+    assert holds == [MAX_PAGE_HOLDS, MAX_PAGE_HOLDS]
