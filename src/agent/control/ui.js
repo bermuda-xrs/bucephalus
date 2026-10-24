@@ -19,7 +19,7 @@ window.addEventListener("hashchange", () => {
 let RETURN_FOCUS = null;           // where focus goes back when a dialog closes
 const S = {conv: null, thread: null, loose: null, archived: false, streams: new Map(), trails: new Map(),
            drafting: new Set(), answers: new Map(), filesTask: null, filesPath: "", pane: "memory",
-           settings: null, lastSide: "", rewind: null, changes: null, callsLoaded: new Set()};
+           lastSide: "", rewind: null, changes: null, callsLoaded: new Set()};
 
 function toast(msg, bad) {
   const t = $("#toast"); t.textContent = msg; t.className = "show" + (bad ? " bad" : "");
@@ -1099,7 +1099,6 @@ new MutationObserver(() => document.querySelectorAll("i[data-pct]").forEach(i =>
   }
   try {
     const [h, st] = await Promise.all([api("/health"), api("/panels/settings")]);
-    S.settings = st;
     $("#health").textContent = `Connected. ${h.backends.length} models configured.`;
     $("#chipProfile").textContent = `Profile: ${st.profile}`;
     if ($("#budUsd").value === "") $("#budUsd").placeholder = String(st.limits.default_task_budget_usd);
