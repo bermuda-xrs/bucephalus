@@ -302,12 +302,12 @@ class TelegramBot:
         from ..kernel.integrity import checkpoint
         checkpoint(self.ctx.log, self.ctx.anchor, task_id)
 
-        self.tx.answer_callback(cb_id, decision + "d")
-        if out["approved"]:
-            if self.queued:
-                self._resume.append(task_id)
-            else:
-                self.run(task_id)
+        self.tx.answer_callback(cb_id, "approved" if out["approved"] else "denied")
+        # either way the task resumes: a refusal is consumed at its next start, and it carries on without the action
+        if self.queued:
+            self._resume.append(task_id)
+        else:
+            self.run(task_id)
         return {"action": decision, "task_id": task_id, "sender": str(sender)}
 
     def poll_once(self, timeout: int | None = None) -> list[dict]:

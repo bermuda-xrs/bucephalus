@@ -542,3 +542,14 @@ def test_an_approval_pressed_in_the_chat_makes_the_action_happen(bot):
     out = Path(bot.ctx.config.root) / "work" / "p.txt"
     assert out.exists() and out.read_text(encoding="utf-8") == "model wording"
     assert bot.ctx.pending_approvals(tid) == [], "no second button for one call"
+
+
+def test_a_refusal_pressed_in_the_chat_lets_the_task_carry_on_without_it(bot):
+    tid, approval_id = _park(bot)
+    bot.ctx.backends["cloud"].queue('<final>{"answer": "done without it"}</final>')
+    out = bot.handle_update(callback(approval_id, decision="deny"))
+    assert out["action"] == "deny"
+    assert bot.tx.answered[-1]["text"] == "denied"
+    status = bot.ctx.conn.execute("SELECT status FROM tasks WHERE id=?", (tid,)).fetchone()[0]
+    assert status == "done", "a refused action is consumed and the task finishes without it, as in the console"
+    assert not (Path(bot.ctx.config.root) / "work" / "p.txt").exists()
