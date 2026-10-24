@@ -61,6 +61,7 @@ class BucephalusTUI(App):
         self.glyphs = supports_glyphs()
         self.theme_data = load(ctx.config.ui.theme, ctx.config.root)
         self._unsubscribe = None
+        self._side: dict[str, list] = {}
         self._tick = 0
         self._model = self._executor_model()
 
@@ -110,15 +111,17 @@ class BucephalusTUI(App):
     def refresh_side(self) -> None:
         from ..control import conversations as conv
 
-        needs = self.query_one("#needs", ListView)
-        needs.clear()
-        for a in self.ctx.pending_approvals():
-            needs.append(ListItem(Label(f"wants {a['tool']}: parked"), name=f"task:{a['task_id']}"))
-        convs = self.query_one("#convs", ListView)
-        convs.clear()
-        for c in conv.listing(self.ctx.conn):
-            mark = f" ({c['needs_you']} for you)" if c["needs_you"] else ""
-            convs.append(ListItem(Label(c["title"][:28] + mark), name=f"conv:{c['id']}"))
+        rows = {"#needs": [(f"wants {a['tool']}: parked", f"task:{a['task_id']}") for a in self.ctx.pending_approvals()],
+                "#convs": [(c["title"][:28] + (f" ({c['needs_you']} for you)" if c["needs_you"] else ""), f"conv:{c['id']}")
+                           for c in conv.listing(self.ctx.conn)]}
+        for sel, items in rows.items():
+            if self._side.get(sel) == items:
+                continue  # rebuilding an unchanged list loses the highlight and the scroll position
+            self._side[sel] = items
+            view = self.query_one(sel, ListView)
+            view.clear()
+            for label, name in items:
+                view.append(ListItem(Label(label), name=name))
 
     def on_list_view_selected(self, event: ListView.Selected) -> None:
         kind, _, ident = (event.item.name or "").partition(":")

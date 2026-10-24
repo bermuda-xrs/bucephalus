@@ -90,3 +90,24 @@ def test_the_input_and_the_status_bar_are_on_screen(ctx, workspace):
                 assert r.height > 0 and screen.contains_region(r), (wid, r, screen)
                 assert r.bottom <= footer.y, (wid, "under the key bar", r, footer)
     asyncio.run(go())
+
+
+def test_the_side_lists_keep_their_items_when_nothing_changed(ctx, workspace):
+    from agent.control import conversations as conv
+
+    conv.create(ctx.conn, "first")
+    conv.create(ctx.conn, "second")
+
+    async def go():
+        app = BucephalusTUI(ctx)
+        async with app.run_test(size=(140, 44)) as pilot:
+            await pilot.pause(0.2)
+            before = list(app.query_one("#convs").children)
+            app.refresh_side()
+            await pilot.pause(0.2)
+            assert list(app.query_one("#convs").children) == before and len(before) == 2
+            conv.create(ctx.conn, "third")
+            app.refresh_side()
+            await pilot.pause(0.2)
+            assert len(app.query_one("#convs").children) == 3
+    asyncio.run(go())
