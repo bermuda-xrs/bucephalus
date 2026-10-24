@@ -105,9 +105,6 @@ def tier_of(ctx, tool_name: str) -> str:
     return spec.required_capability or "user"
 
 
-READ_ONLY_TOOL_NAMES = ("read_file", "list_dir", "expand_artifact")
-
-
 def auto_review(ctx, req: ReviewRequest, task=None) -> ReviewDecision:
     reviewer_name = ctx.config.autonomy.auto_review_backend
     executing = ctx.executing_backend or ""
@@ -131,15 +128,12 @@ def auto_review(ctx, req: ReviewRequest, task=None) -> ReviewDecision:
         return d
 
     backend = ctx.backends[reviewer_name]
-    tools = [
-        s for s in ctx.tools.schemas() if s["name"] in READ_ONLY_TOOL_NAMES
-    ]
     constrain = backend.cfg.needs_action_envelope
     resp = ctx.call_model(
         task if task is not None else req.task_id, backend, "review",
         prefix=REVIEW_PREFIX + "\n\n<policy>\n" + load_policy(ctx) + "\n</policy>",
         tail=render_review_request(req) + (REVIEW_SCHEMA_HINT if constrain else ""),
-        tools=tools,
+        tools=None,
         max_tokens=512,
         temperature=0.0,
         schema=REVIEW_SCHEMA if constrain else None,

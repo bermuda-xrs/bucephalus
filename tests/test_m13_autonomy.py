@@ -256,3 +256,9 @@ def test_client_stream_maps_and_filters(ctx, task):
     body = "".join(stream_events(ctx, task.id))
     assert "event: tool.called" in body
     assert to_client_event({"type": "verify.attempted", "seq": 1, "payload": {}}) is None
+
+
+def test_the_reviewer_is_offered_no_tools_it_could_not_run(ctx, task):
+    ctx.backends["review"].queue("VERDICT: deny" + chr(10) + "BECAUSE: rule 1")
+    auto_review(ctx, ReviewRequest(task_id=task.id, tool="write_file", args={"path": "work/x"}), task=task)
+    assert ctx.backends["review"].calls[-1]["tools"] is None
