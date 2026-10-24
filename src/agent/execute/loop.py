@@ -832,14 +832,13 @@ def _page_holds(ctx, task) -> int:
 
 def _unread_pages(ctx, task) -> dict[str, tuple[str, list[int]]]:
     seen: dict[str, tuple[str, int, set]] = {}
-    for content, origin in ctx.conn.execute(
-            "SELECT content, origin_json FROM artifacts WHERE task_id=? AND kind='tool_output' ORDER BY created_at, rowid",
-            (task.id,)):
+    for head_text, origin in ctx.conn.execute(
+            "SELECT substr(content, 1, instr(content, char(10) || '---' || char(10)) - 1), origin_json FROM artifacts "
+            "WHERE task_id=? AND kind='tool_output' AND json_extract(origin_json, '$.tool')='read_file' "
+            "ORDER BY created_at, rowid", (task.id,)):
         o = json.loads(origin)
-        if o.get("tool") != "read_file":
-            continue
         try:
-            head = json.loads(content.split(chr(10) + "---" + chr(10), 1)[0])
+            head = json.loads(head_text)
         except ValueError:
             continue
         if not isinstance(head, dict) or not head.get("pages"):

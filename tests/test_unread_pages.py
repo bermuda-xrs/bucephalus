@@ -36,7 +36,7 @@ def test_an_answer_with_unread_pages_becomes_a_continuation_naming_them(small, t
     _long(workspace)
     pages = tool_read_file(small, task, "work/long.md")["pages"]
     small.config.limits.max_steps = pages + 10
-    t = create_task(small.conn, small.log, task.contract, task.budget)
+    t = create_task(small.conn, small.log, task.contract, task.budget.model_copy(update={"usd": 10.0}))
     script = [_read(), FINAL] + [_read(n) for n in range(2, pages + 1)] + [FINAL]
     small.backends["cloud"].queue(*script)
     assert run_task(small, t.id).status.startswith("done")
