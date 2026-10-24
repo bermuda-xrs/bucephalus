@@ -214,3 +214,12 @@ def test_run_model_says_when_the_window_is_smaller(api, ctx, fake):
     fake.context_length = 4096
     r = api.post("/models/run", json={"model": "granite4.1:3b"}).json()
     assert "4096" in r["warning"]
+
+
+def test_the_users_port_is_never_started_whoever_asks(monkeypatch, tmp_path):
+    monkeypatch.setattr(local, "is_up", lambda endpoint: False)
+    monkeypatch.setattr(local.shutil, "which", lambda name: "C:/ollama/ollama.exe")
+    monkeypatch.setattr(local.subprocess, "Popen", lambda *a, **k: pytest.fail("started a server on the user's port"))
+    for url in ("http://127.0.0.1:11434", "http://localhost"):
+        with pytest.raises(local.Refused, match="user's own"):
+            local.start_server(url, tmp_path)

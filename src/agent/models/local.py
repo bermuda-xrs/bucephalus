@@ -82,9 +82,11 @@ def installed(endpoint: str) -> list[str]:
 
 
 def start_server(endpoint: str, root: Path, wait_s: float = 30.0) -> None:
+    u = urlparse(endpoint)
+    if (u.port or USER_PORT) == USER_PORT:
+        raise Refused(f"the Ollama on {USER_PORT} is the user's own; it is never started or loaded from here")
     if is_up(endpoint):
         return
-    u = urlparse(endpoint)
     if u.hostname not in ("127.0.0.1", "localhost"):
         raise Refused(f"{endpoint} is not on this machine; start it there")
     exe = shutil.which("ollama")
