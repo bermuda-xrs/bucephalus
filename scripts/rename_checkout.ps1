@@ -8,6 +8,7 @@ param(
     [switch]$WhatIf
 )
 $ErrorActionPreference = "Stop"
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8  # paths are Greek; an OEM code page (cp949) mangles them
 
 function Tag([string]$path) {
     $sha = [System.Security.Cryptography.SHA256]::Create()
