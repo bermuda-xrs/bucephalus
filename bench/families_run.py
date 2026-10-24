@@ -11,7 +11,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-BASE = {"backend.tool_profile": "small", "backend.reasoning_field": False, "backend.carry_field": False}
+# every mechanism declared off: the small profile's defaults (on for the kept items) must not leak into the base
+BASE = {"backend.tool_profile": "small", "backend.reasoning_field": False, "backend.carry_field": False,
+        "backend.compact_prompt": False, "backend.evidence_pins": False, "backend.stuck_patterns": False,
+        "backend.escape_check": False, "backend.edit_format": "default", "backend.context_fill_ratio": 0.28}
 
 
 def _arm(families, **over):

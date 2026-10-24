@@ -118,6 +118,14 @@ def test_e1_hashline_reads_anchor_lines_and_edits_check_them(sm, task, workspace
     assert not stale["ok"] and "read the file again" in stale["error"]
 
 
+def test_e1_the_small_profile_reads_anchors_by_default_so_its_edit_lines_tool_is_usable(sm, task, workspace):
+    from agent.execute.tools import line_anchor, tool_read_file
+
+    (workspace / "c.ini").write_text("[a]" + chr(10) + "x = 1" + chr(10), encoding="utf-8")
+    assert "edit_lines" in sm.tools.names()
+    assert f"{line_anchor(2, 'x = 1')}|x = 1" in tool_read_file(sm, task, "work/c.ini")["content"]
+
+
 def test_e1_the_profile_gets_the_tool_only_in_hashline_format(small):
     from agent.context import AgentContext
     from conftest import make_config

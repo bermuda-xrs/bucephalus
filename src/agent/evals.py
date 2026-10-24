@@ -11,7 +11,7 @@ SECTIONS = ("mechanisms", "limits", "autonomy")
 TUNABLE: dict[str, dict[str, list]] = {
     "long_files": {"long_files": ["pages", "elide", "whole"]},
     "read_all_pages": {"backend.read_all_pages": [None, False]},
-    "fill_ratio": {"limits.context_fill_ratio": [0.28, 0.5]},
+    "fill_ratio": {"backend.context_fill_ratio": [0.28, 0.5]},
 }
 
 

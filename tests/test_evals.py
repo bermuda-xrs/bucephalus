@@ -126,3 +126,27 @@ def test_every_bench_arm_is_base_plus_one_declared_item():
         for k in extra:
             assert k.split(".", 1)[1] in BackendConfig.model_fields, k
         assert arm["families"] is None or set(arm["families"]) <= set(F.FAMILIES)
+
+
+def test_the_bench_base_arm_declares_every_mechanism_off_whatever_the_profile_defaults():
+    import sys
+    from pathlib import Path
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "bench"))
+    import families_run as fr
+
+    from agent.config import BackendConfig
+
+    over = {k.split(".", 1)[1]: v for k, v in fr.ARMS["base"]["overrides"].items()}
+    r = BackendConfig(kind="mock", model="m", **over).resolved()
+    assert not any(v for k, v in r.items() if k not in ("edit_format", "context_fill_ratio")), r
+    assert r["edit_format"] == "default" and r["context_fill_ratio"] == 0.28
+
+
+def test_the_fill_ratio_knob_moves_the_ceiling_on_the_small_profile_too(tmp_path):
+    from agent.config import config_from_raw, fill_ratio
+
+    raw = _raw(tmp_path)
+    raw["backends"]["cloud"]["tool_profile"] = "small"
+    ((key, values),) = evals.TUNABLE["fill_ratio"].items()
+    assert [fill_ratio(config_from_raw(evals.apply_overrides(raw, {key: v}))) for v in values] == values

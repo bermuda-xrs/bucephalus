@@ -128,7 +128,7 @@ def _anchored(text: str) -> str:
 
 def hashline(ctx) -> bool:
     b = ctx.backends.get("cloud") if hasattr(ctx, "backends") else None
-    return b is not None and getattr(b.cfg, "edit_format", "default") == "hashline"
+    return b is not None and b.cfg.edit_style == "hashline"
 
 
 def tool_edit_lines(ctx, task, path: str, start: str, end: str, content: str) -> dict:
