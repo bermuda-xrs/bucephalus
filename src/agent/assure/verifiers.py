@@ -138,7 +138,7 @@ def _validate(data, schema: dict, path: str = "$") -> list[str]:
         "object": dict, "array": list, "string": str,
         "integer": int, "number": (int, float), "boolean": bool,
     }
-    if t and t in types and not isinstance(data, types[t]):
+    if t and t in types and (not isinstance(data, types[t]) or (t in ("integer", "number") and isinstance(data, bool))):
         return [f"{path}: expected {t}, got {type(data).__name__}"]
     if t == "object":
         for key in schema.get("required", []):

@@ -241,3 +241,15 @@ def test_exact_keys_compare_types_too(tmp_path):
     ok = _graded(tmp_path / "a", "grading/H27", {"output/answer.json": json.dumps(mod.EXPECTED)})
     bad = _graded(tmp_path / "b", "grading/H27", {"output/answer.json": json.dumps(answer)})
     assert ok.passed is True and bad.passed is False, (ok.observation, bad.observation)
+
+
+def test_a_boolean_is_not_a_number_to_the_schema_check():
+    from agent.kernel.types import TaskContract
+
+    assert V._validate(True, {"type": "integer"}) and V._validate(False, {"type": "number"})  # noqa: SLF001
+    assert not V._validate(3, {"type": "integer"}) and not V._validate(2.5, {"type": "number"})  # noqa: SLF001
+    c = TaskContract(goal="g", success_criterion="expected_value",
+                     output_schema={"type": "object", "required": ["n"], "properties": {"n": {"type": "integer"}},
+                                    "x-expected": {"n": 1}})
+    assert not V.ExpectedValueVerifier().check('{"n": true}', c).passed
+    assert V.ExpectedValueVerifier().check('{"n": 1}', c).passed
