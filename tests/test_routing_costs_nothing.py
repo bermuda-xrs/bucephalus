@@ -16,7 +16,6 @@ def test_routing_makes_no_model_calls(ctx, task):
 
 def test_estimate_uses_the_configured_assumption_before_any_data(ctx):
     ctx.backends["local"].cfg.assumed_tokens_per_sec = 4.0
-    ctx.backends["local"]._tokens_per_sec = None  # noqa: SLF001
 
     assert abs(estimate_seconds(ctx, "local", "summarize") - 128.0) < 1.0
 
@@ -27,7 +26,6 @@ def test_observed_rate_beats_the_assumption(ctx, task):
     from agent.kernel.types import TokenUsage
 
     ctx.backends["local"].cfg.assumed_tokens_per_sec = 100.0
-    ctx.backends["local"]._tokens_per_sec = None  # noqa: SLF001
 
     record_call(ctx.conn, task.id, "local", "summarize",
                 TokenUsage(output_tokens=100), 0.0, 10_000)
@@ -37,10 +35,3 @@ def test_observed_rate_beats_the_assumption(ctx, task):
 
     est = estimate_seconds(ctx, "local", "summarize")
     assert abs(est - 10.0) < 1.0
-
-
-def test_probe_is_explicit_and_does_call_the_model(ctx):
-    b = ctx.backends["local"]
-    before = len(b.calls)
-    b.probe_throughput()
-    assert len(b.calls) == before + 1

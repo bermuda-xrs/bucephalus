@@ -93,7 +93,6 @@ def test_router_inputs_ignore_calls_that_never_returned(ctx, task):
 
 PROBES = {
     "context.py": "AgentContext.call_model - the one place a task's call is made",
-    "models/base.py": "measure_throughput - a probe of the backend, no task",
     "cli.py": "bench-local - a throughput probe, no task",
 }
 

@@ -32,7 +32,6 @@ class BackendBase:
         self.name = name
         self.cfg = cfg
         self.cost_vector = cfg.cost_vector()
-        self._tokens_per_sec: float | None = None
 
     @property
     def trust_tier(self) -> str:
@@ -46,25 +45,7 @@ class BackendBase:
         return self.cfg.max_output_tokens
 
     def measure_throughput(self) -> float:
-        if self._tokens_per_sec is not None:
-            return self._tokens_per_sec
         return self.cfg.assumed_tokens_per_sec
-
-    def probe_throughput(self) -> float:
-        t0 = time.time()
-        try:
-            resp = self.complete(  # type: ignore[attr-defined]
-                prefix="You are a latency probe. Answer in one word.",
-                tail="Reply with exactly the word: ready.",
-                tools=None,
-                max_tokens=16,
-                temperature=0.0,
-            )
-            elapsed = max(1e-3, time.time() - t0)
-            self._tokens_per_sec = max(1, resp.usage.output_tokens) / elapsed
-        except Exception:  # noqa: BLE001
-            self._tokens_per_sec = 0.0
-        return self._tokens_per_sec
 
     def _response(self, text: str, usage: TokenUsage, t0: float, raw: dict) -> ModelResponse:
         return ModelResponse(
