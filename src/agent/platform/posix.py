@@ -106,6 +106,8 @@ def _stat_fields(pid: int) -> list[str] | None:
 def alive(pid: int) -> bool:
     try:
         os.kill(pid, 0)
+    except PermissionError:
+        return True  # it exists, under another user (Windows: access denied is alive too)
     except OSError:
         return False
     f = _stat_fields(pid)
