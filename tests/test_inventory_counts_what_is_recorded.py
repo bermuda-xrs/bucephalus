@@ -15,7 +15,7 @@ SPEC.loader.exec_module(inventory)
 
 def test_every_event_the_inventory_counts_is_one_the_code_records():
     recorded = _appended_types()
-    counted = {what for _row, what, kind, _a in inventory.ROWS if kind in ("event", "rotate")}
+    counted = {what for _row, what, kind in inventory.ROWS if kind in ("event", "rotate")}
     assert counted, "the inventory counts no events at all"
     assert counted <= recorded, f"counted but never recorded: {sorted(counted - recorded)}"
 

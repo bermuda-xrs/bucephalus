@@ -808,7 +808,7 @@ What to do, in the words a model reads.</textarea></label>
       <dl class="kv"><dt>Harness version</dt><dd>${d.harness_version}</dd><dt>Toolset version</dt><dd>${d.toolset_version}</dd>
       <dt>Profile</dt><dd>${esc(d.profile)}</dd></dl>
       <h4>Has it ever run here?</h4>${d.inventory ? `<table><tr><th>Path</th><th>State</th><th class="r">Count</th></tr>
-        ${d.inventory.map(r => `<tr><td>${esc(r.row || r.name || "")}</td><td>${esc(r.state || "")}</td><td class="r">${esc(r.count ?? "")}</td></tr>`).join("")}</table>`
+        ${d.inventory.map(r => `<tr><td>${esc(r.row)}</td><td>${esc(r.state)}</td><td class="r">${esc(r.n ?? "")}</td></tr>`).join("")}</table>`
         : '<p class="note">The inventory needs bench/ beside the source; an installed copy has none.</p>'}
       <h4>Run records</h4><table>${d.runs.map(r => `<tr><td><code>${esc(r.name)}</code></td><td class="r">${ktok(r.bytes)}B</td>
         <td>${ago(r.modified)}</td></tr>`).join("") || '<tr><td class="empty">None yet.</td></tr>'}</table>`;

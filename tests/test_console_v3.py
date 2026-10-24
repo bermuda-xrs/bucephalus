@@ -229,3 +229,19 @@ def test_emphasis_markers_inside_a_link_url_leave_the_url_alone():
 
 def test_the_suite_table_cuts_a_goal_before_escaping_it():
     assert "esc(t.goal).slice(" not in UI
+
+
+def test_the_measurement_pane_reads_the_fields_the_inventory_returns(tmp_path):
+    import re
+    import sqlite3
+    import sys
+
+    sys.path.insert(0, str(CONTROL.parents[2] / "bench"))
+    import inventory
+
+    db = tmp_path / "x.db"
+    sqlite3.connect(db).close()
+    keys = set(inventory.take(db)[0])
+    pane = UI[UI.index("async measurement()"):UI.index("async settings()")]
+    read = set(re.findall(r"\br\.(\w+)", pane[:pane.index("<h4>Run records")]))
+    assert read and read <= keys, read - keys
