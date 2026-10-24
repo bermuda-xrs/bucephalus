@@ -146,18 +146,15 @@ class Telemetry:
         return None
 
     def median_output_tokens(self, backend: str, purpose: str) -> float | None:
-        rows = [
-            r[0]
-            for r in self.conn.execute(
-                """SELECT output_tokens FROM calls
-                   WHERE backend=? AND purpose=? AND output_tokens IS NOT NULL
-                   ORDER BY output_tokens""",
-                (backend, purpose),
-            ).fetchall()
-        ]
-        if not rows:
-            return None
-        return float(rows[len(rows) // 2])
+        # the upper median, read off the index: routing asks this on every decision, the table only grows
+        row = self.conn.execute(
+            """SELECT output_tokens FROM calls
+               WHERE backend=? AND purpose=? AND output_tokens IS NOT NULL
+               ORDER BY output_tokens LIMIT 1 OFFSET
+               (SELECT COUNT(*) / 2 FROM calls WHERE backend=? AND purpose=? AND output_tokens IS NOT NULL)""",
+            (backend, purpose, backend, purpose),
+        ).fetchone()
+        return float(row[0]) if row else None
 
     def observed_tokens_per_sec(self, backend: str, purpose: str | None = None) -> float | None:
         for where, args in (

@@ -122,6 +122,7 @@ CREATE TABLE IF NOT EXISTS calls (
     outcome         TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_calls_task ON calls(task_id);
+CREATE INDEX IF NOT EXISTS idx_calls_route ON calls(backend, purpose, output_tokens);
 
 CREATE TABLE IF NOT EXISTS monitor_flags (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -405,6 +406,7 @@ def _calls_allow_unreturned(conn: sqlite3.Connection) -> bool:
                      f"SELECT {cols}, 'returned' FROM calls_pre_d36")
         conn.execute("DROP TABLE calls_pre_d36")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_calls_task ON calls(task_id)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_calls_route ON calls(backend, purpose, output_tokens)")
         conn.execute("COMMIT")
     except Exception:
         conn.execute("ROLLBACK")
