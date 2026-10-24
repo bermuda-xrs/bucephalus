@@ -119,7 +119,9 @@ def test_a_mid_task_write_does_not_trip_prefix_guard(store):
 
 
 def test_a_mid_task_write_does_not_move_the_cache_ratio(store, tmp_path):
-    from agent.instrument.telemetry import Telemetry, record_call
+    from conftest import record_call
+
+    from agent.instrument.telemetry import Telemetry
     from agent.kernel.db import open_db
     from agent.kernel.types import TokenUsage
 

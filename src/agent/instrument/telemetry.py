@@ -16,40 +16,6 @@ def compute_cost(usage: TokenUsage, backend_cfg: dict) -> float:
     )
 
 
-def record_call(
-    conn: sqlite3.Connection,
-    task_id: str,
-    backend: str,
-    purpose: str,
-    usage: TokenUsage,
-    cost: float,
-    wall_ms: int,
-    escalated: bool = False,
-    thinking: str = "unknown",
-) -> None:
-    conn.execute(
-        """INSERT INTO calls(task_id, backend, purpose, input_tokens, output_tokens,
-                             cache_read_tokens, cache_write_tokens, cost_usd,
-                             wall_ms, escalated, thinking, created_at, outcome)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,'returned')""",
-        (
-            task_id,
-            backend,
-            purpose,
-            usage.input_tokens,
-            usage.output_tokens,
-            usage.cache_read_tokens,
-            usage.cache_write_tokens,
-            cost,
-            wall_ms,
-            int(escalated),
-            thinking,
-            time.time(),
-        ),
-    )
-    conn.commit()
-
-
 def begin_call(conn: sqlite3.Connection, task_id: str, backend: str, purpose: str,
                escalated: bool = False, thinking: str = "unknown",
                model: str | None = None, est_input_tokens: int | None = None) -> int:

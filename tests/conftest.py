@@ -205,3 +205,10 @@ def make_dir_link(link, target) -> bool:
     except OSError:
         return False
     return True
+
+
+def record_call(conn, task_id, backend, purpose, usage, cost, wall_ms, escalated=False, thinking="unknown"):
+    from agent.instrument.telemetry import begin_call, complete_call
+
+    complete_call(conn, begin_call(conn, task_id, backend, purpose, escalated=escalated, thinking=thinking),
+                  usage, cost, wall_ms)

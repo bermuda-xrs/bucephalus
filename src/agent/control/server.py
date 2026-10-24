@@ -87,10 +87,6 @@ class PolicyIn(BaseModel):
     body: str
 
 
-class DocIn(BaseModel):
-    body: str
-
-
 class NewConversation(BaseModel):
     title: str = ""
 

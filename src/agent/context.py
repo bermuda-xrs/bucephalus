@@ -9,7 +9,7 @@ from pathlib import Path
 from .assure.mesh import VerificationMesh
 from .config import Config, load_config, load_dotenv
 from .execute.tools import ToolRegistry, apply_profile, default_registry
-from .instrument.telemetry import Telemetry, compute_cost, record_call
+from .instrument.telemetry import Telemetry, compute_cost
 from .kernel.db import open_db
 from .kernel.events import EventLog, sha256_hex
 from .kernel.integrity import Anchor
@@ -22,14 +22,6 @@ from .router.cascade import Router
 from .security.taint import TaintTracker
 from .skills.store import SkillStore
 from .userdata.store import UserStore
-
-
-def _without(registry: ToolRegistry, *names: str) -> ToolRegistry:
-    out = ToolRegistry()
-    for name in registry.names():
-        if name not in names:
-            out.register(registry.get(name))
-    return out
 
 
 MAX_PROJECT_NOTES = 8000
@@ -57,7 +49,7 @@ class AgentContext:
 
             self.tools.register(EDIT_LINES)
         if not config.mechanisms.code_as_action:
-            self.tools = _without(self.tools, "run_code")
+            self.tools = self.tools.without("run_code")
         self.skills = SkillStore(self.conn, config.resolve(config.skills_path))
         self.userdata = UserStore(self.conn)
         from .memory.store import MemoryStore
@@ -106,29 +98,6 @@ class AgentContext:
         b = self.backends.get(backend_name)
         return b.cfg.budgeted_window if b else 200000
 
-    def record(
-        self,
-        task,
-        resp: ModelResponse,
-        purpose: str = "step",
-        escalated: bool = False,
-    ) -> float:
-        backend = self.backends[resp.backend]
-        cost = compute_cost(resp.usage, backend.cost_vector)
-        record_call(
-            self.conn,
-            task.id,
-            resp.backend,
-            purpose,
-            resp.usage,
-            cost,
-            resp.wall_ms,
-            escalated=escalated,
-            thinking=backend.cfg.thinking,
-        )
-        spend(self.conn, self.log, task, usd=cost)
-        return cost
-
     def call_model(self, task, backend, purpose: str, escalated: bool = False,
                    **kwargs) -> ModelResponse:
         from .instrument.telemetry import abort_call, begin_call, complete_call
@@ -176,13 +145,10 @@ class AgentContext:
             self.log.append(task.id, "agents_md.skipped", {"why": why})
             return ""
         raw = path.read_bytes()
-        text = raw.decode("utf-8", errors="replace")
-        cut = len(text) > MAX_PROJECT_NOTES
-        if cut:
-            text = text[:MAX_PROJECT_NOTES] + chr(10) + "[truncated]"
-        self.log.append(task.id, "agents_md.loaded",
-                        {"bytes": len(raw), "sha256": sha256_hex(raw.decode("utf-8", errors="replace")), "truncated": cut})
-        return text
+        whole = raw.decode("utf-8", errors="replace")
+        cut = len(whole) > MAX_PROJECT_NOTES
+        self.log.append(task.id, "agents_md.loaded", {"bytes": len(raw), "sha256": sha256_hex(whole), "truncated": cut})
+        return whole[:MAX_PROJECT_NOTES] + chr(10) + "[truncated]" if cut else whole
 
     def freeze_memory(self, task_id: str) -> dict:
         if task_id not in self._memory_frozen:

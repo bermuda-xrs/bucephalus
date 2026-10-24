@@ -22,7 +22,8 @@ def test_estimate_uses_the_configured_assumption_before_any_data(ctx):
 
 
 def test_observed_rate_beats_the_assumption(ctx, task):
-    from agent.instrument.telemetry import record_call
+    from conftest import record_call
+
     from agent.kernel.types import TokenUsage
 
     ctx.backends["local"].cfg.assumed_tokens_per_sec = 100.0

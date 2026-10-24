@@ -150,3 +150,23 @@ def test_the_fill_ratio_knob_moves_the_ceiling_on_the_small_profile_too(tmp_path
     raw["backends"]["cloud"]["tool_profile"] = "small"
     ((key, values),) = evals.TUNABLE["fill_ratio"].items()
     assert [fill_ratio(config_from_raw(evals.apply_overrides(raw, {key: v}))) for v in values] == values
+
+
+def test_when_the_base_wins_on_dev_the_held_out_base_is_not_run_twice(tmp_path):
+    calls = []
+    real = evals.run_arm
+
+    def counting(raw, specs, out, *a, **k):
+        calls.append(out)
+        return real(raw, specs, out, *a, **k)
+
+    evals.run_arm, saved = counting, real
+    try:
+        out = evals.tune(_raw(tmp_path), {"read_all_pages": {"backend.read_all_pages": [False, True]}},
+                         F.instances(["needle"], "dev", 1), F.instances(["needle"], "heldout", 1), tmp_path / "t",
+                         backends_factory=_answering(lambda cfg, tail: _final({"shelf_mark": "nope"})))
+    finally:
+        evals.run_arm = saved
+    assert out["winner"] == {}
+    assert [p.name for p in calls if p.parent.name == "heldout"] == ["base"]
+    assert out["heldout"]["arms"]["winner"] == out["heldout"]["arms"]["base"]

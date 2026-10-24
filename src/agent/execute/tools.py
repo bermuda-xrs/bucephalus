@@ -65,6 +65,13 @@ class ToolRegistry:
             for t in sorted(self._tools.values(), key=lambda t: t.name)
         ]
 
+    def without(self, *names: str) -> ToolRegistry:
+        out = ToolRegistry()
+        for name in self.names():
+            if name not in names:
+                out.register(self._tools[name])
+        return out
+
     def native(self, names: dict | None = None) -> list[dict]:
         names = names or {}
         return [{"type": "function", "function": {"name": names.get(t.name, t.name), "description": t.description,
@@ -84,6 +91,7 @@ class ToolRegistry:
                 "  Use them for exact arithmetic or unit conversion "
                 "rather than computing it in your head.")
         return "\n".join(lines)
+
 
 FAMILIAR = {"run_command": "bash", "read_file": "read", "write_file": "write", "search": "grep", "list_dir": "ls",
             "edit_file": "edit", "apply_patch": "patch", "expand_artifact": "expand", "update_plan": "plan"}
@@ -159,7 +167,10 @@ def tool_read_file(ctx, task, path: str, page: int | None = None) -> dict:
     p = _resolve(ctx, path)
     if not p.exists():
         return {"ok": False, "error": f"no such file: {path}"}
-    text = p.read_text(encoding="utf-8", errors="replace")[:MAX_READ_CHARS]
+    if not p.is_file():
+        return {"ok": False, "error": f"not a file: {path}"}
+    with p.open(encoding="utf-8", errors="replace") as fh:
+        text = fh.read(MAX_READ_CHARS)
     if hashline(ctx):
         text = _anchored(text)
     out = {"ok": True, "path": str(p), "content": text, "bytes": p.stat().st_size}
@@ -333,7 +344,7 @@ def tool_write_file(ctx, task, path: str, content: str) -> dict:
     p.parent.mkdir(parents=True, exist_ok=True)
     existed = p.exists()
     p.write_text(content, encoding="utf-8")
-    return {"ok": True, "path": str(p), "bytes": len(content), "overwrote": existed}
+    return {"ok": True, "path": str(p), "bytes": len(content.encode("utf-8")), "overwrote": existed}
 
 
 def tool_run_code(ctx, task, code: str, timeout_s: int = 30) -> dict:
@@ -375,6 +386,7 @@ def tool_parallel(ctx, task, calls: list | None = None, step: int = 0) -> dict:
 
     from ..security.capabilities import gate_tool_call
 
+    policy = ctx.tool_policy(task.id) if task is not None else UNRESTRICTED
     planned = []
     for i, c in enumerate(calls):
         if not isinstance(c, dict) or not c.get("tool"):
@@ -391,7 +403,6 @@ def tool_parallel(ctx, task, calls: list | None = None, step: int = 0) -> dict:
             return {"ok": False, "error": (
                 f"call {i}: {name} is side-effecting and may not run in a "
                 "batch. Idempotency receipts assume ordered execution.")}
-        policy = ctx.tool_policy(task.id) if task is not None else UNRESTRICTED
         try:
             exposure_check(policy, name)
         except ToolNotExposed as e:
@@ -480,17 +491,13 @@ def _reachable(ctx, task, f: Path, state) -> bool:
     return ok and not is_protected(str(f), root, state)
 
 
-def _walk_state(ctx, task):
+def tool_glob(ctx, task, pattern: str, path: str = ".") -> dict:
     from ..security.capabilities import task_state_paths
 
-    return task_state_paths(ctx, task)
-
-
-def tool_glob(ctx, task, pattern: str, path: str = ".") -> dict:
     root = _resolve(ctx, path)
     if not root.is_dir():
         return {"ok": False, "error": f"not a directory: {path}"}
-    state = _walk_state(ctx, task)
+    state = task_state_paths(ctx, task)
     hits = sorted(str(h.relative_to(root)) for h in root.glob(pattern)
                   if h.is_file() and _reachable(ctx, task, h, state))
     return {"ok": True, "path": str(root), "pattern": pattern,
@@ -508,9 +515,11 @@ def tool_grep(ctx, task, pattern: str, path: str = ".",
     except re.error as e:
         return {"ok": False, "error": f"bad regex {pattern!r}: {e}"}
 
+    from ..security.capabilities import task_state_paths
+
     hits: list[dict] = []
     truncated = False
-    state = _walk_state(ctx, task)
+    state = task_state_paths(ctx, task)
     for f in sorted(root.glob(glob)):
         if not f.is_file() or not _reachable(ctx, task, f, state):
             continue
@@ -549,9 +558,9 @@ def tool_edit_file(ctx, task, path: str, old: str, new: str,
             f"the text to replace appears {found} times in {path} but count="
             f"{count} was given. Include more surrounding context to make it "
             "unique, or pass count={found} if every occurrence should change.")}
-    p.write_text(text.replace(old, new, found), encoding="utf-8")
-    return {"ok": True, "path": str(p), "replacements": found,
-            "bytes": len(text) - len(old) * found + len(new) * found}
+    text = text.replace(old, new, found)
+    p.write_text(text, encoding="utf-8")
+    return {"ok": True, "path": str(p), "replacements": found, "bytes": len(text.encode("utf-8"))}
 
 
 _PATCH_FORM = "a patch is hunks, each starting with a line '@@'"
@@ -674,11 +683,7 @@ def apply_profile(registry: ToolRegistry, profile: str) -> ToolRegistry:
         drop = {*SMALL_ONLY, "edit_file"}
     else:
         drop = {*SMALL_ONLY, *PATCH_ONLY}
-    out = ToolRegistry()
-    for name in registry.names():
-        if name not in drop:
-            out.register(registry.get(name))
-    return out
+    return registry.without(*drop)
 
 
 def tool_search(ctx, task, pattern: str, path: str = ".", glob: str | None = None,

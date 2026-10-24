@@ -175,8 +175,9 @@ def tune(raw: dict, flags: dict, dev: list[dict], heldout: list[dict], out: Path
         scored.append({"overrides": overrides, "passes": sum(r["passed"] for r in rows), "n": len(rows)})
     best = max(scored, key=lambda s: (s["passes"], -len(s["overrides"])))
     winner = best["overrides"]
-    held = {"base": run_arm(raw, heldout, out / "heldout" / "base", backends_factory, profile),
-            "winner": run_arm(apply_overrides(raw, winner), heldout, out / "heldout" / "winner", backends_factory, profile)}
+    base = run_arm(raw, heldout, out / "heldout" / "base", backends_factory, profile)
+    held = {"base": base, "winner": run_arm(apply_overrides(raw, winner), heldout, out / "heldout" / "winner",
+                                            backends_factory, profile) if winner else base}
     result = {"design": how, "dev": scored, "winner": winner, "heldout": summarise(held, "base"),
               "card": card_for(apply_overrides(raw, winner), out / "card", backends_factory), "profile": nested(winner)}
     (out / "tune.json").write_text(json.dumps(result, indent=2, default=str), encoding="utf-8")

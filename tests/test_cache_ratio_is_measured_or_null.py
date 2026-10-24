@@ -25,7 +25,7 @@ def conn(tmp_path):
 
 def record(conn: sqlite3.Connection, backend: str, task: str,
            input_tokens: int, cache_read: int) -> None:
-    from agent.instrument.telemetry import record_call
+    from conftest import record_call
     record_call(conn, task_id=task, backend=backend, purpose="step",
                 usage=TokenUsage(input_tokens=input_tokens, output_tokens=8,
                                  cache_read_tokens=cache_read),

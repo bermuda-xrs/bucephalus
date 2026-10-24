@@ -698,7 +698,7 @@ def _evaluate(ctx, task, backend, parsed, step: int) -> str | None:
             path = head.get("path") if isinstance(head, dict) and head.get("ok") else None
             if path and path not in files:
                 files.append(path)
-        if o.get("tool") in WRITERS + ("run_command",):
+        if o.get("tool") in (*WRITERS, "run_command"):
             diag = content[:1000]
     shown, state, root = [], task_state_paths(ctx, task), str(ctx.config.root)
     for path in files[-3:]:
@@ -797,8 +797,9 @@ def _keep_final_state(ctx, task) -> None:
 
 
 def _schema_route(ctx, backend) -> bool:
-    return (backend.cfg.needs_action_envelope and getattr(backend.cfg, "action_protocol", "json") != "tags"
-            and ctx.config.mechanisms.constrained_calls and backend.cfg.model_server == "ollama")
+    return (backend.cfg.needs_action_envelope and backend.cfg.tool_call_mode != "native"
+            and backend.cfg.action_protocol != "tags" and ctx.config.mechanisms.constrained_calls
+            and backend.cfg.model_server == "ollama")
 
 
 def _named(unread: dict) -> str:
@@ -853,6 +854,8 @@ def _unread_pages(ctx, task) -> dict[str, tuple[str, list[int]]]:
 def _stop_blocks(ctx, task) -> int:
     return ctx.conn.execute("SELECT COUNT(*) FROM events WHERE task_id=? AND type='hook.stop_blocked'",
                             (task.id,)).fetchone()[0]
+
+
 STUCK_WARN = 3
 STUCK_HALT = 6
 
@@ -932,23 +935,23 @@ def _verify(ctx, task, artifact: str):
 
 
 def _envelope(ctx, backend, tail: str, withheld: str | None = None, observed: bool = True) -> tuple[str, dict | None]:
-    if backend.cfg.needs_action_envelope:
-        if backend.cfg.tool_call_mode == "native":
-            return tail + "\n" + NATIVE_HINT, None
-        if getattr(backend.cfg, "action_protocol", "json") == "tags":
-            return tail + "\n" + say(ctx, ACTION_TAG_HINT), None
-        if ctx.config.mechanisms.constrained_calls and backend.cfg.model_server == "ollama":
-            hint = ACTION_SCHEMA_HINT if ctx.code_as_action else ACTION_SCHEMA_HINT_NO_CODE
-            if withheld:
-                hint += chr(10) + withheld
-            schema = build_action_schema(
-                ctx.tools, ctx.code_as_action, withheld is None,
-                thought=THOUGHT_MAX if backend.cfg.requires_thought else 0,
-                carry=CARRY_MAX if backend.cfg.requires_carry and observed else 0,
-                text_out=backend.cfg.code_out_of_json, names=aliases(ctx))
-            return tail + "\n" + say(ctx, hint), schema
+    if not backend.cfg.needs_action_envelope:
+        return tail, None
+    if backend.cfg.tool_call_mode == "native":
+        return tail + "\n" + NATIVE_HINT, None
+    if backend.cfg.action_protocol == "tags":
+        return tail + "\n" + say(ctx, ACTION_TAG_HINT), None
+    if not _schema_route(ctx, backend):
         return tail + "\n" + ACTION_SCHEMA_HINT, ACTION_SCHEMA
-    return tail, None
+    hint = ACTION_SCHEMA_HINT if ctx.code_as_action else ACTION_SCHEMA_HINT_NO_CODE
+    if withheld:
+        hint += chr(10) + withheld
+    schema = build_action_schema(
+        ctx.tools, ctx.code_as_action, withheld is None,
+        thought=THOUGHT_MAX if backend.cfg.requires_thought else 0,
+        carry=CARRY_MAX if backend.cfg.requires_carry and observed else 0,
+        text_out=backend.cfg.code_out_of_json, names=aliases(ctx))
+    return tail + "\n" + say(ctx, hint), schema
 
 
 FLUSH_NOTE = """\
@@ -1230,9 +1233,6 @@ def _hooked_perform(ctx, task, tool, tool_name: str, args: dict, step: int) -> t
     return obs, True
 
 
-FILE_EDITS = ("write_file", "edit_file", "apply_patch", "edit_lines")
-
-
 def _file_bytes(ctx, args: dict):
     from .tools import _resolve
 
@@ -1251,7 +1251,7 @@ def _perform(ctx, task, tool, tool_name: str, args: dict, step: int) -> LedgerEn
     ctx.log.append(task.id, "tool.intent", intent)
 
     t0 = time.time()
-    before = _file_bytes(ctx, args) if tool_name in FILE_EDITS else None
+    before = _file_bytes(ctx, args) if tool_name in WRITERS else None
     try:
         if tool_name == "run_code":
             from .codeact import run_code_action
@@ -1273,7 +1273,7 @@ def _perform(ctx, task, tool, tool_name: str, args: dict, step: int) -> LedgerEn
     except Exception as e:  # noqa: BLE001
         result = {"ok": False, "error": f"{type(e).__name__}: {e}"}
 
-    if (tool_name in FILE_EDITS and ctx.config.mechanisms.diagnostics
+    if (tool_name in WRITERS and ctx.config.mechanisms.diagnostics
             and isinstance(result, dict) and result.get("ok") and result.get("path")):
         from .diagnostics import diagnose
 
@@ -1286,7 +1286,7 @@ def _perform(ctx, task, tool, tool_name: str, args: dict, step: int) -> LedgerEn
                "wall_ms": int((time.time() - t0) * 1000)}
     if isinstance(result, dict):
         changed = bool(result.get("changed_files")) or (
-            tool_name in FILE_EDITS and bool(result.get("ok")) and _file_bytes(ctx, args) != before)
+            tool_name in WRITERS and bool(result.get("ok")) and _file_bytes(ctx, args) != before)
         if changed:
             receipt["changed"] = True
         if tool_name == "run_command" and result.get("verification"):
@@ -1319,8 +1319,6 @@ def _perform(ctx, task, tool, tool_name: str, args: dict, step: int) -> LedgerEn
 
 
 def _code_record(ctx, task, code: str) -> dict:
-    from ..kernel.events import sha256_hex
-
     taint = ctx.taint_tracker(task.id).args_taint({"code": code})
     aid = write_artifact(ctx.conn, task.id, "code", code, taint,
                          {"tool": "run_code", "role": "source"})
@@ -1386,7 +1384,6 @@ def condense_observation(ctx, task, text: str, taint: Taint, aid: str) -> tuple[
     question = f"What in this output bears on: {task.contract.goal}"
 
     op = f"condense:{'quarantine' if quarantined else 'compress'}:{question}"
-    cache_hit = {"v": False}
 
     def _summarize() -> dict:
         resp = ctx.call_model(
@@ -1404,7 +1401,6 @@ def condense_observation(ctx, task, text: str, taint: Taint, aid: str) -> tuple[
             value, hit = cached_op(ctx.conn, op, text, taint, _summarize)
         else:
             value, hit = _summarize(), False
-        cache_hit["v"] = hit
         summary = value.get("text", "")
     except Exception as e:  # noqa: BLE001
         ctx.log.append(
@@ -1415,7 +1411,7 @@ def condense_observation(ctx, task, text: str, taint: Taint, aid: str) -> tuple[
         return project(ctx.conn, aid, mode="summary", max_tokens=_inline_cap(ctx), hint=_elision_hint(ctx)), None
 
     note = "quarantined summary" if quarantined else "compressed"
-    if cache_hit["v"]:
+    if hit:
         note += ", cached"
     body = (
         f"[{note} by {backend.name}; {n:,} tokens of raw output kept in "

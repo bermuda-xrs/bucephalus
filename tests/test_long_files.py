@@ -128,3 +128,22 @@ def test_the_console_will_not_change_it_under_a_running_task(ctx, api, monkeypat
 def test_the_settings_pane_has_the_selector():
     js = (CONTROL / "ui.js").read_text(encoding="utf-8")
     assert 'id="longFiles"' in js and "/settings/long_files" in js
+
+
+def test_read_file_on_a_directory_says_so(ctx, task, workspace):
+    from agent.execute.tools import tool_read_file
+
+    (workspace / "sub").mkdir()
+    out = tool_read_file(ctx, task, "work/sub")
+    assert out["ok"] is False and "not a file" in out["error"]
+
+
+def test_read_file_reads_no_more_than_its_cap(ctx, task, workspace, monkeypatch):
+    from pathlib import Path
+
+    from agent.execute import tools
+
+    (workspace / "big.txt").write_text("x" * 50, encoding="utf-8")
+    monkeypatch.setattr(tools, "MAX_READ_CHARS", 10)
+    monkeypatch.setattr(Path, "read_text", lambda *a, **k: (_ for _ in ()).throw(AssertionError("read the whole file")))
+    assert tools.tool_read_file(ctx, task, "work/big.txt")["content"].startswith("x" * 10)

@@ -217,3 +217,16 @@ def test_b4_the_harness_14_tool_list_can_be_sent_for_comparison(sm, task, worksp
     sm.backends["cloud"].queue(JFINAL)
     run_task(sm, t.id)
     assert sm.backends["cloud"].calls[0]["tools"] == sm.tools.schemas()
+
+
+def test_b4_native_mode_withholds_nothing_through_a_schema_it_does_not_send(sm, task, workspace):
+    from agent.execute.loop import _schema_route
+
+    sm.backends["cloud"].cfg.tool_call_mode = "native"
+    assert _schema_route(sm, sm.backends["cloud"]) is False
+    t = _task(sm, task)
+    sm.backends["cloud"].queue(json.dumps({"kind": "action", "tool": "write_file",
+                                           "args": {"path": "work/a.py", "content": "x = 1" + chr(10)}}),
+                               '{"done": true}', '{"done": true}', '{"done": true}', '{"done": true}')
+    run_task(sm, t.id)
+    assert not [e for e in _events(sm, t, "verify.continued") if e.get("via") == "schema"]
