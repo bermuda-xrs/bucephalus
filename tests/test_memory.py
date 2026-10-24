@@ -10,7 +10,6 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from agent.kernel.types import Taint  # noqa: E402
 from agent.ledger.prefix import PrefixBuilder, PrefixGuard  # noqa: E402
-from agent.memory.provider import NoExternalProvider  # noqa: E402
 from agent.memory.store import (  # noqa: E402
     MemoryStore,
     MemoryTooLarge,
@@ -226,10 +225,3 @@ def test_the_memory_tools_refuse_to_write_during_a_measurement_run(tmp_path):
     out = tool_memory_write(Ctx(), None, "a fact")
     assert out["ok"] is False and "measurement runs" in out["error"]
     assert tool_memory_consolidate(Ctx(), None)["ok"] is False
-
-
-def test_tier_three_is_an_interface_with_no_implementation():
-    p = NoExternalProvider()
-    assert p.recall("anything") == []
-    with pytest.raises(NotImplementedError):
-        p.remember("x", Taint.USER)

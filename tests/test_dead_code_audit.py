@@ -37,8 +37,6 @@ KNOWN_INERT = {
     "_Text.handle_starttag": "HTMLParser callback, invoked by the stdlib.",
     "_Text.handle_endtag": "HTMLParser callback, invoked by the stdlib.",
 
-    "ExternalMemoryProvider.recall": "tier 3 is an interface; nothing implements it.",
-    "NoExternalProvider.recall": "the null implementation of that interface.",
 
 }
 
