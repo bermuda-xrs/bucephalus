@@ -39,6 +39,22 @@ Also: G1 optional git mode (a branch per task, children in worktrees; git is har
 ignores repository attributes, or git mode refuses), G2 `run_command` output streamed live to the console and TUI,
 G3 `config.architect.yaml`. F (isolation) was not built in this iteration.
 
+A read of the whole source (2026-10-24), each fix red first:
+- Broken: cloud backends dropped native tool calls (Anthropic `tool_use`, OpenAI `tool_calls`), so the loop saw an
+  empty reply; artifact ids were the content hash alone, so a task whose answer or tool output matched an earlier
+  task's had no row of its own (no answer in the console, no page holds, a higher taint kept); the auto-reviewer was
+  offered tools it could not run; native mode spent its final-answer holds on a schema it never sent; the small
+  profile got `edit_lines` without the anchors to use it; the bench base arm and the `tune` fill-ratio knob did not
+  survive the new small-profile defaults; the TUI cleared its side lists every 5 s; `true` passed as an integer.
+- Unsafe: `web_fetch` followed redirects to loopback and the LAN, robots.txt too; suite fixtures could be written
+  outside the root and a task key could point the grader out; `start_server` would start a server on 11434;
+  re-storing a skill body reset its status and its drafting declaration.
+- Wasteful: sandbox output was held in full while a program ran; read_file and the planner survey read whole files
+  for a bounded head; unread-page tracking pulled every tool output from SQLite each step; `tune` ran the held-out
+  base twice when the base won.
+- Dead: `AgentContext.record`, the registry's `CostVector`/`cost_vector()` and the throughput probe, `DocIn`,
+  `record_call` (now a test helper); one `steer()` and one `ToolRegistry.without` replace duplicated copies.
+
 - On the constrained-schema route (Ollama with `constrained_calls`), the final branch is left out of the schema while an
   opened file has unread pages (`read_all_pages`) or changed files have not been run (`verify_before_stop`), three
   steps each at most, as `read_first` does before the first observation. The 3B ignored the same requests as text.
