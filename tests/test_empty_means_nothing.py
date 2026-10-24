@@ -238,3 +238,14 @@ def test_none_declares_the_empty_set():
 
     assert _parse_drafted_from("none") == [] and _parse_drafted_from("NONE ") == []
     assert _parse_drafted_from("E01, M11") == ["E01", "M11"]
+
+
+def test_storing_a_body_again_does_not_reset_its_status_or_its_declaration(ctx):
+    sid = _skill(ctx, "Stored once.\n", {"drafted_by": "human", "drafted_from": ["E01"]})
+    ctx.skills.set_status(sid, "promoted")
+    with pytest.raises(ValueError, match="already stored"):
+        ctx.skills.store("again", "Stored once.\n", {"applies_when": "y"}, {})
+    s = ctx.skills.load(sid, verify=False)
+    assert s["status"] == "promoted" and s["name"].startswith("probe-")
+    prov = ctx.conn.execute("SELECT provenance_json FROM skills WHERE id=?", (sid,)).fetchone()[0]
+    assert '"E01"' in prov

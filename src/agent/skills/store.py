@@ -43,6 +43,10 @@ class SkillStore:
                 "comprehensive skills measurably hurt"
             )
         skill_id = sha256_hex(body)
+        held = self.conn.execute("SELECT name, version, status FROM skills WHERE id=?", (skill_id,)).fetchone()
+        if held:
+            raise ValueError(f"this skill body is already stored as {held[0]!r} v{held[1]} ({held[2]}); a stored "
+                             "skill is not replaced - its status and drafting declaration stand")
         version = version if version is not None else self._next_version(name)
 
         d = self.root / skill_id
