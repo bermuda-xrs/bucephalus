@@ -135,20 +135,20 @@ def _run(tree_dir: Path, tests: list[str], timeout: float,
     env = dict(os.environ, PYTHONPATH=str(tree_dir / "src"), PYTHONDONTWRITEBYTECODE="1")
     env.pop("ANTHROPIC_API_KEY", None)
     t0 = time.time()
-    out = tempfile.TemporaryFile()
-    p = subprocess.Popen(  # noqa: S603
-        [sys.executable, "-m", "pytest", "-x", "-q", "-rf", "-p", "no:cacheprovider",
-         "-o", "addopts=", "-o", "pythonpath=", *tests],
-        cwd=str(ROOT), env=env, stdout=out, stderr=subprocess.STDOUT)
-    try:
-        rc = p.wait(timeout)
-    except subprocess.TimeoutExpired:
-        _proc.kill_tree(p.pid)
-        return "timeout", time.time() - t0
-    if why is not None:
-        out.seek(0)
-        why.extend(line.split()[1] for line in out.read().decode("utf-8", "replace").splitlines()
-                   if line.startswith(("FAILED ", "ERROR ")) and len(line.split()) > 1)
+    with tempfile.TemporaryFile() as out:  # one per mutant: an unclosed one leaked a handle each
+        p = subprocess.Popen(  # noqa: S603
+            [sys.executable, "-m", "pytest", "-x", "-q", "-rf", "-p", "no:cacheprovider",
+             "-o", "addopts=", "-o", "pythonpath=", *tests],
+            cwd=str(ROOT), env=env, stdout=out, stderr=subprocess.STDOUT)
+        try:
+            rc = p.wait(timeout)
+        except subprocess.TimeoutExpired:
+            _proc.kill_tree(p.pid)
+            return "timeout", time.time() - t0
+        if why is not None:
+            out.seek(0)
+            why.extend(line.split()[1] for line in out.read().decode("utf-8", "replace").splitlines()
+                       if line.startswith(("FAILED ", "ERROR ")) and len(line.split()) > 1)
     return ("survived" if rc == 0 else "killed"), time.time() - t0
 
 
