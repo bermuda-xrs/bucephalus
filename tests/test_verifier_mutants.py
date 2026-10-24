@@ -92,43 +92,6 @@ def test_ruff_missing_is_a_refusal(tmp_path, monkeypatch):
     assert r.passed is False and "not installed" in r.observation
 
 
-@pytest.mark.parametrize("code,want", [("import sys\nsys.exit(0)\n", True),
-                                       ("import sys\nsys.exit(1)\n", False)])
-def test_execution_with_a_script_passes_exactly_on_exit_zero(code, want, tmp_path, monkeypatch):
-    script = tmp_path / "check.py"
-    script.write_text(code)
-    (tmp_path / "work").mkdir()
-    monkeypatch.chdir(tmp_path)
-    r = V.ExecutionVerifier(str(script)).check("", TaskContract(goal="g", artifact_scope=["work"]))
-    assert r.passed is want, r.observation
-
-
-SOURCES = {"a.md": "The bridge opened in 1932 and carries eight lanes of traffic.",
-           "b.md": "Harbour ferries run every twenty minutes."}
-
-
-def _cite(text):
-    return V.CitationCheckVerifier(SOURCES).check(text, TaskContract(goal="g"))
-
-
-def test_a_grounded_citation_passes_in_either_syntax():
-    assert _cite("[bridge opened 1932 carries lanes](a.md)").passed
-    assert _cite('<cite src="b.md">ferries every twenty minutes</cite>').passed
-
-
-def test_an_unsupported_or_unknown_citation_fails_and_scores_its_share():
-    r = _cite("[bridge opened 1932](a.md) and [bridge opened 1932](b.md)")
-    assert r.passed is False and r.score == 0.5 and "b.md does not support" in r.observation
-    assert _cite("[bridge opened](c.md)").passed is False
-
-
-def test_a_claim_with_no_words_is_not_grounded():
-    assert V._overlaps("a b c", "a b c") is False
-    assert V._overlaps("bridge opened", "the bridge opened") is True
-    assert V._overlaps("bridge ferries", "the bridge") is True
-    assert V._overlaps("bridge ferries lanes", "the bridge") is False
-
-
 def test_self_consistency_refuses_an_empty_answer():
     ctx = types.SimpleNamespace(backends={"cloud": None}, active_local_tier=lambda: None,
                                 call_model=lambda *a, **k: types.SimpleNamespace(text="42"))

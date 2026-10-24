@@ -4,7 +4,7 @@ import pytest
 
 from agent.userdata.store import SuiteTask, ValidationError, validate_task
 
-VERIFIERS = {"expected_value", "contains_all", "json_schema", "always_pass", "execution"}
+VERIFIERS = {"expected_value", "contains_all", "json_schema", "always_pass", "verify_program"}
 
 
 def _task(**kw) -> SuiteTask:

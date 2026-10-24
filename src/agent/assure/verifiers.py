@@ -155,76 +155,6 @@ def _validate(data, schema: dict, path: str = "$") -> list[str]:
     return errs
 
 
-class ExecutionVerifier:
-    kind = "execution"
-
-    def __init__(self, script_path: str | None = None):
-        self.script_path = script_path
-        self.inspects = "workspace" if script_path else "answer"
-
-    def check(self, artifact: str, contract: TaskContract,
-              root: str | None = None) -> VerifyResult:
-        from ..execute.sandbox import run_sandboxed
-
-        if not self.script_path:
-            return _refuse(self.kind, "execution has no script: running the "
-                                      "answer as code checks nothing about the "
-                                      "task. Use verify_program.")
-        code = Path(self.script_path).read_text(encoding="utf-8")
-        r = run_sandboxed(code, allowed_paths=contract.artifact_scope, timeout_s=30)
-        ok = r["returncode"] == 0
-        return VerifyResult(
-            passed=ok,
-            score=1.0 if ok else 0.0,
-            observation=f"returncode={r['returncode']}\nstdout:\n{r['stdout']}\nstderr:\n{r['stderr']}",
-            verifier_id=self.kind,
-        )
-
-
-class CitationCheckVerifier:
-    kind = "citation_check"
-
-    def __init__(self, sources: dict[str, str] | None = None):
-        self.sources = sources or {}
-
-    def check(self, artifact: str, contract: TaskContract,
-              root: str | None = None) -> VerifyResult:
-        cites = re.findall(r"\[([^\]]+)\]\(([^)]+)\)|<cite src=\"([^\"]+)\">([^<]*)</cite>", artifact)
-        if not cites:
-            return VerifyResult(
-                passed=False, score=0.0,
-                observation="no citations found; every claim needs a source",
-                verifier_id=self.kind,
-            )
-        bad: list[str] = []
-        checked = 0
-        for m in cites:
-            claim = m[0] or m[3]
-            src = m[1] or m[2]
-            body = self.sources.get(src)
-            if body is None:
-                bad.append(f"unknown source {src}")
-                continue
-            checked += 1
-            if not _overlaps(claim, body):
-                bad.append(f"{src} does not support {claim[:60]!r}")
-        score = 0.0 if not checked else (checked - len(bad)) / checked
-        return VerifyResult(
-            passed=not bad,
-            score=max(0.0, score),
-            observation="; ".join(bad) or f"{checked} citations grounded",
-            verifier_id=self.kind,
-        )
-
-
-def _overlaps(claim: str, body: str, threshold: float = 0.5) -> bool:
-    words = {w.lower() for w in re.findall(r"\w{4,}", claim)}
-    if not words:
-        return False
-    body_words = {w.lower() for w in re.findall(r"\w{4,}", body)}
-    return len(words & body_words) / len(words) >= threshold
-
-
 class SelfConsistencyVerifier:
     kind = "self_consistency"
 
@@ -461,8 +391,6 @@ def default_verifiers(ctx=None) -> dict[str, Verifier]:
         "expected_value": ExpectedValueVerifier(),
         "contains_all": ContainsAllVerifier(),
         "verify_program": VerifyProgramVerifier(),
-        "execution": ExecutionVerifier(),
-        "citation_check": CitationCheckVerifier(),
     }
     if ctx is not None:
         reg["self_consistency"] = SelfConsistencyVerifier(ctx)

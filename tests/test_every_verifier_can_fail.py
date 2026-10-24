@@ -211,3 +211,10 @@ def test_ruff_installed_still_fails_an_empty_workspace(places, tmp_path, monkeyp
     for answer in ANSWERS.values():
         r = V.RuffVerifier().check(answer, contract, root=str(places))
         assert not r.passed, r.observation
+
+
+def test_every_registered_verifier_can_pass_a_task_written_for_it():
+    from agent.assure.verifiers import default_verifiers
+
+    # `execution` had no script and `citation_check` no sources in the registry: offered everywhere, passable never
+    assert not {"execution", "citation_check"} & set(default_verifiers())
