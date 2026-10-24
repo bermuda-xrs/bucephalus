@@ -218,3 +218,14 @@ def test_latest_means_last_written_even_within_one_clock_tick(ctx, api, monkeypa
 def test_markdown_files_preview_rendered_and_others_as_text():
     assert "isMarkdownFile(" in UI and 'id="filePreview"' in HTML
     assert "(md|markdown)$" in UI and "renderMarkdown(d.text)" in UI
+
+
+@pytest.mark.skipif(NODE is None, reason="node is not installed")
+def test_emphasis_markers_inside_a_link_url_leave_the_url_alone():
+    out = _md("see [the doc](https://example.com/a_b_/**c**) and _this_")
+    assert '<a href="https://example.com/a_b_/**c**" rel="noopener noreferrer" target="_blank">the doc</a>' in out
+    assert "<em>this</em>" in out
+
+
+def test_the_suite_table_cuts_a_goal_before_escaping_it():
+    assert "esc(t.goal).slice(" not in UI

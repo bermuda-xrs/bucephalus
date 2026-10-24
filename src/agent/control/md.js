@@ -8,15 +8,18 @@
   function inline(text) {
     const codes = [];
     let s = esc(text).replace(/`([^`]+)`/g, (_, c) => { codes.push(c); return `\u0000${codes.length - 1}\u0000`; });
+    const links = [];  // held out like code, so emphasis markers in a URL never reach the href
     s = s.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (m, label, url) => {
       const raw = url.replace(/&amp;/g, "&");
-      return SAFE_URL.test(raw)
-        ? `<a href="${esc(raw)}" rel="noopener noreferrer" target="_blank">${label}</a>` : m;
+      if (!SAFE_URL.test(raw)) return m;
+      links.push(esc(raw));
+      return `<a href="\u0001${links.length - 1}\u0001" rel="noopener noreferrer" target="_blank">${label}</a>`;
     });
     s = s.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
          .replace(/(^|[^*\w])\*([^*\s][^*]*)\*(?!\w)/g, "$1<em>$2</em>")
          .replace(/(^|\W)_([^_\s][^_]*)_(?!\w)/g, "$1<em>$2</em>");
-    return s.replace(/\u0000(\d+)\u0000/g, (_, i) => `<code>${codes[Number(i)]}</code>`);
+    return s.replace(/\u0001(\d+)\u0001/g, (_, i) => links[Number(i)])
+            .replace(/\u0000(\d+)\u0000/g, (_, i) => `<code>${codes[Number(i)]}</code>`);
   }
 
   function renderMarkdown(src) {

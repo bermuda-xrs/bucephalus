@@ -934,7 +934,7 @@ async function createSuite() {
 }
 async function delSuite(id, name) {
   if (!confirm(`Delete the suite "${name}" and all its tasks?`)) return;
-  await api("/suites/" + id, {method: "DELETE"});
+  try { await api("/suites/" + id, {method: "DELETE"}); } catch (e) { return toast(e.message, true); }
   if (SUITE && SUITE.id === id) closeSuite();
   toast("Suite deleted."); loadSuites();
 }
@@ -966,7 +966,7 @@ function renderTasks() {
     const right = s["x-expected"] ? `<code>${esc(JSON.stringify(s["x-expected"]))}</code>`
       : s["x-contains"] ? `<code>${esc(JSON.stringify(s["x-contains"]))}</code>` : "Shape only";
     return `<tr><td><code>${esc(t.key)}</code>${t.catastrophic ? " (veto)" : ""}</td>
-      <td>${esc(t.goal).slice(0, 90)}</td><td><code>${esc(t.success_criterion)}</code></td><td>${right}</td>
+      <td>${esc(t.goal.slice(0, 90))}</td><td><code>${esc(t.success_criterion)}</code></td><td>${right}</td>
       <td class="r"><button class="quiet" data-action="delTask" ${args(t.id)}>Delete</button></td></tr>`;
   }).join("") : `<tr><td colspan="5" class="empty">No tasks yet.</td></tr>`;
 }
@@ -991,7 +991,7 @@ async function saveTask() {
   } catch (e) { toast(e.message, true); }
 }
 async function delTask(id) {
-  await api(`/suites/${SUITE.id}/tasks/${id}`, {method: "DELETE"});
+  try { await api(`/suites/${SUITE.id}/tasks/${id}`, {method: "DELETE"}); } catch (e) { return toast(e.message, true); }
   toast("Task deleted."); await openSuite(SUITE.id); loadSuites();
 }
 async function addSkill() {
@@ -1100,7 +1100,6 @@ new MutationObserver(() => document.querySelectorAll("i[data-pct]").forEach(i =>
   try {
     const [h, st] = await Promise.all([api("/health"), api("/panels/settings")]);
     S.settings = st;
-    const exec = st.backends.find(b => b.name === "cloud") || st.backends[0];
     $("#health").textContent = `Connected. ${h.backends.length} models configured.`;
     $("#chipProfile").textContent = `Profile: ${st.profile}`;
     if ($("#budUsd").value === "") $("#budUsd").placeholder = String(st.limits.default_task_budget_usd);
