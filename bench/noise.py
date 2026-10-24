@@ -416,6 +416,8 @@ def _noise_floor(args) -> int:
                   "before the first task. Paging rewrites a seconds-based "
                   "measurement - one call has been seen 18x slower.")
 
+    ctx.config.isolate_retrieval = True  # pinned by test_the_bench_turns_isolation_on_itself_not_from_yaml
+
     if args.executor:
         from agent.models.registry import build_backends
 
