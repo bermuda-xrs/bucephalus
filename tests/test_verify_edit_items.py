@@ -81,7 +81,8 @@ def test_d2_steps_without_a_tool_call_are_named(sm, task, workspace):
     assert "no_tool" in [e["kind"] for e in _events(sm, t, "stuck.warned")]
 
 
-def test_d2_is_off_unless_declared(sm, task, workspace):
+def test_d2_is_off_when_declared_off(sm, task, workspace):
+    sm.backends["cloud"].cfg.stuck_patterns = False
     t = _task(sm, task)
     sm.backends["cloud"].queue(*["not json at all"] * 4, FINAL)
     run_task(sm, t.id)
@@ -121,18 +122,21 @@ def test_e1_the_profile_gets_the_tool_only_in_hashline_format(small):
     from agent.context import AgentContext
     from conftest import make_config
 
-    assert "edit_lines" not in small.tools.names()
-    cfg = make_config(__import__("pathlib").Path(small.config.root) / "h")
-    cfg.backends["cloud"].tool_profile = "small"
-    cfg.backends["cloud"].edit_format = "hashline"
-    c = AgentContext(cfg)
-    try:
-        assert "edit_lines" in c.tools.names()
-    finally:
-        c.close()
+    assert "edit_lines" in small.tools.names()
+    for name, profile, fmt, has in (("full", "full", None, False), ("declared", "small", "default", False),
+                                    ("forced", "full", "hashline", True)):
+        cfg = make_config(__import__("pathlib").Path(small.config.root) / name)
+        cfg.backends["cloud"].tool_profile = profile
+        cfg.backends["cloud"].edit_format = fmt
+        c = AgentContext(cfg)
+        try:
+            assert ("edit_lines" in c.tools.names()) is has, (profile, fmt)
+        finally:
+            c.close()
 
 
-def test_d3_a_run_shows_the_escape_check_only_when_declared(sm, task, workspace):
+def test_d3_a_run_shows_the_escape_check_unless_declared_off(sm, task, workspace):
+    sm.backends["cloud"].cfg.escape_check = False
     t = _task(sm, task)
     bad = "import re" + chr(10) + "PAT = re.compile(r'[^" + chr(9) + "-x]')" + chr(10)
     sm.backends["cloud"].queue(_act("write_file", path="work/m.py", content=bad), FINAL)

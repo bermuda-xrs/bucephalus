@@ -8,6 +8,11 @@ import yaml
 from pydantic import BaseModel, Field
 
 
+SMALL_FILL_RATIO = 0.5
+MECHANISMS = ("compact_prompt", "evidence_pins", "stuck_patterns", "escape_check",
+            "code_out_of_json", "progress_file", "evaluator_pass", "send_tool_list")
+
+
 class BackendConfig(BaseModel):
     kind: Literal["anthropic", "ollama", "openai", "mock"]
     model: str
@@ -36,20 +41,20 @@ class BackendConfig(BaseModel):
     tool_profile: Literal["full", "patch", "small"] = "full"
     read_first: bool | None = None
     read_all_pages: bool | None = None
-    reasoning_field: bool | None = None
+    reasoning_field: bool = False
     carry_field: bool | None = None
     code_out_of_json: bool = False
     tool_call_mode: Literal["constrained", "native"] = "constrained"
     tool_names: Literal["internal", "familiar"] = "internal"
-    compact_prompt: bool = False
-    evidence_pins: bool = False
+    compact_prompt: bool | None = None
+    evidence_pins: bool | None = None
     progress_file: bool = False
     context_fill_ratio: float | None = None
-    stuck_patterns: bool = False
+    stuck_patterns: bool | None = None
     evaluator_pass: bool = False
-    edit_format: Literal["default", "hashline"] = "default"
+    edit_format: Literal["default", "hashline"] | None = None
     send_tool_list: bool = False
-    escape_check: bool = False
+    escape_check: bool | None = None
     observation_tokens: int | None = None
     assumed_tokens_per_sec: float = 5.0
 
@@ -78,9 +83,27 @@ class BackendConfig(BaseModel):
     def requires_observation(self) -> bool:
         return self.tool_profile == "small" if self.read_first is None else self.read_first
 
+    def on(self, name: str) -> bool:
+        v = getattr(self, name)
+        return self.tool_profile == "small" if v is None else bool(v)
+
+    @property
+    def edit_style(self) -> str:
+        return self.edit_format or ("hashline" if self.tool_profile == "small" else "default")
+
+    @property
+    def fill_ratio(self) -> float | None:
+        if self.context_fill_ratio is not None:
+            return self.context_fill_ratio
+        return SMALL_FILL_RATIO if self.tool_profile == "small" else None
+
+    def resolved(self) -> dict:
+        return {**{n: self.on(n) for n in MECHANISMS}, "reasoning_field": self.requires_thought,
+                "carry_field": self.requires_carry, "edit_format": self.edit_style, "context_fill_ratio": self.fill_ratio}
+
     @property
     def requires_thought(self) -> bool:
-        return self.tool_profile == "small" if self.reasoning_field is None else self.reasoning_field
+        return self.reasoning_field
 
     @property
     def requires_carry(self) -> bool:
@@ -241,7 +264,7 @@ WHOLE_FILL_RATIO = 0.75
 
 def fill_ratio(cfg, ctx=None) -> float:
     b = ctx.backends.get("cloud") if ctx is not None else None
-    own = b.cfg.context_fill_ratio if b is not None else (cfg.backends["cloud"].context_fill_ratio
+    own = b.cfg.fill_ratio if b is not None else (cfg.backends["cloud"].fill_ratio
                                                          if "cloud" in cfg.backends else None)
     r = own if own is not None else cfg.limits.context_fill_ratio
     return max(r, WHOLE_FILL_RATIO) if cfg.long_files == "whole" else r

@@ -79,7 +79,8 @@ def test_the_cap_stays_under_the_compaction_ceiling(small):
 
     small.backends["cloud"].cfg.context_window = 16384
     small.backends["cloud"].cfg.usable_context_window = 16384
-    small.config.limits.context_fill_ratio = 0.28
+    assert _inline_cap(small) <= int(16384 * 0.5 * 0.5)  # the small profile's own ceiling (C3)
+    small.backends["cloud"].cfg.context_fill_ratio = 0.28
     assert _inline_cap(small) <= int(16384 * 0.28 * 0.5)
 
 

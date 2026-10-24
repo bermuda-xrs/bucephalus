@@ -43,7 +43,7 @@ def test_the_code_branch_exists_only_with_code_as_action():
 def test_the_small_profile_schema_names_exactly_its_tools(small):
     s = build_action_schema(small.tools, code_as_action=small.code_as_action)
     tools = [b["properties"]["tool"]["const"] for b in s["anyOf"] if "tool" in b["properties"]]
-    assert sorted(tools) == sorted(SMALL_TOOLS)
+    assert sorted(tools) == sorted((*SMALL_TOOLS, "edit_lines"))  # hashline is the small profile's default (E1)
 
 
 def _local(small, constrained=True):

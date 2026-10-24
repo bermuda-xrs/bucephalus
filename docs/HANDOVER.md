@@ -76,24 +76,17 @@ Before any commit: tests red first, never weaken a check, nothing pushed.
 
 ## Next step
 
-Iteration 3 is closed (tag `iteration-3-closed`, on `main`). Iteration 4 is on branch `harness-14`, not merged: the
-suite passes there; the frozen gate and e2e have not been run on it.
+Iteration 4 (harness 15, CHANGELOG "Harness 15") measured every item on held-out generated families
+(`runs/iter4-heldout-20261015`, 3B, n = 12 paired instances per item over 2 families, n = 48 for the base). On for the
+small profile: C1 evidence pins and C3 ceiling 0.5 (multipage 0/6 -> 6/6 and 5/6), B2 carry and B6 compact prompt
+(same passes, fewer tokens), D2 stuck detection, D3 escape diagnostic, E1 hashline edits. Off: B1 (was on), B3, B4
+(11 -> 3), B5, C2, D1, the tool list. F (isolation) was not built.
 
-Harness 14 two-task pair (3B, 3 reps, n = 6 pairs): control 0, small 0. What moved: the small arm now reads every page
-of the handbook and runs its program. Why it still fails:
-- handbook-recall-005: four pages (about 7k tokens) cross the compaction ceiling (16384 x 0.28, about 4.6k); the
-  session boundary drops the pages read, and the answer names none of the three tickets.
-- write-function-002 (file kept by `workspace.final`): the regex is `[^<TAB>-\s]`, a literal tab where `\w` was meant,
-  so `slugify` returns `-`. The code travels inside a JSON string under a constrained schema, where `\w` is not a legal
-  escape; the model ran it, saw `-`, and answered.
-- The control arm (no new mechanisms, by design) never writes the file and never opens the handbook.
-
-Not working: both tasks on the 3B; the desktop app on Linux without GTK or Qt; D78 and D80.
+Not working: on the 3B the base passes 0/6 on multipage, config_edit and arithmetic; the kept items were measured one at
+a time, never together; the desktop app on Linux without GTK or Qt; D78 and D80.
 
 Needs the user: compute for the 8B run (needs 7.23 GB; 4.69 GB free here); D26 credentials; a Mac or bare-metal Linux.
 
-Next three: (1) the 8B run when compute arrives (`bench/profile_run.py --preflight --arms control,full8b,small8b`, then
-without `--preflight`); (2) write-function: let the small profile send code outside JSON (the tag protocol for
-`write_file` content, or a diagnostic that flags control characters in a written string literal), rerun; (3)
-handbook-recall: keep what was read across the boundary (a per-file note the model writes, or `long_files: whole` for
-the small profile), rerun.
+Next three: (1) one held-out run of base vs all kept items together, on the held-out seeds not yet used (13-39), to
+check they add up; (2) config_edit and arithmetic at 0/6: read the failing runs' events before adding any mechanism;
+(3) the 8B run when compute arrives (`bench/profile_run.py --preflight --arms control,full8b,small8b`).

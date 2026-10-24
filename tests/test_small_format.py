@@ -41,13 +41,53 @@ def _task(ctx, task):
     return create_task(ctx.conn, ctx.log, task.contract, task.budget)
 
 
-@pytest.mark.parametrize("field", ["requires_thought", "requires_carry"])
-def test_b1_b2_are_on_for_the_small_profile_only_unless_declared(field):
-    flag = {"requires_thought": "reasoning_field", "requires_carry": "carry_field"}[field]
-    assert getattr(BackendConfig(kind="mock", model="m"), field) is False
-    assert getattr(BackendConfig(kind="mock", model="m", tool_profile="small"), field) is True
-    assert getattr(BackendConfig(kind="mock", model="m", tool_profile="small", **{flag: False}), field) is False
-    assert getattr(BackendConfig(kind="mock", model="m", **{flag: True}), field) is True
+def test_b2_is_on_for_the_small_profile_only_unless_declared():
+    assert BackendConfig(kind="mock", model="m").requires_carry is False
+    assert BackendConfig(kind="mock", model="m", tool_profile="small").requires_carry is True
+    assert BackendConfig(kind="mock", model="m", tool_profile="small", carry_field=False).requires_carry is False
+    assert BackendConfig(kind="mock", model="m", carry_field=True).requires_carry is True
+
+
+def test_b1_is_off_by_default_after_the_held_out_measurement_but_can_be_declared():
+    assert BackendConfig(kind="mock", model="m", tool_profile="small").requires_thought is False
+    assert BackendConfig(kind="mock", model="m", tool_profile="small", reasoning_field=True).requires_thought is True
+
+
+KEPT = ("compact_prompt", "evidence_pins", "stuck_patterns", "escape_check")
+OFF = ("code_out_of_json", "progress_file", "evaluator_pass", "send_tool_list")
+
+
+@pytest.mark.parametrize("name", KEPT)
+def test_kept_items_are_on_for_the_small_profile_only_unless_declared(name):
+    assert BackendConfig(kind="mock", model="m").on(name) is False
+    assert BackendConfig(kind="mock", model="m", tool_profile="small").on(name) is True
+    assert BackendConfig(kind="mock", model="m", tool_profile="small", **{name: False}).on(name) is False
+    assert BackendConfig(kind="mock", model="m", **{name: True}).on(name) is True
+
+
+@pytest.mark.parametrize("name", OFF)
+def test_items_that_did_not_help_stay_off_even_for_the_small_profile(name):
+    assert BackendConfig(kind="mock", model="m", tool_profile="small").on(name) is False
+
+
+def test_e1_hashline_and_c3_a_wider_ceiling_are_the_small_profile_defaults():
+    from agent.config import SMALL_FILL_RATIO
+
+    small, full = BackendConfig(kind="mock", model="m", tool_profile="small"), BackendConfig(kind="mock", model="m")
+    assert small.edit_style == "hashline" and full.edit_style == "default"
+    assert BackendConfig(kind="mock", model="m", tool_profile="small", edit_format="default").edit_style == "default"
+    assert small.fill_ratio == SMALL_FILL_RATIO == 0.5 and full.fill_ratio is None
+    assert BackendConfig(kind="mock", model="m", tool_profile="small", context_fill_ratio=0.3).fill_ratio == 0.3
+    b = BackendConfig(kind="mock", model="m", tool_profile="small")
+    assert (b.tool_call_mode, b.tool_names) == ("constrained", "internal")
+
+
+def test_the_harness_card_records_the_resolved_mechanisms(sm):
+    from agent.card import harness_card
+
+    r = harness_card(sm)["resolved"]
+    assert r["compact_prompt"] is True and r["reasoning_field"] is False and r["edit_format"] == "hashline"
+    assert r["context_fill_ratio"] == 0.5
 
 
 def test_b1_the_thought_comes_first_and_is_bounded():
@@ -58,6 +98,7 @@ def test_b1_the_thought_comes_first_and_is_bounded():
 
 
 def test_b1_a_run_on_the_small_profile_asks_for_a_thought_and_parses_past_it(sm, task, workspace):
+    sm.backends["cloud"].cfg.reasoning_field = True
     (workspace / "a.txt").write_text("hello", encoding="utf-8")
     t = _task(sm, task)
     sm.backends["cloud"].queue(_act("read_file", thought="look first", path="work/a.txt"),

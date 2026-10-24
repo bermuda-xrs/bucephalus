@@ -263,7 +263,7 @@ def _run_task(ctx, task_id: str) -> TaskResult:
         for step in range(ctx.config.limits.max_steps):
             entries.extend(take_messages(ctx, task, step))
             exe = ctx.backends.get("cloud")
-            if exe is not None and exe.cfg.stuck_patterns:
+            if exe is not None and exe.cfg.on("stuck_patterns"):
                 _stuck_patterns(ctx, task, entries, history, warned, step)
             elapsed = time.time() - started
             if elapsed > charged_s:
@@ -560,7 +560,7 @@ NATIVE_HINT = ("Call one of the tools. When you have the answer, reply with the 
 
 def _compact(ctx) -> bool:
     b = ctx.backends.get("cloud")
-    return bool(b and b.cfg.compact_prompt)
+    return bool(b and b.cfg.on("compact_prompt"))
 
 
 def _tool_list(ctx, backend):
@@ -1012,7 +1012,7 @@ def _session_boundary(ctx, task, entries, window, step, plan, skills, builder,
     flushed, record = _flush_memory(ctx, task, builder, prefix, entries, step, plan)
     b = ctx.backends.get("cloud")
     entries = compact(entries, target_tokens=max(0, int(window * 0.20) - count_tokens(prefix)),
-                      objective=task.contract.goal if b is not None and b.cfg.evidence_pins else None) + flushed
+                      objective=task.contract.goal if b is not None and b.cfg.on("evidence_pins") else None) + flushed
     tombstoned = sum(1 for e in entries if e.kind == "tombstone")
     seed = write_artifact(
         ctx.conn, task.id, "session_seed", render_tail(entries),
@@ -1278,7 +1278,7 @@ def _perform(ctx, task, tool, tool_name: str, args: dict, step: int) -> LedgerEn
         from .diagnostics import diagnose
 
         exe = ctx.backends.get("cloud")
-        found = diagnose(result["path"], escapes=bool(exe and exe.cfg.escape_check))
+        found = diagnose(result["path"], escapes=bool(exe and exe.cfg.on("escape_check")))
         if found:
             result["diagnostics"] = found
     touched = result.pop("touched", None) if isinstance(result, dict) else None

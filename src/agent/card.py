@@ -43,6 +43,7 @@ def harness_card(ctx, slot: str = "cloud") -> dict:
     return {
         "model": cfg.model if cfg else None, "quant": quant, "ctx": cfg.budgeted_window if cfg else None,
         "profile": cfg.tool_profile if cfg else None, "backend": cfg.model_dump() if cfg else {},
+        "resolved": cfg.resolved() if cfg else {},
         "mechanisms": c.mechanisms.model_dump(),
         "settings": {"long_files": c.long_files, "limits": c.limits.model_dump(), "profile": c.profile,
                      "compress_observations_over_tokens": c.compress_observations_over_tokens,

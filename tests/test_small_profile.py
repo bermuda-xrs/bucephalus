@@ -16,7 +16,7 @@ def test_the_small_profile_has_exactly_these_six_tools_the_sixth_so_it_can_open_
 
 
 def test_a_small_context_registers_only_those(small):
-    assert small.tools.names() == sorted(SMALL_TOOLS)
+    assert small.tools.names() == sorted((*SMALL_TOOLS, "edit_lines"))  # hashline is the small default (E1)
 
 
 def test_the_small_prefix_and_schemas_show_only_those(small, task, scripted):
@@ -25,7 +25,7 @@ def test_the_small_prefix_and_schemas_show_only_those(small, task, scripted):
         small.conn, small.log, task.contract, task.budget)
     run_task(small, t.id)
     call = small.backends["cloud"].calls[0]
-    assert sorted(s["name"] for s in call["tools"]) == sorted(SMALL_TOOLS)
+    assert sorted(s["name"] for s in call["tools"]) == sorted((*SMALL_TOOLS, "edit_lines"))
     for gone in ("run_code", "memory_write", "web_fetch", "web_search", "delegate", "git_push", "glob", "grep"):
         assert f"{gone}(" not in call["prefix"], gone
     assert "<code>" not in call["prefix"], "no code-as-action on this tier"

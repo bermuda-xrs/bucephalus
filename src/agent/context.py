@@ -52,7 +52,7 @@ class AgentContext:
         executor = self.backends.get("cloud")
         self.tool_profile = executor.cfg.tool_profile if executor else "full"
         self.tools = apply_profile(self.tools, self.tool_profile)
-        if executor is not None and executor.cfg.edit_format == "hashline":
+        if executor is not None and executor.cfg.edit_style == "hashline":
             from .execute.tools import EDIT_LINES
 
             self.tools.register(EDIT_LINES)

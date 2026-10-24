@@ -10,7 +10,34 @@
 Dates are commit dates. `0.1.0` is not released yet — see "Unreleased" for
 what still stands between here and a first iteration.
 
-## Harness 14 - 2026-10-14 (HARNESS_VERSION 13 -> 14)
+## Harness 15 - 2026-10-15/24 (HARNESS_VERSION 14 -> 15; iteration 4, the S-tier items needing no training)
+
+Measurement: eight generated task families (`src/agent/families.py`, 40 seeds each, even seeds dev, odd held-out),
+a Harness Card in every run record, `bucephalus tune` (factorial on dev, winner confirmed on held-out),
+`bench/families_run.py` (paired arms, one run per distinct instance, resumable). Held-out run
+`runs/iter4-heldout-20261015`: 3B granite4.1, small profile, 6 instances per family, n = 48 for the base over 8
+families; each arm n = 12 paired instances over 2 families, McNemar exact p.
+
+| Item | Families | Base -> arm passes | Kept |
+|---|---|---|---|
+| C1 evidence pins | multipage, needle | 6 -> 12 (p 0.031); prompt tokens -28% | on for small |
+| C3 compaction ceiling 0.5 | multipage, needle | 6 -> 11 (p 0.063); tokens -39%, wall -36% | on for small |
+| B2 carry field | multipage, needle | 6 -> 6; tokens -28% | on for small |
+| B6 compact prompt | needle, extract_json | 12 -> 12; tokens -18% | on for small |
+| D2 stuck detection | multi_file, arithmetic | 3 -> 3 | on for small (bounds loops) |
+| D3 escape diagnostic | write_function, config_edit | 5 -> 5 | on for small (flags corrupt code) |
+| E1 hashline edits | config_edit, write_function | 5 -> 6; wall +33% | on for small (stale edits refused) |
+| L14 tool list in the prompt | write_function, needle | 11 -> 12 | off (no list stays the default) |
+| B1 thought field | write_function, multipage | 5 -> 5; wall +68% | off (was on for small) |
+| B3 code out of JSON | write_function, config_edit | 5 -> 4 | off |
+| B4 native tool calls | write_function, needle | 11 -> 3 (p 0.008) | off |
+| B5 familiar tool names | write_function, arithmetic | 5 -> 5 | off |
+| C2 progress file | multipage, config_edit | 0 -> 0 | off |
+| D1 evaluator pass | write_function, unanswerable | 8 -> 8; one more call | off (architect config uses it) |
+
+Also: G1 optional git mode (a branch per task, children in worktrees; git is hardened and must pass a probe that it
+ignores repository attributes, or git mode refuses), G2 `run_command` output streamed live to the console and TUI,
+G3 `config.architect.yaml`. F (isolation) was not built in this iteration.
 
 - On the constrained-schema route (Ollama with `constrained_calls`), the final branch is left out of the schema while an
   opened file has unread pages (`read_all_pages`) or changed files have not been run (`verify_before_stop`), three

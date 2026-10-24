@@ -27,7 +27,7 @@ def test_the_small_profile_card_says_so(small):
     from agent.card import harness_card
 
     card = harness_card(small)
-    assert card["profile"] == "small" and card["edit_format"] == "whole_file"
+    assert card["profile"] == "small" and card["edit_format"] == "hashline"
 
 
 def test_the_users_own_model_server_is_never_asked(ctx, monkeypatch):
