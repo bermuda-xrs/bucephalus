@@ -79,8 +79,8 @@ Before any commit: tests red first, never weaken a check, nothing pushed.
 Iteration 4 (harness 15, CHANGELOG "Harness 15") measured every item on held-out generated families
 (`runs/iter4-heldout-20261015`, 3B, n = 12 paired instances per item over 2 families, n = 48 for the base). On for the
 small profile: C1 evidence pins and C3 ceiling 0.5 (multipage 0/6 -> 6/6 and 5/6), B2 carry and B6 compact prompt
-(same passes, fewer tokens), D2 stuck detection, D3 escape diagnostic, E1 hashline edits. Off: B1 (was on), B3, B4
-(11 -> 3), B5, C2, D1, the tool list. F (isolation) was not built.
+(same passes, fewer tokens), stuck detection, the escape diagnostic, E1 hashline edits. Off: B1 (was on), B3, B4
+(11 -> 3), B5, C2, the evaluator pass, the tool list. F (isolation) was not built.
 
 Not working: on the 3B the base passes 0/6 on multipage, config_edit and arithmetic; the kept items were measured one at
 a time, never together; the desktop app on Linux without GTK or Qt; D78 and D80.
