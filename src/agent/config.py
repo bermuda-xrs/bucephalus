@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 import yaml
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 SMALL_FILL_RATIO = 0.5
@@ -13,7 +13,23 @@ MECHANISMS = ("compact_prompt", "evidence_pins", "stuck_patterns", "escape_check
             "code_out_of_json", "progress_file", "evaluator_pass", "send_tool_list")
 
 
-class BackendConfig(BaseModel):
+class _Section(BaseModel):
+    # unknown keys are kept only so they can be named: a misspelled key would otherwise be dropped in silence
+    model_config = ConfigDict(extra="allow")
+
+
+def ignored_keys(m: BaseModel, path: str = "") -> list[str]:
+    out = [path + k for k in (m.model_extra or {})]
+    for name in type(m).model_fields:
+        v = getattr(m, name)
+        items = v.items() if isinstance(v, dict) else enumerate(v) if isinstance(v, list) else [(None, v)]
+        for key, x in items:
+            if isinstance(x, BaseModel):
+                out += ignored_keys(x, f"{path}{name}." + ("" if key is None else f"{key}."))
+    return out
+
+
+class BackendConfig(_Section):
     kind: Literal["anthropic", "ollama", "openai", "mock"]
     model: str
     endpoint: str | None = None
@@ -126,7 +142,7 @@ class BackendConfig(BaseModel):
         }
 
 
-class Limits(BaseModel):
+class Limits(_Section):
     context_fill_ratio: float = 0.28
     default_task_budget_usd: float = 0.50
     default_task_budget_seconds: int = 600
@@ -136,27 +152,27 @@ class Limits(BaseModel):
     max_parallel_tools: int = 4
 
 
-class GateConfig(BaseModel):
+class GateConfig(_Section):
     min_paired_trials: int = 30
     min_lift_pp: float = 5.0
     max_p_value: float = 0.05
     min_discordant_pairs: int = 10
 
 
-class HookConfig(BaseModel):
+class HookConfig(_Section):
     argv: list[str]
     env: dict[str, str] = Field(default_factory=dict)
     tools: list[str] = Field(default_factory=list)
     timeout_s: int = 10
 
 
-class HooksConfig(BaseModel):
+class HooksConfig(_Section):
     pre_tool: list[HookConfig] = Field(default_factory=list)
     post_tool: list[HookConfig] = Field(default_factory=list)
     stop: list[HookConfig] = Field(default_factory=list)
 
 
-class McpServerConfig(BaseModel):
+class McpServerConfig(_Section):
     argv: list[str]
     env: dict[str, str] = Field(default_factory=dict)
     read_only: list[str] = Field(default_factory=list)
@@ -166,7 +182,7 @@ class McpServerConfig(BaseModel):
     start_timeout_s: int = 20
 
 
-class MechanismsConfig(BaseModel):
+class MechanismsConfig(_Section):
     compaction: bool = True
     semantic_cache: bool = True
     prefix_stability: bool = True
@@ -179,10 +195,10 @@ class MechanismsConfig(BaseModel):
     agents_md: bool = True
 
     def ablated(self) -> list[str]:
-        return sorted(k for k, v in self.model_dump().items() if not v)
+        return sorted(k for k in type(self).model_fields if not getattr(self, k))
 
 
-class AutonomyConfig(BaseModel):
+class AutonomyConfig(_Section):
     mode: Literal["plan_then_run", "interactive", "manual"] = "plan_then_run"
     plan_required: bool = True
     auto_review: bool = True
@@ -193,7 +209,7 @@ class AutonomyConfig(BaseModel):
     approve_scoped_writes: bool = False
 
 
-class TelegramConfig(BaseModel):
+class TelegramConfig(_Section):
     enabled: bool = False
     allowed_senders: list[str] = Field(default_factory=list)
     token_env: str = "BUCEPHALUS_TELEGRAM_TOKEN"
@@ -202,11 +218,11 @@ class TelegramConfig(BaseModel):
     artifact_scope: list[str] = Field(default_factory=lambda: ["work"])
 
 
-class ChannelConfig(BaseModel):
+class ChannelConfig(_Section):
     telegram: TelegramConfig = Field(default_factory=TelegramConfig)
 
 
-class UIConfig(BaseModel):
+class UIConfig(_Section):
     theme: str = "./themes/default.toml"
     banner_art: str = "./assets/banner.ans"
     background_image: str | None = None
@@ -214,7 +230,7 @@ class UIConfig(BaseModel):
     spinner: str = "braille"
 
 
-class Config(BaseModel):
+class Config(_Section):
     profile: Literal["local", "mixed"] = "mixed"
     db_path: str = "./agent.db"
     anchor_path: str = "./anchor/chain.anchor"
@@ -288,6 +304,11 @@ def config_from_raw(raw: dict, profile: str | None = None) -> Config:
         raw["profile"] = profile
     cfg = Config.model_validate(raw)
     cfg.validate_autonomy()
+    ignored = ignored_keys(cfg)
+    if ignored:
+        import sys
+
+        print(f"bucephalus: these config keys are not settings and were ignored: {', '.join(ignored)}", file=sys.stderr)
 
     from .profiles import enforce
 
@@ -295,6 +316,7 @@ def config_from_raw(raw: dict, profile: str | None = None) -> Config:
     cfg.profile_provenance["mechanisms"] = cfg.mechanisms.model_dump()
     cfg.profile_provenance["ablated"] = cfg.mechanisms.ablated()
     cfg.profile_provenance["long_files"] = cfg.long_files
+    cfg.profile_provenance["ignored_keys"] = ignored
     cfg.profile_provenance["compaction_boundary"] = (
         f"SYNTHETIC: forced at step {cfg.compaction_probe_step}, whatever the "
         "real context fill. Measures what compaction costs when it fires, and "
