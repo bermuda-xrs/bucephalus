@@ -5,6 +5,7 @@ import threading
 from rich.text import Text
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal, Vertical, VerticalScroll
+from textual.message import Message
 from textual.widgets import (
     Button,
     Footer,
@@ -23,6 +24,15 @@ from textual.widgets import (
 from .. import stream as bus
 from .model import ALERT_ROLE, RunState
 from .theme import banner_text, load, supports_glyphs
+
+
+JOIN_S = 30  # ponytail: closing waits this long for a step in flight; a longer one is left to the daemon thread
+
+
+class UiCall(Message):
+    def __init__(self, fn, args: tuple, kw: dict):
+        super().__init__()
+        self.fn, self.args, self.kw = fn, args, kw
 
 
 class BucephalusTUI(App):
@@ -62,6 +72,7 @@ class BucephalusTUI(App):
         self.theme_data = load(ctx.config.ui.theme, ctx.config.root)
         self._unsubscribe = None
         self._side: dict[str, list] = {}
+        self._threads: list[tuple[threading.Thread, str | None]] = []
         self._tick = 0
         self._model = self._executor_model()
 
@@ -178,7 +189,7 @@ class BucephalusTUI(App):
         self._unsubscribe = bus.subscribe(task_id, self._on_live)
 
     def _on_live(self, kind: str, data: dict) -> None:
-        self.call_from_thread(self._apply_live, kind, data)
+        self._ui(self._apply_live, kind, data)
 
     def _apply_live(self, kind: str, data: dict) -> None:
         self.state.apply_live(kind, data)
@@ -298,7 +309,7 @@ class BucephalusTUI(App):
         self.query_one("#plan", Static).display = True
         self.query_one("#trail", Tree).focus()
         tid = m["task_id"]
-        threading.Thread(target=self._draft, args=(tid,), daemon=True, name="tui-plan").start()
+        self._spawn(self._draft, tid, "tui-plan")
 
     def _draft(self, tid: str) -> None:
         from ..kernel.tasks import load_task
@@ -307,8 +318,8 @@ class BucephalusTUI(App):
         try:
             draft_plan(self.ctx, load_task(self.ctx.conn, tid))
         except Exception as e:  # noqa: BLE001
-            self.call_from_thread(self.notify, f"drafting failed: {e}", severity="error")
-        self.call_from_thread(self._after_change, tid)
+            self._ui(self.notify, f"drafting failed: {e}", severity="error")
+        self._ui(self._after_change, tid)
 
     def _after_change(self, tid: str) -> None:
         if tid == self.task_id:
@@ -392,13 +403,34 @@ class BucephalusTUI(App):
             except Exception as e:  # noqa: BLE001
                 bus.publish(tid, "token",
                             {"text": f"{chr(10)}[{type(e).__name__}] {e}{chr(10)}"})
-            self.call_from_thread(self._after_change, tid)
+            self._ui(self._after_change, tid)
 
-        threading.Thread(target=work, daemon=True, name="tui-run").start()
+        self._spawn(work, None, "tui-run", runs=tid)
+
+    def _ui(self, fn, *args, **kw) -> None:
+        # post_message is thread-safe and never blocks: call_from_thread waits on the loop, which a closing app holds
+        self.post_message(UiCall(fn, args, kw))
+
+    def on_ui_call(self, m: UiCall) -> None:
+        m.fn(*m.args, **m.kw)
+
+    def _spawn(self, target, arg, name: str, runs: str | None = None) -> None:
+        t = threading.Thread(target=target, args=() if arg is None else (arg,), daemon=True, name=name)
+        self._threads = [x for x in self._threads if x[0].is_alive()] + [(t, runs)]
+        t.start()
 
     def on_unmount(self) -> None:
+        from ..kernel.tasks import load_task, set_status
+        from ..kernel.types import TaskStatus
+
         if self._unsubscribe is not None:
             self._unsubscribe()
+        for t, tid in self._threads:
+            if tid and t.is_alive() and load_task(self.ctx.conn, tid).status == TaskStatus.RUNNING:
+                set_status(self.ctx.conn, self.ctx.log, load_task(self.ctx.conn, tid), TaskStatus.PAUSED,
+                           "human requested")
+        for t, _ in self._threads:
+            t.join(JOIN_S)  # the caller closes the database next; a write still in flight would crash it
 
 
 def run(ctx, task_id: str | None = None) -> None:

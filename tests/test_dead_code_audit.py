@@ -24,6 +24,7 @@ KNOWN_INERT = {
     "BucephalusTUI.compose": "Textual lifecycle hook.",
     "BucephalusTUI.on_mount": "Textual lifecycle hook.",
     "BucephalusTUI.on_unmount": "Textual lifecycle hook.",
+    "BucephalusTUI.on_ui_call": "Textual message handler, dispatched by name.",
     "BucephalusTUI.on_button_pressed": "Textual event handler, dispatched by name.",
     "BucephalusTUI.on_input_submitted": "Textual event handler, dispatched by name.",
     "BucephalusTUI.on_list_view_selected": "Textual event handler, dispatched by name.",

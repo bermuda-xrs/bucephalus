@@ -111,3 +111,32 @@ def test_the_side_lists_keep_their_items_when_nothing_changed(ctx, workspace):
             await pilot.pause(0.2)
             assert len(app.query_one("#convs").children) == 3
     asyncio.run(go())
+
+
+def test_closing_the_tui_mid_task_pauses_it_and_waits_for_its_thread(ctx, workspace):
+    import threading
+    import time
+
+    real = ctx.backends["cloud"]._responder
+
+    def slow(prefix, tail):
+        if "You are the planner" not in prefix:
+            time.sleep(1.5)
+        return real(prefix, tail) if real else '<final>{"answer": "ok"}</final>'
+
+    ctx.backends["cloud"]._responder = slow
+
+    async def go():
+        app = BucephalusTUI(ctx)
+        async with app.run_test(size=(140, 44)) as pilot:
+            app.query_one("#goal").value = "summarise work/notes.md"
+            await pilot.press("enter")
+            assert await _until(pilot, lambda: app.task_id is not None
+                                and "plan.drafted" in _events(ctx, app.task_id))
+            await pilot.press("s")
+            assert await _until(pilot, lambda: _status(ctx, app.task_id) == "running", 10)
+        return app.task_id
+
+    tid = asyncio.run(go())
+    assert not [t for t in threading.enumerate() if t.name.startswith("tui-")], "a TUI thread outlived the app"
+    assert _status(ctx, tid) in ("paused", "done")
