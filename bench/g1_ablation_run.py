@@ -8,6 +8,7 @@ import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "src"))
 
 PROBE_STEP = 2
 
@@ -109,8 +110,6 @@ def _main(argv=None) -> int:
 
 
 def main(argv=None) -> int:
-    import sys
-    sys.path.insert(0, str(__import__('pathlib').Path(__file__).resolve().parents[1] / 'src'))
     from agent.awake import keep_awake
 
     with keep_awake():

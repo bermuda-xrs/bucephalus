@@ -201,7 +201,7 @@ def run_rung(ctx, rung: str, key: str, model: str, samples: int,
     return out
 
 
-def _main() -> int:
+def _main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="the scaffold ladder")
     ap.add_argument("--config", default="config.local.yaml")
     ap.add_argument("--task", required=True,
@@ -223,7 +223,7 @@ def _main() -> int:
     ap.add_argument("--step-by-step", action="store_true",
                     help="add the v3 reasoning instruction to every rung")
     ap.add_argument("--out", default="runs/ladder.json")
-    args = ap.parse_args()
+    args = ap.parse_args(argv)
 
     reaped = reap_orphans()
     print(f"reaped {len(reaped)} orphan(s); free {free_memory_gb():.1f} GB\n")
@@ -276,12 +276,10 @@ def _main() -> int:
 
 
 def main(argv=None) -> int:
-    import sys
-    sys.path.insert(0, str(__import__('pathlib').Path(__file__).resolve().parents[1] / 'src'))
     from agent.awake import keep_awake
 
     with keep_awake():
-        return _main()
+        return _main(argv)
 
 
 if __name__ == "__main__":

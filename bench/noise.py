@@ -310,7 +310,7 @@ def write_report(dest: Path, report: dict) -> None:
     os.replace(tmp, dest)
 
 
-def _main() -> int:
+def _main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="measure the suite's noise floor")
     ap.add_argument("--config", default="config.local.yaml")
     ap.add_argument("--profile", default="local",
@@ -357,7 +357,7 @@ def _main() -> int:
     ap.add_argument("--resume", action="store_true",
                     help="reuse completed runs from the .partial.jsonl ledger "
                          "beside --out; a killed pass restarts where it stopped")
-    args = ap.parse_args()
+    args = ap.parse_args(argv)
 
     if args.order_seed is None:
         args.order_seed = random.randrange(1, 2**31 - 1)
@@ -792,12 +792,10 @@ def _noise_floor(args) -> int:
 
 
 def main(argv=None) -> int:
-    import sys
-    sys.path.insert(0, str(__import__('pathlib').Path(__file__).resolve().parents[1] / 'src'))
     from agent.awake import keep_awake
 
     with keep_awake():
-        return _main()
+        return _main(argv)
 
 
 if __name__ == "__main__":

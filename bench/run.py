@@ -191,12 +191,9 @@ def cmd_arms(args) -> int:
 
 
 def cmd_paired(args) -> int:
-    try:
-        _out = Path(args.out or "runs/x")
-        if not _out.is_absolute():
-            _out = Path(args.config).resolve().parent / _out
-        from agent.runlock import measurement_lock_path
+    from agent.runlock import measurement_lock_path
 
+    try:
         lock = RunLock(measurement_lock_path(Path(args.config).resolve().parent),
                        "calibration").acquire()
     except RunLockBusy as e:
@@ -365,7 +362,7 @@ def _print_arm(label: str, d: dict) -> None:
     print()
 
 
-def _main() -> int:
+def _main(argv=None) -> int:
     p = argparse.ArgumentParser(description="Bucephalus benchmark harness")
     p.add_argument("--config", default="config.yaml")
     p.add_argument("--profile", choices=["local", "mixed"],
@@ -400,17 +397,15 @@ def _main() -> int:
                         "skill that could have been informed by the drafting half")
     q.set_defaults(fn=cmd_paired)
 
-    args = p.parse_args()
+    args = p.parse_args(argv)
     return args.fn(args)
 
 
 def main(argv=None) -> int:
-    import sys
-    sys.path.insert(0, str(__import__('pathlib').Path(__file__).resolve().parents[1] / 'src'))
     from agent.awake import keep_awake
 
     with keep_awake():
-        return _main()
+        return _main(argv)
 
 
 if __name__ == "__main__":

@@ -7,11 +7,12 @@ import random
 import subprocess
 import sys
 import time
-from math import comb
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
+
+from agent.evals import mcnemar_exact  # noqa: E402
 
 NEW = ("diagnostics", "verify_before_stop", "constrained_calls", "stuck_detection", "shadow_checkpoints", "agents_md")
 B8 = "granite4.1:8b"
@@ -115,13 +116,6 @@ def run_arm(cfg: Path, arm: str, rep: int, suite: str, out: Path, models: str, t
     return dest
 
 
-def mcnemar_exact(b: int, c: int) -> float:
-    n = b + c
-    if n == 0:
-        return 1.0
-    return min(1.0, 2 * sum(comb(n, k) for k in range(min(b, c) + 1)) / 2 ** n)
-
-
 def summarise(out: Path, reps: int, arms=DEFAULT_ARMS) -> dict:
     rows, wall = [], {arm: [] for arm in arms}
     for rep in range(reps):
@@ -218,8 +212,6 @@ def _main(argv=None) -> int:
 
 
 def main(argv=None) -> int:
-    import sys
-    sys.path.insert(0, str(__import__('pathlib').Path(__file__).resolve().parents[1] / 'src'))
     from agent.awake import keep_awake
 
     with keep_awake():

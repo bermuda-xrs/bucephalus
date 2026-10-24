@@ -9,6 +9,7 @@ import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "src"))
 
 
 FINAL = '<final>{"answer": "done"}</final>'
@@ -276,7 +277,6 @@ def firerate() -> dict:
 
 
 def _main(argv=None) -> int:
-    sys.path.insert(0, str(ROOT / "src"))
     p = argparse.ArgumentParser()
     p.add_argument("what", choices=["savings", "firerate"])
     p.add_argument("--out", help="write the JSON here as well")
@@ -291,8 +291,6 @@ def _main(argv=None) -> int:
 
 
 def main(argv=None) -> int:
-    import sys
-    sys.path.insert(0, str(__import__('pathlib').Path(__file__).resolve().parents[1] / 'src'))
     from agent.awake import keep_awake
 
     with keep_awake():
