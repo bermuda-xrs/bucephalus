@@ -6,6 +6,7 @@ import shutil
 import subprocess
 import tempfile
 import threading
+from collections import deque
 from pathlib import Path
 from typing import Callable
 
@@ -20,6 +21,23 @@ OUTPUT_CAP = 16000
 TOOLCALL_MARKER = "\x01TOOLCALL"
 
 ToolHandler = Callable[[str, dict], dict]
+
+
+class _Tail:
+    def __init__(self, cap: int):
+        self.cap, self.n, self.parts = cap, 0, deque()
+
+    def add(self, text: str) -> None:
+        self.parts.append(text)
+        self.n += len(text)
+        while len(self.parts) > 1 and self.n - len(self.parts[0]) >= self.cap:
+            self.n -= len(self.parts.popleft())
+
+    def held(self) -> int:
+        return self.n
+
+    def text(self) -> str:
+        return "".join(self.parts)[-self.cap:]
 
 
 _LIMITS = dict(memory_bytes=MEM_LIMIT_BYTES, max_processes=MAX_PROCESSES,
@@ -559,10 +577,8 @@ def run_sandboxed(
         env = _build_env(workdir)
         argv = [*interpreter_argv(), str(script)]
 
-        if tool_handler is None and on_output is not None:
+        if tool_handler is None:
             result = _run_streaming(argv, workdir, env, timeout_s, on_output, limits)
-        elif tool_handler is None:
-            result = _run_batch(argv, workdir, env, timeout_s, limits)
         else:
             result = _run_with_bridge(argv, workdir, env, timeout_s, tool_handler, limits)
 
@@ -578,33 +594,6 @@ def run_sandboxed(
         return result
 
 
-def _run_batch(argv: list[str], workdir: str, env: dict, timeout_s: int,
-               limits: dict = _LIMITS) -> dict:
-    try:
-        proc, close = _platform.spawn_limited(
-            argv, timeout_s=timeout_s, **limits, cwd=workdir, env=env,
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
-            encoding="utf-8", errors="replace")
-    except LimitsRefused as e:
-        return _limits_refused(e)
-    try:
-        try:
-            out, err = proc.communicate(timeout=timeout_s)
-        except subprocess.TimeoutExpired:
-            close()
-            proc.kill()
-            proc.communicate()
-            return {"stdout": "", "stderr": "TIMEOUT", "returncode": -1}
-    finally:
-        close()
-    return {
-        "stdout": (out or "")[-OUTPUT_CAP:],
-        "stderr": ((err or "") + _platform.exit_note(proc, timeout_s))[-OUTPUT_CAP:],
-        "returncode": proc.returncode,
-    }
-
-
 LIVE_CAP = 20_000
 
 
@@ -615,14 +604,16 @@ def _run_streaming(argv: list[str], workdir: str, env: dict, timeout_s: int, on_
             stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace", bufsize=1)
     except LimitsRefused as e:
         return _limits_refused(e)
-    parts = {"out": [], "err": []}
+    parts = {"out": _Tail(OUTPUT_CAP), "err": _Tail(OUTPUT_CAP)}
     sent = {"n": 0}
     lock = threading.Lock()
 
     def pump(pipe, name: str) -> None:
         try:
-            for line in pipe:
-                parts[name].append(line)
+            for line in iter(lambda: pipe.readline(65536), ""):
+                parts[name].add(line)
+                if on_output is None:
+                    continue
                 with lock:
                     if sent["n"] < LIVE_CAP:
                         sent["n"] += len(line)
@@ -651,8 +642,8 @@ def _run_streaming(argv: list[str], workdir: str, env: dict, timeout_s: int, on_
             r.join(30)
     finally:
         close()
-    return {"stdout": "".join(parts["out"])[-OUTPUT_CAP:],
-            "stderr": ("".join(parts["err"]) + _platform.exit_note(proc, timeout_s))[-OUTPUT_CAP:],
+    return {"stdout": parts["out"].text(),
+            "stderr": (parts["err"].text() + _platform.exit_note(proc, timeout_s))[-OUTPUT_CAP:],
             "returncode": proc.returncode}
 
 
@@ -668,12 +659,13 @@ def _run_with_bridge(
     except LimitsRefused as e:
         return {**_limits_refused(e), "tool_calls": 0}
 
-    stderr_parts: list[str] = []
+    err = _Tail(OUTPUT_CAP)
 
     def _drain() -> None:
         try:
             with proc.stderr:  # closed by its reader: from another thread a close waits on a blocked read
-                stderr_parts.append(proc.stderr.read() or "")
+                for chunk in iter(lambda: proc.stderr.read(65536), ""):
+                    err.add(chunk)
         except Exception:  # noqa: BLE001
             pass
 
@@ -693,7 +685,7 @@ def _run_with_bridge(
     timer = threading.Timer(timeout_s, _kill)
     timer.start()
 
-    out_lines: list[str] = []
+    out = _Tail(OUTPUT_CAP)
     n_tool_calls = 0
     try:
         assert proc.stdout is not None and proc.stdin is not None
@@ -712,7 +704,7 @@ def _run_with_bridge(
                 except (BrokenPipeError, ValueError):
                     break
             else:
-                out_lines.append(line)
+                out.add(line)
         proc.wait(timeout=5)
     except Exception:  # noqa: BLE001
         _kill()
@@ -731,9 +723,8 @@ def _run_with_bridge(
         return {"stdout": "", "stderr": "TIMEOUT", "returncode": -1,
                 "tool_calls": n_tool_calls}
     return {
-        "stdout": "".join(out_lines)[-OUTPUT_CAP:],
-        "stderr": ("".join(stderr_parts)
-                   + _platform.exit_note(proc, timeout_s))[-OUTPUT_CAP:],
+        "stdout": out.text(),
+        "stderr": (err.text() + _platform.exit_note(proc, timeout_s))[-OUTPUT_CAP:],
         "returncode": proc.returncode if proc.returncode is not None else -1,
         "tool_calls": n_tool_calls,
     }
