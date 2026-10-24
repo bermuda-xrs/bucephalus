@@ -12,3 +12,4 @@ $py = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
 if (-not $py) { $py = "python" }
 
 & $py -m agent.cli --config (Join-Path $here "config.yaml") @args
+exit $LASTEXITCODE  # without it a -File caller sees 0 whatever the CLI returned (exec uses 2, 3, 4)

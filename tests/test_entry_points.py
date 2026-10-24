@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -51,3 +52,10 @@ def test_the_demo_runs_end_to_end():
     out = r.stdout.replace("\n", "")
     assert "chain verifies: True" in out, out[-300:]
     assert "model calls" in out, "the demo stopped before its summary"
+
+
+@pytest.mark.skipif(sys.platform != "win32" or not shutil.which("powershell"), reason="Windows PowerShell")
+def test_the_powershell_launcher_passes_the_exit_code_on():
+    r = subprocess.run(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(ROOT / "bucephalus.ps1"),
+                        "no-such-command"], capture_output=True, text=True, timeout=120)
+    assert r.returncode == 2, (r.returncode, r.stderr[-400:])
