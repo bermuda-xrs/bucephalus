@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 from dataclasses import dataclass, field
+from pathlib import Path
 
 from ..kernel.types import Budget, TaskContract
 from ..security.exposure import child_policy
@@ -20,28 +21,15 @@ class SubtaskPlan:
 
 
 def scope_widens(parent_scope: list[str], child_scope: list[str]) -> list[str]:
-    import os
-    from pathlib import Path
-
     if not parent_scope:
         return list(child_scope)
     roots = [Path(os.path.abspath(x)) for x in parent_scope]
-    out = []
-    for entry in child_scope:
+
+    def inside(entry: str) -> bool:
         p = Path(os.path.abspath(entry))
-        inside = False
-        for r in roots:
-            try:
-                p.relative_to(r)
-                inside = True
-                break
-            except ValueError:
-                if p == r:
-                    inside = True
-                    break
-        if not inside:
-            out.append(entry)
-    return out
+        return any(p == r or r in p.parents for r in roots)
+
+    return [entry for entry in child_scope if not inside(entry)]
 
 
 def may_delegate(ctx, task, subtask_plan: SubtaskPlan) -> tuple[bool, str]:
