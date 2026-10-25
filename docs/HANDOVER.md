@@ -51,12 +51,12 @@ One measurement process at a time (`src/agent/runlock.py`); nothing else runs du
 
 ## State
 
-Verified 2026-10-25 against commit `f2ed634` on `harness-14`: Windows suite, ruff, the frozen gate and a task through the
+Verified 2026-10-25 against commit `0698657` on `harness-14`: Windows suite, ruff, the frozen gate and a task through the
 rebuilt `bucephalus.exe`'s window, and the WSL2 suite (see the Branch row for whether it reached `main`).
 
 | Fact | Value | Regenerate with |
 |---|---|---|
-| Branch | `main`, fast-forwarded from `harness-14` (iteration 4 and the whole-source review) after the suite, the frozen gate, the frozen e2e and the WSL2 suite passed; tag `iteration-4-closed`; no remote | `git branch --show-current` |
+| Branch | `main`, fast-forwarded from `harness-14` (iteration 4 and two whole-source reviews) after the suite, the frozen gate, the frozen e2e and the WSL2 suite passed; tags `iteration-4-closed`, `review-2-closed`; no remote | `git branch --show-current` |
 | Harness version | **16**, bumped 2026-10-25 for the second whole-code review (CHANGELOG "Harness 16"); numbers from 15 and earlier do not compare | `grep HARNESS_VERSION src/agent/__init__.py` |
 | Toolset version | **7** | `grep TOOLSET_VERSION src/agent/__init__.py` |
 | Tests | not written down | `python -m pytest tests -q`; skips are live-credential tests (D26) and other-OS tests |
