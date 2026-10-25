@@ -675,9 +675,9 @@ const drop = $("#drop");
 drop.addEventListener("drop", e => { e.preventDefault(); [...e.dataTransfer.files].forEach(upload); });
 drop.addEventListener("paste", e => { [...(e.clipboardData || {}).files || []].forEach(upload); });
 
-function openControl(pane) {
+function openControl() {
   if ($("#control").hidden) RETURN_FOCUS = document.activeElement;
-  $("#control").hidden = false; openPane(pane || S.pane);
+  $("#control").hidden = false; openPane(S.pane);
 }
 function closeControl() { $("#control").hidden = true; restoreFocus(); }
 function restoreFocus() { const r = RETURN_FOCUS; RETURN_FOCUS = null; if (r && r.focus && r.offsetParent !== null) r.focus(); }

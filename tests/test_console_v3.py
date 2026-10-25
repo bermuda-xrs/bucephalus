@@ -245,3 +245,12 @@ def test_the_measurement_pane_reads_the_fields_the_inventory_returns(tmp_path):
     pane = UI[UI.index("async measurement()"):UI.index("async settings()")]
     read = set(re.findall(r"\br\.(\w+)", pane[:pane.index("<h4>Run records")]))
     assert read and read <= keys, read - keys
+
+
+def test_an_action_called_without_args_takes_no_parameter():
+    import re
+
+    # a button with no data-args hands its own element to the handler, which then reads it as the first argument
+    bare = {m.group(1) for m in re.finditer(r"<[^>]*data-action=\"(\w+)\"[^>]*>", HTML) if "data-args" not in m.group(0)}
+    takes = {n for n in bare if re.search(rf"function {n}\(\s*\w", UI)}
+    assert bare and not takes, f"called with the clicked element as their first argument: {sorted(takes)}"
