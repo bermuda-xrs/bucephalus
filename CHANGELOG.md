@@ -16,7 +16,8 @@ Prompt bytes are unchanged; the version moves because the planner is now offered
 - Broken: a Telegram refusal left its task parked for good, and the button read "denyd"; the console's Measurement
   pane showed no counts (it read `r.count`, the inventory returns `n`); `bucephalus.ps1` returned 0 under `-File`
   whatever `exec` returned; a suite import with one bad file left a half-imported suite; `execution` and
-  `citation_check` were registered with no script and no sources, so no task could pass them (removed).
+  `citation_check` were registered with no script and no sources, so no task could pass them (removed); every plain sandbox run
+  left its two output pipes open until garbage collection (since the bounded-tail change), caught by the WSL suite.
 - Unsafe: a misspelled config key is now named on stderr and in the run's provenance, its value never kept (a
   misspelled secret would otherwise reach the Harness Card and run records).
 - Wasteful: routing took a median by fetching every call row each decision, and the loop's per-type event counts

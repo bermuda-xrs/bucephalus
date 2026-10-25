@@ -159,3 +159,16 @@ def test_code_mode_collapses_turns(ctx, workspace, scripted):
     assert code_turns <= 3, f"code mode used {code_turns} turns"
     assert direct_turns >= 15, f"direct mode used only {direct_turns} turns"
     assert code_result.answer == direct_result.answer == {"total": 190}
+
+
+def test_a_plain_run_closes_every_pipe_it_opened():
+    import gc
+    import warnings
+
+    gc.collect()
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always", ResourceWarning)
+        r = run_sandboxed("import sys; print('x'); print('e', file=sys.stderr)")
+        gc.collect()
+    assert r["returncode"] == 0 and r["stderr"].strip() == "e"
+    assert not [w for w in caught if issubclass(w.category, ResourceWarning)], [str(w.message)[:120] for w in caught]

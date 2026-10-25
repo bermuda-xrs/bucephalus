@@ -610,17 +610,18 @@ def _run_streaming(argv: list[str], workdir: str, env: dict, timeout_s: int, on_
 
     def pump(pipe, name: str) -> None:
         try:
-            for line in iter(lambda: pipe.readline(65536), ""):
-                parts[name].add(line)
-                if on_output is None:
-                    continue
-                with lock:
-                    if sent["n"] < LIVE_CAP:
-                        sent["n"] += len(line)
-                        try:
-                            on_output(line)
-                        except Exception:  # noqa: BLE001
-                            pass
+            with pipe:  # closed by its reader: from another thread a close waits on a blocked read
+                for line in iter(lambda: pipe.readline(65536), ""):
+                    parts[name].add(line)
+                    if on_output is None:
+                        continue
+                    with lock:
+                        if sent["n"] < LIVE_CAP:
+                            sent["n"] += len(line)
+                            try:
+                                on_output(line)
+                            except Exception:  # noqa: BLE001
+                                pass
         except (OSError, ValueError):
             pass
 
