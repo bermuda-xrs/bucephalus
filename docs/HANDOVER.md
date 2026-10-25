@@ -66,7 +66,7 @@ rebuilt `bucephalus.exe`'s window, and the WSL2 suite (see the Branch row for wh
 | Platforms | Windows. POSIX has run six times, in WSL2 (`docs/evidence/wsl-2026-10-12/` is the last full checklist; the suite passed again 2026-10-25); bare-metal Linux never, and macOS (`src/agent/platform/darwin.py`) has never executed anywhere | `docs/PLATFORMS.md` section 5 is the checklist |
 | Security posture | the capability gate is the boundary; the sandbox (Job Object limits, advisory path/network fence) constrains a mistaken agent, not a hostile one: D32 | |
 | Phase program | complete | `RELEASE.md`, "ITERATION TWO: COMPLETE" |
-| Running now | nothing | `Get-Process python, ollama -ErrorAction SilentlyContinue` |
+| Running now | the harness-16 held-out run (plan item 1) | `Get-Process python, ollama -ErrorAction SilentlyContinue` |
 | Uncommitted | nothing | `git status --porcelain` |
 
 Workstyle: code carries no docstrings and almost no comments; the why is in commit messages
@@ -85,8 +85,14 @@ small profile: C1 evidence pins and C3 ceiling 0.5 (multipage 0/6 -> 6/6 and 5/6
 Not working: on the 3B the base passes 0/6 on multipage, config_edit and arithmetic; the kept items were measured one at
 a time, never together; the desktop app on Linux without GTK or Qt; D78 and D80.
 
-Needs the user: compute for the 8B run (needs 7.23 GB; 4.69 GB free here); D26 credentials; a Mac or bare-metal Linux.
+Needs the user: compute for the 8B run (needs 7.23 GB; 4.69 GB free here); D26 credentials; a Mac or bare-metal Linux; a yes or no on plan items 4 and 5.
 
-Next three: (1) one held-out run of base vs all kept items together, on the held-out seeds not yet used (13-39), to
-check they add up; (2) config_edit and arithmetic at 0/6: read the failing runs' events before adding any mechanism;
-(3) the 8B run when compute arrives (`bench/profile_run.py --preflight --arms control,full8b,small8b`).
+Plan, in order:
+1. Running now (`flight\h16.py`, ~7.5 h with its rests and the merge gates): one held-out run at harness 16 of base vs all
+   kept items together (arm `kept` in `bench/families_run.py`) on the held-out seeds not yet used (13-39; n = 14 per
+   family over 8 families). It is the harness-16 baseline and checks the kept items add up. Out: `runs/h16-heldout-20261025`.
+2. config_edit and arithmetic at 0/6: read the failing runs' events before adding any mechanism.
+3. The 8B run when compute arrives (`bench/profile_run.py --preflight --arms control,full8b,small8b`).
+4. On the user's yes: delete the branches already in `main` (`desktop-app`, `harness-8`, `harness-9`, `harness-10`,
+   `harness-14`, `iteration-3`, `iteration-4`, `iteration-5`, `measurement-2026-09-01`); the tags stay.
+5. The user's choice: a remote for an off-machine copy (there is none).

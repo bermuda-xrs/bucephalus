@@ -322,9 +322,9 @@ def generate(family: str, seed: int) -> dict:
     return FAMILIES[family](seed)
 
 
-def instances(families=None, split: str | None = None, n: int | None = None) -> list[dict]:
+def instances(families=None, split: str | None = None, n: int | None = None, skip: int = 0) -> list[dict]:
     out = []
     for fam in families or FAMILIES:
         got = [generate(fam, s) for s in range(SEEDS) if split is None or split_of(s) == split]
-        out += got[:n] if n else got
+        out += got[skip:skip + n] if n else got[skip:]
     return out

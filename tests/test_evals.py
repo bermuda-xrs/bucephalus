@@ -143,6 +143,23 @@ def test_the_bench_base_arm_declares_every_mechanism_off_whatever_the_profile_de
     assert r["edit_format"] == "default" and r["context_fill_ratio"] == 0.28
 
 
+def test_the_kept_arm_is_exactly_what_the_small_profile_ships_on_every_family():
+    import sys
+    from pathlib import Path
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "bench"))
+    import families_run as fr
+
+    from agent.config import BackendConfig
+
+    kept = fr.COMBINED["kept"]
+    mine = BackendConfig(kind="mock", model="m", **{k.split(".", 1)[1]: v for k, v in kept["overrides"].items()})
+    shipped = BackendConfig(kind="mock", model="m", tool_profile="small")
+    assert mine.resolved() == shipped.resolved()
+    assert (mine.tool_call_mode, mine.tool_names) == (shipped.tool_call_mode, shipped.tool_names)
+    assert all(fr.runs_on("kept", F.generate(fam, 13)) for fam in F.FAMILIES)
+
+
 def test_the_fill_ratio_knob_moves_the_ceiling_on_the_small_profile_too(tmp_path):
     from agent.config import config_from_raw, fill_ratio
 

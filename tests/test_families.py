@@ -28,6 +28,13 @@ def test_eight_families_of_forty_seeds_split_by_seed():
         assert len({s["key"] for s in dev + held}) == F.SEEDS
 
 
+def test_skip_takes_the_seeds_after_the_ones_already_measured():
+    held = F.instances(["needle", "arithmetic"], "heldout")
+    got = F.instances(["needle", "arithmetic"], "heldout", 14, skip=6)
+    assert got == held[6:20] + held[26:40]
+    assert [s["seed"] for s in got[:14]] == list(range(13, 40, 2))
+
+
 @pytest.mark.parametrize("fam", ALL)
 def test_generation_is_deterministic(fam):
     assert F.generate(fam, 7) == F.generate(fam, 7) and F.generate(fam, 7) != F.generate(fam, 8)
