@@ -150,7 +150,7 @@ $("#convSearch").addEventListener("input", () => { clearTimeout(searchTimer);
   searchTimer = setTimeout(() => { S.lastSide = ""; loadSide(); }, 200); });
 
 async function newConversation() {
-  closeStreams(); S.conv = null; S.thread = null; S.loose = null;
+  closeStreams(); S.conv = null; S.thread = null; S.loose = null; clearTrace();
   $("#convTitle").textContent = "New conversation";
   renderWelcome(); S.lastSide = ""; loadSide(); updateRing(null); $("#ask").focus();
   closeSideOnPhone();
@@ -387,7 +387,7 @@ async function doRewind(taskId, what) {
 }
 function goalOf(taskId) {
   const it = ((S.thread && S.thread.items) || []).find(x => x.task_id === taskId);
-  return it ? it.goal : "";
+  return it ? it.goal : taskId === S.loose ? S.looseGoal || "" : "";
 }
 function askAgain(taskId) { send(goalOf(taskId)); }
 function editAsk(taskId) { const a = $("#ask"); a.value = goalOf(taskId); a.focus(); a.setSelectionRange(a.value.length, a.value.length); }
@@ -496,8 +496,9 @@ async function looseItem(taskId) {
           budget: t.budget, plan, approvals: gates.pending, answer: t.answer_shown};
 }
 async function openTaskAlone(taskId) {
-  closeStreams(); S.conv = null; S.loose = taskId;
+  closeStreams(); S.conv = null; S.thread = null; S.loose = taskId;
   const it = await looseItem(taskId);
+  S.looseGoal = it.goal;
   $("#convTitle").textContent = firstLine(it.goal);
   $("#items").innerHTML = renderItem(it);
   S.traceTask = taskId; S.trace = null; loadTrace();
@@ -506,7 +507,7 @@ async function openTaskAlone(taskId) {
   closeSideOnPhone();
 }
 async function openLooseList() {
-  closeStreams(); S.conv = null; S.loose = null;
+  closeStreams(); S.conv = null; S.loose = null; clearTrace();
   const d = await api("/tasks");
   const loose = [];
   for (const t of d.tasks) loose.push(`<button class="side-item" data-action="openTaskAlone" ${args(t.task_id)}>
@@ -637,12 +638,19 @@ function setView(v) {
   VIEW = VIEWS[v] ? v : "normal";
   try { localStorage.setItem("bucephalus-view", VIEW); } catch { /* per-viewer only */ }
   $("#app").classList.toggle("trace-on", VIEW !== "normal");
-  $$(".views [data-view]").forEach(b => b.setAttribute("aria-checked", String(b.dataset.view === VIEW)));
+  $$(".views [data-view]").forEach(b => { const on = b.dataset.view === VIEW; b.setAttribute("aria-checked", String(on)); b.tabIndex = on ? 0 : -1; });
   $("#traceTitle").textContent = VIEWS[VIEW].name;
   if (VIEW === "thinking") $("#traceDetail").hidden = true;
   if (VIEW !== "normal") loadTrace();
 }
 function closeTrace() { setView("normal"); }
+function clearTrace() { S.traceTask = null; S.trace = null; S.traceSel = null; $("#traceDetail").hidden = true; renderTrace(); }
+$(".views").addEventListener("keydown", e => {
+  const keys = Object.keys(VIEWS), d = {ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1}[e.key];
+  if (!d) return;
+  e.preventDefault(); setView(keys[(keys.indexOf(VIEW) + d + keys.length) % keys.length]);
+  $(`.views [data-view="${VIEW}"]`).focus();
+});
 $(".views").addEventListener("click", e => { const b = e.target.closest("[data-view]"); if (b) setView(b.dataset.view); });
 function traceTask(taskId) {
   S.traceTask = taskId;
@@ -1262,6 +1270,7 @@ document.addEventListener("keydown", e => {
   else if (e.key === "Escape") {
     if (!$("#palette").hidden) closePalette();
     else if (!$("#control").hidden) closeControl();
+    else if ($("details.more[open]")) $("details.more[open]").open = false;
     else closeSideOnPhone();
   }
 });
@@ -1276,6 +1285,7 @@ const ACTIONS = {newConversation, selectConversation, renameConversation, archiv
   openSuite, delSuite, delTask, checkGate, pinConversation, exportConversation, enableNotifications,
   runModel, stopTask, resumeTask, toggleTool, setView, closeTrace, traceTask, traceNode, closeTraceDetail, showRewind, showChanges, doRewind, askAgain, editAsk, copyAnswer, copyCode, forgetMemory, addSchedule, removeSchedule, viewSkill};
 document.addEventListener("click", e => {
+  $$("details.more[open]").forEach(d => { if (!d.contains(e.target)) d.open = false; });
   const el = e.target.closest("[data-action]");
   if (!el || !ACTIONS[el.dataset.action]) return;
   const menu = el.closest("details.more"); if (menu) menu.open = false;

@@ -312,6 +312,9 @@ td.r, th.r { text-align: right; }
 }
 @media (max-width: 760px) {
   .app { --side: 0px; }
+  .thread-head { flex-wrap: wrap; row-gap: 6px; padding: 6px 12px; }
+  .thread-head .views { order: 3; flex: 1 0 100%; }
+  .thread-head .views button { flex: 1; }
   .side { position: fixed; left: 0; top: 0; bottom: 0; width: min(300px, 88vw); z-index: 16; display: none;
           box-shadow: 8px 0 24px rgba(0, 0, 0, .35); }
   .app.side-open .side { display: flex; }
