@@ -51,12 +51,12 @@ One measurement process at a time (`src/agent/runlock.py`); nothing else runs du
 
 ## State
 
-Verified 2026-10-26 against commit `0c7a38e` on `heldout-h16`: Windows suite, ruff, the frozen gate and a task through the
+Verified 2026-10-26 against commit `8e97bdb` on `ui-dark`: Windows suite, ruff, the frozen gate and a task through the
 rebuilt `bucephalus.exe`'s window, and the WSL2 suite (see the Branch row for whether it reached `main`).
 
 | Fact | Value | Regenerate with |
 |---|---|---|
-| Branch | `main`, fast-forwarded from `harness-14` (iteration 4, two whole-source reviews, the harness-16 baseline) after the suite, the frozen gate, the frozen e2e and the WSL2 suite passed; tags `iteration-4-closed`, `review-2-closed`; no remote | `git branch --show-current` |
+| Branch | `main`, fast-forwarded from `harness-14` (iteration 4, two whole-source reviews, the harness-16 baseline, the console split view) after the suite, the frozen gate, the frozen e2e and the WSL2 suite passed; tags `iteration-4-closed`, `review-2-closed`; no remote | `git branch --show-current` |
 | Harness version | **16**, bumped 2026-10-25 for the second whole-code review (CHANGELOG "Harness 16"); numbers from 15 and earlier do not compare | `grep HARNESS_VERSION src/agent/__init__.py` |
 | Toolset version | **7** | `grep TOOLSET_VERSION src/agent/__init__.py` |
 | Tests | not written down | `python -m pytest tests -q`; skips are live-credential tests (D26) and other-OS tests |
@@ -105,5 +105,5 @@ Plan, in order:
 3. arithmetic: point a numeric-total task at run_command (one mechanism, one measured run).
 4. The 8B run when compute arrives (`bench/profile_run.py --preflight --arms control,full8b,small8b`).
 5. On the user's yes: delete the branches already in `main` (`desktop-app`, `harness-8`, `harness-9`, `harness-10`,
-   `harness-14`, `iteration-3`, `iteration-4`, `iteration-5`, `measurement-2026-09-01`, `heldout-h16`); the tags stay.
+   `harness-14`, `iteration-3`, `iteration-4`, `iteration-5`, `measurement-2026-09-01`, `heldout-h16`, `ui-dark`); the tags stay.
 6. The user's choice: a remote for an off-machine copy (there is none).
