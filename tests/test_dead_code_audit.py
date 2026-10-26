@@ -124,11 +124,14 @@ def test_the_known_list_does_not_rot():
 def test_every_source_file_parses_cleanly():
     import warnings
 
-    skip = {".git", "build", "dist", ".venv", "node_modules", "__pycache__"}
+    import subprocess
+
+    # tracked and new files alike, but not what .gitignore excludes: runs/ holds code the model wrote
+    listed = subprocess.run(["git", "ls-files", "--cached", "--others", "--exclude-standard", "*.py"], cwd=ROOT,
+                            capture_output=True, text=True, encoding="utf-8", check=True).stdout.splitlines()
+    assert listed, "git listed no Python files"
     bad = []
-    for f in sorted(ROOT.rglob("*.py")):
-        if skip & set(f.relative_to(ROOT).parts):
-            continue
+    for f in sorted(ROOT / x for x in listed):
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter("always")
             try:
