@@ -24,6 +24,12 @@ from .events import stream_events
 from .guard import ALLOW_REMOTE_ENV, AccessGuard, resolve_token
 
 GRACEFUL_SHUTDOWN_S = 1
+# what the trace pane may show: an allowlist, so the monitor's own events never reach the page
+TRACE_EVENTS = ("model.called", "model.returned", "model.thought", "tool.intent", "tool.receipt", "review.requested",
+                "review.decided", "verify.passed",
+                "verify.failed", "read_first.held", "pages.unread_held", "verify.continued", "stuck.warned",
+                "stuck.detected", "hook.stop_blocked", "evaluator.returned", "human.message_delivered",
+                "human.approved", "human.denied", "tool.not_exposed", "hook.denied", "delegation.opened", "task.status_changed")
 
 
 class CreateTask(BaseModel):
@@ -300,6 +306,13 @@ def create_app(ctx: AgentContext) -> FastAPI:
             elif d.get("key") in by_key:
                 by_key[d["key"]].update(ok=bool(d.get("ok")), ms=d.get("wall_ms"))
         return out
+
+    @app.get("/tasks/{task_id}/trace")
+    def get_trace(task_id: str) -> list:
+        _task(task_id)
+        rows = ctx.conn.execute(f"SELECT seq, type, payload_json FROM events WHERE task_id=? AND type IN "
+                                f"({','.join('?' * len(TRACE_EVENTS))}) ORDER BY seq", (task_id, *TRACE_EVENTS))
+        return [{"seq": seq, "type": t, "data": json.loads(p)} for seq, t, p in rows]
 
     @app.get("/tasks/{task_id}/call")
     def get_call(task_id: str, key: str) -> dict:

@@ -19,7 +19,7 @@ window.addEventListener("hashchange", () => {
 let RETURN_FOCUS = null;           // where focus goes back when a dialog closes
 const S = {conv: null, thread: null, loose: null, archived: false, streams: new Map(), trails: new Map(),
            drafting: new Set(), answers: new Map(), filesTask: null, filesPath: "", pane: "memory",
-           lastSide: "", rewind: null, changes: null, callsLoaded: new Set()};
+           lastSide: "", rewind: null, changes: null, callsLoaded: new Set(), traceTask: null, trace: null, traceSel: null};
 
 function toast(msg, bad) {
   const t = $("#toast"); t.textContent = msg; t.className = "show" + (bad ? " bad" : "");
@@ -162,7 +162,7 @@ function renderWelcome() {
     <p>A follow-up in the same conversation is a new task, with its own plan.</p></div>`;
 }
 async function selectConversation(id) {
-  if (id !== S.conv) closeStreams();
+  if (id !== S.conv) { closeStreams(); S.traceTask = null; S.trace = null; }
   S.conv = id; S.loose = null; S.lastSide = "";
   await refreshThread(true); loadSide(); closeSideOnPhone();
 }
@@ -182,6 +182,7 @@ async function refreshThread(scroll) {
     }
   }
   renderItems(th.items);
+  syncTrace(th.items);
   const last = th.items[th.items.length - 1];
   updateRing(last ? last.task_id : null);
   if (last && S.filesTask !== last.task_id) loadFiles(last.task_id, "");
@@ -301,7 +302,8 @@ function runCard(it) {
     <div class="status"><span><b class="${cls}">${esc(statusWord(it.status))}</b></span>
       <span>$${Number(b.spent_usd || 0).toFixed(4)} of $${Number(b.usd || 0).toFixed(2)}</span>
       <span>${secs(b.spent_seconds || 0)} of ${secs(b.seconds || 0)}</span>
-      <span id="steps-${esc(it.task_id)}">${trail(it.task_id).step ? `step ${trail(it.task_id).step}` : ""}</span></div>
+      <span id="steps-${esc(it.task_id)}">${trail(it.task_id).step ? `step ${trail(it.task_id).step}` : ""}</span>
+      <button class="link trace-link" data-action="traceTask" ${args(it.task_id)}>Trace</button></div>
     <div class="budget" aria-hidden="true"><i data-pct="${pct}"></i></div>
     <p class="prefill" id="pre-${esc(it.task_id)}" ${trail(it.task_id).waiting ? "" : "hidden"}><span class="spin"></span> Reading its prompt before the first word. On a CPU this is most of a turn.</p>
     <div class="live" id="live-${esc(it.task_id)}" aria-live="off">${esc(trail(it.task_id).live)}</div>
@@ -498,6 +500,7 @@ async function openTaskAlone(taskId) {
   const it = await looseItem(taskId);
   $("#convTitle").textContent = firstLine(it.goal);
   $("#items").innerHTML = renderItem(it);
+  S.traceTask = taskId; S.trace = null; loadTrace();
   updateRing(taskId); loadFiles(taskId, "");
   if (it.status === "running") openStream(taskId);
   closeSideOnPhone();
@@ -613,7 +616,190 @@ function onEvent(taskId, name, d) {
   } else if (name === "task.status" || name === "budget.updated") {
     clearTimeout(onEvent._t); onEvent._t = setTimeout(afterChange, 1500);
   }
+  if (taskId !== S.traceTask || VIEW === "normal") return;
+  if (name === "live.token" || name === "live.tool_output") {
+    const l = $("#traceLive"); if (l) { l.textContent = tr.live; l.scrollTop = l.scrollHeight; }
+  } else if (name.startsWith("tool.") || name === "live.step" || name === "task.status") {
+    clearTimeout(S.traceT); S.traceT = setTimeout(loadTrace, 400);
+  }
 }
+
+// ------------------------------------------------------------ views and the trace pane
+const VIEWS = {
+  normal: {name: "Normal", hint: "Answers and plans only"},
+  thinking: {name: "Thinking", hint: "What the model said it was thinking"},
+  verbose: {name: "Verbose", hint: "Every step, tool call, edit and check"},
+  graph: {name: "Graph", hint: "Every step, drawn as a graph"},
+};
+let VIEW = "normal";
+try { const v = localStorage.getItem("bucephalus-view"); if (VIEWS[v]) VIEW = v; } catch { /* per-viewer only */ }
+function setView(v) {
+  VIEW = VIEWS[v] ? v : "normal";
+  try { localStorage.setItem("bucephalus-view", VIEW); } catch { /* per-viewer only */ }
+  $("#app").classList.toggle("trace-on", VIEW !== "normal");
+  $$(".views [data-view]").forEach(b => b.setAttribute("aria-checked", String(b.dataset.view === VIEW)));
+  $("#traceTitle").textContent = VIEWS[VIEW].name;
+  if (VIEW === "thinking") $("#traceDetail").hidden = true;
+  if (VIEW !== "normal") loadTrace();
+}
+function closeTrace() { setView("normal"); }
+$(".views").addEventListener("click", e => { const b = e.target.closest("[data-view]"); if (b) setView(b.dataset.view); });
+function traceTask(taskId) {
+  S.traceTask = taskId;
+  if (VIEW === "normal") setView("verbose"); else loadTrace();
+}
+function syncTrace(items) {
+  if (!S.traceTask || !items.some(x => x.task_id === S.traceTask)) S.traceTask = items.length ? items[items.length - 1].task_id : null;
+  const it = items.find(x => x.task_id === S.traceTask);
+  if (VIEW !== "normal" && (!S.trace || S.trace.task !== S.traceTask || (it && S.trace.status !== it.status))) loadTrace();
+}
+const EDIT_TOOLS = new Set(["write_file", "edit_file", "edit_lines", "apply_patch"]);
+const HOLDS = {"read_first.held": "held: read before answering", "pages.unread_held": "held: pages left unread",
+  "verify.continued": "held: run a check first", "stuck.warned": "warned: repeating itself",
+  "stuck.detected": "stopped: repeating itself", "hook.stop_blocked": "held by a stop hook", "hook.denied": "refused by a hook",
+  "tool.not_exposed": "asked for a tool it does not have", "evaluator.returned": "sent back by the evaluator"};
+function traceNodes(evs) {
+  const out = [], calls = new Map();
+  let step = null;
+  for (const {type, data: d} of evs) {
+    if (type === "model.called") {
+      if (d.purpose && d.purpose !== "step") continue;
+      step = {lane: "model", kind: "step", step: d.step, label: `step ${(d.step || 0) + 1}`, tin: d.est_input_tokens || 0,
+              tout: null, thought: "", carry: ""};
+      out.push(step);
+    } else if (type === "model.returned") { if (step && step.tout === null) step.tout = d.output_tokens; }
+    else if (type === "model.thought") { if (step) { step.thought = d.thought || ""; step.carry = d.carry || ""; } }
+    else if (type === "tool.intent") {
+      const n = {lane: "tool", kind: EDIT_TOOLS.has(d.tool) ? "edit" : "tool", label: d.tool, text: d.preview || "", key: d.key};
+      calls.set(d.key, n); out.push(n);
+    } else if (type === "tool.receipt") { const n = calls.get(d.key); if (n) { n.ok = !!d.ok; n.ms = d.wall_ms; } }
+    else if (type === "review.requested")
+      out.push({lane: "tool", kind: EDIT_TOOLS.has(d.tool) ? "edit" : "tool", label: d.tool, text: "held for the reviewer"});
+    else if (type === "review.decided")
+      out.push({lane: "check", kind: "check", label: `reviewer: ${d.verdict}`, ok: d.verdict === "approve",
+                text: d.rationale || ""});
+    else if (type === "verify.passed" || type === "verify.failed")
+      out.push({lane: "check", kind: "check", label: d.verifier || "check", ok: type === "verify.passed", text: d.detail || "",
+                score: d.score});
+    else if (HOLDS[type]) out.push({lane: "check", kind: "hold", label: HOLDS[type], text: ""});
+    else if (type === "human.message_delivered") out.push({lane: "model", kind: "human", label: "your message", text: d.text || ""});
+    else if (type === "human.approved" || type === "human.denied")
+      out.push({lane: "check", kind: "human", label: type === "human.approved" ? "you allowed it" : "you refused it", text: d.tool || ""});
+    else if (type === "delegation.opened") out.push({lane: "tool", kind: "tool", label: "delegated", text: d.goal || d.child_task_id || ""});
+    else if (type === "task.status_changed" && TERMINAL(d.status || "pending"))
+      out.push({lane: "end", kind: "end", label: statusWord(d.status === "failed" && d.reason ? d.reason : d.status),
+                ok: String(d.status).startsWith("done"), text: ""});
+  }
+  if (out.some(n => n.kind === "end")) for (const n of out) if ((n.kind === "tool" || n.kind === "edit") && n.ok === undefined) n.skipped = true;
+  return out;
+}
+async function loadTrace() {
+  const id = S.traceTask;
+  if (VIEW === "normal" || !id) return renderTrace();
+  try {
+    const evs = await api(`/tasks/${id}/trace`);
+    const st = [...evs].reverse().find(e => e.type === "task.status_changed");
+    const status = st ? st.data.status : "pending";
+    const diffs = VIEW === "verbose" && TERMINAL(status) ? await api(`/tasks/${id}/diff`).catch(() => []) : [];
+    if (id !== S.traceTask) return;
+    if (!S.trace || S.trace.task !== id) { S.traceSel = null; $("#traceDetail").hidden = true; }
+    S.trace = {task: id, status, nodes: traceNodes(evs), diffs};
+  } catch (e) { S.trace = {task: id, status: null, error: e.message, nodes: []}; }
+  renderTrace();
+}
+function renderTrace() {
+  const body = $("#traceBody"), t = S.trace;
+  $("#traceTask").textContent = S.traceTask ? firstLine(goalOf(S.traceTask)) : "";
+  if (VIEW === "normal") return;
+  if (!S.traceTask) { body.innerHTML = `<p class="note">Pick a task. Its steps show here while it works.</p>`; return; }
+  if (!t || t.task !== S.traceTask) { body.innerHTML = `<p class="note"><span class="spin"></span> Loading</p>`; return; }
+  if (t.error) { body.innerHTML = `<p class="caveat">${esc(t.error)}</p>`; return; }
+  if (!t.nodes.length) { body.innerHTML = `<p class="note">Nothing has run yet. Steps show here once the plan is signed.</p>`; return; }
+  body.innerHTML = VIEW === "thinking" ? thinkingView(t) : VIEW === "graph" ? graphView(t.nodes) : verboseView(t);
+}
+const tokens = n => `${ktok(n.tin)} in${n.tout == null ? "" : `, ${n.tout} out`}`;
+function rowResult(n) {
+  if (n.kind === "step") return tokens(n);
+  if (n.kind === "end") return "";
+  if (n.skipped) return "not run";
+  if (n.ok === undefined) return n.kind === "tool" || n.kind === "edit" ? `<span class="spin"></span>` : "";
+  if (n.kind === "check") return n.ok ? "passed" : `failed${n.score != null ? `, ${Number(n.score).toFixed(2)}` : ""}`;
+  return `${n.ok ? "done" : "failed"}${n.ms != null ? `, ${n.ms} ms` : ""}`;
+}
+function thinkingView(t) {
+  const steps = t.nodes.filter(n => n.kind === "step"), said = steps.filter(s => s.thought || s.carry);
+  const live = TERMINAL(t.status) ? "" : `<span class="lbl">Writing now</span><pre class="tr-live" id="traceLive">${esc(trail(t.task).live)}</pre>`;
+  if (!said.length) return `<p class="note">${steps.length} ${steps.length === 1 ? "step" : "steps"}, none with stated reasoning.
+    This model is not asked for it (<code>backend.reasoning_field</code> is off). Verbose shows what it did.</p>${live}`;
+  return said.map(s => `<section class="tr-think"><h4>Step ${s.step + 1}</h4>${s.thought ? `<p>${esc(s.thought)}</p>` : ""}
+    ${s.carry ? `<p class="carry"><span class="lbl">Carried forward</span>${esc(s.carry)}</p>` : ""}</section>`).join("") + live;
+}
+const KIND = {step: "step", tool: "tool", edit: "edit", check: "check", hold: "hold", human: "you", end: "end"};
+function verboseView(t) {
+  const diffs = new Map((t.diffs || []).filter(d => d.diff).map(d => [d.step, d]));
+  const out = [];
+  let cur = null;
+  const flush = () => {
+    const d = cur != null && diffs.get(cur);
+    if (d) out.push(`<details class="tr-diff"><summary>Changes in step ${cur + 1}: ${esc((d.files || []).join(", ") || "files")}</summary>
+      <pre class="code">${esc(d.diff)}</pre></details>`);
+  };
+  t.nodes.forEach((n, i) => {
+    if (n.kind === "step" || n.kind === "end") { flush(); cur = n.kind === "step" ? n.step : null; }
+    out.push(`<button type="button" class="tr-row k-${n.kind}${n.ok === false ? " bad" : n.ok ? " ok" : ""}${S.traceSel === i ? " sel" : ""}"
+      data-action="traceNode" ${args(i)}><span class="k">${KIND[n.kind]}</span><span class="v">${esc(n.label)}${n.text
+      ? ` <span class="pv">${esc(n.text)}</span>` : ""}</span><span class="r">${rowResult(n)}</span></button>`);
+    if (n.kind === "step") for (const [k, v] of [["thought", n.thought], ["carry", n.carry]])
+      if (v) out.push(`<div class="tr-row k-thought"><span class="k">${k}</span><span class="v">${esc(v)}</span><span class="r"></span></div>`);
+  });
+  flush();
+  return out.join("");
+}
+const LANE_X = {model: 8, tool: 208, check: 408, end: 208};
+const cut = (s, n) => { const x = String(s || "").replace(/\s+/g, " "); return x.length > n ? x.slice(0, n - 1) + "…" : x; };
+const nodeSub = n => n.kind === "step" ? n.thought || n.carry || tokens(n) : n.text || rowResult(n).replace(/<[^>]*>/g, "");
+function graphView(nodes) {
+  const NW = 184, NH = 36, GAP = 18, TOP = 28, y = i => TOP + i * (NH + GAP), H = y(nodes.length) - GAP + 8;
+  const cx = lane => LANE_X[lane] + NW / 2;
+  const lanes = [["model", "model"], ["tool", "tools and edits"], ["check", "checks"]].map(([k, l]) =>
+    `<text class="lane-label" x="${LANE_X[k]}" y="14">${l}</text><line class="lane" x1="${cx(k)}" y1="20" x2="${cx(k)}" y2="${H}"/>`).join("");
+  const edges = nodes.slice(1).map((n, i) => {
+    const x1 = cx(nodes[i].lane), y1 = y(i) + NH, x2 = cx(n.lane), mid = y1 + GAP / 2;
+    return `<path class="edge" d="M${x1} ${y1} V${mid} H${x2} V${y(i + 1) - 2}" marker-end="url(#ah)"/>`;
+  }).join("");
+  const boxes = nodes.map((n, i) => {
+    const x = LANE_X[n.lane], top = y(i), sub = nodeSub(n), full = n.label + (sub ? ": " + sub : "");
+    return `<g class="node k-${n.kind}${n.ok === false ? " bad" : n.ok ? " ok" : ""}${S.traceSel === i ? " sel" : ""}"
+      data-action="traceNode" ${args(i)} tabindex="0" role="button" aria-label="${esc(full)}"><title>${esc(full)}</title>
+      <rect x="${x}" y="${top}" width="${NW}" height="${NH}" rx="3"/>
+      ${n.kind === "edit" ? `<rect class="mark" x="${x + NW - 12}" y="${top + 6}" width="6" height="6"/>` : ""}
+      <text class="l" x="${x + 10}" y="${top + 15}">${esc(cut(n.label, 24))}</text>
+      <text class="s" x="${x + 10}" y="${top + 28}">${esc(cut(sub, 28))}</text></g>`;
+  }).join("");
+  return `<svg class="graph" viewBox="0 0 600 ${H}" role="group" aria-label="Trace graph">
+    <defs><marker id="ah" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto">
+    <path class="ah" d="M1 1 L7 4 L1 7"/></marker></defs>${lanes}${edges}${boxes}</svg>`;
+}
+async function traceNode(i) {
+  const t = S.trace, n = t && t.nodes[i];
+  if (!n) return;
+  S.traceSel = i;
+  $$("#traceBody .sel").forEach(e => e.classList.remove("sel"));
+  $$(`#traceBody [data-args='${JSON.stringify([i])}']`).forEach(e => e.classList.add("sel"));
+  const box = $("#traceDetail"), head = `<h4>${esc(n.label)}<button class="quiet" data-action="closeTraceDetail">Close</button></h4>`;
+  box.hidden = false;
+  if ((n.kind === "tool" || n.kind === "edit") && n.key) {
+    box.innerHTML = head + `<p class="note"><span class="spin"></span> Loading</p>`;
+    try { n.detail = n.detail || await api(`/tasks/${t.task}/call?key=${encodeURIComponent(n.key)}`); }
+    catch (e) { box.innerHTML = head + `<p class="note">${esc(e.status === 404 ? "No result yet." : e.message)}</p>`; return; }
+    box.innerHTML = head + toolDetail({open: true, detail: n.detail});
+    return;
+  }
+  const parts = [["Thought", n.thought], ["Carried forward", n.carry], ["Detail", n.text]].filter(p => p[1]);
+  box.innerHTML = head + (parts.map(([k, v]) => `<div class="note">${k}</div><pre class="code">${esc(v)}</pre>`).join("")
+    || `<p class="note">${esc(rowResult(n).replace(/<[^>]*>/g, "") || "Nothing more was recorded.")}</p>`);
+}
+function closeTraceDetail() { S.traceSel = null; $("#traceDetail").hidden = true; $$("#traceBody .sel").forEach(e => e.classList.remove("sel")); }
 
 async function updateRing(taskId) {
   let m;
@@ -629,7 +815,12 @@ ${m.ceiling.toLocaleString()} tokens (${Math.round(m.fill_ratio * 100)}% of the 
 }
 
 function toggleFiles() { $("#app").classList.toggle("files-closed"); }
-function toggleSide() { $("#app").classList.toggle("side-open"); }
+const PHONE = matchMedia("(max-width: 760px)");
+function toggleSide() {
+  if (PHONE.matches) return $("#app").classList.toggle("side-open");
+  const closed = $("#app").classList.toggle("side-closed");
+  try { localStorage.setItem("bucephalus-side", closed ? "closed" : "open"); } catch { /* per-viewer only */ }
+}
 function closeSideOnPhone() { $("#app").classList.remove("side-open"); }
 async function loadFiles(taskId, path) {
   S.filesTask = taskId;
@@ -1011,7 +1202,10 @@ async function savePolicy() {
 const COMMANDS = [
   ["New conversation", "newConversation"], ["Search conversations", "focusSearch"],
   ["Show or hide archived conversations", "toggleArchived"], ["Tasks started elsewhere", "openLooseList"],
-  ["Show or hide the file panel", "toggleFiles"], ["Switch light or dark", "toggleTheme"],
+  ["Show or hide the file panel", "toggleFiles"], ["Show or hide the sidebar", "toggleSide"],
+  ["View: Normal, answers only", "setView", "normal"], ["View: Thinking", "setView", "thinking"],
+  ["View: Verbose, every step as text", "setView", "verbose"], ["View: Graph", "setView", "graph"],
+  ["Switch light or dark", "toggleTheme"],
   ["Pin or unpin this conversation", "pinConversation"], ["Export this conversation as Markdown", "exportConversation", "md"],
   ["Export this conversation as JSON", "exportConversation", "json"], ["Turn on notifications", "enableNotifications"],
   ["Open Control Center", "openControl"], ["Memory", "openPane", "memory"], ["Schedules", "openPane", "schedules"],
@@ -1044,7 +1238,7 @@ $("#palInput").addEventListener("keydown", e => {
   else if (e.key === "Enter") { runPalette(PAL_I); e.preventDefault(); }
 });
 $("#palList").addEventListener("click", e => { const li = e.target.closest("[data-pal]"); if (li) runPalette(Number(li.dataset.pal)); });
-function focusSearch() { $("#app").classList.add("side-open"); $("#convSearch").focus(); }
+function focusSearch() { $("#app").classList.remove("side-closed"); $("#app").classList.add("side-open"); $("#convSearch").focus(); }
 
 function trapTab(e) {
   const box = !$("#palette").hidden ? $("#palette") : !$("#control").hidden ? $("#control") : null;
@@ -1060,6 +1254,11 @@ function trapTab(e) {
 document.addEventListener("keydown", e => {
   trapTab(e);
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") { e.preventDefault(); openPalette(); }
+  else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "b") { e.preventDefault(); toggleSide(); }
+  else if (e.altKey && !e.ctrlKey && !e.metaKey && /^[1-4]$/.test(e.key)) { e.preventDefault(); setView(Object.keys(VIEWS)[Number(e.key) - 1]); }
+  else if ((e.key === "Enter" || e.key === " ") && e.target instanceof Element && e.target.matches("[role=button][data-action]")) {
+    e.preventDefault(); e.target.dispatchEvent(new MouseEvent("click", {bubbles: true}));
+  }
   else if (e.key === "Escape") {
     if (!$("#palette").hidden) closePalette();
     else if (!$("#control").hidden) closeControl();
@@ -1075,10 +1274,11 @@ const ACTIONS = {newConversation, selectConversation, renameConversation, archiv
   toggleFiles, toggleSide, openFile, openControl, closeControl, openPane, openPalette, focusSearch,
   toggleTheme, acceptMemory, createSuite, saveTask, closeSuite, addSkill, savePolicy,
   openSuite, delSuite, delTask, checkGate, pinConversation, exportConversation, enableNotifications,
-  runModel, stopTask, resumeTask, toggleTool, showRewind, showChanges, doRewind, askAgain, editAsk, copyAnswer, copyCode, forgetMemory, addSchedule, removeSchedule, viewSkill};
+  runModel, stopTask, resumeTask, toggleTool, setView, closeTrace, traceTask, traceNode, closeTraceDetail, showRewind, showChanges, doRewind, askAgain, editAsk, copyAnswer, copyCode, forgetMemory, addSchedule, removeSchedule, viewSkill};
 document.addEventListener("click", e => {
   const el = e.target.closest("[data-action]");
   if (!el || !ACTIONS[el.dataset.action]) return;
+  const menu = el.closest("details.more"); if (menu) menu.open = false;
   ACTIONS[el.dataset.action](...(el.dataset.args ? JSON.parse(el.dataset.args) : [el]));
 });
 document.addEventListener("change", e => {
@@ -1092,7 +1292,8 @@ new MutationObserver(() => document.querySelectorAll("i[data-pct]").forEach(i =>
 
 (async () => {
   applyTheme(); renderWelcome();
-  if (window.innerWidth < 1100) $("#app").classList.add("files-closed");   // a drawer there
+  try { if (localStorage.getItem("bucephalus-side") === "closed") $("#app").classList.add("side-closed"); } catch { /* open */ }
+  setView(VIEW);
   if (!TOKEN) {
     $("#health").textContent = "No session. Open the console from the desktop app, or the link bucephalus serve prints.";
     return;

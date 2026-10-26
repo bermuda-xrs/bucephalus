@@ -100,6 +100,7 @@ EVENT_TYPES = frozenset(
         "workspace.final",
         "action.body_fetched",
         "carry.updated",
+        "model.thought",
         "evaluator.returned",
         "evaluator.accepted",
         "git.committed",

@@ -372,6 +372,8 @@ def _run_task(ctx, task_id: str) -> TaskResult:
             parsed = _canonical(ctx, backend, parse_action(resp.text), resp.text)
             if _needs_body(ctx, backend, parsed):
                 parsed = _fetch_body(ctx, task, backend, prefix, tail, parsed, step)
+            if parsed.thought or parsed.carry:
+                ctx.log.append(task.id, "model.thought", {"step": step, "thought": parsed.thought, "carry": parsed.carry})
             if parsed.carry and backend.cfg.requires_carry:
                 _update_carry(ctx, task, entries, parsed.carry)
             history.append({"key": sha256_hex(canonical({"k": parsed.kind, "t": parsed.tool, "a": parsed.args})),
