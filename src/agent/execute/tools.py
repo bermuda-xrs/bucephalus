@@ -693,7 +693,10 @@ def tool_search(ctx, task, pattern: str, path: str = ".", glob: str | None = Non
     if names:
         recursive = pattern if ("/" in pattern or "**" in pattern) else f"**/{pattern}"
         out = tool_glob(ctx, task, pattern=recursive, path=path)
-        if out.get("ok") and not out["matches"]:
+        if out.get("ok") and not out["matches"] and " " in pattern:  # no file name has a space: it meant contents
+            out = tool_grep(ctx, task, pattern=pattern, path=path, glob=glob or "**/*")
+            out["note"] = "No file name can contain a space, so this searched file contents instead (names=false)."
+        elif out.get("ok") and not out["matches"]:
             out["note"] = "No file name matches. names=true matches file NAMES; to search inside files, use names=false."
         return out
     return tool_grep(ctx, task, pattern=pattern, path=path, glob=glob or "**/*")

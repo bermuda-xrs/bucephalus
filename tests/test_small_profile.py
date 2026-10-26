@@ -97,6 +97,16 @@ def test_a_name_search_that_finds_nothing_says_how_to_search_inside_files(small,
     from agent.execute.tools import tool_search
 
     (workspace / "a.py").write_text("def gentle_kestrel(): pass\n", encoding="utf-8")
-    out = tool_search(small, task, pattern="def gentle_kestrel", path="work", names=True)
+    out = tool_search(small, task, pattern="gentle_kestrel.txt", path="work", names=True)
     assert out["matches"] == [] and "names=false" in out["note"]
     assert "note" not in tool_search(small, task, pattern="*.py", path="work", names=True)
+
+
+def test_a_name_search_for_text_with_a_space_searches_contents_instead(small, task, workspace):
+    from agent.execute.tools import tool_search
+
+    (workspace / "pkg").mkdir()
+    (workspace / "pkg" / "mod_a.py").write_text("def gentle_kestrel():\n    pass\n", encoding="utf-8")
+    out = tool_search(small, task, pattern="def gentle_kestrel", path="work", names=True)
+    assert [h["file"].replace("\\", "/") for h in out["matches"]] == ["pkg/mod_a.py"]
+    assert "contents" in out["note"]
