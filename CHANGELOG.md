@@ -10,6 +10,15 @@
 Dates are commit dates. `0.1.0` is not released yet — see "Unreleased" for
 what still stands between here and a first iteration.
 
+## Console - 2026-10-26 (no HARNESS_VERSION change: no prompt or decision changed)
+
+- A graphite tool look; a split view whose right half is the trace, in four views: Normal (pane closed), Thinking,
+  Verbose (every step, call, edit, review and check, with each step's diff) and Graph (an SVG flow in three lanes).
+  Alt+1..4 switch views, Ctrl+B hides the sidebar. New route `GET /tasks/{id}/trace`, an allowlist of event types.
+- New event `model.thought`: a step's stated thought and carry note, which were never recorded before.
+- Fixed: the Control Center opened on an error; an empty plan wrapped one word per line; a finished task's trace
+  went stale on a new conversation; the phone header ran off screen.
+
 ## Harness 16 - 2026-10-25 (HARNESS_VERSION 15 -> 16; a second whole-code review)
 
 Prompt bytes are unchanged; the version moves because the planner is now offered fewer criteria. Each fix red first:
