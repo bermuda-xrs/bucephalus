@@ -14,7 +14,8 @@ sys.path.insert(0, str(ROOT / "src"))
 # every mechanism declared off: the small profile's defaults (on for the kept items) must not leak into the base
 BASE = {"backend.tool_profile": "small", "backend.reasoning_field": False, "backend.carry_field": False,
         "backend.compact_prompt": False, "backend.evidence_pins": False, "backend.stuck_patterns": False,
-        "backend.escape_check": False, "backend.edit_format": "default", "backend.context_fill_ratio": 0.28}
+        "backend.escape_check": False, "backend.edit_format": "default", "backend.context_fill_ratio": 0.28,
+        "backend.edit_first": False}
 
 
 def _arm(families, **over):
@@ -50,7 +51,7 @@ def _together(*names):
 
 
 # items measured one at a time, run together on every family: do they add up; each kept-X leaves X out
-KEPT = ("B2", "B6", "C1", "C3", "D2", "D3", "E1")
+KEPT = ("B2", "B6", "C1", "C3", "D2", "D3", "E1", "F1")
 COMBINED = {"kept": _together(*KEPT), **{f"kept-{x}": _together(*(k for k in KEPT if k != x)) for x in KEPT}}
 ALL_ARMS = {**ARMS, **COMBINED}
 

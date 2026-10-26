@@ -79,7 +79,7 @@ class BackendConfig(_Section):
     edit_format: Literal["default", "hashline"] | None = None
     send_tool_list: bool = False
     escape_check: bool | None = None
-    edit_first: bool = False
+    edit_first: bool | None = None
     compute_first: bool = False
     observation_tokens: int | None = None
     assumed_tokens_per_sec: float = 5.0

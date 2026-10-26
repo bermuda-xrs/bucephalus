@@ -10,6 +10,15 @@
 Dates are commit dates. `0.1.0` is not released yet — see "Unreleased" for
 what still stands between here and a first iteration.
 
+## Harness 17 - 2026-10-26 (HARNESS_VERSION 16 -> 17, TOOLSET_VERSION 7 -> 8)
+
+- `edit_first` on for the small profile: on a task checked by a program, an answer waits until a file has changed
+  (at most twice). config_edit 0 -> 9/14, write_function 10 -> 13/14 on held-out seeds.
+- `compute_first` added, off: arithmetic 0 -> 1/14 at twice the tokens.
+- search: a glob without a slash matches at any depth (like ripgrep); a name search that finds nothing says how to
+  search contents, and one whose pattern has a space searches contents instead. Kept multi_file 7 -> 13/14.
+- bench: `kept` now includes F1; leave-one-out arms `kept-X`; arms F1 and F2.
+
 ## Console - 2026-10-26 (no HARNESS_VERSION change: no prompt or decision changed)
 
 - A graphite tool look; a split view whose right half is the trace, in four views: Normal (pane closed), Thinking,

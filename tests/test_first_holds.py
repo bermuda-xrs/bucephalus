@@ -24,10 +24,11 @@ def _task(ctx, **contract):
     return create_task(ctx.conn, ctx.log, TaskContract(artifact_scope=["work"], **contract), Budget(usd=1.0, seconds=600))
 
 
-def test_both_are_off_unless_declared_even_on_the_small_profile():
+def test_edit_first_is_on_for_the_small_profile_and_compute_first_is_off_unless_declared():
     small = BackendConfig(kind="mock", model="m", tool_profile="small")
-    assert not small.on("edit_first") and not small.on("compute_first")
-    assert BackendConfig(kind="mock", model="m", edit_first=True).on("edit_first")
+    assert small.on("edit_first") and not small.on("compute_first")
+    assert not BackendConfig(kind="mock", model="m").on("edit_first")
+    assert BackendConfig(kind="mock", model="m", compute_first=True).on("compute_first")
 
 
 def test_an_answer_to_a_program_checked_task_waits_for_a_changed_file(small, workspace):
