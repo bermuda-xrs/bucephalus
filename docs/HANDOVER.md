@@ -98,12 +98,21 @@ without GTK or Qt; D78 and D80.
 Needs the user: compute for the 8B run (needs 7.23 GB; 4.69 GB free here); D26 credentials; a Mac or bare-metal Linux;
 a yes or no on plan items 5 and 6.
 
+multi_file leave-one-out (2026-10-26, same seeds, n = 14 per arm): base 11, kept 7; kept without B2 7, B6 7, C1 6,
+C3 6, D2 9, D3 7, E1 10. No single item restores it; two tool traps do. With B6's compact prompt the model calls
+search(names=true, pattern='def name'), matches no file name and answers the example path (0 of 14 such runs
+without B6). Without it, it searches contents with glob='*' from work/, which matched only top-level files and missed
+work/pkg/. Fixed on branch `search-fix` (globs match at any depth, an empty name search says how to search
+contents); not yet measured.
+
 Plan, in order:
-1. multi_file: read the kept arm's 7 failures against base's passes, then one held-out run of each kept item alone on
-   multi_file to find which one costs it.
-2. config_edit: hold a final answer on a verify_program task while no file has changed (one mechanism, one measured run).
-3. arithmetic: point a numeric-total task at run_command (one mechanism, one measured run).
+1. Measure, after the paused F1/F2 run: `search-fix` on multi_file, base and kept (TOOLSET_VERSION 7 -> 8 at merge).
+2. Finish the F1 (`edit_first`, config_edit) and F2 (`compute_first`, arithmetic) run on branch `mech-17`
+   (`flight\mech.py`, stopped on low battery after 2 of 56 runs; resumes where it stopped).
+3. Merge `multi-file-loo`, `search-fix` and `mech-17` as one batch through the gates; switch on for the small profile
+   only what measured better (HARNESS_VERSION 16 -> 17 if anything is switched on).
 4. The 8B run when compute arrives (`bench/profile_run.py --preflight --arms control,full8b,small8b`).
 5. On the user's yes: delete the branches already in `main` (`desktop-app`, `harness-8`, `harness-9`, `harness-10`,
    `harness-14`, `iteration-3`, `iteration-4`, `iteration-5`, `measurement-2026-09-01`, `heldout-h16`, `ui-dark`); the tags stay.
-6. The user's choice: a remote for an off-machine copy (there is none).
+6. The user's sign-in: a private GitHub remote (no `gh` here; the checkout is under OneDrive, which is the only
+   off-machine copy today).
