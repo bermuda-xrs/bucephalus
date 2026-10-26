@@ -51,12 +51,12 @@ One measurement process at a time (`src/agent/runlock.py`); nothing else runs du
 
 ## State
 
-Verified 2026-10-25 against commit `0698657` on `harness-14`: Windows suite, ruff, the frozen gate and a task through the
+Verified 2026-10-26 against commit `0c7a38e` on `heldout-h16`: Windows suite, ruff, the frozen gate and a task through the
 rebuilt `bucephalus.exe`'s window, and the WSL2 suite (see the Branch row for whether it reached `main`).
 
 | Fact | Value | Regenerate with |
 |---|---|---|
-| Branch | `main`, fast-forwarded from `harness-14` (iteration 4 and two whole-source reviews) after the suite, the frozen gate, the frozen e2e and the WSL2 suite passed; tags `iteration-4-closed`, `review-2-closed`; no remote | `git branch --show-current` |
+| Branch | `main`, fast-forwarded from `harness-14` (iteration 4, two whole-source reviews, the harness-16 baseline) after the suite, the frozen gate, the frozen e2e and the WSL2 suite passed; tags `iteration-4-closed`, `review-2-closed`; no remote | `git branch --show-current` |
 | Harness version | **16**, bumped 2026-10-25 for the second whole-code review (CHANGELOG "Harness 16"); numbers from 15 and earlier do not compare | `grep HARNESS_VERSION src/agent/__init__.py` |
 | Toolset version | **7** | `grep TOOLSET_VERSION src/agent/__init__.py` |
 | Tests | not written down | `python -m pytest tests -q`; skips are live-credential tests (D26) and other-OS tests |
@@ -66,7 +66,7 @@ rebuilt `bucephalus.exe`'s window, and the WSL2 suite (see the Branch row for wh
 | Platforms | Windows. POSIX has run six times, in WSL2 (`docs/evidence/wsl-2026-10-12/` is the last full checklist; the suite passed again 2026-10-25); bare-metal Linux never, and macOS (`src/agent/platform/darwin.py`) has never executed anywhere | `docs/PLATFORMS.md` section 5 is the checklist |
 | Security posture | the capability gate is the boundary; the sandbox (Job Object limits, advisory path/network fence) constrains a mistaken agent, not a hostile one: D32 | |
 | Phase program | complete | `RELEASE.md`, "ITERATION TWO: COMPLETE" |
-| Running now | the harness-16 held-out run (plan item 1) | `Get-Process python, ollama -ErrorAction SilentlyContinue` |
+| Running now | nothing | `Get-Process python, ollama -ErrorAction SilentlyContinue` |
 | Uncommitted | nothing | `git status --porcelain` |
 
 Workstyle: code carries no docstrings and almost no comments; the why is in commit messages
@@ -82,17 +82,28 @@ small profile: C1 evidence pins and C3 ceiling 0.5 (multipage 0/6 -> 6/6 and 5/6
 (same passes, fewer tokens), stuck detection, the escape diagnostic, E1 hashline edits. Off: B1 (was on), B3, B4
 (11 -> 3), B5, C2, the evaluator pass, the tool list. F (isolation) was not built.
 
-Not working: on the 3B the base passes 0/6 on multipage, config_edit and arithmetic; the kept items were measured one at
-a time, never together; the desktop app on Linux without GTK or Qt; D78 and D80.
+Harness-16 baseline (`runs/h16-heldout-20261025`, 3B, held-out seeds 13-39 that no arm had seen, n = 112 paired
+instances over 8 families, 14 each): base 54/112, all kept items together 66/112 (18 only kept, 6 only base, McNemar
+exact p = 0.023), with a smaller prompt in every family. They add up on multipage (0/14 -> 11/14) and write_function
+(10/14 -> 14/14), but multi_file falls 11/14 -> 7/14; only D2 had been measured on multi_file alone. Same on needle and
+extract_json (14/14), unanswerable (5/14), config_edit (0/14); arithmetic 0/14 -> 1/14.
 
-Needs the user: compute for the 8B run (needs 7.23 GB; 4.69 GB free here); D26 credentials; a Mac or bare-metal Linux; a yes or no on plan items 4 and 5.
+Read (2026-10-26, no code): config_edit fails because the model never edits. All 58 failed runs, every arm, call
+only read_file, then answer with the path; the held-out grader says only "failed", so it re-answers to a plateau.
+arithmetic fails on mental arithmetic: 21 failed runs never call run_command; median error 61%.
+
+Not working: multi_file with the kept items together; config_edit and arithmetic on the 3B; the desktop app on Linux
+without GTK or Qt; D78 and D80.
+
+Needs the user: compute for the 8B run (needs 7.23 GB; 4.69 GB free here); D26 credentials; a Mac or bare-metal Linux;
+a yes or no on plan items 5 and 6.
 
 Plan, in order:
-1. Running now (`flight\h16.py`, ~7.5 h with its rests and the merge gates): one held-out run at harness 16 of base vs all
-   kept items together (arm `kept` in `bench/families_run.py`) on the held-out seeds not yet used (13-39; n = 14 per
-   family over 8 families). It is the harness-16 baseline and checks the kept items add up. Out: `runs/h16-heldout-20261025`.
-2. config_edit and arithmetic at 0/6: read the failing runs' events before adding any mechanism.
-3. The 8B run when compute arrives (`bench/profile_run.py --preflight --arms control,full8b,small8b`).
-4. On the user's yes: delete the branches already in `main` (`desktop-app`, `harness-8`, `harness-9`, `harness-10`,
-   `harness-14`, `iteration-3`, `iteration-4`, `iteration-5`, `measurement-2026-09-01`); the tags stay.
-5. The user's choice: a remote for an off-machine copy (there is none).
+1. multi_file: read the kept arm's 7 failures against base's passes, then one held-out run of each kept item alone on
+   multi_file to find which one costs it.
+2. config_edit: hold a final answer on a verify_program task while no file has changed (one mechanism, one measured run).
+3. arithmetic: point a numeric-total task at run_command (one mechanism, one measured run).
+4. The 8B run when compute arrives (`bench/profile_run.py --preflight --arms control,full8b,small8b`).
+5. On the user's yes: delete the branches already in `main` (`desktop-app`, `harness-8`, `harness-9`, `harness-10`,
+   `harness-14`, `iteration-3`, `iteration-4`, `iteration-5`, `measurement-2026-09-01`, `heldout-h16`); the tags stay.
+6. The user's choice: a remote for an off-machine copy (there is none).
