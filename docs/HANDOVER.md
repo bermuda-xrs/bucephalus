@@ -99,7 +99,7 @@ Needs the user: compute for the 8B run (needs 7.23 GB; 4.69 GB free here); D26 c
 a yes or no on plan items 5 and 6.
 
 multi_file leave-one-out (2026-10-26, same seeds, n = 14 per arm): base 11, kept 7; kept without B2 7, B6 7, C1 6,
-C3 6, D2 9, D3 7, E1 10. No single item restores it; two tool traps do. With B6's compact prompt the model calls
+C3 6, the stuck check 9, the escape check 7, E1 10. No single item restores it; two tool traps do. With B6's compact prompt the model calls
 search(names=true, pattern='def name'), matches no file name and answers the example path (0 of 14 such runs
 without B6). Without it, it searches contents with glob='*' from work/, which matched only top-level files and missed
 work/pkg/. Fixed on branch `search-fix` (globs match at any depth, an empty name search says how to search
