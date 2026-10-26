@@ -153,3 +153,15 @@ def test_a_timer_tick_after_the_app_closed_touches_no_widget(ctx, workspace):
     app._spin()  # noqa: SLF001
     app.refresh_side()
     app.refresh_budget()
+
+
+def test_a_budget_refresh_while_the_screen_comes_down_does_nothing(ctx, workspace):
+    # on close the screen's widgets go before the app's own unmount, so a timer tick can land in between
+    async def go():
+        app = BucephalusTUI(ctx)
+        async with app.run_test(size=(140, 44)) as pilot:
+            await app.query_one("#budget").remove()
+            await pilot.pause(0.05)
+            app.refresh_budget()
+
+    asyncio.run(go())

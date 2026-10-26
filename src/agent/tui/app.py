@@ -264,7 +264,8 @@ class BucephalusTUI(App):
     def refresh_budget(self) -> None:
         from ..control.panels import context_meter
 
-        if self._gone:
+        bars = self.query("#budget")
+        if self._gone or not bars:  # on close the widgets go before on_unmount sets _gone
             return
 
         b = self.state.budget
@@ -278,7 +279,7 @@ class BucephalusTUI(App):
         flag = f"   !! {n_alerts} INTEGRITY ALERT(S)" if n_alerts else ""
         m = context_meter(self.ctx, self.task_id)
         cf = min(bar_w, int(bar_w * m["used"] / max(1, m["ceiling"])))
-        self.query_one("#budget", Static).update(
+        bars.first(Static).update(
             f"{spin}{self._model}   ctx [{glyph * cf}{empty * (bar_w - cf)}] "
             f"{m['used'] // 1000}k/{m['ceiling'] // 1000}k ceiling ({m['window'] // 1000}k window)"
             f"   budget [{glyph * filled}{empty * (bar_w - filled)}] {b.render()}"
