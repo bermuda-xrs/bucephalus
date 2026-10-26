@@ -47,8 +47,9 @@ def _together(*names):
     return {"overrides": over, "families": None}
 
 
-# items measured one at a time, run together on every family: do they add up
-COMBINED = {"kept": _together("B2", "B6", "C1", "C3", "D2", "D3", "E1")}
+# items measured one at a time, run together on every family: do they add up; each kept-X leaves X out
+KEPT = ("B2", "B6", "C1", "C3", "D2", "D3", "E1")
+COMBINED = {"kept": _together(*KEPT), **{f"kept-{x}": _together(*(k for k in KEPT if k != x)) for x in KEPT}}
 ALL_ARMS = {**ARMS, **COMBINED}
 
 

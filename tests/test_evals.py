@@ -187,3 +187,18 @@ def test_when_the_base_wins_on_dev_the_held_out_base_is_not_run_twice(tmp_path):
     assert out["winner"] == {}
     assert [p.name for p in calls if p.parent.name == "heldout"] == ["base"]
     assert out["heldout"]["arms"]["winner"] == out["heldout"]["arms"]["base"]
+
+
+def test_each_leave_one_out_arm_is_the_kept_arm_without_exactly_its_item():
+    import sys
+    from pathlib import Path
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "bench"))
+    import families_run as fr
+
+    kept = fr.COMBINED["kept"]["overrides"]
+    for item in fr.KEPT:
+        loo = fr.COMBINED[f"kept-{item}"]
+        gone = {k for k, v in kept.items() if loo["overrides"].get(k) != v}
+        (key,) = [k for k, v in fr.ARMS[item]["overrides"].items() if fr.BASE.get(k) != v]
+        assert gone == {key} and loo["overrides"][key] == fr.BASE[key] and loo["families"] is None, item
