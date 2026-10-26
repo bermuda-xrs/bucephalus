@@ -37,6 +37,8 @@ ARMS: dict[str, dict] = {
     "D2": _arm(["multi_file", "arithmetic"], stuck_patterns=True),
     "D3": _arm(["write_function", "config_edit"], escape_check=True),
     "E1": _arm(["config_edit", "write_function"], edit_format="hashline"),
+    "F1": _arm(["config_edit", "write_function"], edit_first=True),
+    "F2": _arm(["arithmetic", "extract_json"], compute_first=True),
 }
 
 

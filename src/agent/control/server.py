@@ -27,7 +27,8 @@ GRACEFUL_SHUTDOWN_S = 1
 # what the trace pane may show: an allowlist, so the monitor's own events never reach the page
 TRACE_EVENTS = ("model.called", "model.returned", "model.thought", "tool.intent", "tool.receipt", "review.requested",
                 "review.decided", "verify.passed",
-                "verify.failed", "read_first.held", "pages.unread_held", "verify.continued", "stuck.warned",
+                "verify.failed", "read_first.held", "edit_first.held",
+                "compute_first.held", "pages.unread_held", "verify.continued", "stuck.warned",
                 "stuck.detected", "hook.stop_blocked", "evaluator.returned", "human.message_delivered",
                 "human.approved", "human.denied", "tool.not_exposed", "hook.denied", "delegation.opened", "task.status_changed")
 
