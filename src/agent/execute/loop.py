@@ -394,6 +394,10 @@ def _run_task(ctx, task_id: str) -> TaskResult:
                 entries.append(LedgerEntry.observation(READ_FIRST_NOTE, taint=Taint.TRUSTED, label="read-first"))
                 continue
 
+            if parsed.kind == "final" and (note := _first_hold(ctx, task, backend, step)) is not None:
+                entries.append(LedgerEntry.observation(say(ctx, note), taint=Taint.TRUSTED, label="first-hold"))
+                continue
+
             if parsed.kind == "final" and backend.cfg.requires_all_pages and _page_holds(ctx, task) < MAX_PAGE_HOLDS:
                 unread = _unread_pages(ctx, task)
                 if unread:
@@ -540,6 +544,40 @@ UNREAD_PAGES_NOTE = ("Not yet: you have not read {unread}. Read each with read_f
                      "({left} reminder(s) left).")
 READ_FIRST_NOTE = ("No answer is accepted yet: look at something first with a tool (read a file, search, "
                    "run a command), then answer from what you saw.")
+
+
+EDIT_FIRST_NOTE = ("No answer yet: the check runs a program against the files, and no file has changed. Make the "
+                   "change the task asks for, then answer.")
+COMPUTE_FIRST_NOTE = ("No answer yet: compute the number rather than estimate it. Write a short script with "
+                      "write_file (for example work/calc.py that reads the input and prints the result), run it "
+                      "with run_command `python work/calc.py`, then answer with what it prints.")
+MAX_FIRST_HOLDS = 2
+
+
+def _receipts(ctx, task) -> list[str]:
+    return [json.loads(p)["tool"] for (p,) in ctx.conn.execute(
+        "SELECT payload_json FROM events WHERE task_id=? AND type='tool.receipt' "
+        "AND json_extract(payload_json, '$.ok')", (task.id,))]
+
+
+def _numeric(schema) -> bool:
+    return any(isinstance(p, dict) and p.get("type") in ("integer", "number")
+               for p in ((schema or {}).get("properties") or {}).values())
+
+
+def _first_hold(ctx, task, backend, step: int) -> str | None:
+    ran = _receipts(ctx, task)
+    changed = any((spec := ctx.tools.get(t)) is not None and spec.side_effecting for t in ran)
+    c = task.contract
+    for name, kind, needed, note in (
+            ("edit_first", "edit_first.held", c.success_criterion == "verify_program" and not changed, EDIT_FIRST_NOTE),
+            ("compute_first", "compute_first.held", _numeric(c.output_schema) and "run_command" not in ran, COMPUTE_FIRST_NOTE)):
+        held = ctx.conn.execute("SELECT COUNT(*) FROM events WHERE task_id=? AND type=?", (task.id, kind)).fetchone()[0]
+        if backend.cfg.on(name) and needed and held < MAX_FIRST_HOLDS:
+            ctx.log.append(task.id, "edit_first.held" if kind == "edit_first.held" else "compute_first.held",
+                           {"step": step, "n": held + 1})
+            return note
+    return None
 
 
 def _observed(ctx, task) -> bool:
@@ -813,6 +851,8 @@ def _final_withheld(ctx, task, backend, step: int) -> str | None:
         return None
     if backend.cfg.requires_observation and not _observed(ctx, task):
         return READ_FIRST_NOTE
+    if (note := _first_hold(ctx, task, backend, step)) is not None:
+        return note
     if backend.cfg.requires_all_pages and _page_holds(ctx, task) < MAX_PAGE_HOLDS:
         unread = _unread_pages(ctx, task)
         if unread:

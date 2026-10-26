@@ -662,7 +662,8 @@ function syncTrace(items) {
   if (VIEW !== "normal" && (!S.trace || S.trace.task !== S.traceTask || (it && S.trace.status !== it.status))) loadTrace();
 }
 const EDIT_TOOLS = new Set(["write_file", "edit_file", "edit_lines", "apply_patch"]);
-const HOLDS = {"read_first.held": "held: read before answering", "pages.unread_held": "held: pages left unread",
+const HOLDS = {"read_first.held": "held: read before answering", "edit_first.held": "held: change a file first",
+  "compute_first.held": "held: compute it with a script", "pages.unread_held": "held: pages left unread",
   "verify.continued": "held: run a check first", "stuck.warned": "warned: repeating itself",
   "stuck.detected": "stopped: repeating itself", "hook.stop_blocked": "held by a stop hook", "hook.denied": "refused by a hook",
   "tool.not_exposed": "asked for a tool it does not have", "evaluator.returned": "sent back by the evaluator"};
