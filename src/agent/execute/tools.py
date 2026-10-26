@@ -520,6 +520,8 @@ def tool_grep(ctx, task, pattern: str, path: str = ".",
     hits: list[dict] = []
     truncated = False
     state = task_state_paths(ctx, task)
+    if "/" not in glob and not glob.startswith("**"):
+        glob = "**/" + glob  # like ripgrep: a glob without a slash names files at any depth
     for f in sorted(root.glob(glob)):
         if not f.is_file() or not _reachable(ctx, task, f, state):
             continue
@@ -690,7 +692,13 @@ def tool_search(ctx, task, pattern: str, path: str = ".", glob: str | None = Non
                 names: bool = False) -> dict:
     if names:
         recursive = pattern if ("/" in pattern or "**" in pattern) else f"**/{pattern}"
-        return tool_glob(ctx, task, pattern=recursive, path=path)
+        out = tool_glob(ctx, task, pattern=recursive, path=path)
+        if out.get("ok") and not out["matches"] and " " in pattern:  # no file name has a space: it meant contents
+            out = tool_grep(ctx, task, pattern=pattern, path=path, glob=glob or "**/*")
+            out["note"] = "No file name can contain a space, so this searched file contents instead (names=false)."
+        elif out.get("ok") and not out["matches"]:
+            out["note"] = "No file name matches. names=true matches file NAMES; to search inside files, use names=false."
+        return out
     return tool_grep(ctx, task, pattern=pattern, path=path, glob=glob or "**/*")
 
 

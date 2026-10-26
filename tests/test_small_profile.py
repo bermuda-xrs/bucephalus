@@ -80,3 +80,33 @@ def test_a_tool_the_policy_denies_cannot_be_reached_through_call_tool(ctx, task,
     ctx.restrict_tools(task.id, ToolPolicy(frozenset({"read_file"}), "test"))
     r = run_code_action(ctx, task, 'print(call_tool("read_file", path="work/a.txt"))')
     assert r["ok"] is False and "not available" in (r["stderr"] + r["stdout"]), r
+
+
+def test_a_glob_without_a_slash_matches_at_any_depth_like_ripgrep(small, task, workspace):
+    from agent.execute.tools import tool_search
+
+    (workspace / "pkg").mkdir()
+    (workspace / "pkg" / "mod_a.py").write_text("def gentle_kestrel():\n    pass\n", encoding="utf-8")
+    for glob in ("*", "*.py", None):
+        kw = {"glob": glob} if glob else {}
+        hits = tool_search(small, task, pattern="def gentle_kestrel", path="work", **kw)["matches"]
+        assert [h["file"].replace("\\", "/") for h in hits] == ["pkg/mod_a.py"], glob
+
+
+def test_a_name_search_that_finds_nothing_says_how_to_search_inside_files(small, task, workspace):
+    from agent.execute.tools import tool_search
+
+    (workspace / "a.py").write_text("def gentle_kestrel(): pass\n", encoding="utf-8")
+    out = tool_search(small, task, pattern="gentle_kestrel.txt", path="work", names=True)
+    assert out["matches"] == [] and "names=false" in out["note"]
+    assert "note" not in tool_search(small, task, pattern="*.py", path="work", names=True)
+
+
+def test_a_name_search_for_text_with_a_space_searches_contents_instead(small, task, workspace):
+    from agent.execute.tools import tool_search
+
+    (workspace / "pkg").mkdir()
+    (workspace / "pkg" / "mod_a.py").write_text("def gentle_kestrel():\n    pass\n", encoding="utf-8")
+    out = tool_search(small, task, pattern="def gentle_kestrel", path="work", names=True)
+    assert [h["file"].replace("\\", "/") for h in out["matches"]] == ["pkg/mod_a.py"]
+    assert "contents" in out["note"]
