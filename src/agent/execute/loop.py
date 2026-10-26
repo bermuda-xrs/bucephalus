@@ -569,13 +569,13 @@ def _first_hold(ctx, task, backend, step: int) -> str | None:
     ran = _receipts(ctx, task)
     changed = any((spec := ctx.tools.get(t)) is not None and spec.side_effecting for t in ran)
     c = task.contract
-    for name, needed, note in (
-            ("edit_first", c.success_criterion == "verify_program" and not changed, EDIT_FIRST_NOTE),
-            ("compute_first", _numeric(c.output_schema) and "run_command" not in ran, COMPUTE_FIRST_NOTE)):
-        kind = f"{name}.held"
+    for name, kind, needed, note in (
+            ("edit_first", "edit_first.held", c.success_criterion == "verify_program" and not changed, EDIT_FIRST_NOTE),
+            ("compute_first", "compute_first.held", _numeric(c.output_schema) and "run_command" not in ran, COMPUTE_FIRST_NOTE)):
         held = ctx.conn.execute("SELECT COUNT(*) FROM events WHERE task_id=? AND type=?", (task.id, kind)).fetchone()[0]
         if backend.cfg.on(name) and needed and held < MAX_FIRST_HOLDS:
-            ctx.log.append(task.id, kind, {"step": step, "n": held + 1})
+            ctx.log.append(task.id, "edit_first.held" if kind == "edit_first.held" else "compute_first.held",
+                           {"step": step, "n": held + 1})
             return note
     return None
 
