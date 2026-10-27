@@ -31,7 +31,7 @@ def _run(root, data, *extra):
     env = {k: v for k, v in os.environ.items() if k not in ("BUCEPHALUS_SCRATCH_ONLY",)}
     env["BUCEPHALUS_DATA_DIR"] = str(data)
     return subprocess.run(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(SCRIPT),  # noqa: S603,S607
-                           "-Root", str(root), *extra], capture_output=True, text=True, env=env, timeout=120)
+                           "-Root", str(root), *extra], capture_output=True, encoding="utf-8", errors="replace", env=env, timeout=120)
 
 
 def test_it_renames_the_folder_and_moves_its_state_directory(tmp_path):

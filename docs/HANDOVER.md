@@ -56,7 +56,7 @@ rebuilt `bucephalus.exe`'s window, and the WSL2 suite (see the Branch row for wh
 
 | Fact | Value | Regenerate with |
 |---|---|---|
-| Branch | `main`, fast-forwarded from `harness-14` (iteration 4, two whole-source reviews, the harness-16 baseline, the console split view, harness 17) after the suite, the frozen gate, the frozen e2e and the WSL2 suite passed; tags `iteration-4-closed`, `review-2-closed`, `h16-baseline`, `harness-17`; no remote | `git branch --show-current` |
+| Branch | `main`, fast-forwarded from `harness-14` (iteration 4, two whole-source reviews, the harness-16 baseline, the console split view, harness 17) after the suite, the frozen gate, the frozen e2e and the WSL2 suite passed; tags `iteration-4-closed`, `review-2-closed`, `h16-baseline`, `harness-17`; branch `calc` (G1, rejected) not merged; no remote | `git branch --show-current` |
 | Harness version | **17**, bumped 2026-10-26: edit_first on for the small profile, search fixes (CHANGELOG "Harness 17"); numbers from 16 and earlier do not compare | `grep HARNESS_VERSION src/agent/__init__.py` |
 | Toolset version | **8** (search: globs at any depth, name search with a space searches contents) | `grep TOOLSET_VERSION src/agent/__init__.py` |
 | Tests | not written down | `python -m pytest tests -q`; skips are live-credential tests (D26) and other-OS tests |
@@ -108,16 +108,22 @@ Harness 17 items, held-out seeds 13-39, n = 14 per family, against base (`runs/h
 (hold the answer on a program-checked task until a file changed) config_edit 0 -> 9, write_function 10 -> 13, ON for
 the small profile. F2 `compute_first` (hold a numeric answer until a script ran) arithmetic 0 -> 1 at twice the
 tokens: the 3B cannot write and run a working script, OFF. The F1/F2 holds were designed from failures read on these
-same seeds; a fresh-seed confirmation is plan item 1.
+same seeds; the harness-17 baseline below confirms them on fresh seeds.
+
+Harness-17 baseline (2026-10-27, dev seeds 0-26, n = 14 per family, `runs/h17-dev-20261027`): kept 81/112, base
+54/112; kept alone passes 29, base alone 2, McNemar p = 5e-7. Per family, base -> kept: multipage 0 -> 14
+(p = 0.0001), write_function 6 -> 13 (p = 0.016), config_edit 0 -> 5 (p = 0.06; 9 on the held-out seeds),
+unanswerable 7 -> 8, multi_file 13 -> 12, arithmetic 0 -> 1, needle 14 -> 14, extract_json 14 -> 14. Prompt tokens
+per family 0.4-0.9x base, except config_edit 2.4x (the edit hold's extra turns).
+
+G1 `calc_tool` (branch `calc`, a tool for exact arithmetic on numbers and + - * / // % **, off by default), same dev
+seeds against base: arithmetic 0 -> 1, extract_json 14 -> 14. The 3B called it in 1 of 14 arithmetic runs (the one
+pass) and answered from its head in the rest. Not merged; the branch stays for the record.
 
 Plan, in order:
-1. A harness-17 baseline: base vs kept (now with F1 and the search fix) on all 8 families, on dev seeds or fresh
-   held-out seeds, to confirm the gains and check nothing else moved.
-2. arithmetic still 0-1/14: the 3B neither computes reliably in its head nor writes a working script. Candidates: a
-   calculator tool, or leave arithmetic to the 8B.
-3. The 8B run when compute arrives (`bench/profile_run.py --preflight --arms control,full8b,small8b`).
-4. On the user's yes: delete the branches already in `main` (`desktop-app`, `harness-8`, `harness-9`, `harness-10`,
-   `harness-14`, `iteration-3`, `iteration-4`, `iteration-5`, `measurement-2026-09-01`, `heldout-h16`, `ui-dark`,
-   `multi-file-loo`, `search-fix`, `mech-17`, `batch-17`); the tags stay.
-5. The user's sign-in: a private GitHub remote (no `gh` here; the checkout is under OneDrive, which is the only
+1. arithmetic is left to the 8B: neither a script hold (F2) nor a calculator (G1) moves the 3B.
+2. The 8B run when compute arrives (`bench/profile_run.py --preflight --arms control,full8b,small8b`).
+3. The user's sign-in: a private GitHub remote (no `gh` here; the checkout is under OneDrive, which is the only
    off-machine copy today).
+
+The branches already in `main` were deleted on 2026-10-27 at the user's yes; the tags stay.
