@@ -56,7 +56,7 @@ rebuilt `bucephalus.exe`'s window, and the WSL2 suite (see the Branch row for wh
 
 | Fact | Value | Regenerate with |
 |---|---|---|
-| Branch | `main`, fast-forwarded from `harness-14` (iteration 4, two whole-source reviews, the harness-16 baseline, the console split view, harness 17) after the suite, the frozen gate, the frozen e2e and the WSL2 suite passed; tags `iteration-4-closed`, `review-2-closed`, `h16-baseline`, `harness-17`; branch `calc` (G1, rejected) not merged; no remote | `git branch --show-current` |
+| Branch | `main`, fast-forwarded from `harness-14` (iteration 4, two whole-source reviews, the harness-16 baseline, the console split view, harness 17) after the suite, the frozen gate, the frozen e2e and the WSL2 suite passed; tags `iteration-4-closed`, `review-2-closed`, `h16-baseline`, `harness-17`; branch `h18` (rejected candidates) not merged; no remote | `git branch --show-current` |
 | Harness version | **17**, bumped 2026-10-26: edit_first on for the small profile, search fixes (CHANGELOG "Harness 17"); numbers from 16 and earlier do not compare | `grep HARNESS_VERSION src/agent/__init__.py` |
 | Toolset version | **8** (search: globs at any depth, name search with a space searches contents) | `grep TOOLSET_VERSION src/agent/__init__.py` |
 | Tests | not written down | `python -m pytest tests -q`; skips are live-credential tests (D26) and other-OS tests |
@@ -72,7 +72,7 @@ rebuilt `bucephalus.exe`'s window, and the WSL2 suite (see the Branch row for wh
 Workstyle: code carries no docstrings and almost no comments; the why is in commit messages
 and failing tests. Frozen docs (never edited): FINDINGS, SPEC-DELTA, INVARIANTS, RELEASE,
 PLATFORMS, AUDIT files. Live: this file, `docs/DEFERRED.md`, `CHANGELOG.md`.
-Before any commit: tests red first, never weaken a check, nothing pushed.
+Before any commit: tests red first, never weaken a check; only `main` and the tags are pushed.
 
 ## Next step
 
@@ -95,8 +95,8 @@ arithmetic fails on mental arithmetic: 21 failed runs never call run_command; me
 Not working: multi_file with the kept items together; config_edit and arithmetic on the 3B; the desktop app on Linux
 without GTK or Qt; D78 and D80.
 
-Needs the user: compute for the 8B run (needs 7.23 GB; 4.69 GB free here); D26 credentials; a Mac or bare-metal Linux;
-a yes or no on plan items 5 and 6.
+Needs the user: the 8B run when wanted (plan item 2; 7.23 GB, 4.69 GB free here); D26 credentials; a Mac or bare-metal
+Linux.
 
 multi_file leave-one-out (2026-10-26, same seeds, n = 14 per arm): base 11, kept 7; kept without B2 7, B6 7, C1 6,
 C3 6, the stuck check 9, the escape check 7, E1 10. No single item restores it; two search traps do: glob='*' matched
@@ -118,12 +118,24 @@ per family 0.4-0.9x base, except config_edit 2.4x (the edit hold's extra turns).
 
 G1 `calc_tool` (branch `calc`, a tool for exact arithmetic on numbers and + - * / // % **, off by default), same dev
 seeds against base: arithmetic 0 -> 1, extract_json 14 -> 14. The 3B called it in 1 of 14 arithmetic runs (the one
-pass) and answered from its head in the rest. Not merged; the branch stays for the record.
+pass) and answered from its head in the rest. Not merged; branch `calc` deleted at the user's word.
+
+Kept's failures on those dev seeds: config_edit 9/14 rewrite the whole file with write_file and lose or invent
+settings (edit_lines is offered and never used); unanswerable 6/14 split into copying the sentence's full stop
+("60 minutes." for "60 minutes") and answering a question the document does not answer, each resubmitted unchanged
+until the plateau.
+
+H18 candidates (branch `h18`, off by default, `SEEDS` 40 -> 80), on top of kept, fresh held-out seeds 41-67, n = 14
+per family (`runs/h18-fresh-20261027`). H1 `write_diff` (an overwrite's receipt lists the lines it removed and added;
+untrusted, it quotes the old file): config_edit kept 5 -> 6 (2 only kept, 3 only H1, p = 1), write_function 14 -> 14.
+H2 `repeat_note` (an answer resubmitted unchanged after it failed, with no file changed since, is named as such):
+unanswerable 4 -> 4, arithmetic 0 -> 0, the same runs passing; the note was sent and the model resubmitted the same
+answer anyway. Both rejected; `h18` not merged. Kept against base on the same fresh seeds: config_edit 0 -> 5,
+write_function 8 -> 14 (p = 0.03), unanswerable 5 -> 4, arithmetic 2 -> 0.
 
 Plan, in order:
-1. arithmetic is left to the 8B: neither a script hold (F2) nor a calculator (G1) moves the 3B.
-2. The 8B run when compute arrives (`bench/profile_run.py --preflight --arms control,full8b,small8b`).
-3. The user's sign-in: a private GitHub remote (no `gh` here; the checkout is under OneDrive, which is the only
-   off-machine copy today).
+1. arithmetic is left to the 8B: neither a script hold (F2), a calculator (G1) nor a repeat note (H2) moves the 3B.
+2. Deferred at the user's word (2026-10-27), to be done later: the 8B run (`bench/profile_run.py --preflight --arms
+   control,full8b,small8b`), 7.2 GB needed.
 
 The branches already in `main` were deleted on 2026-10-27 at the user's yes; the tags stay.
