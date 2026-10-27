@@ -244,6 +244,7 @@ def _run_task(ctx, task_id: str) -> TaskResult:
     best_answer: Any = None
     best_score: float = -1.0
     score_history: list[float] = []
+    failed: dict[str, int] = {}  # answer text -> last receipt seq when it failed
     charged_s = 0.0
     seen: dict[str, int] = {}
     history: list[dict] = []
@@ -446,6 +447,13 @@ def _run_task(ctx, task_id: str) -> TaskResult:
                 if ok:
                     return finish(ctx, task, "done", answer=result, steps=step + 1)
 
+                note = ""
+                if backend.cfg.on("repeat_note"):
+                    same = failed.get(artifact_text)
+                    if same is not None and not _any_change_since(ctx, task, same):
+                        note = chr(10) + REPEAT_NOTE
+                    failed[artifact_text] = _last_receipt_seq(ctx, task)
+
                 if report.score > best_score:
                     best_score, best_answer = report.score, result
                 score_history.append(best_score)
@@ -467,7 +475,7 @@ def _run_task(ctx, task_id: str) -> TaskResult:
 
                 entries.append(
                     LedgerEntry.observation(
-                        ctx.mesh.feedback_for_model(report),
+                        ctx.mesh.feedback_for_model(report) + note,
                         taint=Taint.TRUSTED,
                         label="verifier",
                     )
@@ -585,6 +593,8 @@ def _observed(ctx, task) -> bool:
                             (task.id,)).fetchone() is not None
 
 
+REPEAT_NOTE = ("That answer is the same, character for character, as one that already failed, and nothing has "
+               "changed since: it will fail again. Re-read the task and change the answer.")
 VERIFY_NOTE = ("You changed files and have not run a test, lint or the program since: run one now with "
                "run_command.")
 
@@ -910,6 +920,11 @@ def _changed_since(ctx, task, seq: int) -> bool:
     row = ctx.conn.execute("SELECT payload_json FROM events WHERE task_id=? AND type='tool.receipt' AND seq>? "
                            "ORDER BY seq DESC LIMIT 1", (task.id, seq)).fetchone()
     return bool(row and json.loads(row[0]).get("changed"))
+
+
+def _any_change_since(ctx, task, seq: int) -> bool:
+    return ctx.conn.execute("SELECT 1 FROM events WHERE task_id=? AND type='tool.receipt' AND seq>? "
+                            "AND json_extract(payload_json, '$.changed') LIMIT 1", (task.id, seq)).fetchone() is not None
 
 
 def _warn_if_stuck(ctx, task, entries, step, repeats, parsed) -> None:

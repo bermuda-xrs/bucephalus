@@ -10,7 +10,8 @@ from pydantic import BaseModel, Field, PrivateAttr, model_validator
 
 SMALL_FILL_RATIO = 0.5
 MECHANISMS = ("compact_prompt", "evidence_pins", "stuck_patterns", "escape_check",
-            "code_out_of_json", "progress_file", "evaluator_pass", "send_tool_list", "edit_first", "compute_first")
+            "code_out_of_json", "progress_file", "evaluator_pass", "send_tool_list", "edit_first", "compute_first",
+            "write_diff", "repeat_note")
 
 
 class _Section(BaseModel):
@@ -81,6 +82,8 @@ class BackendConfig(_Section):
     escape_check: bool | None = None
     edit_first: bool | None = None
     compute_first: bool = False
+    write_diff: bool = False
+    repeat_note: bool = False
     observation_tokens: int | None = None
     assumed_tokens_per_sec: float = 5.0
 

@@ -343,8 +343,22 @@ def tool_write_file(ctx, task, path: str, content: str) -> dict:
     p = _resolve(ctx, path)
     p.parent.mkdir(parents=True, exist_ok=True)
     existed = p.exists()
+    old = p.read_text(encoding="utf-8", errors="replace") if existed and _write_diff(ctx) else None
     p.write_text(content, encoding="utf-8")
-    return {"ok": True, "path": str(p), "bytes": len(content.encode("utf-8")), "overwrote": existed}
+    out = {"ok": True, "path": str(p), "bytes": len(content.encode("utf-8")), "overwrote": existed}
+    if old is not None:
+        before, after = old.splitlines(), content.splitlines()
+        out.update(removed=_cut([x for x in before if x not in after]), added=_cut([x for x in after if x not in before]))
+    return out
+
+
+def _write_diff(ctx) -> bool:
+    b = ctx.backends.get("cloud") if hasattr(ctx, "backends") else None
+    return b is not None and b.cfg.on("write_diff")
+
+
+def _cut(lines: list[str], keep: int = 12) -> list[str]:
+    return lines if len(lines) <= keep else [*lines[:keep], f"... {len(lines) - keep} more"]
 
 
 def tool_run_code(ctx, task, code: str, timeout_s: int = 30) -> dict:
