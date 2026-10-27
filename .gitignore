@@ -30,3 +30,4 @@ cal.json
 # before commit, so the .db alone is the record.
 *.db-wal
 *.db-shm
+.alpha_token

@@ -833,7 +833,7 @@ every entry point now invoked by a test.
 
 The README's, HANDOVER's and RELEASE's end-to-end proof did all of its work
 and then died on its last line, formatting an unmeasured cache ratio with
-`:.0%`. Bisected: it worked at `7aed79f` and failed at `b0bdcd7` (2026-09-06),
+`:.0%`. Bisected: it worked at `23222e5` and failed at `633b59e` (2026-09-06),
 **the same commit that killed `bench/noise.py main`** - one commit, two
 documented front doors, with the suite green over both.
 
@@ -1014,7 +1014,7 @@ gap that nothing ever recorded, so it could not fire.
 **Other records:**
 - D19 is dormant and D22's rule-3 half is closed.
 - FINDINGS 1.27 says what would reopen M11: a live suite, D19 closed, and the
-  two rules wired. It also says where the code is: `ce624c7`.
+  two rules wired. It also says where the code is: `5490f59`.
 - **FINDINGS 1.26 records the deputy finding as its own entry:** 15 reviews
   with zero `calls` rows, and invariant 12 false twice, in different ways.
 - SPEC-DELTA C59 is corrected. It said the old test's spy watched only the
@@ -1441,7 +1441,7 @@ A scheduled task has origin `schedule`. It never auto-proceeds - the deputy and
 the scoped-write fast path are skipped for every unattended origin, channel or
 schedule, whatever the config says. At a boundary it parks and raises a
 notification (`bucephalus notifications`); once a human decides, the next wake resumes
-it and - since `f11be4d` - the decision is acted on. Its tool floor is derived
+it and - since `175edab` - the decision is acted on. Its tool floor is derived
 from the origin: no `git_push`, `append_to_outbox`, `memory_write`,
 `memory_consolidate` or `delegate`. `run_code` stays, because a side-effecting
 call from an unattended task parks for a human anyway.
@@ -1484,7 +1484,7 @@ altered. D26 remains a STOP.
 Approve a plan, then get a result, was the design. What ran was approve a plan,
 then get a result REGARDLESS. The approval half was fully inert: nothing ever
 read a decided approval, so approving never made an action happen and denying
-never told the task (`f11be4d`; this corrects the Phase 8 report). The plan-pin
+never told the task (`175edab`; this corrects the Phase 8 report). The plan-pin
 half was half inert: the anchor side never fired (D21), though the database side
 did. In the 283-task record there are ZERO human decisions; the three tasks that
 ever parked were never decided and appear in no evidence file; the one approved
@@ -1528,7 +1528,7 @@ intent laundered into an allowed call - that is where a human stands.
 ### The mock could not see a prefix change
 
 Exactly one test depended on it: `test_cache_hit_ratio_above_threshold`, both of
-its assertions, vacuous until `f6f7348`. The five tests in
+its assertions, vacuous until `086416e`. The five tests in
 `test_cache_ratio_is_measured_or_null`, `test_memory`'s ratio check,
 `test_m2_instrument`'s cost tests and `test_openai_compat`'s parse feed
 synthetic usage or a fake HTTP server and never touched the mock. No published
@@ -1551,8 +1551,8 @@ the flush persisted.
 
 ### 9.6 - the prediction, then the measurement
 
-**Method.** The prediction was committed on its own first (`ca990ed`), then
-measured at `5c1a40d` by `bench/cache_boundary.py`, which refuses to run on an
+**Method.** The prediction was committed on its own first (`6a3c591`), then
+measured at `8df9cdb` by `bench/cache_boundary.py`, which refuses to run on an
 uncommitted or edited prediction.
 
 **Against the prediction as stated:** P1 held - every call reused exactly
@@ -1591,7 +1591,7 @@ defects, each reverting one change; every listed test went red against each.
 The injections also caught two defects in my own tests before they shipped: the
 code-route test read a refusal's echoed traceback as a leak, and the write test
 treated a write that would park for a human as unreachable - which, since
-`f11be4d`, it is not. A protected write must be DENIED.
+`175edab`, it is not. A protected write must be DENIED.
 
 ## Phase 8 (A4) — Telegram, stopped before it goes live — 2026-09-08
 
@@ -2473,7 +2473,7 @@ call `checkpoint()`, which is why the anchors drifted. Invariant 40.
 ### Note on Phase 1 evidence
 
 The `refresh_worker` crash fixed in the corrections commit means **any
-`config.openai.yaml` run started before `b0bdcd7` would have died at the first
+`config.openai.yaml` run started before `633b59e` would have died at the first
 worker refresh** with `AttributeError: 'NoneType' object has no attribute
 'rstrip'`. No published number is affected — no measurement pass has run
 through that config — but anyone reading the Phase 1 evidence should know
@@ -2584,7 +2584,7 @@ was verified by injecting one. Invariant 35.
 
 Verified rather than assumed, and the retrospective half is honestly bounded:
 
-* `options.num_ctx` entered the native adapter in `8a68f4c`, 2026-08-19. The
+* `options.num_ctx` entered the native adapter in `f182e77`, 2026-08-19. The
   earliest published evidence is 2026-08-26. `git log -S` finds exactly one
   commit touching that string, so it was never removed. Every published run's
   requests carried it.

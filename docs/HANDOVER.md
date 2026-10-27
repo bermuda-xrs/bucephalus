@@ -51,12 +51,12 @@ One measurement process at a time (`src/agent/runlock.py`); nothing else runs du
 
 ## State
 
-Verified 2026-10-26 against commit `dfc3694` on `batch-17`: Windows suite, ruff, the frozen gate and a task through the
+Verified 2026-10-26 against commit `59fa20c` on `batch-17`: Windows suite, ruff, the frozen gate and a task through the
 rebuilt `bucephalus.exe`'s window, and the WSL2 suite (see the Branch row for whether it reached `main`).
 
 | Fact | Value | Regenerate with |
 |---|---|---|
-| Branch | `main`, fast-forwarded from `harness-14` (iteration 4, two whole-source reviews, the harness-16 baseline, the console split view, harness 17) after the suite, the frozen gate, the frozen e2e and the WSL2 suite passed; tags `iteration-4-closed`, `review-2-closed`, `h16-baseline`, `harness-17`; branch `h18` (rejected candidates) not merged; no remote | `git branch --show-current` |
+| Branch | `main`, fast-forwarded from `harness-14` (iteration 4, two whole-source reviews, the harness-16 baseline, the console split view, harness 17) after the suite, the frozen gate, the frozen e2e and the WSL2 suite passed; tags `iteration-4-closed`, `review-2-closed`, `h16-baseline`, `harness-17`; branch `h18` (rejected candidates) not merged; remote `origin` = private `bermuda-xrs/bucephalus` (`main` and the tags) | `git branch --show-current` |
 | Harness version | **17**, bumped 2026-10-26: edit_first on for the small profile, search fixes (CHANGELOG "Harness 17"); numbers from 16 and earlier do not compare | `grep HARNESS_VERSION src/agent/__init__.py` |
 | Toolset version | **8** (search: globs at any depth, name search with a space searches contents) | `grep TOOLSET_VERSION src/agent/__init__.py` |
 | Tests | not written down | `python -m pytest tests -q`; skips are live-credential tests (D26) and other-OS tests |
@@ -139,3 +139,8 @@ Plan, in order:
    control,full8b,small8b`), 7.2 GB needed.
 
 The branches already in `main` were deleted on 2026-10-27 at the user's yes; the tags stay.
+
+History rewritten 2026-10-28 before the first push, every branch and tag, to drop `.alpha_token` (an old
+local console token) and a `.venv` committed once: every commit ID changed. Commit IDs in this file and CHANGELOG are
+remapped; the frozen docs quote the old ones. The old repository and the old -> new map are in
+`OneDrive\Desktop\Βουκεφάλας\backups` (`bucephalus-pre-rewrite-20261028.bundle`, `bucephalus-rewrite-map-20261028.txt`).
