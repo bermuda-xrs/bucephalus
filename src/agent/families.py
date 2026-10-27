@@ -4,7 +4,7 @@ import json
 import random
 
 FAMILY_VERSION = 1
-SEEDS = 40
+SEEDS = 80
 
 PLACES = ("the north meadow", "the reading room", "the east greenhouse", "the seed library", "the river path",
           "the old orchard", "the print shop", "the herb garden", "the weather mast", "the map room")

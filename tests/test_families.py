@@ -29,10 +29,15 @@ def test_eight_families_of_forty_seeds_split_by_seed():
 
 
 def test_skip_takes_the_seeds_after_the_ones_already_measured():
-    held = F.instances(["needle", "arithmetic"], "heldout")
+    needle, arith = F.instances(["needle"], "heldout"), F.instances(["arithmetic"], "heldout")
     got = F.instances(["needle", "arithmetic"], "heldout", 14, skip=6)
-    assert got == held[6:20] + held[26:40]
+    assert got == needle[6:20] + arith[6:20]
     assert [s["seed"] for s in got[:14]] == list(range(13, 40, 2))
+
+
+def test_fresh_held_out_seeds_follow_the_forty_already_used():
+    got = F.instances(["needle"], "heldout", 14, skip=20)
+    assert [s["seed"] for s in got] == list(range(41, 68, 2))
 
 
 @pytest.mark.parametrize("fam", ALL)

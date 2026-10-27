@@ -56,3 +56,14 @@ def test_no_note_after_a_file_changed_or_when_off(small, workspace):
     small.backends["cloud"].queue(READ, BAD, BAD, BAD)
     run_task(small, t2.id)
     assert not any(REPEAT_NOTE in c["tail"] for c in small.backends["cloud"].calls[-4:])
+
+
+def test_a_diff_carries_the_old_file_so_its_receipt_is_untrusted(small, workspace):
+    (workspace / "a.txt").write_text("from somewhere else", encoding="utf-8")
+    small.backends["cloud"].cfg.write_diff = True
+    t = _task(small, goal="change a.txt")
+    small.backends["cloud"].queue(READ, WRITE, '{"kind": "final", "answer": {"path": "work/a.txt"}}')
+    run_task(small, t.id)
+    got = [r[0] for r in small.conn.execute("SELECT taint FROM artifacts WHERE task_id=? AND kind='tool_output' "
+                                            "AND origin_json LIKE '%write_file%'", (t.id,))]
+    assert got == ["untrusted"]

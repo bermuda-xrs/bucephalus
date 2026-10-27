@@ -1354,6 +1354,8 @@ def _perform(ctx, task, tool, tool_name: str, args: dict, step: int) -> LedgerEn
 
     text = _render_result(result)
     taint = tool.output_taint
+    if tool_name == "write_file" and isinstance(result, dict) and "removed" in result:
+        taint = join_taint(taint, Taint.UNTRUSTED)  # the diff quotes the file it replaced
     origin = {"tool": tool_name,
               "args": {k: str(v)[:200] for k, v in args.items()}}
     if isinstance(result, dict) and isinstance(result.get("provenance"), dict):
