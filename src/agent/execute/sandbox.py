@@ -554,7 +554,12 @@ def run_sandboxed(
     if note:
         notes.append(note)
 
-    with tempfile.TemporaryDirectory(prefix="bucephalus_sbx_") as workdir:
+    with tempfile.TemporaryDirectory(prefix="bucephalus_sbx_") as tmp:
+        # One name for the work directory everywhere - cwd, TEMP, the guard.
+        # The guard fences by the resolved name; given the unresolved one (an
+        # 8.3 short name, C:\Users\RUNNER~1\..., or a symlinked TMPDIR),
+        # every write into the work directory was refused as outside scope.
+        workdir = str(Path(tmp).resolve())
         links = []
         for p in allowed_paths:
             src, rel = p if isinstance(p, (tuple, list)) else (p, None)
@@ -569,7 +574,7 @@ def run_sandboxed(
         guard = _GUARD_TEMPLATE.format(
             roots=[str(Path(p[0] if isinstance(p, (tuple, list)) else p).resolve())
                    for p in allowed_paths],
-            workdir=str(Path(workdir).resolve()),
+            workdir=workdir,
             protected=[str(p) for p in protected_paths],
             deny_spawn=bool(protected_paths),
             streams=_platform.has_data_streams(),
