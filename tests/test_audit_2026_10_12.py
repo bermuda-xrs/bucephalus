@@ -156,6 +156,24 @@ def test_h4_the_files_a_hook_or_mcp_server_runs_are_protected(ctx):
     assert not is_protected("work/other.py", str(root), state)
 
 
+def test_h4_a_hook_run_by_this_interpreter_does_not_fence_off_its_stdlib(ctx):
+    import sysconfig
+
+    from agent.security.capabilities import is_protected, state_paths
+
+    root = Path(ctx.config.root)
+    (root / "tools").mkdir(exist_ok=True)
+    (root / "tools" / "precheck.py").write_text("", encoding="utf-8")
+    ctx.config.hooks = HooksConfig.model_validate({"pre_tool": [{"argv": [sys.executable, "tools/precheck.py"]}]})
+    state = state_paths(ctx)
+    assert is_protected(sys.executable, str(root), state), "the interpreter a hook runs is protected"
+    assert is_protected("tools/helper.py", str(root), state), "and what its script imports beside it"
+    # Windows: python.exe sits directly above Lib\, and "the directory beside
+    # it" was the standard library - sandboxed code could not import json.
+    for f in (json.__file__, os.path.join(sysconfig.get_paths()["stdlib"], "os.py")):
+        assert not is_protected(f, str(root), state), f
+
+
 def test_h4_the_loaded_config_is_protected_whatever_its_name(tmp_path):
     from agent.config import load_config
     from agent.security.capabilities import is_protected, state_paths

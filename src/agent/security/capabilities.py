@@ -102,9 +102,20 @@ def _argv_files(cfg, root: Path) -> list[Path]:
             p = Path(os.path.abspath(a if Path(a).is_absolute() else root / a))
             if p.is_file():
                 out.append(p)
-                if p.parent != root and p.parent not in root.parents:
+                if (p.parent != root and p.parent not in root.parents
+                        and not _holds_the_stdlib(p.parent)):
                     out.append(p.parent)
     return out
+
+
+def _holds_the_stdlib(d: Path) -> bool:
+    # A hook's argv[0] is often the interpreter itself. On Windows python.exe
+    # sits directly above Lib\, so protecting "the directory beside it" fenced
+    # off the standard library: sandboxed code could not import json.
+    import sysconfig
+
+    lib = Path(os.path.abspath(sysconfig.get_paths()["stdlib"]))
+    return d == lib or d in lib.parents
 
 
 def _modules(argv: list[str]) -> list[str]:

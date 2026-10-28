@@ -22,9 +22,6 @@ from pathlib import Path
 
 import pytest
 
-# Takes the REAL checkout's measurement lock (bench/run.py); see test_calibration_path.
-pytestmark = pytest.mark.xdist_group("real-measurement-lock")
-
 
 ROOT = Path(__file__).resolve().parents[2]
 TREE = ROOT / "bench" / "tasks" / "archive" / "aero_calc"
@@ -230,6 +227,9 @@ def test_paired_enforces_the_declared_profile(monkeypatch, capsys, tmp_path):
     checking what it was allowed to touch — and it recorded "mixed" in the
     provenance of a run that was in fact local.
     """
+    # The lock is taken beside the relative config: this test's own, not the
+    # checkout's (see test_calibration_path).
+    monkeypatch.chdir(tmp_path)
     mod = _load_bench_run()
     seen: dict = {}
 
@@ -268,6 +268,9 @@ def test_paired_split_filter_keeps_the_contamination_boundary(monkeypatch, capsy
     informed by the drafting half, the split filter is the only thing standing
     between the gate and a manufactured lift.
     """
+    # The lock is taken beside the relative config: this test's own, not the
+    # checkout's (see test_calibration_path).
+    monkeypatch.chdir(tmp_path)
     mod = _load_bench_run()
     ran: list[str] = []
 

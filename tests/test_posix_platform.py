@@ -21,10 +21,26 @@ DARWIN_ONLY = pytest.mark.skipif(
     reason="macOS only - verified on a real Mac by docs/PLATFORMS.md checklist step 5")
 
 
-@pytest.fixture
-def fake_os(monkeypatch):
+@pytest.fixture(params=["pidfd", "kill"])
+def fake_os(request, monkeypatch):
+    # Both routes _sigkill can take: a pidfd where the OS has one (Linux), plain
+    # kill where it does not. Each records into "kill". The real pidfd_open was
+    # left in place and opened the HOST's pids 10-12 wherever they existed (a
+    # CI runner), then reached for a pidfd_send_signal this fake did not have.
     sent = {"killpg": [], "kill": []}
-    monkeypatch.setattr(posix, "signal", types.SimpleNamespace(SIGKILL=9))
+    fds: dict[int, int] = {}
+
+    def pidfd_open(pid):
+        fd = os.open(os.devnull, os.O_RDONLY)
+        fds[fd] = pid
+        return fd
+
+    monkeypatch.setattr(posix, "signal", types.SimpleNamespace(
+        SIGKILL=9, pidfd_send_signal=lambda fd, s: sent["kill"].append(fds[fd])))
+    if request.param == "pidfd":
+        monkeypatch.setattr(posix.os, "pidfd_open", pidfd_open, raising=False)
+    else:
+        monkeypatch.delattr(posix.os, "pidfd_open", raising=False)
     monkeypatch.setattr(posix.os, "killpg", lambda g, s: sent["killpg"].append(g), raising=False)
     monkeypatch.setattr(posix.os, "kill", lambda p, s: sent["kill"].append(p))
     return sent
@@ -146,16 +162,33 @@ def test_macos_labels_its_memory_cap_reactive():
     assert "REACTIVE" in posix.limits_note(30, 512 * 2**20, 32)
 
 
-PS = """    1     0 /sbin/launchd
-  512     1 /Applications/Some App.app/Contents/MacOS/Some App
-  900   512 /usr/bin/python3
+PS = """    1     0 Ss   /sbin/launchd
+  512     1 S    /Applications/Some App.app/Contents/MacOS/Some App
+  900   512 R+   /usr/bin/python3
+  901   900 Z+   <defunct>
 """
 
 
 def test_darwin_reads_the_process_table_without_proc():
     rows = darwin.parse_ps_table(PS)
-    assert rows == [(1, 0, "launchd"), (512, 1, "Some App"), (900, 512, "python3")]
+    assert rows == [(1, 0, "launchd"), (512, 1, "Some App"), (900, 512, "python3")], \
+        "a zombie (901) is not a running process"
     assert darwin.parse_ps_groups("  900   900\n  901   900\n  902   1\n", 900) == [900, 901]
+
+
+@pytest.mark.parametrize("sid,pgid,pid,ppid,want", [
+    # An ordinary login: our session is not launchd's.
+    ({0: 7, 1: 1, 900: 7}, {0: 7, 1: 1, 900: 7}, 900, 1, True),
+    ({0: 7, 1: 1, 900: 3}, {0: 7, 1: 1, 900: 3}, 900, 1, False),     # another session's daemon
+    # A launchd job (the macOS CI runner): everything shares session 1.
+    ({0: 1, 1: 1, 900: 1}, {0: 50, 1: 1, 900: 50}, 900, 1, True),    # our orphan, adopted
+    ({0: 1, 1: 1, 900: 1}, {0: 50, 1: 1, 900: 900}, 900, 1, False),  # a daemon in its own group
+    ({0: 1, 1: 1, 900: 1, 800: 1}, {0: 50, 1: 1, 900: 50, 800: 50}, 900, 800, False),  # a live parent
+])
+def test_darwin_adoption_holds_inside_launchds_session(monkeypatch, sid, pgid, pid, ppid, want):
+    monkeypatch.setattr(darwin.os, "getsid", lambda p: sid[p], raising=False)
+    monkeypatch.setattr(darwin.os, "getpgid", lambda p: pgid[p], raising=False)
+    assert darwin.adopted(pid, ppid) is want
 
 
 def test_darwin_start_time_and_memory_parsers():

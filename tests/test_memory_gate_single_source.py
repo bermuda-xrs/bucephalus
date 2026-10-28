@@ -70,7 +70,13 @@ def test_pressure_and_rss_are_readable_here():
     assert p, "memory_pressure() returned empty on this platform"
     for k in ("available_gb", "committed_gb", "physical_gb", "commit_ratio"):
         assert k in p, f"memory_pressure() is missing {k}"
-    assert p["commit_ratio"] > 0
+    assert p["available_gb"] > 0 and p["physical_gb"] > 0
+    if sys.platform == "darwin":
+        # macOS has no commit charge to read: unmeasured, so null, never zero
+        # (invariant 36; docs/PLATFORMS.md, memory metrics).
+        assert p["committed_gb"] is None and p["commit_ratio"] is None, p
+    else:
+        assert p["commit_ratio"] > 0
 
     rss = worker_rss_gb()
     assert rss is None or rss > 0
