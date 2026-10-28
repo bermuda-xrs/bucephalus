@@ -181,7 +181,7 @@ def test_the_handover_stays_short():
 
 def test_the_posix_claim_is_still_true():
     assert "POSIX has run six times, in WSL2" in FLAT
-    assert "darwin.py`) has never executed anywhere" in FLAT
+    assert "checklist has never been run on a Mac" in FLAT
 
 
 if __name__ == "__main__":  # pragma: no cover - convenience
