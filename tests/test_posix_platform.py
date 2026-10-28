@@ -174,6 +174,15 @@ def test_darwin_reads_the_process_table_without_proc():
     assert darwin.parse_ps_groups("  900   900\n  901   900\n  902   1\n", 900) == [900, 901]
 
 
+def test_darwin_does_not_count_a_zombie_as_running():
+    live = darwin.parse_ps_live_table(
+        "    1     0 Ss   /sbin/launchd\n"
+        "  512     1 S    /Applications/Some App.app/Contents/MacOS/Some App\n"
+        "  900   512 R+   /usr/bin/python3\n"
+        "  901   900 Z+   <defunct>\n")
+    assert live == [(1, 0, "launchd"), (512, 1, "Some App"), (900, 512, "python3")]
+
+
 def test_darwin_start_time_and_memory_parsers():
     assert darwin.parse_lstart("Thu Sep 25 12:00:01 2026") == int(time.mktime(
         time.strptime("Thu Sep 25 12:00:01 2026", "%a %b %d %H:%M:%S %Y")))
