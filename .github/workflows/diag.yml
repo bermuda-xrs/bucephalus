@@ -53,6 +53,39 @@ jobs:
           else:
               print("never answered; last error:", repr(last))
           p.kill(); print(p.communicate()[0][-3000:])
+      - name: Reaper probe
+        if: runner.os == 'macOS'
+        shell: python
+        run: |
+          import os, subprocess, sys, tempfile, time
+          sys.path.insert(0, "src")
+          from agent.platform import darwin
+          from agent import proc
+          d = tempfile.mkdtemp()
+          child = "import os,sys,time; open(sys.argv[1],'w').write(str(os.getpid())); time.sleep(60)"
+          parent = ("import os,subprocess,sys,time; open(sys.argv[1],'w').write(str(os.getpid())); "
+                    "subprocess.Popen([sys.executable,'-c',sys.argv[3],sys.argv[2]]); time.sleep(60)")
+          pp, cp = os.path.join(d, "p"), os.path.join(d, "c")
+          P = subprocess.Popen([sys.executable, "-c", parent, pp, cp, child])
+          while not (os.path.exists(cp) and open(cp).read()):
+              time.sleep(0.1)
+          ppid, cpid = int(open(pp).read()), int(open(cp).read())
+          print("sys.executable", sys.executable)
+          print("ps raw:", subprocess.run(["ps", "-o", "pid=,ppid=,stat=,comm=", "-p", f"{ppid},{cpid}"], capture_output=True, text=True).stdout)
+          os.kill(ppid, 9); time.sleep(2)
+          print("ps raw after:", subprocess.run(["ps", "-o", "pid=,ppid=,stat=,comm=", "-p", f"{ppid},{cpid}"], capture_output=True, text=True).stdout)
+          print("table rows:", [r for r in darwin.process_table() if r[0] in (ppid, cpid, 1)])
+          for x in (0, cpid, 1):
+              try:
+                  print("getsid", x, os.getsid(x))
+              except OSError as e:
+                  print("getsid", x, repr(e))
+          row = [r for r in darwin.process_table() if r[0] == cpid]
+          if row:
+              print("adopted", darwin.adopted(cpid, row[0][1]))
+          print("orphans(python)", proc.orphan_pids(names=("python",)))
+          print("start times", proc.process_start_time(cpid), proc.process_start_time(1))
+          os.kill(cpid, 9); P.wait()
       - name: Failing tests, verbose
         env:
           PYTHONUTF8: "1"
