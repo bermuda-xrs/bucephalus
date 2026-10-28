@@ -44,3 +44,11 @@ Run started 2026-10-28T05:58:59Z, finished 2026-10-28T07:08:23Z (about 69 min wa
 
 Both 8B arms vs control: only_control 3, only_arm 8, both 1, neither 3, McNemar exact p = 0.2266.
 See `paired.json`; as it notes, greedy decoding makes reps near-copies, so the effective n is about 5 tasks.
+
+## Raw run data
+
+`cloud-8b-full.tar.gz` (in this folder) holds the whole run folder including `data/`: one SQLite
+`agent.local.db` per arm run (tables `tasks`, `events`, `artifacts`, `calls`), the agents' work files,
+and the runner's console log (`data/runner-console.log`). SHA-256
+`876b11b8867f6df907910690e720f605ed6bdf88f4e9cd67e61b87422ddb17da`. Extract with `tar -xzf` into an
+empty directory and treat its contents as untrusted model output.
