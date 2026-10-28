@@ -103,16 +103,31 @@ def alive(pid: int) -> bool:
 def adopted(pid: int, ppid: int) -> bool:
     # posix.adopted's rule: an orphan still in this session, under a parent
     # that is not - never a daemon of another session.
+    return _orphaned_from(os.getsid, pid, ppid) or (
+        # Started as a launchd job (a CI runner), this process shares launchd's
+        # own session, and so does every orphan launchd adopts: the session
+        # cannot tell. The same rule on the process group, a subset of it, can.
+        _same(os.getsid, 0, 1) and _orphaned_from(os.getpgid, pid, ppid))
+
+
+def _same(ident, a: int, b: int) -> bool:
     try:
-        mine, own = os.getsid(0), os.getsid(pid)
+        return ident(a) == ident(b)
+    except OSError:
+        return False
+
+
+def _orphaned_from(ident, pid: int, ppid: int) -> bool:
+    try:
+        mine, own = ident(0), ident(pid)
     except OSError:
         return False
     try:
-        parent = os.getsid(ppid)
+        parent = ident(ppid)
     except ProcessLookupError:
         return False
     except PermissionError:
-        parent = None                   # not in this session
+        parent = None                   # not ours
     return own == mine and parent != mine
 
 

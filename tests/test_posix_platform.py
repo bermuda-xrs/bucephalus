@@ -176,6 +176,21 @@ def test_darwin_reads_the_process_table_without_proc():
     assert darwin.parse_ps_groups("  900   900\n  901   900\n  902   1\n", 900) == [900, 901]
 
 
+@pytest.mark.parametrize("sid,pgid,pid,ppid,want", [
+    # An ordinary login: our session is not launchd's.
+    ({0: 7, 1: 1, 900: 7}, {0: 7, 1: 1, 900: 7}, 900, 1, True),
+    ({0: 7, 1: 1, 900: 3}, {0: 7, 1: 1, 900: 3}, 900, 1, False),     # another session's daemon
+    # A launchd job (the macOS CI runner): everything shares session 1.
+    ({0: 1, 1: 1, 900: 1}, {0: 50, 1: 1, 900: 50}, 900, 1, True),    # our orphan, adopted
+    ({0: 1, 1: 1, 900: 1}, {0: 50, 1: 1, 900: 900}, 900, 1, False),  # a daemon in its own group
+    ({0: 1, 1: 1, 900: 1, 800: 1}, {0: 50, 1: 1, 900: 50, 800: 50}, 900, 800, False),  # a live parent
+])
+def test_darwin_adoption_holds_inside_launchds_session(monkeypatch, sid, pgid, pid, ppid, want):
+    monkeypatch.setattr(darwin.os, "getsid", lambda p: sid[p], raising=False)
+    monkeypatch.setattr(darwin.os, "getpgid", lambda p: pgid[p], raising=False)
+    assert darwin.adopted(pid, ppid) is want
+
+
 def test_darwin_start_time_and_memory_parsers():
     assert darwin.parse_lstart("Thu Sep 25 12:00:01 2026") == int(time.mktime(
         time.strptime("Thu Sep 25 12:00:01 2026", "%a %b %d %H:%M:%S %Y")))
