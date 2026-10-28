@@ -5,6 +5,8 @@ import os
 import sys
 from pathlib import Path
 
+import pytest
+
 from agent.execute.codeact import run_code_action
 from agent.execute.loop import run_task
 from agent.execute.sandbox import run_sandboxed
@@ -109,3 +111,23 @@ def test_in_memory_sqlite_still_runs_in_agent_code(ctx, task):
         "print(sqlite3.connect(':memory:').execute('select 41+1').fetchone()[0])\n",
         timeout_s=120)
     assert res["returncode"] == 0 and "42" in res["stdout"], res
+
+
+def test_the_work_directory_is_writable_by_any_name_it_was_given(tmp_path, monkeypatch):
+    # The Windows runner's TEMP is an 8.3 short name (C:\Users\RUNNER~1\...);
+    # the guard fences by the resolved name, so a write into the work directory
+    # under the short one - tempfile's, pytest's - was refused. A symlinked
+    # temp directory gives the same two names anywhere symlinks can be made.
+    real, link = tmp_path / "real", tmp_path / "link"
+    real.mkdir()
+    try:
+        link.symlink_to(real, target_is_directory=True)
+    except OSError:
+        pytest.skip("cannot make a directory symlink here")
+    monkeypatch.setattr("tempfile.tempdir", str(link))
+    code = ("import os, tempfile\n"
+            "open(os.path.join(os.environ['TEMP'], 'x.txt'), 'w').write('1')\n"
+            "with tempfile.TemporaryFile() as f:\n"
+            "    print('wrote', tempfile.gettempdir() != '')\n")
+    r = run_sandboxed(code, protected_paths=[str(tmp_path / "state")], timeout_s=120)
+    assert r["returncode"] == 0 and "wrote True" in r["stdout"], r["stderr"][-1500:]

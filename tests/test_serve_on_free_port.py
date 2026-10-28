@@ -18,6 +18,14 @@ def _probe(port):
         return False
 
 
+# `python -m http.server`, minus HTTPServer.server_bind's socket.getfqdn: on a
+# macOS runner that reverse lookup of 127.0.0.1 took 35 s, before listen(), so
+# the server could not answer inside this test's 30 s.
+SERVE = ("import http.server, socketserver, sys\n"
+         "socketserver.TCPServer(('127.0.0.1', int(sys.argv[1])),"
+         " http.server.SimpleHTTPRequestHandler).serve_forever()\n")
+
+
 def test_a_port_taken_between_choosing_and_binding_is_retried():
     tried = []
 
@@ -25,7 +33,7 @@ def test_a_port_taken_between_choosing_and_binding_is_retried():
         tried.append(port)
         if len(tried) == 1:
             return subprocess.Popen([sys.executable, "-c", "raise SystemExit(1)"])
-        return subprocess.Popen([sys.executable, "-m", "http.server", str(port), "--bind", "127.0.0.1"],
+        return subprocess.Popen([sys.executable, "-c", SERVE, str(port)],
                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
     p, port = serve_on_free_port(launch, _probe, timeout=30)

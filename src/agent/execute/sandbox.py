@@ -125,7 +125,12 @@ def _copy_back(entries: list[dict]) -> list[str]:
 _GUARD_TEMPLATE = '''\
 import sys as _sys, os as _os
 
-_ROOTS = [_os.path.realpath(p) for p in {roots!r}]
+# The child runs with -I, which ignores _build_env's PYTHONDONTWRITEBYTECODE.
+# Without this, importing a stdlib module whose .pyc is missing (a fresh CI
+# interpreter) tries to write into the interpreter's own __pycache__: refused,
+# and recorded as a denied write the code never made.
+_sys.dont_write_bytecode = True
+_ROOTS =[_os.path.realpath(p) for p in {roots!r}]
 _WORKDIR = _os.path.realpath({workdir!r})
 _BUSY = [False]
 _PROTECTED = [_os.path.realpath(p) for p in {protected!r}]
@@ -549,7 +554,12 @@ def run_sandboxed(
     if note:
         notes.append(note)
 
-    with tempfile.TemporaryDirectory(prefix="bucephalus_sbx_") as workdir:
+    with tempfile.TemporaryDirectory(prefix="bucephalus_sbx_") as tmp:
+        # One name for the work directory everywhere - cwd, TEMP, the guard.
+        # The guard fences by the resolved name; given the unresolved one (an
+        # 8.3 short name, C:\Users\RUNNER~1\..., or a symlinked TMPDIR),
+        # every write into the work directory was refused as outside scope.
+        workdir = str(Path(tmp).resolve())
         links = []
         for p in allowed_paths:
             src, rel = p if isinstance(p, (tuple, list)) else (p, None)
@@ -564,7 +574,7 @@ def run_sandboxed(
         guard = _GUARD_TEMPLATE.format(
             roots=[str(Path(p[0] if isinstance(p, (tuple, list)) else p).resolve())
                    for p in allowed_paths],
-            workdir=str(Path(workdir).resolve()),
+            workdir=workdir,
             protected=[str(p) for p in protected_paths],
             deny_spawn=bool(protected_paths),
             streams=_platform.has_data_streams(),

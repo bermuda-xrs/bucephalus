@@ -27,6 +27,11 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+        with:
+          # The whole history: test_handover_is_current checks that the commit
+          # docs/HANDOVER.md was verified against is an ancestor of HEAD, and a
+          # depth-1 clone holds no commit but HEAD.
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
