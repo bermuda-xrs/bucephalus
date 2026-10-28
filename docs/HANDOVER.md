@@ -61,9 +61,10 @@ rebuilt `bucephalus.exe`'s window, and the WSL2 suite (see the Branch row for wh
 | Toolset version | **8** (search: globs at any depth, name search with a space searches contents) | `grep TOOLSET_VERSION src/agent/__init__.py` |
 | Tests | not written down | `python -m pytest tests -q`; skips are live-credential tests (D26) and other-OS tests |
 | Lint | bug rules only | `python -m ruff check src tests scripts packaging demo.py` |
+| CI | `.github/workflows/ci.yml`: ruff and the parallel suite on GitHub's Windows, Ubuntu and macOS runners, Python 3.11, every push and PR; first green 2026-10-28 (`bermuda-xrs/bucephalus#2`). The dev extras cap pytest below 9.2, which silently drops every `xdist_group` (`tests/test_xdist_groups_hold.py`) | the repository's Actions tab |
 | Open issues | `docs/DEFERRED.md`, open entries only | its state table |
 | CLI | 30 subcommands, each smoke-tested | `.\bucephalus.ps1 --help` |
-| Platforms | Windows. POSIX has run six times, in WSL2 (`docs/evidence/wsl-2026-10-12/` is the last full checklist; the suite passed again 2026-10-25); bare-metal Linux never, and macOS (`src/agent/platform/darwin.py`) has never executed anywhere | `docs/PLATFORMS.md` section 5 is the checklist |
+| Platforms | Windows. POSIX has run six times, in WSL2 (`docs/evidence/wsl-2026-10-12/` is the last full checklist; the suite passed again 2026-10-25). Since 2026-10-28 CI runs the suite on GitHub-hosted Ubuntu and macOS VMs: macOS (`src/agent/platform/darwin.py`) first ran there and needed four fixes (zombies, orphan adoption, commit ratio, a 35 s reverse DNS lookup; `bermuda-xrs/bucephalus#2`). Bare-metal Linux never, and the PLATFORMS checklist has never been run on a Mac | `docs/PLATFORMS.md` section 5 is the checklist |
 | Security posture | the capability gate is the boundary; the sandbox (Job Object limits, advisory path/network fence) constrains a mistaken agent, not a hostile one: D32 | |
 | Phase program | complete | `RELEASE.md`, "ITERATION TWO: COMPLETE" |
 | Running now | nothing | `Get-Process python, ollama -ErrorAction SilentlyContinue` |
@@ -95,8 +96,8 @@ arithmetic fails on mental arithmetic: 21 failed runs never call run_command; me
 Not working: multi_file with the kept items together; config_edit and arithmetic on the 3B; the desktop app on Linux
 without GTK or Qt; D78 and D80.
 
-Needs the user: the 8B run when wanted (plan item 2; 7.23 GB, 4.69 GB free here); D26 credentials; a Mac or bare-metal
-Linux.
+Needs the user: the 8B run when wanted (plan item 2; 7.23 GB, 4.69 GB free here); D26 credentials; a Mac for the PLATFORMS
+checklist (CI runs only the suite there) or bare-metal Linux.
 
 multi_file leave-one-out (2026-10-26, same seeds, n = 14 per arm): base 11, kept 7; kept without B2 7, B6 7, C1 6,
 C3 6, the stuck check 9, the escape check 7, E1 10. No single item restores it; two search traps do: glob='*' matched

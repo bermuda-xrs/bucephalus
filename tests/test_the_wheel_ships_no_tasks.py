@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import shutil
 import subprocess
 import sys
 import zipfile
@@ -12,11 +13,24 @@ ROOT = Path(__file__).resolve().parents[1]
 pytestmark = pytest.mark.xdist_group("wheel-build")
 
 
+def _not_build_state(src: str, names: list[str]) -> set[str]:
+    skip = {n for n in names if n.endswith(".egg-info") or n == "__pycache__"}
+    if Path(src) == ROOT:
+        skip |= {".git", "build", "dist", "runs", ".venv", ".pytest_cache"} & set(names)
+    return skip
+
+
 @pytest.fixture(scope="module")
 def wheel(tmp_path_factory) -> zipfile.ZipFile:
+    # setuptools builds in the source tree (build/, src/*.egg-info). Built in
+    # the checkout, two builds at once - another worker, an install - removed
+    # each other's files mid-build. A private copy of the source, minus that
+    # build state, is the same wheel with nothing shared.
+    src = tmp_path_factory.mktemp("wheel-src") / "bucephalus"
+    shutil.copytree(ROOT, src, ignore=_not_build_state)
     out = tmp_path_factory.mktemp("wheel")
     r = subprocess.run(  # noqa: S603
-        [sys.executable, "-m", "pip", "wheel", str(ROOT), "--no-deps",
+        [sys.executable, "-m", "pip", "wheel", str(src), "--no-deps",
          "-w", str(out), "-q"],
         capture_output=True, text=True, encoding="utf-8", errors="replace",
         timeout=600)

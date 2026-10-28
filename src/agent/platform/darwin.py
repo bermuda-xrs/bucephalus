@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import ctypes
+import os
 import struct
 import subprocess
 import time
 
 from . import posix
 from .posix import (  # noqa: F401
-    WATCH_INTERVAL_S, adopted, alive, background_popen_flags, exit_note, has_data_streams, hold_awake, kill_tree_signal,
+    WATCH_INTERVAL_S, background_popen_flags, exit_note, has_data_streams, hold_awake, kill_tree_signal,
     link_names, lock_file, over_limits, spawn_denied_processes, unlock_file)
 
 RUSAGE_INFO_V4 = 4
@@ -21,16 +22,18 @@ def _run(*argv: str) -> str:
 
 
 def parse_ps_table(text: str) -> list[tuple[int, int, str]]:
+    """`ps -axo pid=,ppid=,stat=,comm=`, zombies dropped: an exited process
+    nobody has waited for yet is not running, as posix.process_table says."""
     rows = []
     for line in text.splitlines():
-        parts = line.strip().split(None, 2)
-        if len(parts) < 2:
+        parts = line.strip().split(None, 3)
+        if len(parts) < 3 or parts[2].startswith("Z"):
             continue
         try:
             pid, ppid = int(parts[0]), int(parts[1])
         except ValueError:
             continue
-        name = parts[2].rsplit("/", 1)[-1] if len(parts) == 3 else ""
+        name = parts[3].rsplit("/", 1)[-1] if len(parts) == 4 else ""
         rows.append((pid, ppid, name))
     return rows
 
@@ -75,7 +78,57 @@ def footprint_from_rusage(buf: bytes) -> int:
 
 
 def process_table() -> list[tuple[int, int, str]]:
-    return parse_ps_table(_run("ps", "-axo", "pid=,ppid=,comm="))
+    return parse_ps_table(_run("ps", "-axo", "pid=,ppid=,stat=,comm="))
+
+
+# posix.alive and posix.adopted read /proc, which macOS does not have: a
+# zombie read as alive (kill_tree waited out its whole timeout on a killed
+# child not yet reaped), and no orphan was ever adopted, so the reaper saw none.
+def alive(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+    except PermissionError:
+        return True
+    except OSError:
+        return False
+    try:
+        stat = _run("ps", "-o", "stat=", "-p", str(pid)).strip()
+    except subprocess.CalledProcessError:
+        return False                    # gone between the two calls
+    except (OSError, subprocess.TimeoutExpired):
+        return True                     # unknown: not proven dead
+    return not stat.startswith("Z")
+
+
+def adopted(pid: int, ppid: int) -> bool:
+    # posix.adopted's rule: an orphan still in this session, under a parent
+    # that is not - never a daemon of another session.
+    return _orphaned_from(os.getsid, pid, ppid) or (
+        # Started as a launchd job (a CI runner), this process shares launchd's
+        # own session, and so does every orphan launchd adopts: the session
+        # cannot tell. The same rule on the process group, a subset of it, can.
+        _same(os.getsid, 0, 1) and _orphaned_from(os.getpgid, pid, ppid))
+
+
+def _same(ident, a: int, b: int) -> bool:
+    try:
+        return ident(a) == ident(b)
+    except OSError:
+        return False
+
+
+def _orphaned_from(ident, pid: int, ppid: int) -> bool:
+    try:
+        mine, own = ident(0), ident(pid)
+    except OSError:
+        return False
+    try:
+        parent = ident(ppid)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        parent = None                   # not ours
+    return own == mine and parent != mine
 
 
 def group_members(pgid: int) -> list[int]:

@@ -9,7 +9,14 @@ from pathlib import Path
 
 import pytest
 
-pytestmark = pytest.mark.xdist_group("real-measurement-lock")
+# cmd_paired and noise's main lock beside --config, and these pass a relative
+# config.local.yaml: run from the checkout, every test here took the REAL
+# .measurement.lock, and refused to start while anything else held it - a
+# real measurement, or another xdist worker (an xdist_group did not hold
+# under pytest 9.2). From its own tmp_path, each test's lock is its own.
+@pytest.fixture(autouse=True)
+def _own_measurement_lock(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
 
 
 ROOT = Path(__file__).resolve().parents[1]
