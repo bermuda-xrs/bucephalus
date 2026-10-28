@@ -22,21 +22,6 @@ def _run(*argv: str) -> str:
 
 
 def parse_ps_table(text: str) -> list[tuple[int, int, str]]:
-    rows = []
-    for line in text.splitlines():
-        parts = line.strip().split(None, 2)
-        if len(parts) < 2:
-            continue
-        try:
-            pid, ppid = int(parts[0]), int(parts[1])
-        except ValueError:
-            continue
-        name = parts[2].rsplit("/", 1)[-1] if len(parts) == 3 else ""
-        rows.append((pid, ppid, name))
-    return rows
-
-
-def parse_ps_live_table(text: str) -> list[tuple[int, int, str]]:
     """`ps -axo pid=,ppid=,stat=,comm=`, zombies dropped: an exited process
     nobody has waited for yet is not running, as posix.process_table says."""
     rows = []
@@ -93,7 +78,7 @@ def footprint_from_rusage(buf: bytes) -> int:
 
 
 def process_table() -> list[tuple[int, int, str]]:
-    return parse_ps_live_table(_run("ps", "-axo", "pid=,ppid=,stat=,comm="))
+    return parse_ps_table(_run("ps", "-axo", "pid=,ppid=,stat=,comm="))
 
 
 # posix.alive and posix.adopted read /proc, which macOS does not have: a

@@ -162,25 +162,18 @@ def test_macos_labels_its_memory_cap_reactive():
     assert "REACTIVE" in posix.limits_note(30, 512 * 2**20, 32)
 
 
-PS = """    1     0 /sbin/launchd
-  512     1 /Applications/Some App.app/Contents/MacOS/Some App
-  900   512 /usr/bin/python3
+PS = """    1     0 Ss   /sbin/launchd
+  512     1 S    /Applications/Some App.app/Contents/MacOS/Some App
+  900   512 R+   /usr/bin/python3
+  901   900 Z+   <defunct>
 """
 
 
 def test_darwin_reads_the_process_table_without_proc():
     rows = darwin.parse_ps_table(PS)
-    assert rows == [(1, 0, "launchd"), (512, 1, "Some App"), (900, 512, "python3")]
+    assert rows == [(1, 0, "launchd"), (512, 1, "Some App"), (900, 512, "python3")], \
+        "a zombie (901) is not a running process"
     assert darwin.parse_ps_groups("  900   900\n  901   900\n  902   1\n", 900) == [900, 901]
-
-
-def test_darwin_does_not_count_a_zombie_as_running():
-    live = darwin.parse_ps_live_table(
-        "    1     0 Ss   /sbin/launchd\n"
-        "  512     1 S    /Applications/Some App.app/Contents/MacOS/Some App\n"
-        "  900   512 R+   /usr/bin/python3\n"
-        "  901   900 Z+   <defunct>\n")
-    assert live == [(1, 0, "launchd"), (512, 1, "Some App"), (900, 512, "python3")]
 
 
 def test_darwin_start_time_and_memory_parsers():
