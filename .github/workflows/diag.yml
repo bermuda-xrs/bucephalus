@@ -1,0 +1,69 @@
+# TEMPORARY - diagnostics for the macOS/Windows-only failures; removed before merge.
+name: diag
+
+on:
+  push:
+    branches: [claude/inspiring-goodall-8xgk3p]
+
+jobs:
+  diag:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install
+        run: python -m pip install ".[dev]"
+      - name: Environment
+        shell: python
+        run: |
+          import os, socket, sys, tempfile, time
+          t = tempfile.gettempdir()
+          print("tempdir", t, "realpath", os.path.realpath(t), "abspath", os.path.abspath(t))
+          for f, a in ((socket.getfqdn, "127.0.0.1"), (socket.gethostbyaddr, "127.0.0.1"), (socket.gethostname, None)):
+              t0 = time.time()
+              try:
+                  r = f(a) if a else f()
+              except Exception as e:
+                  r = repr(e)
+              print(f.__name__, a, r, f"{time.time() - t0:.2f}s")
+      - name: http.server
+        shell: python
+        run: |
+          import socket, subprocess, sys, time, urllib.request
+          s = socket.socket(); s.bind(("127.0.0.1", 0)); port = s.getsockname()[1]; s.close()
+          p = subprocess.Popen([sys.executable, "-m", "http.server", str(port), "--bind", "127.0.0.1"],
+                               stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+          t0 = time.time()
+          while time.time() - t0 < 60:
+              try:
+                  with urllib.request.urlopen(f"http://127.0.0.1:{port}/", timeout=2):
+                      print("answered after", round(time.time() - t0, 2)); break
+              except Exception as e:
+                  last = e
+              if p.poll() is not None:
+                  print("exited", p.returncode); break
+              time.sleep(0.3)
+          else:
+              print("never answered; last error:", repr(last))
+          p.kill(); print(p.communicate()[0][-3000:])
+      - name: Failing tests, verbose
+        env:
+          PYTHONUTF8: "1"
+        run: >-
+          python -m pytest -n 0 -vv --tb=long
+          tests/test_run_command.py::test_a_failing_test_run_reports_the_failure
+          tests/test_hooks.py::test_a_hook_also_guards_calls_made_from_inside_a_program
+          tests/test_audit_2026_10_12.py::test_h2_a_call_from_inside_a_program_gets_the_post_hook
+          tests/test_audit_2026_10_12.py::test_h3_a_hook_that_leaves_a_grandchild_holding_its_output_still_times_out
+          tests/test_desktop.py::test_closing_the_window_kills_everything_it_started
+          tests/test_reaper_parentage.py
+          tests/test_memory_gate_single_source.py
+          tests/test_serve_on_free_port.py
+          tests/test_posix_platform.py
