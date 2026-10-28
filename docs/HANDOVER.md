@@ -99,7 +99,7 @@ arithmetic fails on mental arithmetic: 21 failed runs never call run_command; me
 Not working: multi_file with the kept items together; config_edit and arithmetic on the 3B; the desktop app on Linux
 without GTK or Qt; D78 and D80.
 
-Needs the user: the 8B run when wanted (plan item 2; 7.23 GB, 4.69 GB free here); D26 credentials; a Mac for the PLATFORMS
+Needs the user: the 8B re-run (plan item 1; 7.23 GB, 4.69 GB free here); D26 credentials; a Mac for the PLATFORMS
 checklist (CI runs only the suite there) or bare-metal Linux.
 
 multi_file leave-one-out (2026-10-26, same seeds, n = 14 per arm): base 11, kept 7; kept without B2 7, B6 7, C1 6,
@@ -137,10 +137,17 @@ unanswerable 4 -> 4, arithmetic 0 -> 0, the same runs passing; the note was sent
 answer anyway. Both rejected; `h18` not merged. Kept against base on the same fresh seeds: config_edit 0 -> 5,
 write_function 8 -> 14 (p = 0.03), unanswerable 5 -> 4, arithmetic 2 -> 0.
 
+8B run (2026-10-28, a CPU-only cloud container, `bench/profile_run.py --suite bench/tasks --arms
+control,full8b,small8b`, 3 reps x 5 tasks, branch `cloud-8b`, raw data `runs/cloud-8b/cloud-8b-full.tar.gz`):
+control 4/15, full8b 9/15, small8b 9/15. Not a model comparison: `--out` was relative, so the config root was too,
+and glob found no file in scope (full8b answered 0 on negative-control) and a path the harness showed was refused
+when sent back (small8b could not read page 2 of the handbook). Fixed (CHANGELOG "Relative data dir"). The 8B's
+other failure is its own: full8b re-read page 1 of 8 and invented ticket IDs. Temperature 0 was not deterministic
+there: one prompt gave different code across reps.
+
 Plan, in order:
-1. arithmetic is left to the 8B: neither a script hold (F2), a calculator (G1) nor a repeat note (H2) moves the 3B.
-2. Deferred at the user's word (2026-10-27), to be done later: the 8B run (`bench/profile_run.py --preflight --arms
-   control,full8b,small8b`), 7.2 GB needed.
+1. Re-run the 8B arms on the fix (same command, any 8 GB machine); arithmetic waits on the 8B too: neither a script
+   hold (F2), a calculator (G1) nor a repeat note (H2) moves the 3B.
 
 The branches already in `main` were deleted on 2026-10-27 at the user's yes; the tags stay.
 

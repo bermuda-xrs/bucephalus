@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 import yaml
-from pydantic import BaseModel, Field, PrivateAttr, model_validator
+from pydantic import BaseModel, Field, PrivateAttr, field_validator, model_validator
 
 
 SMALL_FILL_RATIO = 0.5
@@ -261,12 +261,17 @@ class Config(_Section):
     isolate_retrieval: bool | None = None
     compaction_probe_step: int | None = None
     grader_held_out: bool = False
-    root: str = "."
+    root: str = Field(".", validate_default=True)
     state_dir: str = ""
     source_path: str = ""
     long_files: Literal["pages", "elide", "whole"] = "pages"
     git_mode: bool = False
     profile_provenance: dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("root")
+    @classmethod
+    def _absolute_root(cls, v: str) -> str:
+        return os.path.abspath(v)  # a relative root doubles itself in the scope check: glob finds nothing
 
     def resolve(self, relative: str) -> Path:
         p = Path(relative)
