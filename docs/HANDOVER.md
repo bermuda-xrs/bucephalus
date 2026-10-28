@@ -56,7 +56,7 @@ rebuilt `bucephalus.exe`'s window, and the WSL2 suite (see the Branch row for wh
 
 | Fact | Value | Regenerate with |
 |---|---|---|
-| Branch | `main`, fast-forwarded from `harness-14` (iteration 4, two whole-source reviews, the harness-16 baseline, the console split view, harness 17) after the suite, the frozen gate, the frozen e2e and the WSL2 suite passed; tags `iteration-4-closed`, `review-2-closed`, `h16-baseline`, `harness-17`; branch `h18` (rejected candidates) not merged; remote `origin` = private `bermuda-xrs/bucephalus` (`main` and the tags) | `git branch --show-current` |
+| Branch | `main`, fast-forwarded from `harness-14` (iteration 4, two whole-source reviews, the harness-16 baseline, the console split view, harness 17) after the suite, the frozen gate, the frozen e2e and the WSL2 suite passed; tags `iteration-4-closed`, `review-2-closed`, `h16-baseline`, `harness-17`; branch `h18` (rejected candidates) not merged; remote `origin` = private `bermuda-xrs/bucephalus` (`main`, the tags, and the results branch `cloud-8b`, which carries `runs/` and is never merged) | `git branch --show-current` |
 | Harness version | **17**, bumped 2026-10-26: edit_first on for the small profile, search fixes (CHANGELOG "Harness 17"); numbers from 16 and earlier do not compare | `grep HARNESS_VERSION src/agent/__init__.py` |
 | Toolset version | **8** (search: globs at any depth, name search with a space searches contents) | `grep TOOLSET_VERSION src/agent/__init__.py` |
 | Tests | not written down | `python -m pytest tests -q`; skips are live-credential tests (D26) and other-OS tests |
@@ -73,7 +73,10 @@ rebuilt `bucephalus.exe`'s window, and the WSL2 suite (see the Branch row for wh
 Workstyle: code carries no docstrings and almost no comments; the why is in commit messages
 and failing tests. Frozen docs (never edited): FINDINGS, SPEC-DELTA, INVARIANTS, RELEASE,
 PLATFORMS, AUDIT files. Live: this file, `docs/DEFERRED.md`, `CHANGELOG.md`.
-Before any commit: tests red first, never weaken a check; only `main` and the tags are pushed.
+Before any commit: tests red first, never weaken a check. Changes reach `main` through a pull request
+whose `ci` run is green on all three OSes, never by a direct push; a results branch carries only `runs/`
+(gitignored, so added with `git add -f`; such a push skips CI) and is not merged. Delete a branch once
+it is merged.
 
 ## Next step
 
