@@ -1,16 +1,13 @@
-# UNVERIFIED. Written 2026-09-28 (iteration 3, 2.5) with no remote to run it
-# on: nothing below has executed on GitHub Actions. Expect the first run to
-# find something.
+# Ruff (bug rules) and the whole suite, in parallel, on Windows, Ubuntu and
+# macOS, Python 3.11. First green 2026-10-28 (bermuda-xrs/bucephalus#2); that
+# was the first time darwin.py ran anywhere, and it needed fixes.
 #
-# Known before it runs:
-#   * Linux: DEFERRED D54-D59 fail on the WSL2 evidence (a zombie counted
-#     alive, the reaper inert, shared SQLite under threads on 3.13, the CPU
-#     limit racing the timeout, the handover naming build/, a crawl delay
-#     short by 40 us). CI pins Python 3.11, which removes D56's 3.13 half only.
-#   * macOS: nothing here has ever run on a Mac (docs/PLATFORMS.md section 5).
+# Not covered here:
 #   * The live-credential tests skip without secrets, by design (D26).
 #   * The frozen gate (packaging/build.py --probe) is not run: it is a
 #     separate ~4 minute build per OS.
+#   * The runners are VMs: bare-metal Linux and the docs/PLATFORMS.md
+#     checklist on a Mac are still unrun.
 name: ci
 
 on:
