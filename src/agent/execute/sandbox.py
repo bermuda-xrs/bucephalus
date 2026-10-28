@@ -125,7 +125,12 @@ def _copy_back(entries: list[dict]) -> list[str]:
 _GUARD_TEMPLATE = '''\
 import sys as _sys, os as _os
 
-_ROOTS = [_os.path.realpath(p) for p in {roots!r}]
+# The child runs with -I, which ignores _build_env's PYTHONDONTWRITEBYTECODE.
+# Without this, importing a stdlib module whose .pyc is missing (a fresh CI
+# interpreter) tries to write into the interpreter's own __pycache__: refused,
+# and recorded as a denied write the code never made.
+_sys.dont_write_bytecode = True
+_ROOTS =[_os.path.realpath(p) for p in {roots!r}]
 _WORKDIR = _os.path.realpath({workdir!r})
 _BUSY = [False]
 _PROTECTED = [_os.path.realpath(p) for p in {protected!r}]
