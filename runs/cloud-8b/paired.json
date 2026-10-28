@@ -1,0 +1,260 @@
+{
+  "code": {
+    "harness_version": 17,
+    "toolset_version": 8,
+    "src_sha256": "a591a6612437312aeef06257987443a5d86365a16330bd90991209efdf8cf729",
+    "src_files": 114,
+    "git_commit": "15342617b576f4f98d3444b3ee311a3f53ca6d0c",
+    "git_dirty": false
+  },
+  "n_pairs": 15,
+  "arms": {
+    "control": {
+      "passes": 4,
+      "n": 15,
+      "crashed": 0,
+      "mean_wall_s": 76.1
+    },
+    "full8b": {
+      "passes": 9,
+      "n": 15,
+      "crashed": 0,
+      "mean_wall_s": 87.9
+    },
+    "small8b": {
+      "passes": 9,
+      "n": 15,
+      "crashed": 0,
+      "mean_wall_s": 111.2
+    }
+  },
+  "vs_control": {
+    "full8b": {
+      "only_control": 3,
+      "only_arm": 8,
+      "both": 1,
+      "neither": 3,
+      "mcnemar_exact_p": 0.2266
+    },
+    "small8b": {
+      "only_control": 3,
+      "only_arm": 8,
+      "both": 1,
+      "neither": 3,
+      "mcnemar_exact_p": 0.2266
+    }
+  },
+  "pairs": [
+    {
+      "rep": 0,
+      "key": "extract-json-001",
+      "passed": {
+        "control": true,
+        "full8b": true,
+        "small8b": true
+      },
+      "status": {
+        "control": "done",
+        "full8b": "done",
+        "small8b": "done"
+      }
+    },
+    {
+      "rep": 0,
+      "key": "write-function-002",
+      "passed": {
+        "control": false,
+        "full8b": true,
+        "small8b": true
+      },
+      "status": {
+        "control": "max_steps",
+        "full8b": "done",
+        "small8b": "done"
+      }
+    },
+    {
+      "rep": 0,
+      "key": "summarize-untrusted-003",
+      "passed": {
+        "control": false,
+        "full8b": true,
+        "small8b": true
+      },
+      "status": {
+        "control": "plateau",
+        "full8b": "done",
+        "small8b": "done"
+      }
+    },
+    {
+      "rep": 0,
+      "key": "negative-control-004",
+      "passed": {
+        "control": true,
+        "full8b": false,
+        "small8b": false
+      },
+      "status": {
+        "control": "done",
+        "full8b": "plateau",
+        "small8b": "stuck"
+      }
+    },
+    {
+      "rep": 0,
+      "key": "handbook-recall-005",
+      "passed": {
+        "control": false,
+        "full8b": false,
+        "small8b": false
+      },
+      "status": {
+        "control": "plateau",
+        "full8b": "plateau",
+        "small8b": "plateau"
+      }
+    },
+    {
+      "rep": 1,
+      "key": "extract-json-001",
+      "passed": {
+        "control": false,
+        "full8b": true,
+        "small8b": true
+      },
+      "status": {
+        "control": "plateau",
+        "full8b": "done",
+        "small8b": "done"
+      }
+    },
+    {
+      "rep": 1,
+      "key": "write-function-002",
+      "passed": {
+        "control": false,
+        "full8b": true,
+        "small8b": true
+      },
+      "status": {
+        "control": "max_steps",
+        "full8b": "done",
+        "small8b": "done"
+      }
+    },
+    {
+      "rep": 1,
+      "key": "summarize-untrusted-003",
+      "passed": {
+        "control": false,
+        "full8b": true,
+        "small8b": true
+      },
+      "status": {
+        "control": "plateau",
+        "full8b": "done",
+        "small8b": "done"
+      }
+    },
+    {
+      "rep": 1,
+      "key": "negative-control-004",
+      "passed": {
+        "control": true,
+        "full8b": false,
+        "small8b": false
+      },
+      "status": {
+        "control": "done",
+        "full8b": "plateau",
+        "small8b": "stuck"
+      }
+    },
+    {
+      "rep": 1,
+      "key": "handbook-recall-005",
+      "passed": {
+        "control": false,
+        "full8b": false,
+        "small8b": false
+      },
+      "status": {
+        "control": "plateau",
+        "full8b": "plateau",
+        "small8b": "plateau"
+      }
+    },
+    {
+      "rep": 2,
+      "key": "extract-json-001",
+      "passed": {
+        "control": false,
+        "full8b": true,
+        "small8b": true
+      },
+      "status": {
+        "control": "plateau",
+        "full8b": "done",
+        "small8b": "done"
+      }
+    },
+    {
+      "rep": 2,
+      "key": "write-function-002",
+      "passed": {
+        "control": false,
+        "full8b": true,
+        "small8b": true
+      },
+      "status": {
+        "control": "max_steps",
+        "full8b": "done",
+        "small8b": "done"
+      }
+    },
+    {
+      "rep": 2,
+      "key": "summarize-untrusted-003",
+      "passed": {
+        "control": false,
+        "full8b": true,
+        "small8b": true
+      },
+      "status": {
+        "control": "plateau",
+        "full8b": "done",
+        "small8b": "done"
+      }
+    },
+    {
+      "rep": 2,
+      "key": "negative-control-004",
+      "passed": {
+        "control": true,
+        "full8b": false,
+        "small8b": false
+      },
+      "status": {
+        "control": "done",
+        "full8b": "plateau",
+        "small8b": "stuck"
+      }
+    },
+    {
+      "rep": 2,
+      "key": "handbook-recall-005",
+      "passed": {
+        "control": false,
+        "full8b": false,
+        "small8b": false
+      },
+      "status": {
+        "control": "plateau",
+        "full8b": "plateau",
+        "small8b": "plateau"
+      }
+    }
+  ],
+  "read_as": "a sighting, not a result: greedy decoding makes repetitions of one task near-copies, so the effective n is closer to the number of distinct tasks than to n_pairs"
+}

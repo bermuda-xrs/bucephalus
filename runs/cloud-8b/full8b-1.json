@@ -1,0 +1,248 @@
+{
+  "pareto": [
+    {
+      "arm": "skills-off",
+      "n": 5,
+      "mean_usd_per_task": 0.0,
+      "pass_rate": 0.6
+    }
+  ],
+  "arms": {
+    "skills-off": {
+      "provenance": {
+        "arm": "skills-off",
+        "date": "2026-10-28",
+        "harness_version": 17,
+        "code": {
+          "harness_version": 17,
+          "toolset_version": 8,
+          "src_sha256": "a591a6612437312aeef06257987443a5d86365a16330bd90991209efdf8cf729",
+          "src_files": 114,
+          "git_commit": "15342617b576f4f98d3444b3ee311a3f53ca6d0c",
+          "git_dirty": false
+        },
+        "models": {
+          "cloud": "granite4.1:8b",
+          "review": "granite4.1:8b",
+          "local": "granite4.1:3b"
+        },
+        "scaffold_version": "0.1.0",
+        "local_tier": null,
+        "effort": {
+          "cloud": "high",
+          "review": "high",
+          "local": "high"
+        },
+        "caveats": [
+          "Token usage is the model server's own count. Only in-loop context budgeting uses a local estimate, fitted to each backend once it has 30 measured calls.",
+          "Public coding benchmarks are contamination-inflated by roughly 5-15 points, and an audit found ~59% of the hardest SWE-bench Verified tasks have tests that would not catch the intended bug. A reported 90% is realistically 75-80%.",
+          "Identical GAIA problems score anywhere from ~45% to ~92% depending only on the scaffold around the model.",
+          "Published agent costs have been misestimated by up to 100%. These numbers are cost-controlled but single-run unless n is stated."
+        ],
+        "card": {
+          "model": "granite4.1:8b",
+          "quant": "Q4_K_M",
+          "ctx": 8192,
+          "profile": "full",
+          "backend": {
+            "kind": "ollama",
+            "model": "granite4.1:8b",
+            "endpoint": "http://localhost:11435",
+            "base_url": null,
+            "model_server": "ollama",
+            "api_key_env": null,
+            "api_mode": "chat_completions",
+            "max_tokens_field": "max_tokens",
+            "reports_prompt_cache": false,
+            "input_cost_per_mtok": 0.0,
+            "output_cost_per_mtok": 0.0,
+            "cache_read_per_mtok": 0.0,
+            "cache_write_per_mtok": 0.0,
+            "context_window": 131072,
+            "usable_context_window": 8192,
+            "can_parallel": false,
+            "trust_tier": "local",
+            "speculative_decoding": false,
+            "thinking": "disabled",
+            "effort": "high",
+            "max_output_tokens": 512,
+            "accepts_temperature": true,
+            "action_protocol": "json",
+            "keep_alive": "30m",
+            "tool_profile": "full",
+            "read_first": null,
+            "read_all_pages": null,
+            "reasoning_field": false,
+            "carry_field": null,
+            "code_out_of_json": false,
+            "tool_call_mode": "constrained",
+            "tool_names": "internal",
+            "compact_prompt": null,
+            "evidence_pins": null,
+            "progress_file": false,
+            "context_fill_ratio": null,
+            "stuck_patterns": null,
+            "evaluator_pass": false,
+            "edit_format": null,
+            "send_tool_list": false,
+            "escape_check": null,
+            "edit_first": null,
+            "compute_first": false,
+            "observation_tokens": null,
+            "assumed_tokens_per_sec": 5.0
+          },
+          "resolved": {
+            "compact_prompt": false,
+            "evidence_pins": false,
+            "stuck_patterns": false,
+            "escape_check": false,
+            "code_out_of_json": false,
+            "progress_file": false,
+            "evaluator_pass": false,
+            "send_tool_list": false,
+            "edit_first": false,
+            "compute_first": false,
+            "reasoning_field": false,
+            "carry_field": false,
+            "edit_format": "default",
+            "context_fill_ratio": null
+          },
+          "mechanisms": {
+            "compaction": true,
+            "semantic_cache": true,
+            "prefix_stability": true,
+            "code_as_action": true,
+            "diagnostics": true,
+            "verify_before_stop": true,
+            "constrained_calls": true,
+            "stuck_detection": true,
+            "shadow_checkpoints": true,
+            "agents_md": true
+          },
+          "settings": {
+            "long_files": "pages",
+            "limits": {
+              "context_fill_ratio": 0.28,
+              "default_task_budget_usd": 0.0,
+              "default_task_budget_seconds": 1800,
+              "max_refinement_iterations": 2,
+              "max_steps": 10,
+              "delegation_min_isolated_tokens": 1000,
+              "max_parallel_tools": 1
+            },
+            "profile": "local",
+            "compress_observations_over_tokens": 100000,
+            "isolate_retrieval": true,
+            "grader_held_out": true,
+            "approve_scoped_writes": true,
+            "auto_review": false
+          },
+          "tools": [
+            "append_to_outbox",
+            "edit_file",
+            "expand_artifact",
+            "git_push",
+            "glob",
+            "grep",
+            "list_dir",
+            "memory_consolidate",
+            "memory_read",
+            "memory_write",
+            "parallel",
+            "read_file",
+            "run_code",
+            "search_history",
+            "web_fetch",
+            "web_search",
+            "write_file"
+          ],
+          "edit_format": "edit_file",
+          "versions": {
+            "harness": 17,
+            "toolset": 8,
+            "code": {
+              "harness_version": 17,
+              "toolset_version": 8,
+              "src_sha256": "a591a6612437312aeef06257987443a5d86365a16330bd90991209efdf8cf729",
+              "src_files": 114,
+              "git_commit": "15342617b576f4f98d3444b3ee311a3f53ca6d0c",
+              "git_dirty": false
+            },
+            "python": "3.13.17",
+            "model_server": "0.40.12"
+          },
+          "hardware": {
+            "platform": "Linux-6.18.44-fc-v180-x86_64-with-glibc2.39",
+            "machine": "x86_64",
+            "cpus": 4,
+            "physical_gb": 15.71
+          },
+          "free_memory_gb": 4.33
+        }
+      },
+      "n": 5,
+      "pass_rate": 0.6,
+      "unannounced_rate": 0.0,
+      "mean_usd_per_task": 0.0,
+      "mean_wall_s": 84.64,
+      "results": [
+        {
+          "key": "extract-json-001",
+          "task_id": "t_fa12b23e96154296",
+          "status": "done",
+          "passed": true,
+          "cost_usd": 0.0,
+          "paid_tokens": 0,
+          "free_tokens": 2009,
+          "wall_s": 33.38,
+          "cache_hit_ratio": null
+        },
+        {
+          "key": "write-function-002",
+          "task_id": "t_e8ca298200914010",
+          "status": "done",
+          "passed": true,
+          "cost_usd": 0.0,
+          "paid_tokens": 0,
+          "free_tokens": 3384,
+          "wall_s": 97.14,
+          "cache_hit_ratio": null
+        },
+        {
+          "key": "summarize-untrusted-003",
+          "task_id": "t_31e82cc9c6c94466",
+          "status": "done",
+          "passed": true,
+          "cost_usd": 0.0,
+          "paid_tokens": 0,
+          "free_tokens": 2124,
+          "wall_s": 46.61,
+          "cache_hit_ratio": null
+        },
+        {
+          "key": "negative-control-004",
+          "task_id": "t_45fcd2382a334e66",
+          "status": "plateau",
+          "passed": false,
+          "cost_usd": 0.0,
+          "paid_tokens": 0,
+          "free_tokens": 4354,
+          "wall_s": 59.62,
+          "cache_hit_ratio": null
+        },
+        {
+          "key": "handbook-recall-005",
+          "task_id": "t_0eaa13660d70442d",
+          "status": "plateau",
+          "passed": false,
+          "cost_usd": 0.0,
+          "paid_tokens": 0,
+          "free_tokens": 9610,
+          "wall_s": 186.45,
+          "cache_hit_ratio": null
+        }
+      ]
+    }
+  },
+  "how_to_read": "x = mean USD/task, y = pass rate. Report three ways \u2014 bare model, model + scaffold, full system \u2014 with date and versions."
+}
