@@ -21,10 +21,26 @@ DARWIN_ONLY = pytest.mark.skipif(
     reason="macOS only - verified on a real Mac by docs/PLATFORMS.md checklist step 5")
 
 
-@pytest.fixture
-def fake_os(monkeypatch):
+@pytest.fixture(params=["pidfd", "kill"])
+def fake_os(request, monkeypatch):
+    # Both routes _sigkill can take: a pidfd where the OS has one (Linux), plain
+    # kill where it does not. Each records into "kill". The real pidfd_open was
+    # left in place and opened the HOST's pids 10-12 wherever they existed (a
+    # CI runner), then reached for a pidfd_send_signal this fake did not have.
     sent = {"killpg": [], "kill": []}
-    monkeypatch.setattr(posix, "signal", types.SimpleNamespace(SIGKILL=9))
+    fds: dict[int, int] = {}
+
+    def pidfd_open(pid):
+        fd = os.open(os.devnull, os.O_RDONLY)
+        fds[fd] = pid
+        return fd
+
+    monkeypatch.setattr(posix, "signal", types.SimpleNamespace(
+        SIGKILL=9, pidfd_send_signal=lambda fd, s: sent["kill"].append(fds[fd])))
+    if request.param == "pidfd":
+        monkeypatch.setattr(posix.os, "pidfd_open", pidfd_open, raising=False)
+    else:
+        monkeypatch.delattr(posix.os, "pidfd_open", raising=False)
     monkeypatch.setattr(posix.os, "killpg", lambda g, s: sent["killpg"].append(g), raising=False)
     monkeypatch.setattr(posix.os, "kill", lambda p, s: sent["kill"].append(p))
     return sent
