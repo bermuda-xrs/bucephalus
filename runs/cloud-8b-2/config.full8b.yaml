@@ -1,0 +1,79 @@
+db_path: ./agent.local.db
+anchor_path: ./anchor/chain.local.anchor
+skills_path: ./skills_store
+backends:
+  cloud:
+    kind: ollama
+    model: granite4.1:8b
+    endpoint: http://localhost:11435
+    model_server: ollama
+    input_cost_per_mtok: 0.0
+    output_cost_per_mtok: 0.0
+    cache_read_per_mtok: 0.0
+    cache_write_per_mtok: 0.0
+    context_window: 131072
+    usable_context_window: 8192
+    can_parallel: false
+    thinking: disabled
+    accepts_temperature: true
+    max_output_tokens: 512
+    trust_tier: local
+    tool_profile: full
+  review:
+    kind: ollama
+    model: granite4.1:8b
+    endpoint: http://localhost:11435
+    model_server: ollama
+    input_cost_per_mtok: 0.0
+    output_cost_per_mtok: 0.0
+    cache_read_per_mtok: 0.0
+    cache_write_per_mtok: 0.0
+    context_window: 131072
+    usable_context_window: 8192
+    can_parallel: false
+    thinking: disabled
+    accepts_temperature: true
+    max_output_tokens: 128
+    trust_tier: local
+  local:
+    kind: ollama
+    model: granite4.1:3b
+    endpoint: http://localhost:11435
+    model_server: ollama
+    context_window: 131072
+    usable_context_window: 16384
+    thinking: disabled
+    accepts_temperature: true
+    max_output_tokens: 512
+    trust_tier: local
+active_local_tier: null
+limits:
+  context_fill_ratio: 0.28
+  default_task_budget_usd: 0.0
+  default_task_budget_seconds: 1800
+  max_refinement_iterations: 2
+  max_steps: 10
+  delegation_min_isolated_tokens: 1000
+local_allowlist: []
+laptop_allowlist: []
+compress_observations_over_tokens: 100000
+gate:
+  min_paired_trials: 15
+  min_discordant_pairs: 10
+  max_p_value: 0.05
+  min_lift_pp: 5.0
+autonomy:
+  mode: plan_then_run
+  plan_required: false
+  auto_review: false
+  auto_review_backend: review
+  auto_review_policy: ./policy.md
+  approve_scoped_writes: true
+  deviation_tolerance: 0.25
+  human_only_tiers:
+  - trusted
+ui:
+  theme: ./themes/default.toml
+  banner_art: ./assets/banner.ans
+  spinner: braille
+mechanisms: {}

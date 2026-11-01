@@ -1,0 +1,13 @@
+id,task_id,backend,purpose,input_tokens,output_tokens,cache_read_tokens,cache_write_tokens,cost_usd,wall_ms,escalated,thinking,created_at
+1,t_29aac59c65d348ab,cloud,step,,,,,,301742,0,disabled,1793537674.7788706
+2,t_d93ab5068f0d46b3,cloud,step,944,293,0,0,0.0,330517,0,disabled,1793537976.765533
+3,t_3d5abeb3cdda4582,cloud,step,962,31,0,0,0.0,24929,0,disabled,1793538307.8855937
+4,t_3d5abeb3cdda4582,cloud,step,1097,42,0,0,0.0,29113,0,disabled,1793538332.8359854
+5,t_f8234746b81d45a1,cloud,step,984,34,0,0,0.0,30273,0,disabled,1793538362.2378905
+6,t_f8234746b81d45a1,cloud,step,1069,16,0,0,0.0,18000,0,disabled,1793538392.5551744
+7,t_7bfed36f190b470e,cloud,step,984,31,0,0,0.0,29802,0,disabled,1793538410.8076496
+8,t_7bfed36f190b470e,cloud,step,1640,36,0,0,0.0,64593,0,disabled,1793538440.6626794
+9,t_7bfed36f190b470e,cloud,step,1183,33,0,0,0.0,29595,0,disabled,1793538505.3275123
+10,t_7bfed36f190b470e,cloud,step,1839,38,0,0,0.0,62966,0,disabled,1793538534.9658644
+11,t_7bfed36f190b470e,cloud,step,1887,41,0,0,0.0,25241,0,disabled,1793538597.9641187
+12,t_7bfed36f190b470e,cloud,step,1935,38,0,0,0.0,24476,0,disabled,1793538623.2374473
