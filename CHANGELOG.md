@@ -10,6 +10,12 @@
 Dates are commit dates. `0.1.0` is not released yet — see "Unreleased" for
 what still stands between here and a first iteration.
 
+## Relative data dir - 2026-10-29 (no HARNESS_VERSION change: nothing changes under an absolute root)
+
+- Fixed: with a relative `BUCEPHALUS_DATA_DIR` (as `bench/profile_run.py --out runs/...` sets it) the config root
+  stayed relative. The scope check then joined it on twice: glob and grep found no file in scope, and a path a
+  receipt showed was refused when the model sent it back. `Config.root` is now absolute (`tests/test_relative_data_dir.py`).
+
 ## Harness 17 - 2026-10-26 (HARNESS_VERSION 16 -> 17, TOOLSET_VERSION 7 -> 8)
 
 - `edit_first` on for the small profile: on a task checked by a program, an answer waits until a file has changed
