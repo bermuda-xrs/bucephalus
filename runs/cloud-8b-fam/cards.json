@@ -126,7 +126,7 @@
       "cpus": 4,
       "physical_gb": 15.71
     },
-    "free_memory_gb": 7.46
+    "free_memory_gb": 6.22
   },
   "kept": {
     "model": "granite4.1:8b",
@@ -256,6 +256,6 @@
       "cpus": 4,
       "physical_gb": 15.71
     },
-    "free_memory_gb": 7.45
+    "free_memory_gb": 6.22
   }
 }

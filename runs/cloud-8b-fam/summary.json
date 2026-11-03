@@ -1,32 +1,36 @@
 {
-  "n": 14,
-  "n_families": 1,
+  "n": 28,
+  "n_families": 2,
   "arms": {
     "base": {
-      "passes": 4,
-      "n": 14
+      "passes": 18,
+      "n": 28
     },
     "kept": {
       "passes": 2,
-      "n": 14
+      "n": 28
     }
   },
   "families": {
     "arithmetic": {
       "base": 4,
       "kept": 2
+    },
+    "config_edit": {
+      "base": 14,
+      "kept": 0
     }
   },
   "vs_base": {
     "kept": {
-      "n": 14,
-      "base_passes": 4,
+      "n": 28,
+      "base_passes": 18,
       "arm_passes": 2,
-      "only_base": 2,
+      "only_base": 16,
       "only_arm": 0,
       "both": 2,
       "neither": 10,
-      "mcnemar_exact_p": 0.5
+      "mcnemar_exact_p": 0.0
     }
   },
   "split": "dev",
@@ -194,7 +198,7 @@
         "cpus": 4,
         "physical_gb": 15.71
       },
-      "free_memory_gb": 7.46
+      "free_memory_gb": 6.22
     },
     "kept": {
       "model": "granite4.1:8b",
@@ -324,7 +328,7 @@
         "cpus": 4,
         "physical_gb": 15.71
       },
-      "free_memory_gb": 7.45
+      "free_memory_gb": 6.22
     }
   }
 }
