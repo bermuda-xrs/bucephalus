@@ -115,3 +115,75 @@ def test_a_summary_compares_every_arm_with_the_control(tmp_path):
     assert s["vs_control"]["full8b"]["only_control"] == 1 and "control" not in s["vs_control"]
     assert s["arms"]["control"]["crashed"] == 0
     assert s["code"]["harness_version"] >= 10
+
+
+def _fake_run(tmp_path, monkeypatch, arms="control,full8b,small8b", reps=2, load_errors=()):
+    import types
+
+    import httpx
+    import profile_run
+    import yaml
+    from agent.models import local
+
+    seen = {"events": [], "resident": {}, "clock": 0.0, "errors": list(load_errors)}
+
+    def run(endpoint, model, root, num_ctx=None):
+        seen["clock"] += 100.0
+        if seen["errors"]:
+            seen["errors"].pop(0)
+            raise httpx.HTTPStatusError("500", request=httpx.Request("POST", endpoint),
+                                        response=httpx.Response(500))
+        seen["resident"][model] = num_ctx
+        seen["events"].append(("load", model, num_ctx))
+        return {"model": model, "loaded": True, "context_length": num_ctx}
+
+    def unload(endpoint, model):
+        seen["resident"].pop(model, None)
+        seen["events"].append(("unload", model))
+        return {"model": model, "loaded": False}
+
+    def run_arm(cfg, arm, rep, suite, out, models, timeout_s):
+        b = yaml.safe_load(Path(cfg).read_text(encoding="utf-8"))["backends"]["cloud"]
+        seen["clock"] += 60.0
+        seen["events"].append(("arm", arm, b["model"], b.get("usable_context_window") or b["context_window"],
+                               dict(seen["resident"])))
+        return Path(out) / f"{arm}-{rep}.json"
+
+    monkeypatch.setattr(local, "start_server", lambda *a, **k: None)
+    monkeypatch.setattr(local, "stop_owned", lambda: None)
+    monkeypatch.setattr(local, "run", run)
+    monkeypatch.setattr(local, "unload", unload)
+    monkeypatch.setattr(profile_run, "run_arm", run_arm)
+    monkeypatch.setattr(profile_run, "preflight", lambda arms, models: {})
+    monkeypatch.setattr(profile_run, "time", types.SimpleNamespace(time=lambda: seen["clock"]))
+    monkeypatch.setenv("BUCEPHALUS_OLLAMA_MODELS", str(tmp_path))
+    rc = profile_run._main(["--suite", "bench/tasks", "--arms", arms, "--reps", str(reps), "--out", str(tmp_path / "out")])
+    return rc, seen
+
+
+def test_every_arm_starts_on_its_own_model_loaded_at_its_own_window_and_nothing_else(tmp_path, monkeypatch):
+    rc, seen = _fake_run(tmp_path, monkeypatch)
+    arms = [e for e in seen["events"] if e[0] == "arm"]
+    assert rc == 0 and len(arms) == 6
+    for _, arm, model, window, resident in arms:
+        assert resident == {model: window}, (arm, resident)
+    assert {(m, w) for _, _, m, w, _ in arms} == {("granite4.1:3b", 16384), ("granite4.1:8b", 8192)}
+
+
+def test_the_load_is_not_part_of_the_arm_time(tmp_path, monkeypatch, capsys):
+    _fake_run(tmp_path, monkeypatch)
+    lines = [x for x in capsys.readouterr().out.splitlines() if x.startswith("rep ")]
+    assert len(lines) == 6 and all(x.endswith(": 1.0 min") for x in lines), lines
+
+
+def test_a_load_that_fails_once_is_tried_again(tmp_path, monkeypatch, capsys):
+    rc, seen = _fake_run(tmp_path, monkeypatch, load_errors=[1])
+    assert rc == 0 and len([e for e in seen["events"] if e[0] == "arm"]) == 6
+    assert "trying once more" in capsys.readouterr().out
+
+
+def test_a_load_that_fails_twice_stops_the_run_before_the_arm(tmp_path, monkeypatch):
+    import httpx
+
+    with pytest.raises(httpx.HTTPStatusError):
+        _fake_run(tmp_path, monkeypatch, load_errors=[1, 2])

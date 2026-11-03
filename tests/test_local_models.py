@@ -103,6 +103,13 @@ def test_run_model_loads_it_and_keeps_it_warm(api, fake):
     assert "granite4.1:8b" not in fake.loaded
 
 
+def test_a_model_is_loaded_at_the_window_it_will_be_asked_for(fake, tmp_path):
+    local.run(fake.endpoint, "granite4.1:8b", tmp_path, 8192)
+    assert fake.generated[-1]["options"] == {"num_ctx": 8192}
+    local.run(fake.endpoint, "granite4.1:3b", tmp_path)
+    assert "options" not in fake.generated[-1]
+
+
 def test_a_model_that_is_not_installed_is_refused(api, fake):
     r = api.post("/models/run", json={"model": "llama-giant:405b"})
     assert r.status_code == 400 and "not installed" in r.json()["detail"]

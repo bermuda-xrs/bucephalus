@@ -156,6 +156,27 @@ def summarise(out: Path, reps: int, arms=DEFAULT_ARMS) -> dict:
     }
 
 
+def arm_model(arm: str, base) -> tuple[str, int]:
+    a = ARMS[arm]
+    return a.get("model", base.model), a.get("window", base.budgeted_window)
+
+
+def warm(endpoint: str, model: str, window: int, previous: str | None) -> dict:
+    import httpx
+
+    from agent.models import local
+
+    if previous and previous != model:
+        local.unload(endpoint, previous)
+    for attempt in (0, 1):
+        try:
+            return local.run(endpoint, model, ROOT, window)
+        except httpx.HTTPStatusError as e:
+            if attempt:
+                raise
+            print(f"{model} did not load (HTTP {e.response.status_code}); trying once more", flush=True)
+
+
 def _main(argv=None) -> int:
     from agent.config import load_config
     from agent.models import local
@@ -191,15 +212,19 @@ def _main(argv=None) -> int:
     os.environ["BUCEPHALUS_DATA_DIR"] = str(out / "data" / "runner")
     os.environ["BUCEPHALUS_CONFIG_DIR"] = str(out / "data" / "runner" / "config")
     cfg = load_config(args.base)
-    endpoint = cfg.backends["cloud"].endpoint
+    base = cfg.backends["cloud"]
+    endpoint = base.endpoint
     os.environ["BUCEPHALUS_OLLAMA_MODELS"] = models
+    loaded = None
     try:
         local.start_server(endpoint, ROOT)
-        print("model loaded:", local.run(endpoint, cfg.backends["cloud"].model, ROOT), flush=True)
         for rep in range(args.reps):
             order = list(arms)
             random.Random(args.seed + rep).shuffle(order)
             for arm in order:
+                model, window = arm_model(arm, base)
+                print("model loaded:", warm(endpoint, model, window, loaded), flush=True)
+                loaded = model
                 t0 = time.time()
                 run_arm(cfgs[arm], arm, rep, args.suite, out, models, args.timeout_min * 60)
                 print(f"rep {rep} {arm}: {(time.time() - t0) / 60:.1f} min", flush=True)
