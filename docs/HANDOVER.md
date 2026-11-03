@@ -56,7 +56,7 @@ rebuilt `bucephalus.exe`'s window, and the WSL2 suite (see the Branch row for wh
 
 | Fact | Value | Regenerate with |
 |---|---|---|
-| Branch | `main`, fast-forwarded from `harness-14` (iteration 4, two whole-source reviews, the harness-16 baseline, the console split view, harness 17) after the suite, the frozen gate, the frozen e2e and the WSL2 suite passed; tags `iteration-4-closed`, `review-2-closed`, `h16-baseline`, `harness-17`; branch `h18` (rejected candidates) not merged; remote `origin` = private `bermuda-xrs/bucephalus` (`main`, the tags, and the results branch `cloud-8b`, which carries `runs/` and is never merged) | `git branch --show-current` |
+| Branch | `main`, fast-forwarded from `harness-14` (iteration 4, two whole-source reviews, the harness-16 baseline, the console split view, harness 17) after the suite, the frozen gate, the frozen e2e and the WSL2 suite passed; tags `iteration-4-closed`, `review-2-closed`, `h16-baseline`, `harness-17`; branch `h18` (rejected candidates) not merged; remote `origin` = private `bermuda-xrs/bucephalus` (`main`, the tags, and the results branches `cloud-8b` and `cloud-8b-2`, which carry `runs/` and are never merged) | `git branch --show-current` |
 | Harness version | **17**, bumped 2026-10-26: edit_first on for the small profile, search fixes (CHANGELOG "Harness 17"); numbers from 16 and earlier do not compare | `grep HARNESS_VERSION src/agent/__init__.py` |
 | Toolset version | **8** (search: globs at any depth, name search with a space searches contents) | `grep TOOLSET_VERSION src/agent/__init__.py` |
 | Tests | not written down | `python -m pytest tests -q`; skips are live-credential tests (D26) and other-OS tests |
@@ -99,8 +99,8 @@ arithmetic fails on mental arithmetic: 21 failed runs never call run_command; me
 Not working: multi_file with the kept items together; config_edit and arithmetic on the 3B; the desktop app on Linux
 without GTK or Qt; D78 and D80.
 
-Needs the user: the 8B re-run (plan item 1; 7.23 GB, 4.69 GB free here); D26 credentials; a Mac for the PLATFORMS
-checklist (CI runs only the suite there) or bare-metal Linux.
+Needs the user: cloud compute for the 8B arithmetic run (plan item 1; 7.23 GB, 4.69 GB free here); D26 credentials;
+a Mac for the PLATFORMS checklist (CI runs only the suite there) or bare-metal Linux.
 
 multi_file leave-one-out (2026-10-26, same seeds, n = 14 per arm): base 11, kept 7; kept without B2 7, B6 7, C1 6,
 C3 6, the stuck check 9, the escape check 7, E1 10. No single item restores it; two search traps do: glob='*' matched
@@ -145,9 +145,23 @@ when sent back (small8b could not read page 2 of the handbook). Fixed (CHANGELOG
 other failure is its own: full8b re-read page 1 of 8 and invented ticket IDs. Temperature 0 was not deterministic
 there: one prompt gave different code across reps.
 
+8B re-run on the fix (2026-11-01, same command with `--out runs/cloud-8b-2`, code `917ab9b`, branch `cloud-8b-2`, raw
+data `runs/cloud-8b-2/cloud-8b-2-full.tar.gz`): control 4/15, full8b 10/15 (1 crash), small8b 9/15; against control
+p = 0.0703 and 0.2266, still a sighting (about 5 distinct tasks). The fix took effect: tool paths are absolute, full8b's
+glob on `work/` finds the files, so negative-control passes in all 3 reps (was 0/3), and nothing inside `work/` is
+refused. Still failing: small8b's negative-control is `stuck`, searching only `.` (the run root, refused 15 times);
+handbook-recall fails in every arm (small8b reads all 4 pages and names 1 of the 3 IDs, INF-6218, every rep; full8b
+invents IDs). full8b rep 0's crash (extract-json, HTTP 500) and its write-function budget overrun came from a cold 8B
+load, not the model: `profile_run` warmed only the 3B before timing (fixed, CHANGELOG "Warm each arm's model"). The
+container was 30-60% slower per output token, so wall times and wall-clock budget statuses do not compare with the
+first run (control's write-function ends `budget_exhausted`, not `max_steps`). A scan of the 232 run folders on this
+machine found relative tool paths only in `profile-readfirst-20261011`; the h16, h17, h18 and iteration-4 numbers used
+absolute roots and stand.
+
 Plan, in order:
-1. Re-run the 8B arms on the fix (same command, any 8 GB machine); arithmetic waits on the 8B too: neither a script
-   hold (F2), a calculator (G1) nor a repeat note (H2) moves the 3B.
+1. arithmetic waits on the 8B: `bench/tasks` has no arithmetic task, so the re-run does not answer it; it needs
+   `bench/families_run.py` with the 8B, in the cloud. Neither a script hold (F2), a calculator (G1) nor a repeat note
+   (H2) moves the 3B.
 
 The branches already in `main` were deleted on 2026-10-27 at the user's yes; the tags stay.
 
