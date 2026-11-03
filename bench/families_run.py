@@ -91,6 +91,8 @@ def _main(argv=None) -> int:
     p.add_argument("--model", default=None)
     p.add_argument("--out", default=None)
     p.add_argument("--seed", type=int, default=1)
+    p.add_argument("--budget-seconds", type=int, default=None,
+                   help="wall-clock budget per instance instead of the spec's 600; for a machine slower than the baseline's")
     args = p.parse_args(argv)
     arms = [a.strip() for a in args.arms.split(",") if a.strip()]
     if "base" not in arms or any(a not in ALL_ARMS for a in arms):
@@ -102,6 +104,8 @@ def _main(argv=None) -> int:
     os.environ.setdefault("BUCEPHALUS_CONFIG_DIR", str(out / "data" / "runner" / "config"))
     raw = evals.measurement_raw(yaml.safe_load(Path(args.base).read_text(encoding="utf-8")), model=args.model)
     specs = families.instances(fams, args.split, args.n, args.skip)
+    if args.budget_seconds:
+        specs = [{**s, "budget_seconds": args.budget_seconds} for s in specs]
     try:
         lock = RunLock(measurement_lock_path(ROOT), "measurement").acquire()
     except RunLockBusy as e:
@@ -110,7 +114,9 @@ def _main(argv=None) -> int:
     endpoint = raw["backends"]["cloud"].get("endpoint")
     try:
         local.start_server(endpoint, ROOT)
-        print("model loaded:", local.run(endpoint, raw["backends"]["cloud"]["model"], ROOT), flush=True)
+        cloud = raw["backends"]["cloud"]
+        print("model loaded:", local.run(endpoint, cloud["model"], ROOT,
+                                         cloud.get("usable_context_window") or cloud["context_window"]), flush=True)
         cards = {a: evals.card_for(arm_raw(raw, a), out / "cards" / a) for a in arms}
         (out / "cards.json").write_text(json.dumps(cards, indent=2, default=str), encoding="utf-8")
         done = {a: load_done(out / f"{a}.jsonl") for a in arms}
@@ -129,7 +135,8 @@ def _main(argv=None) -> int:
         local.stop_owned()
         lock.release()
     summary = evals.summarise({a: list(done[a].values()) for a in arms}, "base")
-    summary.update(split=args.split, per_family=args.n, skip=args.skip, families=summary["families"],
+    summary.update(split=args.split, per_family=args.n, skip=args.skip, budget_seconds=args.budget_seconds,
+                   families=summary["families"],
                    arms_defined={a: ALL_ARMS[a] for a in arms},
                    family_version=families.FAMILY_VERSION, card=cards)
     (out / "summary.json").write_text(json.dumps(summary, indent=2, default=str), encoding="utf-8")
