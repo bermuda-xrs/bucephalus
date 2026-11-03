@@ -1,14 +1,14 @@
 {
-  "n": 28,
-  "n_families": 2,
+  "n": 42,
+  "n_families": 3,
   "arms": {
     "base": {
-      "passes": 18,
-      "n": 28
+      "passes": 32,
+      "n": 42
     },
     "kept": {
-      "passes": 2,
-      "n": 28
+      "passes": 15,
+      "n": 42
     }
   },
   "families": {
@@ -19,16 +19,20 @@
     "config_edit": {
       "base": 14,
       "kept": 0
+    },
+    "unanswerable": {
+      "base": 14,
+      "kept": 13
     }
   },
   "vs_base": {
     "kept": {
-      "n": 28,
-      "base_passes": 18,
-      "arm_passes": 2,
-      "only_base": 16,
+      "n": 42,
+      "base_passes": 32,
+      "arm_passes": 15,
+      "only_base": 17,
       "only_arm": 0,
-      "both": 2,
+      "both": 15,
       "neither": 10,
       "mcnemar_exact_p": 0.0
     }
@@ -198,7 +202,7 @@
         "cpus": 4,
         "physical_gb": 15.71
       },
-      "free_memory_gb": 6.22
+      "free_memory_gb": 4.78
     },
     "kept": {
       "model": "granite4.1:8b",
@@ -328,7 +332,7 @@
         "cpus": 4,
         "physical_gb": 15.71
       },
-      "free_memory_gb": 6.22
+      "free_memory_gb": 4.78
     }
   }
 }
