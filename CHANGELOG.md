@@ -10,6 +10,13 @@
 Dates are commit dates. `0.1.0` is not released yet — see "Unreleased" for
 what still stands between here and a first iteration.
 
+## Families run on a slower machine - 2026-11-03 (no HARNESS_VERSION change: bench tooling only)
+
+- `bench/families_run.py --budget-seconds N` sets the wall-clock budget of every instance (the specs say 600) and
+  records it in `summary.json`, for a machine slower than the baseline's. The 3B baselines (h16, h17, h18) never ended
+  `budget_exhausted`, so a longer budget does not favour the arm being compared with them.
+- Its warm-up loads the model at the config's window, as `profile_run` now does (`tests/test_families_run.py`).
+
 ## Warm each arm's model - 2026-11-03 (no HARNESS_VERSION change: bench tooling only)
 
 - Fixed: `bench/profile_run.py` loaded only the base config's 3B before timing, so an 8B arm loaded cold inside its

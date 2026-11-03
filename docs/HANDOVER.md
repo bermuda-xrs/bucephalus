@@ -159,9 +159,12 @@ machine found relative tool paths only in `profile-readfirst-20261011`; the h16,
 absolute roots and stand.
 
 Plan, in order:
-1. arithmetic waits on the 8B: `bench/tasks` has no arithmetic task, so the re-run does not answer it; it needs
-   `bench/families_run.py` with the 8B, in the cloud. Neither a script hold (F2), a calculator (G1) nor a repeat note
-   (H2) moves the 3B.
+1. arithmetic waits on the 8B: `bench/tasks` has no arithmetic task, so the re-run does not answer it. Cloud run,
+   resumable per family: `bench/families_run.py --split dev --n 14 --families arithmetic,config_edit,unanswerable
+   --arms base,kept --model granite4.1:8b --budget-seconds 1800 --out runs/<name>`. Dev seeds 0-26 are the h17
+   baseline's instances, so the 3B pairs by key; the 8B keeps the 3B's 16384 window (about 8.5 GB by the preflight's
+   estimate). The 3B never reached the 600 s budget (h16, h17, h18); a slower machine would. Neither a script hold (F2),
+   a calculator (G1) nor a repeat note (H2) moves the 3B.
 
 The branches already in `main` were deleted on 2026-10-27 at the user's yes; the tags stay.
 
