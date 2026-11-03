@@ -10,6 +10,14 @@
 Dates are commit dates. `0.1.0` is not released yet — see "Unreleased" for
 what still stands between here and a first iteration.
 
+## Warm each arm's model - 2026-11-03 (no HARNESS_VERSION change: bench tooling only)
+
+- Fixed: `bench/profile_run.py` loaded only the base config's 3B before timing, so an 8B arm loaded cold inside its
+  first task. On a slow machine that load passed Ollama's 5-minute limit (HTTP 500, a crashed task) or used most of a
+  300 s task budget (`cloud-8b-2`). Now each arm's model is loaded just before the arm, outside its time, at the
+  window its tasks ask for (`local.run` takes `num_ctx`); the other model is unloaded first, so only the one model the
+  preflight sized is resident; a load that fails is tried once more.
+
 ## Relative data dir - 2026-10-29 (no HARNESS_VERSION change: nothing changes under an absolute root)
 
 - Fixed: with a relative `BUCEPHALUS_DATA_DIR` (as `bench/profile_run.py --out runs/...` sets it) the config root

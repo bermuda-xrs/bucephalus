@@ -110,13 +110,13 @@ def start_server(endpoint: str, root: Path, wait_s: float = 30.0) -> None:
     raise Refused(f"the model server on {endpoint} did not start")
 
 
-def run(endpoint: str, model: str, root: Path) -> dict:
+def run(endpoint: str, model: str, root: Path, num_ctx: int | None = None) -> dict:
     start_server(endpoint, root)
     if model not in installed(endpoint):
         raise ValueError(f"{model} is not installed on {endpoint}; ollama pull it first")
     t0 = time.monotonic()
-    httpx.post(f"{endpoint}/api/generate", json={"model": model, "prompt": "", "keep_alive": KEEP_ALIVE},
-               timeout=600.0).raise_for_status()
+    body = {"model": model, "prompt": "", "keep_alive": KEEP_ALIVE, **({"options": {"num_ctx": num_ctx}} if num_ctx else {})}
+    httpx.post(f"{endpoint}/api/generate", json=body, timeout=600.0).raise_for_status()
     return {"model": model, "endpoint": endpoint, "loaded": True, "seconds": round(time.monotonic() - t0, 2),
             "context_length": next((m.get("context_length") for m in status(endpoint)["loaded"]
                                     if m["name"] == model), None)}
