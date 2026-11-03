@@ -1,6 +1,8 @@
 # cloud-8b-2 run notes
 
 The first 8B run (branch `cloud-8b`) repeated on the relative-data-dir fix (PR #5, merge `917ab9b`).
+The per-task comparison and trajectory evidence are in `REPORT.md`. The Ollama logs, the test log and the
+analysis scripts are in `extra/`. A prompt for an independent reviewer is in `REVIEW_PROMPT.md`.
 
 Command (`--out` relative on purpose; the fix must survive it):
 

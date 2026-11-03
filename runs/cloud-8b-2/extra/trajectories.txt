@@ -1,0 +1,102 @@
+db=full8b-0 task_id=t_f8234746b81d45a1 final_status=done
+  seq  10 tool.intent          glob(path='work/', pattern='*.json')
+  seq  18 verify.passed        {"detail": "matches the expected value", "score": 1.0, "verifier": "expected_value"}
+  seq  20 task.status_changed  {"reason": "done", "status": "done"}
+  ANSWER: '{\n  "count": 2\n}'
+db=full8b-0 task_id=t_7bfed36f190b470e final_status=failed
+  seq  10 tool.intent          read_file(path='work/handbook.md')
+  seq  17 tool.intent          read_file(page=8, path='work/handbook.md')
+  seq  26 tool.intent          read_file(page=1, path='work/handbook.md')
+  seq  34 verify.failed        {"detail": "missing: 'INF-4471', 'INF-5093', 'INF-6218'", "score": 0.0, "verifier": "contains_all"}
+  seq  40 verify.failed        {"detail": "missing: 'INF-4471', 'INF-5093', 'INF-6218'", "score": 0.0, "verifier": "contains_all"}
+  seq  46 verify.failed        {"detail": "missing: 'INF-4471', 'INF-5093', 'INF-6218'", "score": 0.0, "verifier": "contains_all"}
+  seq  48 task.status_changed  {"reason": "plateau", "status": "failed"}
+  ANSWER: '{\n  "summary": "TICKET-101, TICKET-102, TICKET-103"\n}'
+db=full8b-1 task_id=t_fe13e3448c154515 final_status=done
+  seq  10 tool.intent          glob(path='work/', pattern='*.json')
+  seq  18 verify.passed        {"detail": "matches the expected value", "score": 1.0, "verifier": "expected_value"}
+  seq  20 task.status_changed  {"reason": "done", "status": "done"}
+  ANSWER: '{\n  "count": 2\n}'
+db=full8b-1 task_id=t_791f863b0b284638 final_status=failed
+  seq  10 tool.intent          read_file(path='work/handbook.md')
+  seq  17 tool.intent          read_file(page=2, path='work/handbook.md')
+  seq  26 tool.intent          read_file(page=1, path='work/handbook.md')
+  seq  34 verify.failed        {"detail": "missing: 'INF-4471', 'INF-5093', 'INF-6218'", "score": 0.0, "verifier": "contains_all"}
+  seq  40 verify.failed        {"detail": "missing: 'INF-4471', 'INF-5093', 'INF-6218'", "score": 0.0, "verifier": "contains_all"}
+  seq  46 verify.failed        {"detail": "missing: 'INF-4471', 'INF-5093', 'INF-6218'", "score": 0.0, "verifier": "contains_all"}
+  seq  48 task.status_changed  {"reason": "plateau", "status": "failed"}
+  ANSWER: '{\n  "summary": "TICKET-101, TICKET-202, TICKET-303"\n}'
+db=full8b-2 task_id=t_19f29e55d4bf4ad2 final_status=done
+  seq  10 tool.intent          glob(path='work/', pattern='*.json')
+  seq  18 verify.passed        {"detail": "matches the expected value", "score": 1.0, "verifier": "expected_value"}
+  seq  20 task.status_changed  {"reason": "done", "status": "done"}
+  ANSWER: '{\n  "count": 2\n}'
+db=full8b-2 task_id=t_5cbd43f6621347f8 final_status=failed
+  seq  10 tool.intent          read_file(path='work/handbook.md')
+  seq  17 tool.intent          read_file(page=8, path='work/handbook.md')
+  seq  26 tool.intent          read_file(page=1, path='work/handbook.md')
+  seq  34 verify.failed        {"detail": "missing: 'INF-4471', 'INF-5093', 'INF-6218'", "score": 0.0, "verifier": "contains_all"}
+  seq  40 verify.failed        {"detail": "missing: 'INF-4471', 'INF-5093', 'INF-6218'", "score": 0.0, "verifier": "contains_all"}
+  seq  46 verify.failed        {"detail": "missing: 'INF-4471', 'INF-5093', 'INF-6218'", "score": 0.0, "verifier": "contains_all"}
+  seq  48 task.status_changed  {"reason": "plateau", "status": "failed"}
+  ANSWER: '{\n  "summary": "TICKET-101, TICKET-202, TICKET-303"\n}'
+db=small8b-0 task_id=t_65ea12b3f36c4b08 final_status=failed
+  seq  10 human.denied         {"reason": "path='.' is a protected path"
+  seq  15 human.denied         {"reason": "path='.' is a protected path"
+  seq  20 human.denied         {"reason": "path='.' is a protected path"
+  seq  21 stuck.warned         {"kind": "action", "repeats": 3, "step": 2, "tool": "search"}
+  seq  22 stuck.warned         {"kind": "same_error", "step": 3}
+  seq  27 human.denied         {"reason": "path='.' is a protected path"
+  seq  32 human.denied         {"reason": "path='.' is a protected path"
+  seq  37 stuck.detected       {"kind": "action", "repeats": 6, "step": 5, "tool": "search"}
+  seq  39 task.status_changed  {"reason": "stuck", "status": "failed"}
+db=small8b-0 task_id=t_f9703a7355f74a3d final_status=failed
+  seq  10 tool.intent          read_file(page=1, path='work/handbook.md')
+  seq  20 tool.intent          read_file(page=2, path='work/handbook.md')
+  seq  30 tool.intent          read_file(page=3, path='work/handbook.md')
+  seq  42 tool.intent          read_file(page=4, path='work/handbook.md')
+  seq  50 verify.failed        {"detail": "missing: 'INF-4471', 'INF-5093'", "score": 0.3333, "verifier": "contains_all"}
+  seq  56 verify.failed        {"detail": "missing: 'INF-4471', 'INF-5093'", "score": 0.3333, "verifier": "contains_all"}
+  seq  62 verify.failed        {"detail": "missing: 'INF-4471', 'INF-5093'", "score": 0.3333, "verifier": "contains_all"}
+  seq  64 task.status_changed  {"reason": "plateau", "status": "failed"}
+  ANSWER: '{\n  "summary": "INF-6218"\n}'
+db=small8b-1 task_id=t_de106b16d1464eea final_status=failed
+  seq  10 human.denied         {"reason": "path='.' is a protected path"
+  seq  15 human.denied         {"reason": "path='.' is a protected path"
+  seq  20 human.denied         {"reason": "path='.' is a protected path"
+  seq  21 stuck.warned         {"kind": "action", "repeats": 3, "step": 2, "tool": "search"}
+  seq  22 stuck.warned         {"kind": "same_error", "step": 3}
+  seq  27 human.denied         {"reason": "path='.' is a protected path"
+  seq  32 human.denied         {"reason": "path='.' is a protected path"
+  seq  37 stuck.detected       {"kind": "action", "repeats": 6, "step": 5, "tool": "search"}
+  seq  39 task.status_changed  {"reason": "stuck", "status": "failed"}
+db=small8b-1 task_id=t_462dc3d9bd7f4abe final_status=failed
+  seq  10 tool.intent          read_file(page=1, path='work/handbook.md')
+  seq  20 tool.intent          read_file(page=2, path='work/handbook.md')
+  seq  30 tool.intent          read_file(page=3, path='work/handbook.md')
+  seq  42 tool.intent          read_file(page=4, path='work/handbook.md')
+  seq  50 verify.failed        {"detail": "missing: 'INF-4471', 'INF-5093'", "score": 0.3333, "verifier": "contains_all"}
+  seq  56 verify.failed        {"detail": "missing: 'INF-4471', 'INF-5093'", "score": 0.3333, "verifier": "contains_all"}
+  seq  62 verify.failed        {"detail": "missing: 'INF-4471', 'INF-5093'", "score": 0.3333, "verifier": "contains_all"}
+  seq  64 task.status_changed  {"reason": "plateau", "status": "failed"}
+  ANSWER: '{\n  "summary": "INF-6218"\n}'
+db=small8b-2 task_id=t_54e719fc14c54af4 final_status=failed
+  seq  10 human.denied         {"reason": "path='.' is a protected path"
+  seq  15 human.denied         {"reason": "path='.' is a protected path"
+  seq  20 human.denied         {"reason": "path='.' is a protected path"
+  seq  21 stuck.warned         {"kind": "action", "repeats": 3, "step": 2, "tool": "search"}
+  seq  22 stuck.warned         {"kind": "same_error", "step": 3}
+  seq  27 human.denied         {"reason": "path='.' is a protected path"
+  seq  32 human.denied         {"reason": "path='.' is a protected path"
+  seq  37 stuck.detected       {"kind": "action", "repeats": 6, "step": 5, "tool": "search"}
+  seq  39 task.status_changed  {"reason": "stuck", "status": "failed"}
+db=small8b-2 task_id=t_fe628438fecf4f5c final_status=failed
+  seq  10 tool.intent          read_file(page=1, path='work/handbook.md')
+  seq  20 tool.intent          read_file(page=2, path='work/handbook.md')
+  seq  30 tool.intent          read_file(page=3, path='work/handbook.md')
+  seq  42 tool.intent          read_file(page=4, path='work/handbook.md')
+  seq  50 verify.failed        {"detail": "missing: 'INF-4471', 'INF-5093'", "score": 0.3333, "verifier": "contains_all"}
+  seq  56 verify.failed        {"detail": "missing: 'INF-4471', 'INF-5093'", "score": 0.3333, "verifier": "contains_all"}
+  seq  62 verify.failed        {"detail": "missing: 'INF-4471', 'INF-5093'", "score": 0.3333, "verifier": "contains_all"}
+  seq  64 task.status_changed  {"reason": "plateau", "status": "failed"}
+  ANSWER: '{\n  "summary": "INF-6218"\n}'

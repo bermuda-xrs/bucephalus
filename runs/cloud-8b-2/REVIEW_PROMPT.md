@@ -8,7 +8,7 @@ Repo: private GitHub `bermuda-xrs/bucephalus`. `runs/` is in `.gitignore`, so re
 
 | what | branch @ commit | folder |
 |---|---|---|
-| Re-run under review | `cloud-8b-2` (results committed in `b090065`; the next commit adds only this file) | `runs/cloud-8b-2/` |
+| Re-run under review | `cloud-8b-2` (results committed in `b090065`; later commits add only this file, `REPORT.md` and `extra/`) | `runs/cloud-8b-2/` |
 | First run, for comparison | `cloud-8b` @ `3a2bdd1` | `runs/cloud-8b/` |
 
 - Browse: https://github.com/bermuda-xrs/bucephalus/tree/cloud-8b-2/runs/cloud-8b-2
@@ -22,7 +22,16 @@ Get both:
     ls runs/cloud-8b-2
     git show origin/cloud-8b:runs/cloud-8b/paired.json
 
-The folder `runs/cloud-8b-2/` has 25 files: this `REVIEW_PROMPT.md`, `NOTES.md`, `paired.json`, `config.{control,full8b,small8b}.yaml`, `<arm>-<rep>.json` and `<arm>-<rep>.calls.csv` for each arm in {control, full8b, small8b} and each rep in {0, 1, 2}, and `cloud-8b-2-full.tar.gz`.
+The folder `runs/cloud-8b-2/` holds: this `REVIEW_PROMPT.md`, `NOTES.md`, `REPORT.md`, `paired.json`, `config.{control,full8b,small8b}.yaml`, `<arm>-<rep>.json` and `<arm>-<rep>.calls.csv` for each arm in {control, full8b, small8b} and each rep in {0, 1, 2}, `cloud-8b-2-full.tar.gz`, and `extra/`.
+
+- `REPORT.md` is the run report. Most of the claims below come from it, with `task_id`s and event `seq`s. Check it; don't take it as given.
+- `extra/` holds:
+  - the Ollama server logs for both runs (`ollama-serve-cloud-8b-2.log`, `ollama-serve-cloud-8b.log`);
+  - the pre-run test log (`pytest-full.log`);
+  - the scripts that produced the report's numbers, with their outputs (`check_fix.py`, `compare.py`, `trajectory.py` and their `.json`/`.md`/`.txt` outputs);
+  - `FOLLOWUP_PROMPT.md`, which is for a different task. Ignore it.
+
+  Work from the raw data yourself. You may compare your numbers with the scripts' outputs afterwards, but don't just re-run the scripts and call that a check.
 
 ## The raw data (in the repo, inside the archive)
 
@@ -60,7 +69,7 @@ The first run (`cloud-8b`, code `1534261`) had the bug: `glob` found nothing in 
 3. full8b rep 0's crash (extract-json-001) and budget_exhausted (write-function-002) are infrastructure, not the model:
    - A cold 8B load passed Ollama's 5-minute limit and returned HTTP 500 at 12:59:36Z.
    - The retry took 164.8 s inside write-function's only model call (330.5 s), against a 300 s task budget.
-   - The Ollama server log isn't in the archive. Check what you can from `events` timestamps and `runner-console.log`, and say what you can't.
+   - The Ollama server log is at `runs/cloud-8b-2/extra/ollama-serve-cloud-8b-2.log` (on the branch, not in the archive). Match its `Load failed`, `| 500 |` and `llama-server started in` lines against the `events` timestamps (`created_at`, Unix seconds) and `runner-console.log`.
 4. This machine was 30–60% slower per output token than the first run's (computed from `calls.csv` as `wall_ms` per output token). That's why control's write-function now ends as `budget_exhausted` instead of `max_steps`, and still fails.
 5. small8b negative-control is `stuck` because the model searches only `.` (refused at seq 10, 15, 20, 27, 32) and never tries `work/`. That's the model's behaviour, not the bug.
 6. small8b handbook-recall reads all 4 pages without refusal but finds only `INF-6218` (verify score 0.33). full8b handbook-recall reads pages 1 and 8 (or 1 and 2) and then invents `TICKET-…` IDs.

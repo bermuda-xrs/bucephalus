@@ -1,0 +1,145 @@
+{
+ "artifact_paths": {
+  "control-0": {
+   "n_paths": 0,
+   "relative": 0,
+   "start_runs/": 0,
+   "examples_relative": []
+  },
+  "control-1": {
+   "n_paths": 0,
+   "relative": 0,
+   "start_runs/": 0,
+   "examples_relative": []
+  },
+  "control-2": {
+   "n_paths": 0,
+   "relative": 0,
+   "start_runs/": 0,
+   "examples_relative": []
+  },
+  "full8b-0": {
+   "n_paths": 5,
+   "relative": 0,
+   "start_runs/": 0,
+   "examples_relative": []
+  },
+  "full8b-1": {
+   "n_paths": 7,
+   "relative": 0,
+   "start_runs/": 0,
+   "examples_relative": []
+  },
+  "full8b-2": {
+   "n_paths": 7,
+   "relative": 0,
+   "start_runs/": 0,
+   "examples_relative": []
+  },
+  "small8b-0": {
+   "n_paths": 7,
+   "relative": 0,
+   "start_runs/": 0,
+   "examples_relative": []
+  },
+  "small8b-1": {
+   "n_paths": 7,
+   "relative": 0,
+   "start_runs/": 0,
+   "examples_relative": []
+  },
+  "small8b-2": {
+   "n_paths": 7,
+   "relative": 0,
+   "start_runs/": 0,
+   "examples_relative": []
+  }
+ },
+ "neg_control_full8b": {
+  "full8b-0": {
+   "task_id": "t_f8234746b81d45a1",
+   "tool_calls": [
+    [
+     10,
+     "glob(path='work/', pattern='*.json')"
+    ]
+   ],
+   "searched_work": true,
+   "an_output_lists_a.json_and_b.json": true
+  },
+  "full8b-1": {
+   "task_id": "t_fe13e3448c154515",
+   "tool_calls": [
+    [
+     10,
+     "glob(path='work/', pattern='*.json')"
+    ]
+   ],
+   "searched_work": true,
+   "an_output_lists_a.json_and_b.json": true
+  },
+  "full8b-2": {
+   "task_id": "t_19f29e55d4bf4ad2",
+   "tool_calls": [
+    [
+     10,
+     "glob(path='work/', pattern='*.json')"
+    ]
+   ],
+   "searched_work": true,
+   "an_output_lists_a.json_and_b.json": true
+  }
+ },
+ "denied": {
+  "control-0": {
+   "dot_refusals": 0,
+   "inside_work_refusals": [],
+   "other": []
+  },
+  "control-1": {
+   "dot_refusals": 0,
+   "inside_work_refusals": [],
+   "other": []
+  },
+  "control-2": {
+   "dot_refusals": 0,
+   "inside_work_refusals": [],
+   "other": []
+  },
+  "full8b-0": {
+   "dot_refusals": 0,
+   "inside_work_refusals": [],
+   "other": []
+  },
+  "full8b-1": {
+   "dot_refusals": 0,
+   "inside_work_refusals": [],
+   "other": []
+  },
+  "full8b-2": {
+   "dot_refusals": 0,
+   "inside_work_refusals": [],
+   "other": []
+  },
+  "small8b-0": {
+   "dot_refusals": 5,
+   "inside_work_refusals": [],
+   "other": []
+  },
+  "small8b-1": {
+   "dot_refusals": 5,
+   "inside_work_refusals": [],
+   "other": []
+  },
+  "small8b-2": {
+   "dot_refusals": 5,
+   "inside_work_refusals": [],
+   "other": []
+  }
+ },
+ "paired_code": {
+  "git_commit": "917ab9baeb42ad8ee2342443550ea7d6732778ec",
+  "git_dirty": false,
+  "commit_matches": true
+ }
+}
