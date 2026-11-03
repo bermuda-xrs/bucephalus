@@ -148,7 +148,7 @@ there: one prompt gave different code across reps.
 8B re-run on the fix (2026-11-01, same command with `--out runs/cloud-8b-2`, code `917ab9b`, branch `cloud-8b-2`, raw
 data `runs/cloud-8b-2/cloud-8b-2-full.tar.gz`): control 4/15, full8b 10/15 (1 crash), small8b 9/15; against control
 p = 0.0703 and 0.2266, still a sighting (about 5 distinct tasks). The fix took effect: tool paths are absolute, full8b's
-glob on `work/` finds the files, so negative-control passes in all 3 reps (was 0/3), and nothing inside `work/` is
+glob in the work folder finds the files, so negative-control passes in all 3 reps (was 0/3), and nothing inside it is
 refused. Still failing: small8b's negative-control is `stuck`, searching only `.` (the run root, refused 15 times);
 handbook-recall fails in every arm (small8b reads all 4 pages and names 1 of the 3 IDs, INF-6218, every rep; full8b
 invents IDs). full8b rep 0's crash (extract-json, HTTP 500) and its write-function budget overrun came from a cold 8B
