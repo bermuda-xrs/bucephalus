@@ -10,6 +10,16 @@
 Dates are commit dates. `0.1.0` is not released yet — see "Unreleased" for
 what still stands between here and a first iteration.
 
+## edit_lines anchors - 2026-11-04 (HARNESS_VERSION 18)
+
+- Fixed: the gate refused every `edit_lines` call that followed a read. The tool allows at most user-level arguments,
+  but its anchors (`12:a3`) are copied from the read output, and the taint tracker marks any text of 4+ characters
+  found in untrusted output as untrusted. On the 8B (`cloud-8b-fam`) all 14 `kept` config_edit instances were refused
+  (21 refusals, no `write_file`, 0/14 passes against 14/14 for `base`). The 3B never called the tool, which hid it.
+- The gate now leaves `start` and `end` out of the taint check when they have the anchor form; the tool still checks
+  them against the file, and `content` stays under the gate (`tests/test_edit_lines_anchors.py`).
+- Every earlier `kept` number that includes E1 predates this fix.
+
 ## Families run on a slower machine - 2026-11-03 (no HARNESS_VERSION change: bench tooling only)
 
 - `bench/families_run.py --budget-seconds N` sets the wall-clock budget of every instance (the specs say 600) and
