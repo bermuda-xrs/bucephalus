@@ -1,0 +1,6 @@
+[core]
+	repositoryformatversion = 0
+	filemode = true
+	bare = false
+	logallrefupdates = true
+	worktree = /home/user/bucephalus/runs/cloud-8b-cfg/data/base/config_edit-016

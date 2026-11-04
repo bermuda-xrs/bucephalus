@@ -1,0 +1,16 @@
+Traceback (most recent call last):
+  File "/home/user/bucephalus/bench/families_run.py", line 155, in <module>
+    raise SystemExit(main())
+                     ^^^^^^
+  File "/home/user/bucephalus/bench/families_run.py", line 151, in main
+    return _main(argv)
+           ^^^^^^^^^^^
+  File "/home/user/bucephalus/bench/families_run.py", line 118, in _main
+    print("model loaded:", local.run(endpoint, cloud["model"], ROOT,
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/user/bucephalus/src/agent/models/local.py", line 119, in run
+    httpx.post(f"{endpoint}/api/generate", json=body, timeout=600.0).raise_for_status()
+  File "/root/.bucephalus-venv/lib/python3.12/site-packages/httpx/_models.py", line 829, in raise_for_status
+    raise HTTPStatusError(message, request=request, response=self)
+httpx.HTTPStatusError: Server error '500 Internal Server Error' for url 'http://localhost:11435/api/generate'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/500

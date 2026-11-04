@@ -1,0 +1,83 @@
+model loaded: {'model': 'granite4.1:8b', 'endpoint': 'http://localhost:11435', 'loaded': True, 'seconds': 158.22, 'context_length': 16384}
+[1/14] kept config_edit-000: plateau (608.14 s)
+[1/14] kept-E1 config_edit-000: done (219.1 s)
+[1/14] base config_edit-000: done (328.93 s)
+[2/14] kept config_edit-002: plateau (276.36 s)
+[2/14] kept-E1 config_edit-002: done (257.12 s)
+[2/14] base config_edit-002: done (342.21 s)
+[3/14] kept config_edit-004: plateau (289.69 s)
+[3/14] kept-E1 config_edit-004: done (244.61 s)
+[3/14] base config_edit-004: done (292.37 s)
+[4/14] kept-E1 config_edit-006: done (233.69 s)
+[4/14] kept config_edit-006: plateau (263.67 s)
+[4/14] base config_edit-006: done (337.72 s)
+[5/14] base config_edit-008: done (291.13 s)
+[5/14] kept config_edit-008: plateau (156.16 s)
+[5/14] kept-E1 config_edit-008: done (194.57 s)
+[6/14] kept config_edit-010: plateau (325.08 s)
+[6/14] base config_edit-010: done (306.07 s)
+[6/14] kept-E1 config_edit-010: done (407.64 s)
+[7/14] kept-E1 config_edit-012: done (264.42 s)
+[7/14] base config_edit-012: done (242.26 s)
+[7/14] kept config_edit-012: plateau (245.0 s)
+[8/14] kept-E1 config_edit-014: done (136.57 s)
+[8/14] kept config_edit-014: plateau (301.48 s)
+[8/14] base config_edit-014: done (257.72 s)
+[9/14] base config_edit-016: done (306.45 s)
+[9/14] kept-E1 config_edit-016: done (238.94 s)
+[9/14] kept config_edit-016: plateau (154.54 s)
+[10/14] kept config_edit-018: plateau (153.34 s)
+[10/14] base config_edit-018: done (274.76 s)
+[10/14] kept-E1 config_edit-018: done (152.04 s)
+[11/14] base config_edit-020: done (277.81 s)
+[11/14] kept-E1 config_edit-020: done (243.26 s)
+[11/14] kept config_edit-020: plateau (249.78 s)
+[12/14] base config_edit-022: done (275.07 s)
+[12/14] kept-E1 config_edit-022: done (213.96 s)
+[12/14] kept config_edit-022: plateau (314.12 s)
+[13/14] base config_edit-024: done (307.49 s)
+[13/14] kept-E1 config_edit-024: done (269.78 s)
+[13/14] kept config_edit-024: plateau (175.79 s)
+[14/14] kept config_edit-026: plateau (200.71 s)
+[14/14] kept-E1 config_edit-026: done (266.73 s)
+[14/14] base config_edit-026: done (252.88 s)
+{
+  "n": 14,
+  "n_families": 1,
+  "arms": {
+    "base": {
+      "passes": 14,
+      "n": 14
+    },
+    "kept": {
+      "passes": 0,
+      "n": 14
+    },
+    "kept-E1": {
+      "passes": 14,
+      "n": 14
+    }
+  },
+  "vs_base": {
+    "kept": {
+      "n": 14,
+      "base_passes": 14,
+      "arm_passes": 0,
+      "only_base": 14,
+      "only_arm": 0,
+      "both": 0,
+      "neither": 0,
+      "mcnemar_exact_p": 0.0001
+    },
+    "kept-E1": {
+      "n": 14,
+      "base_passes": 14,
+      "arm_passes": 14,
+      "only_base": 0,
+      "only_arm": 0,
+      "both": 14,
+      "neither": 0,
+      "mcnemar_exact_p": 1.0
+    }
+  }
+}
