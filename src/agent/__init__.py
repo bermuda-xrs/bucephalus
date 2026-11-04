@@ -1,6 +1,6 @@
 __version__ = "0.1.0"
 
-HARNESS_VERSION = 17
+HARNESS_VERSION = 18
 
 
 TOOLSET_VERSION = 8

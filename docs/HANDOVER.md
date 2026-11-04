@@ -56,8 +56,8 @@ rebuilt `bucephalus.exe`'s window, and the WSL2 suite (see the Branch row for wh
 
 | Fact | Value | Regenerate with |
 |---|---|---|
-| Branch | `main`, fast-forwarded from `harness-14` (iteration 4, two whole-source reviews, the harness-16 baseline, the console split view, harness 17) after the suite, the frozen gate, the frozen e2e and the WSL2 suite passed; tags `iteration-4-closed`, `review-2-closed`, `h16-baseline`, `harness-17`; branch `h18` (rejected candidates) not merged; remote `origin` = private `bermuda-xrs/bucephalus` (`main`, the tags, and the results branches `cloud-8b` and `cloud-8b-2`, which carry `runs/` and are never merged) | `git branch --show-current` |
-| Harness version | **17**, bumped 2026-10-26: edit_first on for the small profile, search fixes (CHANGELOG "Harness 17"); numbers from 16 and earlier do not compare | `grep HARNESS_VERSION src/agent/__init__.py` |
+| Branch | `main`, fast-forwarded from `harness-14` (iteration 4, two whole-source reviews, the harness-16 baseline, the console split view, harness 17) after the suite, the frozen gate, the frozen e2e and the WSL2 suite passed; tags `iteration-4-closed`, `review-2-closed`, `h16-baseline`, `harness-17`; branch `h18` (rejected candidates) not merged; remote `origin` = private `bermuda-xrs/bucephalus` (`main`, the tags, and the results branches `cloud-8b`, `cloud-8b-2` and `cloud-8b-fam`, which carry `runs/` and are never merged) | `git branch --show-current` |
+| Harness version | **18**, bumped 2026-11-04: the gate no longer refuses `edit_lines` anchors copied from a read (CHANGELOG "edit_lines anchors"); prompts unchanged since 15; `kept` numbers that include E1 from 17 and earlier do not compare, nor do numbers from 16 and earlier | `grep HARNESS_VERSION src/agent/__init__.py` |
 | Toolset version | **8** (search: globs at any depth, name search with a space searches contents) | `grep TOOLSET_VERSION src/agent/__init__.py` |
 | Tests | not written down | `python -m pytest tests -q`; skips are live-credential tests (D26) and other-OS tests |
 | Lint | bug rules only | `python -m ruff check src tests scripts packaging demo.py` |
@@ -158,13 +158,24 @@ first run (control's write-function ends `budget_exhausted`, not `max_steps`). A
 machine found relative tool paths only in `profile-readfirst-20261011`; the h16, h17, h18 and iteration-4 numbers used
 absolute roots and stand.
 
+Families on the 8B (2026-11-03, branch `cloud-8b-fam`, code `1e593f8`, dev seeds 0-26, n = 14 per family, window
+16384, budget 1800 s, raw data `runs/cloud-8b-fam/cloud-8b-fam-full.tar.gz`; the 3B on the same instances in
+brackets): arithmetic base 4 [0], kept 2 [1]; config_edit base 14 [0], kept 0 [5]; unanswerable base 14 [7], kept 13
+[8]; totals base 32/42 [7], kept 15/42 [14]. No crash, no instance beyond 700 s. The 8B on base settings beats the 3B
+on every family (config_edit p = 0.0001, unanswerable 0.0156). Two findings: (a) arithmetic is answered from the
+model's head, 28/28 instances called only `read_file` and never `run_command`; (b) under `kept` every `edit_lines`
+call was refused by the gate (21 refusals, 14/14 instances): its anchors are copied from the read output, which the
+taint tracker marks untrusted. Fixed in harness 18 (CHANGELOG "edit_lines anchors"); the 3B never called the tool, so
+E1 was untested for it. The unanswerable failures left are the exact-match grader (`29 spaces.` with a full stop).
+The cloud-8b-fam NOTES say the 3B scored 4-8/14 on unanswerable; on these instances it is 7 (base) and 8 (kept).
+
 Plan, in order:
-1. arithmetic waits on the 8B: `bench/tasks` has no arithmetic task, so the re-run does not answer it. Cloud run,
-   resumable per family: `bench/families_run.py --split dev --n 14 --families arithmetic,config_edit,unanswerable
-   --arms base,kept --model granite4.1:8b --budget-seconds 1800 --out runs/<name>`. Dev seeds 0-26 are the h17
+1. re-run config_edit on the 8B after the fix, cloud run, resumable per family:
+   `bench/families_run.py --split dev --n 14 --families config_edit --arms base,kept,kept-E1 --model granite4.1:8b
+   --budget-seconds 1800 --out runs/<name>` (kept-E1 is kept without E1, to isolate it). Dev seeds 0-26 are the h17
    baseline's instances, so the 3B pairs by key; the 8B keeps the 3B's 16384 window (about 8.5 GB by the preflight's
-   estimate). The 3B never reached the 600 s budget (h16, h17, h18); a slower machine would. Neither a script hold (F2),
-   a calculator (G1) nor a repeat note (H2) moves the 3B.
+   estimate). Arithmetic on the 8B stays open: it never calls `run_command`; a script hold (F2), a calculator (G1)
+   and a repeat note (H2) did not move the 3B, so a nudge for the 8B is a new candidate, not a family.
 
 The branches already in `main` were deleted on 2026-10-27 at the user's yes; the tags stay.
 

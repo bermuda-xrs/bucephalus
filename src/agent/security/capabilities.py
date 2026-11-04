@@ -336,9 +336,14 @@ def _protected_at(p: Path, state: tuple[Path, ...]) -> bool:
     return False
 
 
+_ANCHOR = re.compile(r"[0-9]{1,6}:[0-9a-f]{2}")
+
+
 def gate_tool_call(ctx, task, tool, args: dict, phase: str = "execute") -> GateDecision:
     tracker = ctx.taint_tracker(task.id)
-    arg_taint = tracker.args_taint(args)
+    # a line anchor (12:a3) only names a line the tool then checks against the file; it is copied from the read output
+    named = {k: v for k, v in args.items() if not (tool.name == "edit_lines" and k in ("start", "end") and _ANCHOR.fullmatch(str(v)))}
+    arg_taint = tracker.args_taint(named)
 
     if phase == "plan" and tool.side_effecting:
         return GateDecision.deny(
