@@ -10,6 +10,12 @@
 Dates are commit dates. `0.1.0` is not released yet — see "Unreleased" for
 what still stands between here and a first iteration.
 
+## Test timeout - 2026-11-04 (no HARNESS_VERSION change: test tooling only)
+
+- `pytest-timeout` with `timeout = 180` in `pyproject.toml`: one Ubuntu CI job hung at 96% of the suite for 26 minutes
+  until the 30-minute job limit cancelled it (the same commit passed in 2m48s on the push run), and the log could not
+  say which test. A hung test now fails by name (`tests/test_a_hung_test_fails_by_name.py`).
+
 ## edit_lines anchors - 2026-11-04 (HARNESS_VERSION 18)
 
 - Fixed: the gate refused every `edit_lines` call that followed a read. The tool allows at most user-level arguments,
