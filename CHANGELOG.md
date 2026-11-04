@@ -10,6 +10,12 @@
 Dates are commit dates. `0.1.0` is not released yet — see "Unreleased" for
 what still stands between here and a first iteration.
 
+## Denied calls say why - 2026-11-05 (no HARNESS_VERSION change: a log field, no behaviour)
+
+- `human.denied` now carries `preview` (the call as `tool.intent` shows it) and, for a taint denial, `untrusted_args`
+  (which arguments were untrusted). `cloud-8b-cfg` could not say why `edit_lines` was still refused 26 times because
+  the event held only the tool and the reason (`tests/test_denied_args_are_logged.py`).
+
 ## Test timeout - 2026-11-04 (no HARNESS_VERSION change: test tooling only)
 
 - `pytest-timeout` with `timeout = 180` in `pyproject.toml`: one Ubuntu CI job hung at 96% of the suite for 26 minutes
