@@ -351,10 +351,13 @@ def gate_tool_call(ctx, task, tool, args: dict, phase: str = "execute") -> GateD
         )
 
     if arg_taint.level > tool.max_arg_taint.level:
-        return GateDecision.deny(
+        d = GateDecision.deny(
             f"{tool.name} requires <={tool.max_arg_taint.value} arguments, "
             f"args are {arg_taint.value}"
         )
+        d.detail = {"untrusted_args": sorted(k for k, v in named.items()
+                                             if tracker.args_taint({k: v}).level > tool.max_arg_taint.level)}
+        return d
 
     eff = _effective_args(tool, args)
     extra = frozenset(getattr(tool, "path_args", ()))

@@ -1233,7 +1233,8 @@ def execute_action(ctx, task, parsed: ParsedAction, step: int, plan=None) -> Led
 
     if decision.verdict == "deny":
         ctx.log.append(
-            task.id, "human.denied", {"tool": tool_name, "reason": decision.reason}
+            task.id, "human.denied", {"tool": tool_name, "reason": decision.reason,
+                                      "preview": render_preview(tool, args), **decision.detail}
         )
         return LedgerEntry.observation(
             f"DENIED by the capability gate: {decision.reason}\n"
