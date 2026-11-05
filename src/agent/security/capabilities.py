@@ -339,10 +339,22 @@ def _protected_at(p: Path, state: tuple[Path, ...]) -> bool:
 _ANCHOR = re.compile(r"[0-9]{1,6}:[0-9a-f]{2}")
 
 
+def _under_root(v, root):
+    # a '..' or '.' collapsed lexically can differ from the real path (a link), so only a canonical path is mapped
+    if not (isinstance(v, str) and os.path.isabs(v)) or {".", ".."} & set(re.split(r"[\\/]", v)):
+        return v
+    try:
+        return Path(os.path.abspath(v)).relative_to(os.path.abspath(root)).as_posix()
+    except ValueError:
+        return v
+
+
 def gate_tool_call(ctx, task, tool, args: dict, phase: str = "execute") -> GateDecision:
     tracker = ctx.taint_tracker(task.id)
     # a line anchor (12:a3) only names a line the tool then checks against the file; it is copied from the read output
     named = {k: v for k, v in args.items() if not (tool.name == "edit_lines" and k in ("start", "end") and _ANCHOR.fullmatch(str(v)))}
+    # read_file echoes the absolute path; an absolute path inside the root is the same file as its relative form
+    named = {k: _under_root(v, ctx.config.root) if k in _PATH_KEYS else v for k, v in named.items()}
     arg_taint = tracker.args_taint(named)
 
     if phase == "plan" and tool.side_effecting:
