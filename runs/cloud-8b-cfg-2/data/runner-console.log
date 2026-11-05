@@ -1,0 +1,55 @@
+model loaded: {'model': 'granite4.1:8b', 'endpoint': 'http://localhost:11435', 'loaded': True, 'seconds': 158.38, 'context_length': 16384}
+[1/14] kept config_edit-000: plateau (277.87 s)
+[1/14] base config_edit-000: done (322.39 s)
+[2/14] kept config_edit-002: plateau (309.93 s)
+[2/14] base config_edit-002: done (330.09 s)
+[3/14] kept config_edit-004: plateau (375.73 s)
+[3/14] base config_edit-004: done (331.42 s)
+[4/14] kept config_edit-006: plateau (157.79 s)
+[4/14] base config_edit-006: done (331.81 s)
+[5/14] base config_edit-008: done (302.72 s)
+[5/14] kept config_edit-008: plateau (159.04 s)
+[6/14] kept config_edit-010: plateau (241.04 s)
+[6/14] base config_edit-010: done (313.24 s)
+[7/14] base config_edit-012: done (289.06 s)
+[7/14] kept config_edit-012: plateau (263.28 s)
+[8/14] kept config_edit-014: plateau (330.16 s)
+[8/14] base config_edit-014: done (226.87 s)
+[9/14] base config_edit-016: done (274.8 s)
+[9/14] kept config_edit-016: plateau (149.09 s)
+[10/14] kept config_edit-018: plateau (161.35 s)
+[10/14] base config_edit-018: done (324.34 s)
+[11/14] base config_edit-020: done (278.69 s)
+[11/14] kept config_edit-020: plateau (158.07 s)
+[12/14] base config_edit-022: done (257.53 s)
+[12/14] kept config_edit-022: plateau (290.76 s)
+[13/14] base config_edit-024: done (310.6 s)
+[13/14] kept config_edit-024: plateau (288.17 s)
+[14/14] kept config_edit-026: plateau (440.6 s)
+[14/14] base config_edit-026: done (283.0 s)
+{
+  "n": 14,
+  "n_families": 1,
+  "arms": {
+    "base": {
+      "passes": 14,
+      "n": 14
+    },
+    "kept": {
+      "passes": 0,
+      "n": 14
+    }
+  },
+  "vs_base": {
+    "kept": {
+      "n": 14,
+      "base_passes": 14,
+      "arm_passes": 0,
+      "only_base": 14,
+      "only_arm": 0,
+      "both": 0,
+      "neither": 0,
+      "mcnemar_exact_p": 0.0001
+    }
+  }
+}
