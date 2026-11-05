@@ -10,6 +10,12 @@
 Dates are commit dates. `0.1.0` is not released yet — see "Unreleased" for
 what still stands between here and a first iteration.
 
+## E1 not for the 8B - 2026-11-05 (no HARNESS_VERSION change: a decision about which arm to measure)
+
+- On harness 19 the 8B scores 0/14 on config_edit under `kept` with no gate refusal: `edit_lines` calls fail on anchors
+  (bare line number, wrong hash) or edit the wrong line. `kept-E1` scores 14/14. The 8B is measured as `kept-E1` from now
+  on; nothing in the product changes, since the 8B runs the full profile there.
+
 ## Absolute paths - 2026-11-05 (HARNESS_VERSION 19)
 
 - The gate compares a path argument that is absolute and inside the root as its root-relative form. `read_file` prints the
