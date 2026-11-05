@@ -22,3 +22,9 @@ def test_an_absolute_path_outside_the_root_stays_untrusted(small, task):
     out = "/elsewhere/work/c.txt"
     d = _gate(small, task, '{"ok": true, "path": "%s"}' % out, out)
     assert not d.allowed and d.detail["untrusted_args"] == ["path"]
+
+
+def test_a_path_with_dot_segments_is_not_mapped_to_the_known_file(small, task):
+    ab = (Path(small.config.root) / "work" / "x" / ".." / "c.txt").as_posix()
+    d = _gate(small, task, '{"ok": true, "path": "%s"}' % ab, ab)
+    assert not d.allowed and d.detail["untrusted_args"] == ["path"]

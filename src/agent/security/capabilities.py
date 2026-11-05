@@ -340,7 +340,8 @@ _ANCHOR = re.compile(r"[0-9]{1,6}:[0-9a-f]{2}")
 
 
 def _under_root(v, root):
-    if not (isinstance(v, str) and os.path.isabs(v)):
+    # a '..' or '.' collapsed lexically can differ from the real path (a link), so only a canonical path is mapped
+    if not (isinstance(v, str) and os.path.isabs(v)) or {".", ".."} & set(re.split(r"[\\/]", v)):
         return v
     try:
         return Path(os.path.abspath(v)).relative_to(os.path.abspath(root)).as_posix()
