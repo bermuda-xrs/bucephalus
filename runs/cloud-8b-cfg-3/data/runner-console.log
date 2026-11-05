@@ -1,0 +1,41 @@
+model loaded: {'model': 'granite4.1:8b', 'endpoint': 'http://localhost:11435', 'loaded': True, 'seconds': 144.76, 'context_length': 16384}
+[1/14] kept config_edit-000: plateau (219.35 s)
+[2/14] kept config_edit-002: plateau (423.76 s)
+[3/14] kept config_edit-004: plateau (460.42 s)
+[4/14] kept config_edit-006: plateau (178.32 s)
+[5/14] kept config_edit-008: plateau (260.43 s)
+[6/14] kept config_edit-010: plateau (604.95 s)
+[7/14] kept config_edit-012: plateau (181.53 s)
+[8/14] kept config_edit-014: plateau (164.61 s)
+[9/14] kept config_edit-016: plateau (162.81 s)
+[10/14] kept config_edit-018: plateau (449.92 s)
+[11/14] kept config_edit-020: plateau (181.42 s)
+[12/14] kept config_edit-022: plateau (198.29 s)
+[13/14] kept config_edit-024: plateau (176.81 s)
+[14/14] kept config_edit-026: plateau (346.06 s)
+{
+  "n": 14,
+  "n_families": 1,
+  "arms": {
+    "base": {
+      "passes": 14,
+      "n": 14
+    },
+    "kept": {
+      "passes": 0,
+      "n": 14
+    }
+  },
+  "vs_base": {
+    "kept": {
+      "n": 14,
+      "base_passes": 14,
+      "arm_passes": 0,
+      "only_base": 14,
+      "only_arm": 0,
+      "both": 0,
+      "neither": 0,
+      "mcnemar_exact_p": 0.0001
+    }
+  }
+}
