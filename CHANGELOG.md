@@ -10,6 +10,13 @@
 Dates are commit dates. `0.1.0` is not released yet — see "Unreleased" for
 what still stands between here and a first iteration.
 
+## Absolute paths - 2026-11-05 (HARNESS_VERSION 19)
+
+- The gate compares a path argument that is absolute and inside the root as its root-relative form. `read_file` prints the
+  absolute path in its output header, the 8B copied it into `edit_lines`, and neither `known_paths` (relative form only)
+  nor the untrusted-token check accepted it: all 26 refusals in `cloud-8b-cfg-2` were this one argument. A path outside
+  the root stays as given (`tests/test_absolute_path_is_the_same_file.py`).
+
 ## Denied calls say why - 2026-11-05 (no HARNESS_VERSION change: a log field, no behaviour)
 
 - `human.denied` now carries `preview` (the call as `tool.intent` shows it) and, for a taint denial, `untrusted_args`

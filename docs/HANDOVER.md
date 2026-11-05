@@ -56,8 +56,8 @@ rebuilt `bucephalus.exe`'s window, and the WSL2 suite (see the Branch row for wh
 
 | Fact | Value | Regenerate with |
 |---|---|---|
-| Branch | `main`, fast-forwarded from `harness-14` (iteration 4, two whole-source reviews, the harness-16 baseline, the console split view, harness 17) after the suite, the frozen gate, the frozen e2e and the WSL2 suite passed; tags `iteration-4-closed`, `review-2-closed`, `h16-baseline`, `harness-17`; branch `h18` (rejected candidates) not merged; remote `origin` = private `bermuda-xrs/bucephalus` (`main`, the tags, and the results branches `cloud-8b`, `cloud-8b-2`, `cloud-8b-fam` and `cloud-8b-cfg`, which carry `runs/` and are never merged) | `git branch --show-current` |
-| Harness version | **18**, bumped 2026-11-04: the gate no longer refuses `edit_lines` anchors copied from a read (CHANGELOG "edit_lines anchors"); prompts unchanged since 15; `kept` numbers that include E1 from 17 and earlier do not compare, nor do numbers from 16 and earlier | `grep HARNESS_VERSION src/agent/__init__.py` |
+| Branch | `main`, fast-forwarded from `harness-14` (iteration 4, two whole-source reviews, the harness-16 baseline, the console split view, harness 17) after the suite, the frozen gate, the frozen e2e and the WSL2 suite passed; tags `iteration-4-closed`, `review-2-closed`, `h16-baseline`, `harness-17`; branch `h18` (rejected candidates) not merged; remote `origin` = private `bermuda-xrs/bucephalus` (`main`, the tags, and the results branches `cloud-8b`, `cloud-8b-2`, `cloud-8b-fam`, `cloud-8b-cfg` and `cloud-8b-cfg-2`, which carry `runs/` and are never merged) | `git branch --show-current` |
+| Harness version | **19**, bumped 2026-11-05: the gate compares an absolute path inside the root as its relative form (CHANGELOG "Absolute paths"); 18 let `edit_lines` anchors through; prompts unchanged since 15; `kept` numbers that include E1 from 18 and earlier do not compare, nor do numbers from 16 and earlier | `grep HARNESS_VERSION src/agent/__init__.py` |
 | Toolset version | **8** (search: globs at any depth, name search with a space searches contents) | `grep TOOLSET_VERSION src/agent/__init__.py` |
 | Tests | not written down | `python -m pytest tests -q`; skips are live-credential tests (D26) and other-OS tests |
 | Lint | bug rules only | `python -m ruff check src tests scripts packaging demo.py` |
@@ -180,12 +180,22 @@ shapes still untrusted: an absolute path copied from the read output, an anchor 
 cause is true for one shape only. `human.denied` now logs the call and the untrusted arguments (CHANGELOG "Denied
 calls say why").
 
+The denied-call log (2026-11-05, branch `cloud-8b-cfg-2`, code `37651ae`, two attempts: the first warm-up timed out,
+the second ran all 28 in 132 min; archive SHA-256 `347bf5ee...a7e9`): base 14/14, kept 0/14 again. All 26 kept
+refusals are `edit_lines` with `untrusted_args == ["path"]`, none on `start`, `end` or `content`, and in every one the
+path is the absolute one (`/home/user/.../work/garden.ini`) that the `read_file` output header prints
+(`{"ok": true, "path": "/home/user/..."}`); the 6 calls that got through used `work/garden.ini`. `known_paths` held only
+the relative form, and the absolute form is also a token of the untrusted read output. Fixed in harness 19: an absolute
+path inside the root is compared as its root-relative form (CHANGELOG "Absolute paths"). The other two shapes
+(anchor with text, content restating a line) did not occur. The 4 accepted calls in cloud-8b-cfg and the 4 here that
+changed the file still failed verification; why is not yet looked at.
+
 Plan, in order:
-1. re-run kept on the 8B with the denied-call log, to see which arguments the gate refuses, cloud run:
-   `bench/families_run.py --split dev --n 14 --families config_edit --arms base,kept --model granite4.1:8b
-   --budget-seconds 1800 --out runs/<name>`; then fix the gate for the shape found, test first.
-   Dev seeds 0-26 are the h17 baseline's instances, so the 3B pairs by key; the 8B keeps the 3B's 16384 window (about
-   8.5 GB by the preflight's estimate). Alternative if E1 is not worth the work: drop it from kept for the 8B.
+1. re-run kept on the 8B on harness 19 (cloud, results branch `cloud-8b-cfg-3`):
+   `bench/families_run.py --split dev --n 14 --families config_edit --arms kept --model granite4.1:8b
+   --budget-seconds 1800 --out runs/cloud-8b-cfg-3`, with `base.jsonl` copied in from `cloud-8b-cfg-2` (same
+   instances, 14/14). If kept still fails, read why the accepted edits fail verification; the alternative is to drop
+   E1 from kept for the 8B.
 2. Arithmetic on the 8B stays open: it never calls `run_command`; a script hold (F2), a calculator (G1) and a repeat
    note (H2) did not move the 3B, so a nudge for the 8B is a new candidate, not a family.
 
