@@ -20,6 +20,15 @@ def _not_build_state(src: str, names: list[str]) -> set[str]:
     return skip
 
 
+def _copytree_tolerating_vanished(src, dst, ignore):
+    # another worker's test may delete a file in the checkout between the listing and the copy
+    try:
+        shutil.copytree(src, dst, ignore=ignore)
+    except shutil.Error as e:
+        if not all(isinstance(err[2], str) and "No such file" in err[2] for err in e.args[0]):
+            raise
+
+
 @pytest.fixture(scope="module")
 def wheel(tmp_path_factory) -> zipfile.ZipFile:
     # setuptools builds in the source tree (build/, src/*.egg-info). Built in
@@ -27,7 +36,7 @@ def wheel(tmp_path_factory) -> zipfile.ZipFile:
     # each other's files mid-build. A private copy of the source, minus that
     # build state, is the same wheel with nothing shared.
     src = tmp_path_factory.mktemp("wheel-src") / "bucephalus"
-    shutil.copytree(ROOT, src, ignore=_not_build_state)
+    _copytree_tolerating_vanished(ROOT, src, _not_build_state)
     out = tmp_path_factory.mktemp("wheel")
     r = subprocess.run(  # noqa: S603
         [sys.executable, "-m", "pip", "wheel", str(src), "--no-deps",
@@ -43,6 +52,19 @@ def wheel(tmp_path_factory) -> zipfile.ZipFile:
         f"could not build a wheel (exit {r.returncode}):\n"
         f"{r.stdout[-1500:]}\n{r.stderr[-1500:]}")
     return zipfile.ZipFile(built[0])
+
+
+def test_a_file_that_vanishes_during_the_copy_does_not_fail_it(tmp_path):
+    (tmp_path / "a").mkdir()
+    (tmp_path / "a" / "gone.txt").write_text("x", encoding="utf-8")
+    (tmp_path / "a" / "kept.txt").write_text("y", encoding="utf-8")
+
+    def ignore(d, names):
+        (Path(d) / "gone.txt").unlink(missing_ok=True)
+        return set()
+
+    _copytree_tolerating_vanished(tmp_path / "a", tmp_path / "b", ignore)
+    assert (tmp_path / "b" / "kept.txt").read_text(encoding="utf-8") == "y"
 
 
 def test_the_wheel_contains_no_bench_directory(wheel):
