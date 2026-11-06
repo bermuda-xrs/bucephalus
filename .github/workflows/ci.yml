@@ -12,8 +12,11 @@ name: ci
 
 on:
   # A push that only adds benchmark results (runs/, normally gitignored and
-  # committed with -f on a results branch) has no code to test.
+  # committed with -f on a results branch) has no code to test. Push runs only
+  # on main: a PR branch is tested by pull_request, and testing it on push as
+  # well doubled the minutes (a private repo; macOS counts 10x, Windows 2x).
   push:
+    branches: [main]
     paths-ignore:
       - "runs/**"
   pull_request:
