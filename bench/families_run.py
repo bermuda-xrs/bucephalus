@@ -93,7 +93,15 @@ def _main(argv=None) -> int:
     p.add_argument("--seed", type=int, default=1)
     p.add_argument("--budget-seconds", type=int, default=None,
                    help="wall-clock budget per instance instead of the spec's 600; for a machine slower than the baseline's")
+    p.add_argument("--shard", default=None, metavar="K/N",
+                   help="run only instances K, K+N, K+2N... of the list (one machine of N); pool the outputs with families_merge.py")
     args = p.parse_args(argv)
+    shard = None
+    if args.shard is not None:
+        k, _, n = args.shard.partition("/")
+        if not (k.isdigit() and n.isdigit() and int(n) >= 1 and int(k) < int(n)):
+            p.error("--shard must be K/N with 0 <= K < N")
+        shard = (int(k), int(n))
     arms = [a.strip() for a in args.arms.split(",") if a.strip()]
     if "base" not in arms or any(a not in ALL_ARMS for a in arms):
         p.error(f"--arms must include base and name known arms: {sorted(ALL_ARMS)}")
@@ -104,6 +112,8 @@ def _main(argv=None) -> int:
     os.environ.setdefault("BUCEPHALUS_CONFIG_DIR", str(out / "data" / "runner" / "config"))
     raw = evals.measurement_raw(yaml.safe_load(Path(args.base).read_text(encoding="utf-8")), model=args.model)
     specs = families.instances(fams, args.split, args.n, args.skip)
+    if shard:
+        specs = specs[shard[0]::shard[1]]
     if args.budget_seconds:
         specs = [{**s, "budget_seconds": args.budget_seconds} for s in specs]
     try:
@@ -135,7 +145,7 @@ def _main(argv=None) -> int:
         local.stop_owned()
         lock.release()
     summary = evals.summarise({a: list(done[a].values()) for a in arms}, "base")
-    summary.update(split=args.split, per_family=args.n, skip=args.skip, budget_seconds=args.budget_seconds,
+    summary.update(shard=args.shard, split=args.split, per_family=args.n, skip=args.skip, budget_seconds=args.budget_seconds,
                    families=summary["families"],
                    arms_defined={a: ALL_ARMS[a] for a in arms},
                    family_version=families.FAMILY_VERSION, card=cards)
