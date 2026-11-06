@@ -190,12 +190,24 @@ path inside the root is compared as its root-relative form (CHANGELOG "Absolute 
 (anchor with text, content restating a line) did not occur. The 4 accepted calls in cloud-8b-cfg and the 4 here that
 changed the file still failed verification; why is not yet looked at.
 
+Harness 19 on the 8B (2026-11-05, branch `cloud-8b-cfg-3`, code `547f4b0`; `base` copied from `cloud-8b-cfg-2`, harness
+18; archive SHA-256 `f96c8810...0340`): kept 0/14 again, all `plateau`, but with 0 gate refusals (26 before) and 19 of
+22 `edit_lines` calls on an absolute path, all allowed. The cause is now the model's use of the tool. 14 of 22 calls
+failed with "anchor ... does not match the file now" (5 with a bare line number and no hash, 9 with a wrong hash). Of
+the 8 applied edits (diffed against the first read of each file): 3 made one of the two required edits and never the
+second (score 0.25), 3 replaced the wrong line by one (a `[lights]` header or `on_hour` for `off_hour`), 2 pasted
+multi-line content that duplicated sections or put junk over a header. Not looked at: whether the model re-read after
+an anchor error, and what the grader checks beyond the file. Hashline editing costs the 8B all 14 instances, with
+`kept-E1` at 14/14, after two gate fixes.
+
+Decision (2026-11-05, the user): E1 is dropped for the 8B. In the product the 8B is the reviewer, which runs the full
+profile, so nothing there changes. In measurements the 8B runs `kept-E1`, never `kept`; 3B runs stay on `kept`. The 3B
+never called `edit_lines` in any run, so E1 has not been shown to help any model.
+
 Plan, in order:
-1. re-run kept on the 8B on harness 19 (cloud, results branch `cloud-8b-cfg-3`):
-   `bench/families_run.py --split dev --n 14 --families config_edit --arms kept --model granite4.1:8b
-   --budget-seconds 1800 --out runs/cloud-8b-cfg-3`, with `base.jsonl` copied in from `cloud-8b-cfg-2` (same
-   instances, 14/14). If kept still fails, read why the accepted edits fail verification; the alternative is to drop
-   E1 from kept for the 8B.
+1. Nothing else needs compute until the user's GPU machines are ready (up to 5 days, offered 2026-11-05). When they
+   are: the 8B on all 8 families, `--arms base,kept-E1`, dev seeds, n = 14 (224 instances), to answer whether the 8B
+   with the kept items beats its own base; it also decides the 8B-as-default question this machine cannot test.
 2. Arithmetic on the 8B stays open: it never calls `run_command`; a script hold (F2), a calculator (G1) and a repeat
    note (H2) did not move the 3B, so a nudge for the 8B is a new candidate, not a family.
 
