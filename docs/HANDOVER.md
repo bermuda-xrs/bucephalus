@@ -217,6 +217,14 @@ Plan, in order:
    keeps them in `shard_cards`, so mismatched setups show.
 2. Arithmetic on the 8B stays open: it never calls `run_command`; a script hold (F2), a calculator (G1) and a repeat
    note (H2) did not move the 3B, so a nudge for the 8B is a new candidate, not a family.
+3. The console takes the look of the official Hermes Agent UI (NousResearch/hermes-agent, MIT; the user's choice
+   2026-11-07): restyled in our plain JS, no React, no build, no npm, their brand fonts and names not copied, the CSP
+   unchanged. `tests/test_console_reskin_guards.py` holds every route, control, pane, view and slash command the
+   console had, refuses a call to a route the server lacks, and holds WCAG AA. Done: the dashboard shell and palette
+   (nav sidebar, Control Center panes as pages, Hermes Teal / blue light). Next: the chat thread after their desktop
+   app's chat, then each page in their page patterns. Later, each its own plan: the dashboard pages we lack
+   (analytics, docs, profiles, config editor, keys, MCP, plugins, webhooks, pairing, system), each with risks
+   written down before it is built (plugins on our origin could sign plans; keys need storage off OneDrive).
 
 The branches already in `main` were deleted on 2026-10-27 at the user's yes; the tags stay.
 

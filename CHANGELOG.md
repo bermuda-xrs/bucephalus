@@ -10,6 +10,17 @@
 Dates are commit dates. `0.1.0` is not released yet — see "Unreleased" for
 what still stands between here and a first iteration.
 
+## The Hermes look - 2026-11-07 (no HARNESS_VERSION change: console only)
+
+- The console takes the shell and palette of the Hermes Agent dashboard: a nav sidebar of uppercase page links, and
+  the Control Center panes as pages beside Chat instead of a dialog. Dark is Hermes Teal (`#041C1C` ground,
+  `#FFE6CB` ink, amber and green from their warning and success); light is their blue on blue with secondary text
+  darkened to pass AA. The theme file carries the same colours, so the TUI matches. Supersedes U6's palette; the
+  plan card stays the one bold element and `--danger` stays integrity only. MIT notice in `THIRD_PARTY_NOTICES.md`.
+- `tests/test_console_reskin_guards.py` pins what the console offered before (routes, actions, panes, views,
+  slash commands), refuses calls to routes the server lacks, and checks WCAG AA for every text colour on every
+  surface in both themes.
+
 ## Sharded family runs - 2026-11-06 (no HARNESS_VERSION change: bench tooling)
 
 - `bench/families_run.py --shard K/N` runs every N-th instance; `bench/families_merge.py` pools the shard folders into
