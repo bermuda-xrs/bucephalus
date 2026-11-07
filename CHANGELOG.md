@@ -21,6 +21,13 @@ what still stands between here and a first iteration.
   slash commands), refuses calls to routes the server lacks, and checks WCAG AA for every text colour on every
   surface in both themes.
 
+## Unanswerable full stop - 2026-11-07 (no HARNESS_VERSION change: a task family, unanswerable family_version 2)
+
+- The museum FAQ wrote "The answer: 60 minutes." and the task asks for the answer "exactly as written", so a copied
+  full stop failed the exact match while arguably being right. The answer now ends its own line with no full stop.
+  Same random stream: every instance's question and expected answer are unchanged (pinned by digest), and only
+  unanswerable's `family_version` moves (`tests/test_families.py`). Earlier unanswerable numbers do not compare.
+
 ## Sharded family runs - 2026-11-06 (no HARNESS_VERSION change: bench tooling)
 
 - `bench/families_run.py --shard K/N` runs every N-th instance; `bench/families_merge.py` pools the shard folders into

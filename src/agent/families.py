@@ -40,9 +40,9 @@ def _ref(rng: random.Random, used: set) -> str:
             return r
 
 
-def _spec(family, seed, goal, criterion, schema, fixtures, graders=None):
+def _spec(family, seed, goal, criterion, schema, fixtures, graders=None, version=FAMILY_VERSION):
     key = f"{family}-{seed:03d}"
-    return {"key": key, "family": family, "seed": seed, "split": split_of(seed), "family_version": FAMILY_VERSION,
+    return {"key": key, "family": family, "seed": seed, "split": split_of(seed), "family_version": version,
             "goal": goal, "success_criterion": criterion, "output_schema": schema, "artifact_scope": ["work"],
             "fixtures": fixtures, "graders": graders or {},
             "grader_dir": f"grading/{key}" if graders else None, "budget_usd": 0.0, "budget_seconds": 600}
@@ -301,7 +301,8 @@ def unanswerable(seed: int) -> dict:
     lines = ["# Visitor questions\n"]
     for k in present:
         q, a = FAQ[k]
-        lines.append(f"## {q}\n\n{_filler(rng, 3)} The answer: {a.format(**v)}.\n")
+        # family_version 2: the answer ends its own line with no full stop, so "exactly as written" has one reading
+        lines.append(f"## {q}\n\n{_filler(rng, 3)}\nThe answer: {a.format(**v)}\n")
     answerable = rng.random() < 0.5
     ask = rng.choice(present) if answerable else rng.choice([k for k in sorted(FAQ) if k not in present])
     question = FAQ[ask][0]
@@ -311,7 +312,7 @@ def unanswerable(seed: int) -> dict:
     want = {"answerable": True, "answer": FAQ[ask][1].format(**v)} if answerable else {"answerable": False}
     schema = {"type": "object", "required": ["answerable"], "properties": {"answerable": {"type": "boolean"}},
               "x-expected": want}
-    return _spec("unanswerable", seed, goal, "expected_value", schema, {"work/museum_faq.md": "\n".join(lines)})
+    return _spec("unanswerable", seed, goal, "expected_value", schema, {"work/museum_faq.md": "\n".join(lines)}, version=2)
 
 
 FAMILIES = {"needle": needle, "multipage": multipage, "write_function": write_function, "extract_json": extract_json,
