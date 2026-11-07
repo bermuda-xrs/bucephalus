@@ -154,9 +154,14 @@ kbd { border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 3p
 .welcome { color: var(--dim); max-width: 520px; margin: 12vh auto 0; }
 .welcome h2 { color: var(--text); font-size: 24px; font-weight: 600; letter-spacing: -.01em; margin: 0 0 8px; }
 
-/* the request is a log line, not a chat bubble */
-.ask-bubble { border-left: 2px solid var(--dim); padding: 2px 0 2px 12px; white-space: pre-wrap; font-weight: 500; }
-.ask-meta { color: var(--dim); font: 11px/1.5 var(--mono); margin-top: 4px; padding-left: 14px; }
+/* Chat after the Hermes desktop app: the request is a bubble that stays in view over its own reply;
+   the reply is prose with quiet scaffolding; the plan card is the one bold thing. */
+.items { font-size: 14px; line-height: 1.5; }
+.exchange { display: flex; flex-direction: column; gap: 10px; }
+.ask-bubble { position: sticky; top: -22px; z-index: 3; background: var(--panel); border: 1px solid var(--line);
+              border-radius: 12px; padding: 8px 12px; white-space: pre-wrap; overflow-wrap: anywhere;
+              max-height: 9em; overflow: auto; }
+.ask-meta { color: var(--dim); font: 11px/1.5 var(--mono); margin-top: -6px; padding-left: 13px; }
 
 .card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); padding: 14px 16px; }
 .card h3 { margin: 0 0 6px; font-size: 11.5px; font-weight: 400; text-transform: uppercase; letter-spacing: .12em; color: var(--dim); }
@@ -173,8 +178,10 @@ kbd { border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 3p
 .settle ul { margin: 2px 0 8px; padding-left: 18px; }
 .settle .lbl { color: var(--dim); font-size: 12px; }
 .track { list-style: none; margin: 0 0 12px; padding: 0; }
-.track > li { display: grid; grid-template-columns: 28px 1fr auto; gap: 12px; padding: 10px 0;
-              border-top: 1px solid var(--line); }
+/* steps on a rail, after the desktop app's timeline */
+.track > li { display: grid; grid-template-columns: 28px 1fr auto; gap: 12px; padding: 10px 0; position: relative; }
+.track > li:not(:last-child)::before { content: ""; position: absolute; left: 12px; top: 36px; bottom: -8px;
+                                       width: 1px; background: var(--line); }
 .track > li.empty { display: block; }
 .track .node { width: 24px; height: 24px; border-radius: var(--r-sm); border: 1px solid var(--line);
                display: grid; place-items: center; font: 11px var(--mono); color: var(--dim); }
@@ -213,35 +220,38 @@ kbd { border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 3p
 .budget i { display: block; height: 100%; background: var(--accent); }
 .prefill { color: var(--dim); font-size: 13px; margin: 6px 0; }
 .live { font-family: var(--mono); font-size: 12.5px; white-space: pre-wrap; max-height: 260px; overflow: auto;
-        background: var(--ground); border-radius: var(--r-sm); padding: 8px 10px; margin: 6px 0; }
+        background: var(--panel); border-radius: var(--r-sm); padding: 8px 10px; margin: 6px 0; }
 .live:empty { display: none; }
-.tools { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
-.tool { border: 1px solid var(--line-soft); background: var(--ground); border-radius: var(--r-sm); padding: 5px 10px; font-size: 12px;
+.tools { display: flex; flex-direction: column; gap: 2px; margin-top: 6px; }
+.tool { padding: 1px 0; font-size: 12px; color: var(--dim);
         display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: baseline; }
-.tool .name { font-family: var(--mono); font-weight: 600; }
-.tool .pv { font-family: var(--mono); color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.tool .res { color: var(--dim); white-space: nowrap; }
+.tool:hover { color: var(--text); }
+.tool .name { font-family: var(--mono); }
+.tool .name .quiet { padding: 0; color: inherit; }
+.tool .pv { font-family: var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tool .res { white-space: nowrap; }
 .tool.ok .res { color: var(--done); }
 .tool.bad .res { color: var(--needs); }
-.answer { border-color: color-mix(in srgb, var(--done) 45%, var(--line)); }
+/* the reply side has no card chrome: it reads as prose, indented to the bubble's text */
+.card.run, .card.answer, .card.drafting { background: none; border: 0; border-radius: 0; padding: 0 13px; }
+.card.drafting { font-size: 13px; }
 .answer pre { white-space: pre-wrap; word-break: break-word; margin: 0; font-family: var(--sans); font-size: 14px; }
 .st-done { color: var(--done); }
 .st-needs { color: var(--needs); }
 
 /* ------------------------------------------------------------ composer */
-/* one input box: the text and its controls share a border, like an editor pane */
-.composer { padding: 12px 18px 14px; background: var(--ground); }
-.composer textarea { display: block; width: 100%; max-width: 920px; margin: 0 auto; resize: vertical; min-height: 64px;
-                     background: var(--panel); border: 1px solid var(--line); border-bottom: 0;
-                     border-radius: var(--r) var(--r) 0 0; padding: 10px 12px; }
-.composer textarea:focus-visible { outline: none; border-color: var(--dim); }
-.composer textarea:focus-visible + .controls { border-color: var(--dim); }
-.controls { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; max-width: 920px; margin: 0 auto;
-            background: var(--panel); border: 1px solid var(--line); border-top-color: var(--line-soft);
-            border-radius: 0 0 var(--r) var(--r); padding: 6px 6px 6px 8px; }
-.controls .send { margin-left: auto; }
-.chip { background: none; border: 1px solid var(--line); border-radius: var(--r-sm); padding: 2px 8px; font: 11.5px/1.6 var(--mono);
-        color: var(--dim); cursor: pointer; display: inline-flex; gap: 6px; align-items: center; }
+/* one floating surface, text over a row of pills, after the desktop app's composer */
+.composer { width: calc(100% - 36px); max-width: 920px; margin: 6px auto 14px; background: var(--panel);
+            border: 1px solid var(--line); border-radius: 12px; }
+.composer:focus-within { border-color: var(--dim); }
+.composer textarea { display: block; width: 100%; resize: vertical; min-height: 64px; background: none; border: 0;
+                     padding: 10px 12px 4px; }
+.composer textarea:focus-visible { outline: none; }
+.controls { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; padding: 4px 6px 6px 8px; }
+.controls .send { margin-left: auto; border-radius: 999px; }
+.chip { background: var(--raised); border: 1px solid transparent; border-radius: 999px; padding: 1px 9px;
+        font: 11.5px/1.6 var(--mono); color: var(--dim); cursor: pointer; display: inline-flex; gap: 6px; align-items: center; }
+.chip:hover { color: var(--text); }
 .field-chip { cursor: default; }
 .field-chip input { background: none; border: 0; border-bottom: 1px solid var(--line); padding: 0 2px; width: 7ch; color: var(--text); }
 .ring-wrap { display: flex; align-items: center; gap: 6px; margin-left: auto; font: 11.5px var(--mono); color: var(--dim); }
@@ -350,7 +360,8 @@ td.r, th.r { text-align: right; }
           box-shadow: 8px 0 24px rgba(0, 0, 0, .35); }
   .app.side-open .side { display: flex; }
   .items { padding: 14px 12px 8px; }
-  .composer { padding: 10px 12px 12px; }
+  .composer { width: calc(100% - 24px); margin: 4px auto 12px; }
+  .ask-bubble { top: -14px; }
   .ring-wrap { margin-left: 0; }
   #chipModel, #chipProfile { display: none; }   /* in Settings; the composer stays two rows */
   .plan { padding: 16px 14px; }
@@ -373,8 +384,8 @@ td.r, th.r { text-align: right; }
 .md p, .md ul, .md ol, .md blockquote, .md pre { margin: 0 0 10px; }
 .md ul, .md ol { padding-left: 22px; }
 .md h4, .md h5, .md h6 { margin: 14px 0 6px; font-size: 14.5px; }
-.md code { font-family: var(--mono); font-size: 12.5px; background: var(--ground); border-radius: 4px; padding: 1px 4px; }
-.md pre.code { position: relative; background: var(--ground); border-radius: var(--r-sm); padding: 26px 12px 10px;
+.md code { font-family: var(--mono); font-size: 12.5px; background: var(--panel); border-radius: 4px; padding: 1px 4px; }
+.md pre.code { position: relative; background: var(--panel); border-radius: var(--r-sm); padding: 26px 12px 10px;
   overflow-x: auto; white-space: pre; }
 .md pre.code code { background: none; padding: 0; }
 .md pre.code .copy { position: absolute; top: 4px; right: 4px; font-size: 11.5px; }
@@ -390,6 +401,13 @@ td.r, th.r { text-align: right; }
 .tool-detail { grid-column: 1 / -1; min-width: 0; }
 .tool-detail pre.code { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 22rem; overflow: auto; }
 .changes pre.code { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 28rem; overflow: auto; }
+/* changes and rewind: the desktop app's changed-files card */
+.changes, .rewind { border: 1px solid var(--line); border-radius: 12px; background: var(--panel); margin-top: 8px;
+                    overflow: hidden; }
+.changes > details + details { border-top: 1px solid var(--line-soft); }
+.changes summary { padding: 6px 12px; font: 12px/1.5 var(--mono); color: var(--dim); cursor: pointer; }
+.changes pre.code { margin: 0; padding: 8px 12px; background: var(--ground); }
+.changes > .note, .rewind { padding: 8px 12px; }
 
 /* ------------------------------------------------------------ views and trace */
 .views { display: inline-flex; flex: none; border: 1px solid var(--line); border-radius: var(--r-sm); overflow: hidden; }
