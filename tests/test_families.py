@@ -118,3 +118,25 @@ def test_every_write_function_kind_appears_in_each_split():
     for split in ("dev", "heldout"):
         kinds = {re.search(r"function (\w+)\(", s["goal"]).group(1) for s in F.instances(["write_function"], split)}
         assert len(kinds) == len(F.REFERENCE)
+
+
+def test_an_unanswerable_answer_is_not_followed_by_a_full_stop():
+    # "exactly as written" read "The answer: 60 minutes." as "60 minutes." and failed the exact match
+    for seed in range(F.SEEDS):
+        spec = F.generate("unanswerable", seed)
+        want = spec["output_schema"]["x-expected"]
+        doc = spec["fixtures"]["work/museum_faq.md"]
+        assert "The answer: " in doc and not any(line.rstrip().endswith(".") for line in doc.splitlines()
+                                                 if line.startswith("The answer: ") or " The answer: " in line)
+        if want["answerable"]:
+            assert f"The answer: {want['answer']}\n" in doc
+        assert spec["family_version"] == 2
+
+
+def test_the_full_stop_fix_left_every_instance_the_same():
+    import hashlib
+
+    d = json.dumps([[F.generate(f, s)["output_schema"].get("x-expected"), F.generate(f, s)["goal"]]
+                    for f in F.FAMILIES for s in range(F.SEEDS)], sort_keys=True, default=str)
+    assert hashlib.sha256(d.encode()).hexdigest() == "1d2ddc206f7ffad0cec672fc53bf82f99450f17fa53f34a78c4e7768cbb44590"
+    assert {F.generate(f, 0)["family_version"] for f in F.FAMILIES if f != "unanswerable"} == {1}
