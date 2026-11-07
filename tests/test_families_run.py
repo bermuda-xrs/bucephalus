@@ -43,3 +43,52 @@ def test_a_slower_machine_can_be_given_a_longer_budget_and_the_summary_says_so(t
     _, seen, out = _run(tmp_path / "b", monkeypatch, "--budget-seconds", "1800")
     assert seen["specs"] and {s["budget_seconds"] for s in seen["specs"]} == {1800}
     assert json.loads((out / "summary.json").read_text(encoding="utf-8"))["budget_seconds"] == 1800
+
+
+def test_shards_partition_the_instances_and_the_run_takes_only_its_own(tmp_path, monkeypatch):
+    keys = []
+    for k in range(3):
+        _, _, out = _run(tmp_path / f"s{k}", monkeypatch, "--shard", f"{k}/3", "--n", "5")
+        keys.append([json.loads(x)["key"] for x in (out / "base.jsonl").read_text(encoding="utf-8").splitlines()])
+        assert json.loads((out / "summary.json").read_text(encoding="utf-8"))["shard"] == f"{k}/3"
+    _, _, out = _run(tmp_path / "all", monkeypatch, "--n", "5")
+    every = [json.loads(x)["key"] for x in (out / "base.jsonl").read_text(encoding="utf-8").splitlines()]
+    assert sorted(sum(keys, [])) == sorted(every) and len(set(sum(keys, []))) == len(every)
+    assert max(map(len, keys)) - min(map(len, keys)) <= 1
+
+
+def test_a_bad_shard_is_refused(tmp_path, monkeypatch):
+    import pytest
+
+    for bad in ("3/3", "0/0", "x", "-1/2"):
+        with pytest.raises(SystemExit):
+            _run(tmp_path / bad.replace("/", "_"), monkeypatch, "--shard", bad)
+
+
+def test_merging_shards_pools_the_rows_and_summarises_once(tmp_path):
+    import families_merge
+
+    for i, (k, ok) in enumerate((("a-000", True), ("a-002", False))):
+        d = tmp_path / f"s{i}"
+        d.mkdir()
+        for arm, passed in (("base", True), ("kept", ok)):
+            (d / f"{arm}.jsonl").write_text(json.dumps({"key": k, "family": "a", "status": "done", "passed": passed}) + "\n",
+                                            encoding="utf-8")
+        (d / "cards.json").write_text(json.dumps({"base": {"machine": f"pc{i}"}}), encoding="utf-8")
+    s = families_merge.merge([tmp_path / "s0", tmp_path / "s1"], tmp_path / "pooled")
+    assert s["arms"] == {"base": {"passes": 2, "n": 2}, "kept": {"passes": 1, "n": 2}}
+    assert len((tmp_path / "pooled" / "kept.jsonl").read_text(encoding="utf-8").splitlines()) == 2
+    assert [c["base"]["machine"] for c in s["shard_cards"]] == ["pc0", "pc1"]
+
+
+def test_merging_refuses_one_instance_measured_twice(tmp_path):
+    import families_merge
+    import pytest
+
+    for i in range(2):
+        d = tmp_path / f"s{i}"
+        d.mkdir()
+        (d / "base.jsonl").write_text(json.dumps({"key": "a-000", "family": "a", "status": "done", "passed": True}) + "\n",
+                                      encoding="utf-8")
+    with pytest.raises(ValueError, match="a-000"):
+        families_merge.merge([tmp_path / "s0", tmp_path / "s1"], tmp_path / "pooled")

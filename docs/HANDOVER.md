@@ -205,9 +205,16 @@ profile, so nothing there changes. In measurements the 8B runs `kept-E1`, never 
 never called `edit_lines` in any run, so E1 has not been shown to help any model.
 
 Plan, in order:
-1. Nothing else needs compute until the user's GPU machines are ready (up to 5 days, offered 2026-11-05). When they
-   are: the 8B on all 8 families, `--arms base,kept-E1`, dev seeds, n = 14 (224 instances), to answer whether the 8B
-   with the kept items beats its own base; it also decides the 8B-as-default question this machine cannot test.
+1. Nothing else needs compute until the user's GPU machines are ready (up to 5 days, offered 2026-11-05). The question,
+   fixed before the run: does the 8B with the kept items minus E1 (`kept-E1`) beat its own `base`? Both arms on all 8
+   families, dev seeds, n = 14 (112 instances, 224 runs), window 16384, `--budget-seconds 1800`; pooled McNemar exact
+   on `kept-E1` vs `base`, per-family counts reported next to it, no other arm and no re-cut afterwards. The odd
+   (held-out) seeds stay unused for a confirmation. It also decides the 8B-as-default question this machine cannot
+   test. Many machines: each runs `bench/families_run.py ... --shard K/N --out <its own folder>` (same `N` everywhere;
+   a shard holds every N-th instance, with both arms of an instance on one machine), then
+   `bench/families_merge.py <folders> --out <pooled>` writes the pooled jsonl and summary and refuses an instance
+   measured in two shards. Each shard's `cards.json` records its model-server version and quantization; the merge
+   keeps them in `shard_cards`, so mismatched setups show.
 2. Arithmetic on the 8B stays open: it never calls `run_command`; a script hold (F2), a calculator (G1) and a repeat
    note (H2) did not move the 3B, so a nudge for the 8B is a new candidate, not a family.
 

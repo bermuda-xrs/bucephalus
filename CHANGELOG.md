@@ -10,6 +10,12 @@
 Dates are commit dates. `0.1.0` is not released yet — see "Unreleased" for
 what still stands between here and a first iteration.
 
+## Sharded family runs - 2026-11-06 (no HARNESS_VERSION change: bench tooling)
+
+- `bench/families_run.py --shard K/N` runs every N-th instance; `bench/families_merge.py` pools the shard folders into
+  one summary and refuses an instance measured twice (`tests/test_families_run.py`). For running the 8B across many
+  machines.
+
 ## E1 not for the 8B - 2026-11-05 (no HARNESS_VERSION change: a decision about which arm to measure)
 
 - On harness 19 the 8B scores 0/14 on config_edit under `kept` with no gate refusal: `edit_lines` calls fail on anchors
