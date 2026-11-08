@@ -897,6 +897,7 @@ async function openPane(name) {
   try { body.innerHTML = await PANES[name](); } catch (e) { body.innerHTML = `<p class="caveat">${esc(e.message)}</p>`; }
   body.focus();
   if (name === "suites") loadSuites();
+  if (name === "docs" && $("#docBody")) readDoc(S.doc || "README.md");
   if (name === "files" && $("#dropPg")) { wireDrop($("#dropPg")); if (S.filesTask) loadFiles(S.filesTask, S.filesPath || ""); }
 }
 $(".nav-list").addEventListener("click", e => { const b = e.target.closest("button[data-pane]"); if (b) openPane(b.dataset.pane); });
@@ -997,6 +998,20 @@ const PANES = {
       <h4>By purpose</h4><table><tr><th>Purpose</th><th class="r">Calls</th><th class="r">Tokens</th></tr>
         ${d.purposes.map(p => `<tr><td>${esc(p.purpose)}</td><td class="r">${p.calls}</td><td class="r">${ktok(p.tokens)}</td></tr>`).join("")
           || '<tr><td colspan="3" class="empty">No model calls in this period.</td></tr>'}</table>`;
+  },
+  async docs() {
+    const d = await api("/documents");
+    if (!d.available) return `<h3>Docs</h3><p class="note">The documents live beside the source, and an installed
+      copy has none. Read them in the repository.</p>`;
+    return `<h3>Docs</h3><p class="lede">The project's own documents, read only. Frozen ones are records and are never
+      edited; live ones change with the work.</p>
+      <div class="split"><nav class="task-list doc-list" aria-label="Documents">
+        <input id="docQ" class="search" type="search" placeholder="Filter by title" aria-label="Filter documents" autocomplete="off">
+        ${d.docs.map(x => `<button class="side-item" data-action="readDoc" ${args(x.name)}
+          data-title="${esc((x.title + " " + x.name).toLowerCase())}" aria-current="${x.name === S.doc}">
+          <span class="t">${esc(x.title)}</span><span class="s">${esc(x.where ? x.where + "/" : "")}${esc(x.name)}${x.kind
+            ? `, ${x.kind}` : ""}</span></button>`).join("")}</nav>
+        <article class="doc md" id="docBody" tabindex="0" aria-label="Document"></article></div>`;
   },
   async memory() {
     const m = await api("/memory");
@@ -1169,6 +1184,13 @@ function useModel(m) { modelCall(post("/models/select", {model: m}), () => `New 
 function loadModel(m) { toast(`Loading ${m}`); modelCall(post("/models/run", {model: m}), r => `${m} is loaded (${r.seconds} s).`); }
 function unloadModel(m) { modelCall(post("/models/unload", {model: m}), () => `${m} is out of memory.`); }
 function anDays(n) { S.anDays = n; openPane("analytics"); }
+async function readDoc(name) {
+  let d;
+  try { d = await api("/documents/" + encodeURIComponent(name)); } catch (e) { return toast(e.message, true); }
+  S.doc = name;
+  $$(".doc-list .side-item").forEach(b => b.setAttribute("aria-current", String(b.dataset.args === JSON.stringify([name]))));
+  const el = $("#docBody"); el.innerHTML = renderMarkdown(d.text); el.scrollTop = 0;
+}
 async function forgetMemory(text) {
   if (!confirm(`Forget this line?\n\n${text}`)) return;
   try { const r = await post("/memory/forget", {text}); toast(`Forgot ${r.removed.length} line${r.removed.length === 1 ? "" : "s"}.`); openPane("memory"); }
@@ -1347,7 +1369,7 @@ const COMMANDS = [
   ["Models", "openPane", "models"], ["Analytics", "openPane", "analytics"], ["Memory", "openPane", "memory"], ["Schedules", "openPane", "schedules"],
   ["Channels", "openPane", "channels"], ["Skills", "openPane", "skills"], ["Eval suites", "openPane", "suites"],
   ["Reviewer policy", "openPane", "policy"], ["Integrity", "openPane", "integrity"],
-  ["Measurement", "openPane", "measurement"], ["Settings", "openPane", "settings"], ["Logs", "openPane", "logs"],
+  ["Measurement", "openPane", "measurement"], ["Settings", "openPane", "settings"], ["Logs", "openPane", "logs"], ["Docs", "openPane", "docs"],
 ];
 let PAL = [], PAL_I = 0;
 function openPalette() {
@@ -1411,13 +1433,18 @@ const ACTIONS = {newConversation, selectConversation, renameConversation, archiv
   toggleTheme, acceptMemory, createSuite, saveTask, closeSuite, addSkill, savePolicy,
   openSuite, delSuite, delTask, checkGate, pinConversation, exportConversation, enableNotifications,
   runModel, stopTask, resumeTask, toggleTool, setView, closeTrace, traceTask, traceNode, closeTraceDetail, showRewind, showChanges, doRewind, askAgain, editAsk, copyAnswer, copyCode, forgetMemory, addSchedule, removeSchedule, viewSkill,
-  patchConversation, exportOne, sessArchived, pickWorkspace, useModel, loadModel, unloadModel, anDays};
+  patchConversation, exportOne, sessArchived, pickWorkspace, useModel, loadModel, unloadModel, anDays, readDoc};
 document.addEventListener("click", e => {
   $$("details.more[open]").forEach(d => { if (!d.contains(e.target)) d.open = false; });
   const el = e.target.closest("[data-action]");
   if (!el || !ACTIONS[el.dataset.action]) return;
   const menu = el.closest("details.more"); if (menu) menu.open = false;
   ACTIONS[el.dataset.action](...(el.dataset.args ? JSON.parse(el.dataset.args) : [el]));
+});
+document.addEventListener("input", e => {
+  if (e.target.id !== "docQ") return;
+  const q = e.target.value.trim().toLowerCase();
+  $$(".doc-list .side-item").forEach(b => { b.hidden = !b.dataset.title.includes(q); });
 });
 document.addEventListener("change", e => {
   if (e.target.dataset.change === "critChanged") critChanged();

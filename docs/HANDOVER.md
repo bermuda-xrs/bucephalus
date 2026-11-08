@@ -229,7 +229,7 @@ Plan, in order:
    plan (2026-11-08) in four waves by risk: 1 Analytics, Docs, Sessions/Files/Schedules gaps; 2 System, MCP read-only;
    3 config editor with a sign step, write-only keys, Telegram pairing; 4 loopback webhooks. Plugins, the skills hub,
    MCP install, MoA, cloud providers, update/restart/restore and anything that sends data out are not built.
-   Done: Analytics (measurement tasks carry `origin='bench'` and are left out).
+   Done: Analytics (measurement tasks carry `origin='bench'` and are left out); Docs (read only, source checkout).
 
 The branches already in `main` were deleted on 2026-10-27 at the user's yes; the tags stay.
 
