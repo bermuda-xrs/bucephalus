@@ -10,11 +10,34 @@
 <a class="skip" href="#ask">Skip to the composer</a>
 <div class="app files-closed" id="app">
 
-  <aside class="side" id="side" aria-label="Conversations">
+  <aside class="nav" aria-label="Navigation">
     <div class="brand">
       <pre id="banner" class="banner" aria-hidden="true"></pre>
-      <p class="health" id="health">Connecting</p>
     </div>
+    <nav class="nav-list" aria-label="Pages">
+      <button class="nav-item" data-action="closeControl" id="navChat" aria-current="true">Chat</button>
+      <button class="nav-group" data-action="openControl" title="Back to the page you last had open">Control Center</button>
+      <button class="nav-item" data-pane="memory">Memory</button>
+      <button class="nav-item" data-pane="schedules">Schedules</button>
+      <button class="nav-item" data-pane="channels">Channels</button>
+      <button class="nav-item" data-pane="skills">Skills</button>
+      <button class="nav-item" data-pane="suites">Eval suites</button>
+      <button class="nav-item" data-pane="policy">Reviewer policy</button>
+      <button class="nav-item" data-pane="integrity">Integrity</button>
+      <button class="nav-item" data-pane="measurement">Measurement</button>
+      <button class="nav-item" data-pane="settings">Settings</button>
+      <button class="nav-item" data-pane="logs">Logs</button>
+    </nav>
+    <footer class="nav-foot">
+      <p class="health" id="health">Connecting</p>
+      <div class="row">
+        <button class="quiet" data-action="toggleTheme">Light or dark</button>
+        <button class="quiet kbd" data-action="openPalette" aria-label="Command palette, Control K"><kbd>Ctrl</kbd><kbd>K</kbd></button>
+      </div>
+    </footer>
+  </aside>
+
+  <aside class="side" id="side" aria-label="Conversations">
     <button class="btn new" data-action="newConversation">New conversation</button>
     <input id="convSearch" class="search" type="search" placeholder="Search conversations"
            aria-label="Search conversations" autocomplete="off">
@@ -27,10 +50,6 @@
       <nav id="convList" aria-label="Conversation list"></nav>
       <button class="quiet" id="archToggle" data-action="toggleArchived">Show archived</button>
     </section>
-    <footer class="side-foot">
-      <button class="cc-open" data-action="openControl">Control Center</button>
-      <button class="quiet kbd" data-action="openPalette" aria-label="Command palette, Control K"><kbd>Ctrl</kbd><kbd>K</kbd></button>
-    </footer>
   </aside>
 
   <main class="thread" aria-label="Conversation">
@@ -103,26 +122,10 @@
     <div id="filePreview" class="preview" tabindex="0" aria-label="File preview"></div>
     <div class="drop" id="drop" tabindex="0">Drop or paste a file here to add it to this task's workspace. It is marked untrusted: the agent reads it as data, never as instructions.</div>
   </aside>
-</div>
 
-<div class="overlay" id="control" hidden>
-  <div class="cc" role="dialog" aria-modal="true" aria-labelledby="ccTitle">
-    <nav class="cc-nav" aria-label="Control Center">
-      <h2 id="ccTitle">Control Center</h2>
-      <button data-pane="memory">Memory</button>
-      <button data-pane="schedules">Schedules</button>
-      <button data-pane="channels">Channels</button>
-      <button data-pane="skills">Skills</button>
-      <button data-pane="suites">Eval suites</button>
-      <button data-pane="policy">Reviewer policy</button>
-      <button data-pane="integrity">Integrity</button>
-      <button data-pane="measurement">Measurement</button>
-      <button data-pane="settings">Settings</button>
-      <button data-pane="logs">Logs</button>
-    </nav>
+  <main class="page" id="control" aria-label="Control Center" hidden>
     <section class="cc-body" id="ccBody" tabindex="-1"></section>
-    <button class="quiet cc-close" data-action="closeControl">Close</button>
-  </div>
+  </main>
 </div>
 
 <div class="overlay" id="palette" hidden>

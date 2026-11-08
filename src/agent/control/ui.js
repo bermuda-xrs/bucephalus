@@ -150,7 +150,7 @@ $("#convSearch").addEventListener("input", () => { clearTimeout(searchTimer);
   searchTimer = setTimeout(() => { S.lastSide = ""; loadSide(); }, 200); });
 
 async function newConversation() {
-  closeStreams(); S.conv = null; S.thread = null; S.loose = null; clearTrace();
+  showPage(false); closeStreams(); S.conv = null; S.thread = null; S.loose = null; clearTrace();
   $("#convTitle").textContent = "New conversation";
   renderWelcome(); S.lastSide = ""; loadSide(); updateRing(null); $("#ask").focus();
   closeSideOnPhone();
@@ -162,6 +162,7 @@ function renderWelcome() {
     <p>A follow-up in the same conversation is a new task, with its own plan.</p></div>`;
 }
 async function selectConversation(id) {
+  showPage(false);
   if (id !== S.conv) { closeStreams(); S.traceTask = null; S.trace = null; }
   S.conv = id; S.loose = null; S.lastSide = "";
   await refreshThread(true); loadSide(); closeSideOnPhone();
@@ -496,7 +497,7 @@ async function looseItem(taskId) {
           budget: t.budget, plan, approvals: gates.pending, answer: t.answer_shown};
 }
 async function openTaskAlone(taskId) {
-  closeStreams(); S.conv = null; S.thread = null; S.loose = taskId;
+  showPage(false); closeStreams(); S.conv = null; S.thread = null; S.loose = taskId;
   const it = await looseItem(taskId);
   S.looseGoal = it.goal;
   $("#convTitle").textContent = firstLine(it.goal);
@@ -507,7 +508,7 @@ async function openTaskAlone(taskId) {
   closeSideOnPhone();
 }
 async function openLooseList() {
-  closeStreams(); S.conv = null; S.loose = null; clearTrace();
+  showPage(false); closeStreams(); S.conv = null; S.loose = null; clearTrace();
   const d = await api("/tasks");
   const loose = [];
   for (const t of d.tasks) loose.push(`<button class="side-item" data-action="openTaskAlone" ${args(t.task_id)}>
@@ -875,23 +876,25 @@ const drop = $("#drop");
 drop.addEventListener("drop", e => { e.preventDefault(); [...e.dataTransfer.files].forEach(upload); });
 drop.addEventListener("paste", e => { [...(e.clipboardData || {}).files || []].forEach(upload); });
 
-function openControl() {
-  if ($("#control").hidden) RETURN_FOCUS = document.activeElement;
-  $("#control").hidden = false; openPane(S.pane);
+function showPage(on) {
+  $("#control").hidden = !on; $(".thread").hidden = on;
+  $("#app").classList.toggle("page-on", on);
+  $("#navChat").setAttribute("aria-current", String(!on));
+  if (!on) $$(".nav-list [data-pane]").forEach(b => b.setAttribute("aria-current", "false"));
 }
-function closeControl() { $("#control").hidden = true; restoreFocus(); }
+function openControl() { openPane(S.pane); }
+function closeControl() { showPage(false); }
 function restoreFocus() { const r = RETURN_FOCUS; RETURN_FOCUS = null; if (r && r.focus && r.offsetParent !== null) r.focus(); }
 async function openPane(name) {
-  if ($("#control").hidden) RETURN_FOCUS = document.activeElement;
-  S.pane = name; $("#control").hidden = false;
-  $$(".cc-nav button").forEach(b => b.setAttribute("aria-current", String(b.dataset.pane === name)));
+  S.pane = name; showPage(true); closeSideOnPhone();
+  $$(".nav-list [data-pane]").forEach(b => b.setAttribute("aria-current", String(b.dataset.pane === name)));
   const body = $("#ccBody");
   body.innerHTML = `<p class="note"><span class="spin"></span> Loading</p>`;
   try { body.innerHTML = await PANES[name](); } catch (e) { body.innerHTML = `<p class="caveat">${esc(e.message)}</p>`; }
   body.focus();
   if (name === "suites") loadSuites();
 }
-$(".cc-nav").addEventListener("click", e => { const b = e.target.closest("button[data-pane]"); if (b) openPane(b.dataset.pane); });
+$(".nav-list").addEventListener("click", e => { const b = e.target.closest("button[data-pane]"); if (b) openPane(b.dataset.pane); });
 
 const PANES = {
   async memory() {
@@ -1238,7 +1241,9 @@ function renderPalette() {
 }
 function runPalette(i) {
   const c = PAL[i]; if (!c) return;
-  closePalette(); ACTIONS[c[1]](...c.slice(2));
+  closePalette();
+  if (!["openControl", "openPane", "toggleTheme", "enableNotifications"].includes(c[1])) showPage(false);
+  ACTIONS[c[1]](...c.slice(2));
 }
 $("#palInput").addEventListener("input", () => { PAL_I = 0; renderPalette(); });
 $("#palInput").addEventListener("keydown", e => {
@@ -1247,10 +1252,10 @@ $("#palInput").addEventListener("keydown", e => {
   else if (e.key === "Enter") { runPalette(PAL_I); e.preventDefault(); }
 });
 $("#palList").addEventListener("click", e => { const li = e.target.closest("[data-pal]"); if (li) runPalette(Number(li.dataset.pal)); });
-function focusSearch() { $("#app").classList.remove("side-closed"); $("#app").classList.add("side-open"); $("#convSearch").focus(); }
+function focusSearch() { showPage(false); $("#app").classList.remove("side-closed"); $("#app").classList.add("side-open"); $("#convSearch").focus(); }
 
 function trapTab(e) {
-  const box = !$("#palette").hidden ? $("#palette") : !$("#control").hidden ? $("#control") : null;
+  const box = !$("#palette").hidden ? $("#palette") : null;
   if (!box || e.key !== "Tab") return;
   const f = [...box.querySelectorAll("button, input, textarea, select, [tabindex]:not([tabindex='-1'])")]
     .filter(x => !x.disabled && x.offsetParent !== null);
@@ -1270,14 +1275,11 @@ document.addEventListener("keydown", e => {
   }
   else if (e.key === "Escape") {
     if (!$("#palette").hidden) closePalette();
-    else if (!$("#control").hidden) closeControl();
     else if ($("details.more[open]")) $("details.more[open]").open = false;
     else closeSideOnPhone();
   }
 });
-for (const id of ["#palette", "#control"]) $(id).addEventListener("click", e => {
-  if (e.target === $(id)) { $(id).hidden = true; restoreFocus(); }
-});
+$("#palette").addEventListener("click", e => { if (e.target === $("#palette")) closePalette(); });
 
 const ACTIONS = {newConversation, selectConversation, renameConversation, archiveConversation,
   toggleArchived, openLooseList, openTaskAlone, openTaskOf, draft, showSendBack, sign, sendBack, decide,
