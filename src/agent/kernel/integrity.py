@@ -145,11 +145,25 @@ def verify_all(conn: sqlite3.Connection, log: EventLog, anchor: Anchor,
             findings.append(found)
     known = {r[0] for r in conn.execute("SELECT id FROM tasks").fetchall()}
     for task_id in sorted(anchor.all_tasks() - known):
-        if not task_id.startswith("plan:"):
+        if not task_id.startswith(("plan:", "schedule:")):
             findings.append({"task_id": task_id, "severity": "critical",
                              "detail": "the anchor has a checkpoint for this task and the "
                                        "database has no record of it - deleted after it "
                                        "was checkpointed"})
+    from ..schedule import seal
+
+    try:  # a record from before schedules has no table; this check never migrates what it reads
+        rows = conn.execute("SELECT id, spec, contract_json, budget_json FROM schedules "
+                            "WHERE removed_at IS NULL").fetchall()
+    except sqlite3.OperationalError:
+        rows = []
+    for r in rows:
+        s = dict(zip(("id", "spec", "contract_json", "budget_json"), r))
+        anchored = anchor.latest(f"schedule:{s['id']}")
+        if anchored and anchored != seal(s):
+            findings.append({"task_id": f"schedule:{s['id']}", "severity": "critical",
+                             "detail": f"schedule {s['id']} changed since it was created, so it will not fire; "
+                                       "remove it and add it again if the change is yours"})
     heads = anchor.chain_heads()
     for task_id in sorted(known):
         ok, bad = log.verify(task_id)

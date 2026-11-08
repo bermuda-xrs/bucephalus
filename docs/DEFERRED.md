@@ -12,6 +12,8 @@ An entry is removed in the change that closes it; its history is in git and CHAN
 | D33 | open: a HARNESS_VERSION change; its criterion is measured at zero |
 | D78 | known: a read-only MCP tool's arguments are checked by heuristics; `path_args` or `strict_paths` closes it per server |
 | D80 | known: what a hook collects from the workspace (a `conftest.py`) runs outside the sandbox |
+| D81 | decided: dashboard features not built, each needs its own plan and the user's go |
+| D82 | known: a schedule added before 2026-11-08 is sealed as it stands at its first tick |
 
 ---
 
@@ -263,3 +265,27 @@ A hook runs isolated (`-I`: no script directory, no user site, no `PYTHON*` vari
 and the files it names are protected state. What it loads on purpose from the workspace is not: a `pytest` hook collects
 a model-written `conftest.py` and runs it outside the sandbox. README says so. **What closes it:** run hooks in the
 sandbox.
+
+## D81 - dashboard features not built (2026-11-08)
+
+Decided with the plan for the pages the console lacked. Each would need its own plan and the user's go.
+
+| Feature | Why not |
+|---|---|
+| Session delete, prune-delete | Deleting tasks breaks the integrity chain on purpose; bulk archive covers tidying |
+| Session import | An imported task has no chain, so it would show records nothing can verify |
+| Skills hub search and install | Downloads third-party instructions that change the prompt; Add a candidate plus the gate is the path |
+| MCP catalog and install | Downloads and runs third-party code |
+| Plugins UI | Plugin script on the console's origin could read the token and sign plans; needs a separate-origin sandbox |
+| WhatsApp onboarding | Needs a third-party Node bridge |
+| Debug share, shared metrics | Send the user's data to a third party |
+| Update, restart, restore from the UI | Installs code from the network; kills the serving process; swaps the live database |
+| MoA, cloud providers, OAuth | Data leaves the machine and measurements change meaning |
+| Their docs in an iframe | The CSP forbids it, and it would advertise their product |
+
+## D82 - a schedule from before sealing is trusted at its first tick (2026-11-08)
+
+Since 2026-11-08 a schedule's spec, goal and budget are sealed in the anchor when it is added, and a firing whose
+row no longer matches is refused, recorded as `tampered`, pauses the schedule and is reported by `verify`. A schedule
+added before then has no seal; its first tick (or Run now) seals it as it stands. An edit to the database before that
+first tick would be sealed with it. Closes when no unsealed schedule remains: remove and re-add old ones to be sure.

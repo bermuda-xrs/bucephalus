@@ -615,3 +615,14 @@ def test_exec_runs_one_task_and_streams_json(cli):
     r = cli("exec", "say hello", "--scope", "work", "--output-format", "stream-json", "--approve-plan")
     rows = [json.loads(line) for line in r.stdout.splitlines() if line.strip()]
     assert rows[0]["type"] == "task.created" and rows[-1]["type"] == "result" and rows[-1]["exit_code"] == 0
+
+
+def test_schedule_pause_resume_and_run_now(cli):
+    sid = cli("schedule", "add", "0 3 * * *", "a goal to run by hand").stdout.split()[0]
+    assert "paused" in cli("schedule", "pause", "--id", sid).stdout
+    assert "no active schedule to pause" in cli("schedule", "pause", "--id", sid, expect=1).stdout
+    assert "resumed" in cli("schedule", "resume", "--id", sid).stdout
+    assert "fired" in cli("schedule", "run", "--id", sid).stdout
+    assert "not finished" in cli("schedule", "run", "--id", sid, expect=1).stdout
+    assert "no such active schedule" in cli("schedule", "run", "--id", "c_nosuch", expect=1).stdout
+    cli("schedule", "remove", "--id", sid)

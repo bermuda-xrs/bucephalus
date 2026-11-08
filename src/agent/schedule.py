@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import sqlite3
 import time
@@ -17,6 +18,10 @@ HORIZON_DAYS = 366 * 8
 
 
 class CronError(ValueError):
+    pass
+
+
+class Busy(RuntimeError):
     pass
 
 
@@ -116,21 +121,62 @@ class Cron:
         return None
 
 
-_SCOLS = ("id", "spec", "contract_json", "budget_json", "created_at")
+_SCOLS = ("id", "spec", "contract_json", "budget_json", "created_at", "paused_at")
 
 
-def add(conn: sqlite3.Connection, spec: str, contract: TaskContract,
-        budget: Budget, now: float | None = None) -> str:
+def seal(s: dict) -> str:
+    return hashlib.sha256(f"{s['spec']}\n{s['contract_json']}\n{s['budget_json']}".encode()).hexdigest()
+
+
+def _insert(conn: sqlite3.Connection, spec: str, contract: TaskContract, budget: Budget,
+            now: float, paused_at: float | None = None) -> str:
     Cron.parse(spec)
     sid = "c_" + uuid.uuid4().hex[:12]
     conn.execute(
         """INSERT INTO schedules(id, spec, contract_json, budget_json,
-                                 created_at, removed_at)
-           VALUES (?,?,?,?,?,NULL)""",
-        (sid, spec, contract.model_dump_json(), budget.model_dump_json(),
-         time.time() if now is None else now))
-    conn.commit()
+                                 created_at, removed_at, paused_at)
+           VALUES (?,?,?,?,?,NULL,?)""",
+        (sid, spec, contract.model_dump_json(), budget.model_dump_json(), now, paused_at))
     return sid
+
+
+def _seal_in(conn: sqlite3.Connection, anchor, sid: str) -> None:
+    if anchor is not None:
+        anchor.record(f"schedule:{sid}", seal(get(conn, sid)))
+
+
+def add(conn: sqlite3.Connection, spec: str, contract: TaskContract,
+        budget: Budget, now: float | None = None, anchor=None) -> str:
+    sid = _insert(conn, spec, contract, budget, time.time() if now is None else now)
+    conn.commit()
+    _seal_in(conn, anchor, sid)
+    return sid
+
+
+def replace(conn: sqlite3.Connection, sid: str, spec: str, contract: TaskContract,
+            budget: Budget, anchor=None, now: float | None = None) -> str | None:
+    old = next((x for x in active(conn) if x["id"] == sid), None)
+    if old is None:
+        return None
+    new = _insert(conn, spec, contract, budget, time.time() if now is None else now, old["paused_at"])
+    conn.execute("UPDATE schedules SET removed_at=? WHERE id=?", (time.time(), sid))
+    conn.commit()
+    _seal_in(conn, anchor, new)
+    return new
+
+
+def pause(conn: sqlite3.Connection, sid: str) -> bool:
+    cur = conn.execute("UPDATE schedules SET paused_at=? WHERE id=? AND removed_at IS NULL AND paused_at IS NULL",
+                       (time.time(), sid))
+    conn.commit()
+    return cur.rowcount == 1
+
+
+def resume(conn: sqlite3.Connection, sid: str) -> bool:
+    cur = conn.execute("UPDATE schedules SET paused_at=NULL WHERE id=? AND removed_at IS NULL "
+                       "AND paused_at IS NOT NULL", (sid,))
+    conn.commit()
+    return cur.rowcount == 1
 
 
 def remove(conn: sqlite3.Connection, sid: str) -> bool:
@@ -208,6 +254,7 @@ def tick(ctx, now: float | None = None) -> list[dict]:
     out: list[dict] = []
     busy = _measuring(ctx)
     for s in active(ctx.conn):
+        _seal_unsealed(ctx, s)
         cron = Cron.parse(s["spec"])
         first = cron.next_after(_last(ctx.conn, s))
         if first > now:
@@ -215,6 +262,8 @@ def tick(ctx, now: float | None = None) -> list[dict]:
         latest = cron.last_at_or_before(now, first)
         fire_at = latest if now - latest <= GRACE_S else None
         reason = "passed while nothing was watching"
+        if s["paused_at"]:
+            fire_at, reason = None, "paused"
         if fire_at is not None and busy:
             fire_at, reason = None, (f"a measurement is running ({busy.get('label')}, "
                                      f"PID {busy.get('pid')})")
@@ -234,8 +283,35 @@ def tick(ctx, now: float | None = None) -> list[dict]:
     return out
 
 
+# ponytail: a schedule from before sealing is trusted as it stands at its first tick
+def _seal_unsealed(ctx, s: dict) -> None:
+    if ctx.anchor.latest(f"schedule:{s['id']}") is None:
+        ctx.anchor.record(f"schedule:{s['id']}", seal(s))
+
+
+def run_now(ctx, sid: str, now: float | None = None) -> dict:
+    now = time.time() if now is None else now
+    s = next((x for x in active(ctx.conn) if x["id"] == sid), None)
+    if s is None:
+        raise LookupError(sid)
+    if _unfinished(ctx.conn, sid):
+        raise Busy("its previous run has not finished")
+    _seal_unsealed(ctx, s)
+    cron = Cron.parse(s["spec"])
+    first = cron.next_after(_last(ctx.conn, s))
+    until = cron.last_at_or_before(now - 1, first) if first < now else None
+    if until is not None:
+        claim(ctx.conn, sid, until, "missed",
+              {"from": int(first), "count": _count(cron, first, until), "reason": "run by hand instead"})
+    return _fire(ctx, s, int(now), now)
+
+
 def _fire(ctx, s: dict, occurrence: float, now: float) -> dict:
     late = round(now - occurrence, 1)
+    if ctx.anchor.latest(f"schedule:{s['id']}") != seal(s):
+        claim(ctx.conn, s["id"], occurrence, "tampered", {"seal": seal(s)[:16]})
+        pause(ctx.conn, s["id"])
+        return {"schedule_id": s["id"], "action": "tampered", "occurrence": occurrence}
     if not claim(ctx.conn, s["id"], occurrence, "fired", {"late_s": late}):
         return {"schedule_id": s["id"], "action": "already_claimed",
                 "occurrence": occurrence}

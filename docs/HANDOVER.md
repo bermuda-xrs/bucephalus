@@ -57,7 +57,7 @@ rebuilt `bucephalus.exe`'s window, and the WSL2 suite (see the Branch row for wh
 | Fact | Value | Regenerate with |
 |---|---|---|
 | Branch | `main`, fast-forwarded from `harness-14` (iteration 4, two whole-source reviews, the harness-16 baseline, the console split view, harness 17) after the suite, the frozen gate, the frozen e2e and the WSL2 suite passed; tags `iteration-4-closed`, `review-2-closed`, `h16-baseline`, `harness-17`; branch `h18` (rejected candidates) kept only as tag `h18-rejected` (2026-11-08); remote `origin` = private `bermuda-xrs/bucephalus` (`main`, the tags, and the results branches `cloud-8b`, `cloud-8b-2`, `cloud-8b-fam`, `cloud-8b-cfg` and `cloud-8b-cfg-2`, which carry `runs/` and are never merged) | `git branch --show-current` |
-| Harness version | **19**, bumped 2026-11-05: the gate compares an absolute path inside the root as its relative form (CHANGELOG "Absolute paths"); 18 let `edit_lines` anchors through; prompts unchanged since 15; `kept` numbers that include E1 from 18 and earlier do not compare, nor do numbers from 16 and earlier | `grep HARNESS_VERSION src/agent/__init__.py` |
+| Harness version | **20**, bumped 2026-11-08 for the console's Wave 1: measurement tasks carry `origin='bench'` and schedules are sealed in the anchor; the agent's prompts, tools and gate are unchanged, so 19's numbers still compare. 19 (2026-11-05): the gate compares an absolute path inside the root as its relative form (CHANGELOG "Absolute paths"); 18 let `edit_lines` anchors through; prompts unchanged since 15; `kept` numbers that include E1 from 18 and earlier do not compare, nor do numbers from 16 and earlier | `grep HARNESS_VERSION src/agent/__init__.py` |
 | Toolset version | **8** (search: globs at any depth, name search with a space searches contents) | `grep TOOLSET_VERSION src/agent/__init__.py` |
 | Tests | not written down | `python -m pytest tests -q`; skips are live-credential tests (D26) and other-OS tests |
 | Lint | bug rules only | `python -m ruff check src tests scripts packaging demo.py` |
@@ -229,7 +229,9 @@ Plan, in order:
    plan (2026-11-08) in four waves by risk: 1 Analytics, Docs, Sessions/Files/Schedules gaps; 2 System, MCP read-only;
    3 config editor with a sign step, write-only keys, Telegram pairing; 4 loopback webhooks. Plugins, the skills hub,
    MCP install, MoA, cloud providers, update/restart/restore and anything that sends data out are not built.
-   Done: Analytics (measurement tasks carry `origin='bench'` and are left out); Docs (read only, source checkout).
+   Wave 1 done: Analytics (measurement tasks carry `origin='bench'` and are left out), Docs (read only, source
+   checkout), bulk archive, new folder and removing a file you added, and schedules that pause, resume, run now,
+   edit as a new record and are sealed in the anchor. Next: Wave 2 (System, MCP read-only, the reviewer model).
 
 The branches already in `main` were deleted on 2026-10-27 at the user's yes; the tags stay.
 
