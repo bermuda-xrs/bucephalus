@@ -15,6 +15,7 @@ from measurement import open_measurement  # noqa: E402
 from agent.execute.loop import run_task  # noqa: E402
 from agent.instrument.report import pareto_points, write_calls_csv  # noqa: E402
 from agent.kernel.tasks import create_task  # noqa: E402
+from agent.security.origin import BENCH  # noqa: E402
 from agent.kernel.types import Budget, TaskContract  # noqa: E402
 from agent.models.base import BackendError  # noqa: E402
 from agent.models.registry import build_backends  # noqa: E402
@@ -120,7 +121,7 @@ def run_arm(ctx, suite: list[dict], arm: str, skills_on: bool) -> dict:
             usd=spec.get("budget_usd", ctx.config.limits.default_task_budget_usd),
             seconds=spec.get("budget_seconds", ctx.config.limits.default_task_budget_seconds),
         )
-        task = create_task(ctx.conn, ctx.log, contract, budget)
+        task = create_task(ctx.conn, ctx.log, contract, budget, origin=BENCH)
         if not skills_on:
             ctx.set_frozen_skills(task.id, [])
         t0 = time.time()

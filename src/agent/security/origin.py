@@ -3,6 +3,7 @@ from __future__ import annotations
 from .exposure import UNRESTRICTED, ToolPolicy
 
 LOCAL = "local"
+BENCH = "bench"
 TELEGRAM = "telegram"
 
 CHANNEL_ORIGINS = frozenset({TELEGRAM})

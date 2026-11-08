@@ -98,6 +98,7 @@ class TrialOutcome:
 def run_task_isolated(ctx, task_spec: TaskSpec, skills: list[dict]) -> TrialOutcome:
     from ..execute.loop import run_task
     from ..kernel.tasks import create_task
+    from ..security.origin import BENCH
 
     reset_workspace(ctx.config.root, task_spec.artifact_scope, task_spec.fixtures)
 
@@ -112,7 +113,7 @@ def run_task_isolated(ctx, task_spec: TaskSpec, skills: list[dict]) -> TrialOutc
         usd=ctx.config.limits.default_task_budget_usd,
         seconds=ctx.config.limits.default_task_budget_seconds,
     )
-    task = create_task(ctx.conn, ctx.log, contract, budget)
+    task = create_task(ctx.conn, ctx.log, contract, budget, origin=BENCH)
     ctx.set_frozen_skills(task.id, skills)
     t0 = time.time()
     result = run_task(ctx, task.id)
