@@ -17,7 +17,7 @@ what still stands between here and a first iteration.
   and `GET /documents/{name}` serves one by exact name from that list, so nothing else on disk can be asked for. An
   installed copy has no documents and says so. Not copied: their page, an iframe of their website.
 - The routes are `/documents`, not `/docs`, which FastAPI already serves (its API page).
-- `tests/test_console_docs.py` holds the list, the marks, the raw text, eight names that must 404 and the installed case.
+- `tests/test_console_docs.py` holds the list, the marks, the raw text, seven names that must 404 and the installed case.
 
 ## Analytics - 2026-11-08 (HARNESS_VERSION 20 lands with the last PR of this wave)
 
