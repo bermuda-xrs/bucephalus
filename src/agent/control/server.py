@@ -600,6 +600,22 @@ def create_app(ctx: AgentContext) -> FastAPI:
             raise HTTPException(404, "no such active schedule")
         return {"removed": sid}
 
+    @app.get("/documents")
+    def get_documents() -> dict:
+        from . import docs
+
+        root = docs.source_root()
+        return {"available": root is not None, "docs": docs.listing(root)}
+
+    @app.get("/documents/{name}")
+    def get_document(name: str) -> dict:
+        from . import docs
+
+        p = docs.files(docs.source_root()).get(name)
+        if p is None:
+            raise HTTPException(404, "no such document")
+        return {"name": name, "kind": docs.kind(name), "text": p.read_text(encoding="utf-8", errors="replace")}
+
     @app.get("/analytics")
     def get_analytics(days: int = 30) -> dict:
         from .analytics import usage

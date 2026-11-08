@@ -10,6 +10,15 @@
 Dates are commit dates. `0.1.0` is not released yet — see "Unreleased" for
 what still stands between here and a first iteration.
 
+## Docs - 2026-11-08 (HARNESS_VERSION 20 lands with the last PR of this wave)
+
+- A Docs page: the project's own Markdown documents (the top-level ones and `docs/`), read only, marked frozen or live,
+  with a title filter. They render through `md.js`, so markup in a document stays text. `GET /documents` lists them
+  and `GET /documents/{name}` serves one by exact name from that list, so nothing else on disk can be asked for. An
+  installed copy has no documents and says so. Not copied: their page, an iframe of their website.
+- The routes are `/documents`, not `/docs`, which FastAPI already serves (its API page).
+- `tests/test_console_docs.py` holds the list, the marks, the raw text, seven names that must 404 and the installed case.
+
 ## Analytics - 2026-11-08 (HARNESS_VERSION 20 lands with the last PR of this wave)
 
 - An Analytics page: tokens read and written, spend, tasks and model calls over 7, 30 or 90 days, a daily bar chart
