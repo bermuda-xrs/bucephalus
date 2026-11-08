@@ -627,7 +627,7 @@ def cmd_schedule(ctx, args, console) -> int:
                                      artifact_scope=args.scope or ["work"]),
                         Budget(usd=args.budget_usd or lim.default_task_budget_usd,
                                seconds=args.budget_seconds
-                               or lim.default_task_budget_seconds))
+                               or lim.default_task_budget_seconds), anchor=ctx.anchor)
         nxt = sched.next_fire(ctx.conn, sched.get(ctx.conn, sid))
         console.print(f"{sid}  {args.spec}  next "
                       f"{time.strftime('%Y-%m-%d %H:%M', time.localtime(nxt))}")
@@ -636,6 +636,24 @@ def cmd_schedule(ctx, args, console) -> int:
         ok = sched.remove(ctx.conn, args.id or "")
         console.print("removed" if ok else "no such active schedule")
         return 0 if ok else 1
+    if args.action in ("pause", "resume"):
+        ok = (sched.pause if args.action == "pause" else sched.resume)(ctx.conn, args.id or "")
+        console.print(f"{args.action}d" if ok else f"no active schedule to {args.action}")
+        return 0 if ok else 1
+    if args.action == "run":
+        try:
+            out = sched.run_now(ctx, args.id or "")
+        except LookupError:
+            console.print("no such active schedule")
+            return 1
+        except sched.Busy as e:
+            console.print(str(e))
+            return 1
+        if out["action"] == "tampered":
+            console.print("this schedule changed after it was created, so it will not run; see `bucephalus verify`")
+            return 1
+        console.print(f"fired {out['task_id']}; `bucephalus supervise` runs it")
+        return 0
     rows = sched.active(ctx.conn)
     if not rows:
         console.print("no schedules")
@@ -934,8 +952,8 @@ def build_parser() -> argparse.ArgumentParser:
     mo.add_argument("task_id")
     mo.set_defaults(fn=cmd_monitor)
 
-    sc = sub.add_parser("schedule", help="add, list or remove a scheduled task")
-    sc.add_argument("action", choices=["add", "list", "remove"])
+    sc = sub.add_parser("schedule", help="add, list, remove, pause, resume or run a scheduled task now")
+    sc.add_argument("action", choices=["add", "list", "remove", "pause", "resume", "run"])
     sc.add_argument("spec", nargs="?",
                     help="cron: minute hour day-of-month month day-of-week")
     sc.add_argument("goal", nargs="?")

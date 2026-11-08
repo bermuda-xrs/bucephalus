@@ -842,6 +842,7 @@ async function loadFiles(taskId, path) {
     F("filePath").textContent = e.status === 404 ? "Nothing here yet." : e.message;
     F("fileList").innerHTML = ""; return;
   }
+  F("removeFile").hidden = d.kind === "dir";
   if (d.kind === "dir") {
     S.filesPath = d.path;
     F("filePath").textContent = d.path + "/";
@@ -850,6 +851,7 @@ async function loadFiles(taskId, path) {
         <span>${esc(e.name)}${e.dir ? "/" : ""}</span><span class="sz">${e.dir ? "" : ktok(e.bytes) + "B"}</span></button>`).join("")
         || `<div class="empty">Empty so far.</div>`);
   } else {
+    S.fileOpen = d.path;
     $$(".file").forEach(f => f.setAttribute("aria-current", String(f.dataset.args === JSON.stringify([d.path]))));
     const pv = F("filePreview");
     pv.classList.toggle("md", d.text !== undefined && isMarkdownFile(d.path));
@@ -917,6 +919,9 @@ const PANES = {
       <div class="page-tools"><input id="sessQ" class="search" type="search" value="${esc(q)}" data-change="sessSearch"
         placeholder="Search titles and goals, then Enter" aria-label="Search conversations">
         <button class="btn" data-action="sessArchived">${arch ? "Show active" : "Show archived"}</button></div>
+      ${arch ? "" : `<div class="page-tools"><label class="note">Archive conversations idle for more than
+        <input id="arDays" type="number" min="1" max="3650" value="30" size="4" aria-label="Days idle"> days</label>
+        <button class="btn" data-action="archiveOlder">Archive</button></div>`}
       <table><tr><th>Conversation</th><th class="r">Tasks</th><th class="r">Needs you</th><th>Updated</th><th></th></tr>
       ${d.conversations.map(row).join("") || `<tr><td colspan="5" class="empty">${q ? "Nothing matches." : arch
         ? "Nothing archived." : "No conversations yet."}</td></tr>`}</table>`;
@@ -930,6 +935,7 @@ const PANES = {
         <span class="t">${esc(firstLine(t.goal))}</span><span class="s">${esc(statusWord(t.status))}, ${ago(t.created_at)}</span></button>`).join("")
         || '<div class="empty">No tasks yet.</div>'}</nav>
       <section class="ws" aria-label="Workspace"><p class="crumb" id="filePathPg">Pick a task to see its workspace.</p>
+        <div class="file-acts"><button class="quiet" data-action="newFolder">New folder</button><button class="quiet" data-action="removeFile" id="removeFilePg" hidden>Remove this file</button></div>
         <div id="fileListPg" class="file-list"></div>
         <div id="filePreviewPg" class="preview" tabindex="0" aria-label="File preview"></div>
         <div class="drop" id="dropPg" tabindex="0">Drop or paste a file here to add it to this task's workspace, marked untrusted.</div></section></div>`;
@@ -1033,16 +1039,22 @@ const PANES = {
     const d = await api("/panels/schedules");
     return `<h3>Schedules</h3><p class="lede">Each firing creates a task that still needs its plan signed.
       Missed occurrences are recorded, never run late.</p>
+      <p class="note">The console only lists them; <code>bucephalus supervise</code> fires them, including Run now.</p>
       <table><tr><th>When</th><th>Goal</th><th>Next</th><th class="r">Missed</th><th></th></tr>
-      ${d.schedules.map(s => `<tr><td><code>${esc(s.spec)}</code></td><td>${esc(firstLine(s.goal))}</td>
-        <td>${new Date(s.next_fire * 1000).toLocaleString()}</td><td class="r">${s.missed}</td>
-        <td class="r"><button class="quiet" data-action="removeSchedule" ${args(s.id)}>Remove</button></td></tr>`).join("")
+      ${d.schedules.map(s => `<tr${s.sealed ? "" : ' class="integrity-row"'}><td><code>${esc(s.spec)}</code></td>
+        <td>${esc(firstLine(s.goal))}${s.sealed ? "" : ' <strong class="st-needs">Changed since it was added; it will not fire.</strong>'}</td>
+        <td>${s.paused ? '<span class="st-needs">Paused</span>' : new Date(s.next_fire * 1000).toLocaleString()}</td><td class="r">${s.missed}</td>
+        <td class="r acts"><button class="quiet" data-action="${s.paused ? "resumeSchedule" : "pauseSchedule"}" ${args(s.id)}>${s.paused ? "Resume" : "Pause"}</button>
+          <button class="quiet" data-action="runSchedule" ${args(s.id)}>Run now</button>
+          <button class="quiet" data-action="editSchedule" ${args(s.id, s.spec, s.goal, s.scope)}>Edit</button>
+          <button class="quiet" data-action="removeSchedule" ${args(s.id)}>Remove</button></td></tr>`).join("")
         || '<tr><td colspan="5" class="empty">No schedules yet.</td></tr>'}</table>
-      <h4>Add a schedule</h4>
+      <h4 id="schFormH">${S.schedEdit ? "Edit a schedule" : "Add a schedule"}</h4>
       <div class="grid2"><label class="field">When (cron: minute hour day month weekday)<input id="schSpec" placeholder="0 9 * * 1"></label>
       <label class="field">Workspace<input id="schScope" value="work"></label></div>
       <label class="field">Goal<textarea id="schGoal" placeholder="Summarise what changed in work/ this week."></textarea></label>
-      <button class="btn primary" data-action="addSchedule">Add schedule</button>
+      <div class="row"><button class="btn primary" data-action="addSchedule" id="schSave">${S.schedEdit ? "Save as a new schedule" : "Add schedule"}</button>
+        <button class="btn" data-action="cancelScheduleEdit" id="schCancel"${S.schedEdit ? "" : " hidden"}>Cancel</button></div>
       <h4>Parked runs</h4>${d.parked.map(n => `<div class="entry"><code>${esc(n.task_id)}</code> ${esc(n.kind)}, ${ago(n.created_at)}</div>`).join("")
         || '<div class="empty">None.</div>'}`;
   },
@@ -1197,9 +1209,50 @@ async function forgetMemory(text) {
   catch (e) { toast(e.message, true); }
 }
 async function addSchedule() {
-  try { await post("/schedules", {spec: $("#schSpec").value.trim(), goal: $("#schGoal").value.trim(),
-                                  scope: $("#schScope").value.trim() || "work"});
-        toast("Scheduled. Each firing drafts a task whose plan you still sign."); openPane("schedules"); }
+  const body = {spec: $("#schSpec").value.trim(), goal: $("#schGoal").value.trim(), scope: $("#schScope").value.trim() || "work"};
+  try {
+    if (S.schedEdit) await api("/schedules/" + S.schedEdit, {method: "PUT", body: JSON.stringify(body)});
+    else await post("/schedules", body);
+    toast(S.schedEdit ? "Saved as a new schedule; the old one is removed." : "Scheduled. Each firing drafts a task whose plan you still sign.");
+    S.schedEdit = null; openPane("schedules");
+  } catch (e) { toast(e.message, true); }
+}
+function editSchedule(id, spec, goal, scope) {
+  S.schedEdit = id; $("#schSpec").value = spec; $("#schGoal").value = goal; $("#schScope").value = scope;
+  $("#schFormH").textContent = "Edit a schedule"; $("#schSave").textContent = "Save as a new schedule";
+  $("#schCancel").hidden = false; $("#schSpec").focus();
+}
+function cancelScheduleEdit() { S.schedEdit = null; openPane("schedules"); }
+async function scheduleCall(req, done) {
+  try { await req; toast(done); } catch (e) { toast(e.message, true); }
+  openPane("schedules");
+}
+function pauseSchedule(id) { scheduleCall(post(`/schedules/${id}/pause`, {}), "Paused. Its occurrences are recorded as missed until you resume it."); }
+function resumeSchedule(id) { scheduleCall(post(`/schedules/${id}/resume`, {}), "Resumed from the next occurrence."); }
+function runSchedule(id) { scheduleCall(post(`/schedules/${id}/run`, {}), "Fired. bucephalus supervise runs it, and its plan still needs your signature."); }
+async function archiveOlder() {
+  const days = Number($("#arDays").value);
+  try {
+    const {count} = await post("/conversations/archive_older", {days, dry_run: true});
+    if (!count) return toast(`Nothing idle for more than ${days} days. Pinned and unfinished conversations stay.`);
+    if (!confirm(`Archive ${count} conversation${count === 1 ? "" : "s"} idle for more than ${days} days? Nothing is deleted; they move under Show archived.`)) return;
+    const r = await post("/conversations/archive_older", {days});
+    toast(`Archived ${r.count}.`); S.lastSide = ""; loadSide(); openPane("sessions");
+  } catch (e) { toast(e.message, true); }
+}
+async function newFolder() {
+  if (!S.filesTask) return toast("Pick a task first.", true);
+  const name = prompt(`New folder in ${S.filesPath || "work"}/`);
+  if (!name || !name.trim()) return;
+  try { const r = await post(`/tasks/${S.filesTask}/files/mkdir`, {path: `${S.filesPath || "work"}/${name.trim()}`});
+        toast(`Made ${r.path}/.`); loadFiles(S.filesTask, S.filesPath || "work"); }
+  catch (e) { toast(e.message, true); }
+}
+async function removeFile() {
+  const p = S.fileOpen;
+  if (!S.filesTask || !p || !confirm(`Remove ${p}? Only a file you added, unchanged since, can be removed.`)) return;
+  try { await api(`/tasks/${S.filesTask}/files?path=${encodeURIComponent(p)}`, {method: "DELETE"});
+        toast(`Removed ${p}.`); F("filePreview").textContent = ""; loadFiles(S.filesTask, S.filesPath || "work"); }
   catch (e) { toast(e.message, true); }
 }
 async function removeSchedule(id) {
@@ -1433,7 +1486,8 @@ const ACTIONS = {newConversation, selectConversation, renameConversation, archiv
   toggleTheme, acceptMemory, createSuite, saveTask, closeSuite, addSkill, savePolicy,
   openSuite, delSuite, delTask, checkGate, pinConversation, exportConversation, enableNotifications,
   runModel, stopTask, resumeTask, toggleTool, setView, closeTrace, traceTask, traceNode, closeTraceDetail, showRewind, showChanges, doRewind, askAgain, editAsk, copyAnswer, copyCode, forgetMemory, addSchedule, removeSchedule, viewSkill,
-  patchConversation, exportOne, sessArchived, pickWorkspace, useModel, loadModel, unloadModel, anDays, readDoc};
+  patchConversation, exportOne, sessArchived, pickWorkspace, useModel, loadModel, unloadModel, anDays, readDoc,
+  editSchedule, cancelScheduleEdit, pauseSchedule, resumeSchedule, runSchedule, archiveOlder, newFolder, removeFile};
 document.addEventListener("click", e => {
   $$("details.more[open]").forEach(d => { if (!d.contains(e.target)) d.open = false; });
   const el = e.target.closest("[data-action]");

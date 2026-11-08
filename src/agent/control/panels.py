@@ -35,9 +35,12 @@ def schedules(ctx) -> dict:
         missed = ctx.conn.execute(
             "SELECT COUNT(*) FROM schedule_firings WHERE schedule_id=? AND outcome='missed'",
             (s["id"],)).fetchone()[0]
-        rows.append({"id": s["id"], "spec": s["spec"],
-                     "goal": json.loads(s["contract_json"]).get("goal", ""),
-                     "next_fire": sched.next_fire(ctx.conn, s), "missed": missed})
+        contract = json.loads(s["contract_json"])
+        rows.append({"id": s["id"], "spec": s["spec"], "goal": contract.get("goal", ""),
+                     "scope": (contract.get("artifact_scope") or ["work"])[0],
+                     "next_fire": sched.next_fire(ctx.conn, s), "missed": missed,
+                     "paused": bool(s["paused_at"]),
+                     "sealed": ctx.anchor.latest(f"schedule:{s['id']}") in (None, sched.seal(s))})
     return {"schedules": rows, "parked": sched.notifications(ctx.conn, unseen_only=False)[:50]}
 
 

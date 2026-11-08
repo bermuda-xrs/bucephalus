@@ -28,6 +28,10 @@ class Unwritable(Exception):
     ...
 
 
+class Busy(Exception):
+    ...
+
+
 def _allowed(ctx, task, raw: str, state=None) -> Path:
     root = ctx.config.root
     if not raw or "\x00" in raw:
@@ -103,3 +107,33 @@ def drop(ctx, task, raw: str, content_b64: str) -> dict:
         "path": rel, "bytes": len(data), "sha256": hashlib.sha256(data).hexdigest(),
         "taint": "untrusted"})
     return {"path": rel, "bytes": len(data)}
+
+
+def make_folder(ctx, task, raw: str) -> dict:
+    p = _allowed(ctx, task, raw)
+    if p.exists():
+        raise Exists("already there")
+    try:
+        p.mkdir(parents=True)
+    except (OSError, ValueError) as e:
+        raise Unwritable(f"cannot create {raw[:80]!r}: {getattr(e, 'strerror', None) or e}") from None
+    rel = os.path.relpath(p, ctx.config.root).replace(os.sep, "/")
+    ctx.log.append(task.id, "human.made_folder", {"path": rel})
+    return {"path": rel}
+
+
+def remove(ctx, task, raw: str) -> dict:
+    if task.status.value == "running":
+        raise Busy("the task is running; stop it first")
+    p = _allowed(ctx, task, raw)
+    rel = os.path.relpath(p, ctx.config.root).replace(os.sep, "/")
+    if not p.is_file():
+        raise Missing(rel)
+    added = [e["payload"] for e in ctx.log.events(task.id)
+             if e["type"] == "human.uploaded" and e["payload"].get("path") == rel]
+    digest = hashlib.sha256(p.read_bytes()).hexdigest()
+    if not added or added[-1].get("sha256") != digest:
+        raise Refused("only a file you added, unchanged since, can be removed here; rewind undoes the agent's files")
+    p.unlink()
+    ctx.log.append(task.id, "human.removed", {"path": rel, "sha256": digest})
+    return {"removed": rel}

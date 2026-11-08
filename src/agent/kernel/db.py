@@ -334,7 +334,8 @@ CREATE TABLE IF NOT EXISTS schedules (
     contract_json TEXT NOT NULL,
     budget_json   TEXT NOT NULL,
     created_at    REAL NOT NULL,
-    removed_at    REAL
+    removed_at    REAL,
+    paused_at     REAL
 );
 CREATE TABLE IF NOT EXISTS schedule_firings (
     schedule_id   TEXT NOT NULL REFERENCES schedules(id),
@@ -376,6 +377,7 @@ _ADDED_COLUMNS = (
     ("calls", "model", "TEXT"),
     ("calls", "est_input_tokens", "INTEGER"),
     ("conversations", "pinned", "INTEGER NOT NULL DEFAULT 0"),
+    ("schedules", "paused_at", "REAL"),
 )
 
 

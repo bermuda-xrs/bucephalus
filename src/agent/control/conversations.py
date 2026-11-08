@@ -48,6 +48,20 @@ def listing(conn, q: str = "", archived: bool = False) -> list[dict]:
              "pinned": bool(r[4]), "n_tasks": r[5], "needs_you": r[6]} for r in rows]
 
 
+_IDLE_AND_OLD = """archived=0 AND pinned=0 AND updated_at < ? AND NOT EXISTS (
+    SELECT 1 FROM conversation_tasks x JOIN tasks t ON t.id = x.task_id
+     WHERE x.conversation_id = conversations.id AND t.status IN ('pending', 'running', 'paused'))"""
+
+
+def archive_older(conn, days: int, dry_run: bool = False) -> int:
+    cut = (time.time() - days * 86400,)
+    if dry_run:
+        return conn.execute(f"SELECT COUNT(*) FROM conversations WHERE {_IDLE_AND_OLD}", cut).fetchone()[0]
+    n = conn.execute(f"UPDATE conversations SET archived=1 WHERE {_IDLE_AND_OLD}", cut).rowcount
+    conn.commit()
+    return n
+
+
 def update(conn, cid: str, title: str | None = None, archived: bool | None = None,
            pinned: bool | None = None) -> dict:
     get_row(conn, cid)

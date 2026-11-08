@@ -10,6 +10,24 @@
 Dates are commit dates. `0.1.0` is not released yet — see "Unreleased" for
 what still stands between here and a first iteration.
 
+## Schedules, archive and files - 2026-11-08 (HARNESS_VERSION 20)
+
+- Schedules pause, resume, run now and edit. A paused schedule records its occurrences as missed and never runs them
+  late. Run now fires one occurrence through the same path as the clock, so the task is `origin='schedule'` and its plan
+  still needs signing; the occurrences it stands in for are recorded as missed. An edit is a new schedule, and the old
+  one is removed in the same transaction, so a changed goal is never a rewrite. CLI: `bucephalus schedule pause|resume|run`.
+- Schedules are sealed: adding one records a hash of its spec, goal and budget in the anchor, outside the database.
+  A firing whose row no longer matches creates no task, is recorded as `tampered` and pauses the schedule, and
+  `verify`, the alerts and the Integrity page report it. A schedule from before this is sealed at its first tick (D82).
+- Sessions archives conversations idle for more than N days, after showing how many. Pinned conversations and those
+  with an unfinished task stay. Nothing is deleted.
+- Files makes folders inside a task's workspace and removes a file you added, only while it is unchanged since and the
+  task is not running. Both are on the task's chain (`human.made_folder`, `human.removed`). The agent's files are
+  rewind's to undo.
+- HARNESS_VERSION 20 for this wave: measurement tasks carry `origin='bench'` (Analytics) and schedules are sealed.
+  The agent's prompts, tools and gate are unchanged.
+- D81 records the dashboard features not built and why.
+
 ## Docs - 2026-11-08 (HARNESS_VERSION 20 lands with the last PR of this wave)
 
 - A Docs page: the project's own Markdown documents (the top-level ones and `docs/`), read only, marked frozen or live,

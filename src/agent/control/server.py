@@ -124,6 +124,15 @@ class NewSchedule(BaseModel):
     budget_usd: float | None = None
 
 
+class ArchiveOlder(BaseModel):
+    days: int = Field(ge=1, le=3650)
+    dry_run: bool = False
+
+
+class PathIn(BaseModel):
+    path: str
+
+
 class Message(BaseModel):
     text: str
     artifact_scope: list[str] = Field(default_factory=lambda: ["work"])
@@ -436,6 +445,12 @@ def create_app(ctx: AgentContext) -> FastAPI:
 
         return conv.create(ctx.conn, body.title)
 
+    @app.post("/conversations/archive_older")
+    def post_archive_older(body: ArchiveOlder) -> dict:
+        from . import conversations as conv
+
+        return {"count": conv.archive_older(ctx.conn, body.days, body.dry_run)}
+
     @app.patch("/conversations/{cid}")
     def patch_conversation(cid: str, body: PatchConversation) -> dict:
         from . import conversations as conv
@@ -587,10 +602,60 @@ def create_app(ctx: AgentContext) -> FastAPI:
             sid = sched.add(ctx.conn, body.spec,
                             TaskContract(goal=body.goal, artifact_scope=[body.scope or "work"]),
                             Budget(usd=body.budget_usd or lim.default_task_budget_usd,
-                                   seconds=lim.default_task_budget_seconds))
+                                   seconds=lim.default_task_budget_seconds), anchor=ctx.anchor)
         except ValueError as e:
             raise HTTPException(400, str(e)) from None
         return {"id": sid}
+
+    @app.put("/schedules/{sid}")
+    def put_schedule(sid: str, body: NewSchedule) -> dict:
+        from .. import schedule as sched
+
+        lim = ctx.config.limits
+        try:
+            new = sched.replace(ctx.conn, sid, body.spec,
+                                TaskContract(goal=body.goal, artifact_scope=[body.scope or "work"]),
+                                Budget(usd=body.budget_usd or lim.default_task_budget_usd,
+                                       seconds=lim.default_task_budget_seconds), anchor=ctx.anchor)
+        except ValueError as e:
+            raise HTTPException(400, str(e)) from None
+        if new is None:
+            raise HTTPException(404, "no such active schedule")
+        return {"id": new, "replaced": sid}
+
+    @app.post("/schedules/{sid}/pause")
+    def pause_schedule(sid: str) -> dict:
+        from .. import schedule as sched
+
+        if not any(s["id"] == sid for s in sched.active(ctx.conn)):
+            raise HTTPException(404, "no such active schedule")
+        if not sched.pause(ctx.conn, sid):
+            raise HTTPException(409, "already paused")
+        return {"id": sid, "paused": True}
+
+    @app.post("/schedules/{sid}/resume")
+    def resume_schedule(sid: str) -> dict:
+        from .. import schedule as sched
+
+        if not any(s["id"] == sid for s in sched.active(ctx.conn)):
+            raise HTTPException(404, "no such active schedule")
+        if not sched.resume(ctx.conn, sid):
+            raise HTTPException(409, "not paused")
+        return {"id": sid, "paused": False}
+
+    @app.post("/schedules/{sid}/run")
+    def run_schedule(sid: str) -> dict:
+        from .. import schedule as sched
+
+        try:
+            out = sched.run_now(ctx, sid)
+        except LookupError:
+            raise HTTPException(404, "no such active schedule") from None
+        except sched.Busy as e:
+            raise HTTPException(409, str(e)) from None
+        if out["action"] == "tampered":
+            raise HTTPException(409, "this schedule changed after it was created, so it will not run; see Integrity")
+        return out
 
     @app.delete("/schedules/{sid}")
     def delete_schedule(sid: str) -> dict:
@@ -662,6 +727,32 @@ def create_app(ctx: AgentContext) -> FastAPI:
             raise HTTPException(409, str(e)) from None
         except files.Unwritable as e:
             raise HTTPException(400, str(e)) from None
+
+    @app.post("/tasks/{task_id}/files/mkdir")
+    def post_folder(task_id: str, body: PathIn) -> dict:
+        from . import files
+
+        try:
+            return files.make_folder(ctx, _task(task_id), body.path)
+        except files.Refused as e:
+            raise HTTPException(403, str(e)) from None
+        except files.Exists as e:
+            raise HTTPException(409, str(e)) from None
+        except files.Unwritable as e:
+            raise HTTPException(400, str(e)) from None
+
+    @app.delete("/tasks/{task_id}/files")
+    def delete_file(task_id: str, path: str) -> dict:
+        from . import files
+
+        try:
+            return files.remove(ctx, _task(task_id), path)
+        except files.Refused as e:
+            raise HTTPException(403, str(e)) from None
+        except files.Missing as e:
+            raise HTTPException(404, f"nothing at {e}") from None
+        except files.Busy as e:
+            raise HTTPException(409, str(e)) from None
 
     @app.get("/theme")
     def get_theme() -> dict:
