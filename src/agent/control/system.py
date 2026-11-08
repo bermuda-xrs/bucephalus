@@ -53,11 +53,13 @@ def backup(ctx) -> dict:
     if sync_root(d):
         raise SyncedFolder(f"{d} is inside a synced folder; a backup holds your conversations, so keep it off sync. "
                            "Set BUCEPHALUS_CONFIG_DIR to a local folder.")
-    d.mkdir(parents=True, exist_ok=True)
+    d.mkdir(parents=True, exist_ok=True, mode=0o700)
+    os.chmod(d, 0o700)
     name = time.strftime("bucephalus-%Y%m%d-%H%M%S.zip")
     with tempfile.TemporaryDirectory() as tmp:
         db = snapshot(ctx.conn, Path(tmp) / "agent.db")
-        with zipfile.ZipFile(d / name, "w", zipfile.ZIP_DEFLATED) as z:
+        fd = os.open(d / name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0), 0o600)
+        with os.fdopen(fd, "wb") as fh, zipfile.ZipFile(fh, "w", zipfile.ZIP_DEFLATED) as z:
             z.write(db, "agent.db")
             anchor = ctx.config.resolve_state(ctx.config.anchor_path)
             if anchor.is_file():

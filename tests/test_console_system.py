@@ -69,3 +69,10 @@ def test_the_page_reads_its_routes_and_offers_no_restore_or_update():
     block = block[:block.index("\n  async ")]
     for word in ("restart", "update now", "restore from", "debug share"):
         assert word not in block.lower().replace("restore:", ""), word
+
+
+@pytest.mark.skipif(__import__("os").name == "nt", reason="POSIX modes")
+def test_a_backup_and_its_folder_are_owner_only(api):
+    name = api.post("/system/backup").json()["name"]
+    assert (system.backups_dir().stat().st_mode & 0o777) == 0o700
+    assert ((system.backups_dir() / name).stat().st_mode & 0o777) == 0o600
