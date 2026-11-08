@@ -144,3 +144,11 @@ def test_every_text_colour_reads_on_every_surface(scheme):
     pairs += [("on-accent", "accent", 4.5)] + [("focus", bg, 3.0) for bg in ("ground", "panel", "raised")]
     low = [(fg, bg, round(_ratio(t[fg], t[bg]), 2)) for fg, bg, need in pairs if _ratio(t[fg], t[bg]) < need]
     assert not low, f"{scheme}: below WCAG AA: {low}"
+
+
+def test_the_pinned_request_hides_what_scrolls_under_it():
+    css = (CONTROL / "ui.css").read_text(encoding="utf-8")
+    rules = " ".join(m.group(1) for m in re.finditer(r"\.ask-bubble\s*\{([^}]*)\}", css))
+    assert re.search(r"position:\s*sticky", rules), "the request no longer stays in view over its reply"
+    bg = re.search(r"background:\s*var\(--(\w[\w-]*)\)", rules)
+    assert bg and bg.group(1) in ("ground", "panel", "raised"), "a pinned request needs an opaque surface"

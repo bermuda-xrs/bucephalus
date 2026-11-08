@@ -10,6 +10,15 @@
 Dates are commit dates. `0.1.0` is not released yet — see "Unreleased" for
 what still stands between here and a first iteration.
 
+## The Hermes chat - 2026-11-08 (no HARNESS_VERSION change: console only)
+
+- The thread takes the Hermes desktop app's chat look. Your request is a rounded bubble that stays pinned at the top
+  while its reply scrolls under it. The run and the answer are prose with no card. Tool calls are quiet rows that
+  brighten on hover. Plan steps sit on a rail. Changes and rewind are one bordered card. The composer is one floating
+  surface with pill controls. The plan card stays the one bold element. CSS only: no markup, route or control moved.
+- `tests/test_console_reskin_guards.py` holds the pinned request sticky and on an opaque surface, so text scrolling
+  under it can't show through.
+
 ## The Hermes look - 2026-11-07 (no HARNESS_VERSION change: console only)
 
 - The console takes the shell and palette of the Hermes Agent dashboard: a nav sidebar of uppercase page links, and
