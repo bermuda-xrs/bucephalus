@@ -600,6 +600,14 @@ def create_app(ctx: AgentContext) -> FastAPI:
             raise HTTPException(404, "no such active schedule")
         return {"removed": sid}
 
+    @app.get("/analytics")
+    def get_analytics(days: int = 30) -> dict:
+        from .analytics import usage
+
+        if days not in (7, 30, 90):
+            raise HTTPException(422, "days must be 7, 30 or 90")
+        return usage(ctx.conn, days)
+
     @app.get("/panels/{name}")
     def get_panel(name: str) -> dict:
         from . import panels

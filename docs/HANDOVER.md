@@ -56,7 +56,7 @@ rebuilt `bucephalus.exe`'s window, and the WSL2 suite (see the Branch row for wh
 
 | Fact | Value | Regenerate with |
 |---|---|---|
-| Branch | `main`, fast-forwarded from `harness-14` (iteration 4, two whole-source reviews, the harness-16 baseline, the console split view, harness 17) after the suite, the frozen gate, the frozen e2e and the WSL2 suite passed; tags `iteration-4-closed`, `review-2-closed`, `h16-baseline`, `harness-17`; branch `h18` (rejected candidates) not merged; remote `origin` = private `bermuda-xrs/bucephalus` (`main`, the tags, and the results branches `cloud-8b`, `cloud-8b-2`, `cloud-8b-fam`, `cloud-8b-cfg` and `cloud-8b-cfg-2`, which carry `runs/` and are never merged) | `git branch --show-current` |
+| Branch | `main`, fast-forwarded from `harness-14` (iteration 4, two whole-source reviews, the harness-16 baseline, the console split view, harness 17) after the suite, the frozen gate, the frozen e2e and the WSL2 suite passed; tags `iteration-4-closed`, `review-2-closed`, `h16-baseline`, `harness-17`; branch `h18` (rejected candidates) kept only as tag `h18-rejected` (2026-11-08); remote `origin` = private `bermuda-xrs/bucephalus` (`main`, the tags, and the results branches `cloud-8b`, `cloud-8b-2`, `cloud-8b-fam`, `cloud-8b-cfg` and `cloud-8b-cfg-2`, which carry `runs/` and are never merged) | `git branch --show-current` |
 | Harness version | **19**, bumped 2026-11-05: the gate compares an absolute path inside the root as its relative form (CHANGELOG "Absolute paths"); 18 let `edit_lines` anchors through; prompts unchanged since 15; `kept` numbers that include E1 from 18 and earlier do not compare, nor do numbers from 16 and earlier | `grep HARNESS_VERSION src/agent/__init__.py` |
 | Toolset version | **8** (search: globs at any depth, name search with a space searches contents) | `grep TOOLSET_VERSION src/agent/__init__.py` |
 | Tests | not written down | `python -m pytest tests -q`; skips are live-credential tests (D26) and other-OS tests |
@@ -225,9 +225,11 @@ Plan, in order:
    console had, refuses a call to a route the server lacks, and holds WCAG AA. Done: the dashboard shell and palette
    (nav sidebar, Control Center panes as pages, Hermes Teal / blue light); the chat thread after their desktop app's
    chat (pinned request bubble, prose reply, quiet tool rows, step rail, floating composer); the pages in their page
-   patterns, plus Sessions, Files and Models pages over existing routes only. Next, each its own plan: the dashboard pages we lack
-   (analytics, docs, profiles, config editor, keys, MCP, plugins, webhooks, pairing, system), each with risks
-   written down before it is built (plugins on our origin could sign plans; keys need storage off OneDrive).
+   patterns, plus Sessions, Files and Models pages over existing routes only. The pages we lack follow one approved
+   plan (2026-11-08) in four waves by risk: 1 Analytics, Docs, Sessions/Files/Schedules gaps; 2 System, MCP read-only;
+   3 config editor with a sign step, write-only keys, Telegram pairing; 4 loopback webhooks. Plugins, the skills hub,
+   MCP install, MoA, cloud providers, update/restart/restore and anything that sends data out are not built.
+   Done: Analytics (measurement tasks carry `origin='bench'` and are left out).
 
 The branches already in `main` were deleted on 2026-10-27 at the user's yes; the tags stay.
 

@@ -962,6 +962,42 @@ const PANES = {
         ${ex.warning ? `<p class="caveat">${esc(ex.warning)}</p>` : ""}` : '<p class="note">No executor is configured.</p>'}
       ${d.servers.map(server).join("") || '<p class="note">No local model servers in the config.</p>'}`;
   },
+  async analytics() {
+    const days = S.anDays || 30, d = await api(`/analytics?days=${days}`), t = d.totals;
+    const max = Math.max(1, ...d.daily.map(x => x.input_tokens + x.output_tokens));
+    const day = x => new Date(x.day * 1000).toLocaleDateString(undefined, {month: "short", day: "numeric", timeZone: "UTC"});
+    const usd = v => v ? `$${v.toFixed(v >= 1 ? 2 : 4)}` : "$0";
+    const bars = d.daily.map((x, i) => { const hi = x.input_tokens / max * 100, ho = x.output_tokens / max * 100;
+      return `<g><title>${day(x)}: ${x.input_tokens.toLocaleString()} in, ${x.output_tokens.toLocaleString()} out, ${x.calls} calls</title>
+        <rect class="in" x="${i * 10 + 1}" y="${100 - hi}" width="8" height="${hi}"/>
+        <rect class="out" x="${i * 10 + 1}" y="${100 - hi - ho}" width="8" height="${ho}"/></g>`; }).join("");
+    const pick = n => `<button type="button" class="chip" data-action="anDays" ${args(n)} aria-pressed="${n === days}">${n} days</button>`;
+    return `<h3>Analytics</h3><p class="lede">What the console's own work used: tokens, money and model calls.
+      Benchmark and skill-gate runs are left out. Days are UTC.</p>
+      <div class="page-tools" role="group" aria-label="Period">${[7, 30, 90].map(pick).join("")}</div>
+      <dl class="stats"><div><dt>Tokens</dt><dd>${ktok(t.input_tokens + t.output_tokens)}</dd>
+        <dd class="sub">${ktok(Math.round((t.input_tokens + t.output_tokens) / days))} a day, ${ktok(t.cache_read_tokens)} from cache</dd></div>
+      <div><dt>Spent</dt><dd>${usd(t.cost_usd)}</dd><dd class="sub">${t.cost_usd ? "" : "local models cost nothing"}</dd></div>
+      <div><dt>Tasks</dt><dd>${t.tasks}</dd><dd class="sub">${Object.entries(d.statuses).map(([k, v]) => `${v} ${esc(statusWord(k).toLowerCase())}`).join(", ") || "none"}</dd></div>
+      <div><dt>Model calls</dt><dd>${t.calls}</dd><dd class="sub">${t.failed_calls ? `${t.failed_calls} stalled or failed` : "none failed"}</dd></div></dl>
+      <h4>Tokens a day</h4>
+      <div class="chart"><svg viewBox="0 0 ${days * 10} 100" preserveAspectRatio="none" role="img"
+        aria-label="Daily tokens over ${days} days; the table below has the numbers">${bars}</svg>
+        <p class="legend"><span class="key in"></span> Read <span class="key out"></span> Written</p></div>
+      <details class="numbers"><summary class="quiet">Numbers by day</summary><table>
+        <tr><th>Day</th><th class="r">Read</th><th class="r">Written</th><th class="r">Calls</th><th class="r">Spent</th></tr>
+        ${d.daily.filter(x => x.calls).reverse().map(x => `<tr><td>${day(x)}</td><td class="r">${x.input_tokens.toLocaleString()}</td>
+          <td class="r">${x.output_tokens.toLocaleString()}</td><td class="r">${x.calls}</td><td class="r">${usd(x.cost_usd)}</td></tr>`).join("")
+          || '<tr><td colspan="5" class="empty">No model calls in this period.</td></tr>'}</table></details>
+      <h4>By model</h4><table><tr><th>Model</th><th class="r">Read</th><th class="r">Written</th><th class="r">Spent</th>
+        <th class="r">Calls</th><th>Last used</th></tr>
+        ${d.models.map(m => `<tr><td><code>${esc(m.model)}</code></td><td class="r">${ktok(m.input_tokens)}</td>
+          <td class="r">${ktok(m.output_tokens)}</td><td class="r">${usd(m.cost_usd)}</td><td class="r">${m.calls}</td>
+          <td>${ago(m.last_used)}</td></tr>`).join("") || '<tr><td colspan="6" class="empty">No model calls in this period.</td></tr>'}</table>
+      <h4>By purpose</h4><table><tr><th>Purpose</th><th class="r">Calls</th><th class="r">Tokens</th></tr>
+        ${d.purposes.map(p => `<tr><td>${esc(p.purpose)}</td><td class="r">${p.calls}</td><td class="r">${ktok(p.tokens)}</td></tr>`).join("")
+          || '<tr><td colspan="3" class="empty">No model calls in this period.</td></tr>'}</table>`;
+  },
   async memory() {
     const m = await api("/memory");
     const state = {intact: "Blessed. It matches what you last accepted.",
@@ -1132,6 +1168,7 @@ async function modelCall(req, done) {
 function useModel(m) { modelCall(post("/models/select", {model: m}), () => `New tasks run on ${m}.`); }
 function loadModel(m) { toast(`Loading ${m}`); modelCall(post("/models/run", {model: m}), r => `${m} is loaded (${r.seconds} s).`); }
 function unloadModel(m) { modelCall(post("/models/unload", {model: m}), () => `${m} is out of memory.`); }
+function anDays(n) { S.anDays = n; openPane("analytics"); }
 async function forgetMemory(text) {
   if (!confirm(`Forget this line?\n\n${text}`)) return;
   try { const r = await post("/memory/forget", {text}); toast(`Forgot ${r.removed.length} line${r.removed.length === 1 ? "" : "s"}.`); openPane("memory"); }
@@ -1307,7 +1344,7 @@ const COMMANDS = [
   ["Pin or unpin this conversation", "pinConversation"], ["Export this conversation as Markdown", "exportConversation", "md"],
   ["Export this conversation as JSON", "exportConversation", "json"], ["Turn on notifications", "enableNotifications"],
   ["Open Control Center", "openControl"], ["Sessions", "openPane", "sessions"], ["Files", "openPane", "files"],
-  ["Models", "openPane", "models"], ["Memory", "openPane", "memory"], ["Schedules", "openPane", "schedules"],
+  ["Models", "openPane", "models"], ["Analytics", "openPane", "analytics"], ["Memory", "openPane", "memory"], ["Schedules", "openPane", "schedules"],
   ["Channels", "openPane", "channels"], ["Skills", "openPane", "skills"], ["Eval suites", "openPane", "suites"],
   ["Reviewer policy", "openPane", "policy"], ["Integrity", "openPane", "integrity"],
   ["Measurement", "openPane", "measurement"], ["Settings", "openPane", "settings"], ["Logs", "openPane", "logs"],
@@ -1374,7 +1411,7 @@ const ACTIONS = {newConversation, selectConversation, renameConversation, archiv
   toggleTheme, acceptMemory, createSuite, saveTask, closeSuite, addSkill, savePolicy,
   openSuite, delSuite, delTask, checkGate, pinConversation, exportConversation, enableNotifications,
   runModel, stopTask, resumeTask, toggleTool, setView, closeTrace, traceTask, traceNode, closeTraceDetail, showRewind, showChanges, doRewind, askAgain, editAsk, copyAnswer, copyCode, forgetMemory, addSchedule, removeSchedule, viewSkill,
-  patchConversation, exportOne, sessArchived, pickWorkspace, useModel, loadModel, unloadModel};
+  patchConversation, exportOne, sessArchived, pickWorkspace, useModel, loadModel, unloadModel, anDays};
 document.addEventListener("click", e => {
   $$("details.more[open]").forEach(d => { if (!d.contains(e.target)) d.open = false; });
   const el = e.target.closest("[data-action]");

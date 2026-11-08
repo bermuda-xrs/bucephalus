@@ -10,6 +10,16 @@
 Dates are commit dates. `0.1.0` is not released yet — see "Unreleased" for
 what still stands between here and a first iteration.
 
+## Analytics - 2026-11-08 (HARNESS_VERSION 20 lands with the last PR of this wave)
+
+- An Analytics page: tokens read and written, spend, tasks and model calls over 7, 30 or 90 days, a daily bar chart
+  with a table of the same numbers, and breakdowns by model and by purpose. It reads `GET /analytics`, which sums the
+  `calls` table; no prompt or answer text leaves the database.
+- Measurement tasks are marked: `bench/run.py`, the skill gate's paired trials and the family evals create tasks with
+  `origin='bench'`. A bench task gets exactly the tools and budget a local one does (a test holds this). Analytics
+  leaves bench tasks out, and older ones by their `[arm:X]` goal suffix.
+- `tests/test_console_analytics.py` holds the sums, the bench exclusion both ways, the empty case and the three periods.
+
 ## The Hermes pages - 2026-11-08 (no HARNESS_VERSION change: console only)
 
 - Three new pages, each over routes the server already had. Sessions lists every conversation, active or archived,

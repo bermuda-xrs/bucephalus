@@ -76,6 +76,7 @@ COUNTED = ("read_first.held", "pages.unread_held", "verify.continued", "stuck.wa
 def run_instance(raw: dict, spec: dict, root: Path, backends_factory=None, profile: str | None = "local") -> dict:
     from .execute.loop import run_task
     from .kernel.tasks import create_task
+    from .security.origin import BENCH
     from .kernel.types import Budget, TaskContract
 
     root.mkdir(parents=True, exist_ok=True)
@@ -87,7 +88,8 @@ def run_instance(raw: dict, spec: dict, root: Path, backends_factory=None, profi
                                 output_schema=spec.get("output_schema", {}), artifact_scope=spec.get("artifact_scope", []),
                                 grader_dir=spec.get("grader_dir"))
         task = create_task(ctx.conn, ctx.log, contract, Budget(usd=spec.get("budget_usd", 0.0),
-                                                               seconds=spec.get("budget_seconds", 600)))
+                                                               seconds=spec.get("budget_seconds", 600)),
+                           origin=BENCH)
         ctx.set_frozen_skills(task.id, [])
         t0 = time.time()
         try:
