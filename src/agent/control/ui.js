@@ -186,7 +186,7 @@ async function refreshThread(scroll) {
   syncTrace(th.items);
   const last = th.items[th.items.length - 1];
   updateRing(last ? last.task_id : null);
-  if (last && S.filesTask !== last.task_id) loadFiles(last.task_id, "");
+  if (last && S.filesTask !== last.task_id && !filesPage()) loadFiles(last.task_id, "");
   for (const it of th.items) if (["running", "pending", "paused"].includes(it.status) && it.plan && it.plan.status === "approved") openStream(it.task_id);
   for (const it of th.items) if (TERMINAL(it.status) && !S.streams.has(it.task_id) && !S.callsLoaded.has(it.task_id)) loadCalls(it.task_id);
   if (scroll) $("#items").scrollTop = $("#items").scrollHeight;
@@ -832,24 +832,26 @@ function toggleSide() {
   try { localStorage.setItem("bucephalus-side", closed ? "closed" : "open"); } catch { /* per-viewer only */ }
 }
 function closeSideOnPhone() { $("#app").classList.remove("side-open"); }
+function filesPage() { return S.pane === "files" && !$("#control").hidden; }
+const F = id => $("#" + id + (filesPage() ? "Pg" : ""));
 async function loadFiles(taskId, path) {
   S.filesTask = taskId;
   let d;
   try { d = await api(`/tasks/${taskId}/files?path=${encodeURIComponent(path)}`); }
   catch (e) {
-    $("#filePath").textContent = e.status === 404 ? "Nothing here yet." : e.message;
-    $("#fileList").innerHTML = ""; return;
+    F("filePath").textContent = e.status === 404 ? "Nothing here yet." : e.message;
+    F("fileList").innerHTML = ""; return;
   }
   if (d.kind === "dir") {
     S.filesPath = d.path;
-    $("#filePath").textContent = d.path + "/";
+    F("filePath").textContent = d.path + "/";
     const up = d.path.includes("/") ? `<button class="file" data-action="openFile" ${args(d.path.split("/").slice(0, -1).join("/"))}>..</button>` : "";
-    $("#fileList").innerHTML = up + (d.entries.map(e => `<button class="file" data-action="openFile" ${args(d.path + "/" + e.name)}>
+    F("fileList").innerHTML = up + (d.entries.map(e => `<button class="file" data-action="openFile" ${args(d.path + "/" + e.name)}>
         <span>${esc(e.name)}${e.dir ? "/" : ""}</span><span class="sz">${e.dir ? "" : ktok(e.bytes) + "B"}</span></button>`).join("")
         || `<div class="empty">Empty so far.</div>`);
   } else {
     $$(".file").forEach(f => f.setAttribute("aria-current", String(f.dataset.args === JSON.stringify([d.path]))));
-    const pv = $("#filePreview");
+    const pv = F("filePreview");
     pv.classList.toggle("md", d.text !== undefined && isMarkdownFile(d.path));
     if (d.text !== undefined && isMarkdownFile(d.path)) pv.innerHTML = renderMarkdown(d.text);
     else pv.textContent = d.text !== undefined ? d.text
@@ -870,11 +872,13 @@ async function upload(file) {
     toast(`Added ${out.path}, marked untrusted.`); loadFiles(S.filesTask, dir);
   } catch (e) { toast(e.message, true); }
 }
-const drop = $("#drop");
-["dragenter", "dragover"].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.add("over"); }));
-["dragleave", "drop"].forEach(t => drop.addEventListener(t, () => drop.classList.remove("over")));
-drop.addEventListener("drop", e => { e.preventDefault(); [...e.dataTransfer.files].forEach(upload); });
-drop.addEventListener("paste", e => { [...(e.clipboardData || {}).files || []].forEach(upload); });
+function wireDrop(drop) {
+  ["dragenter", "dragover"].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.add("over"); }));
+  ["dragleave", "drop"].forEach(t => drop.addEventListener(t, () => drop.classList.remove("over")));
+  drop.addEventListener("drop", e => { e.preventDefault(); [...e.dataTransfer.files].forEach(upload); });
+  drop.addEventListener("paste", e => { [...(e.clipboardData || {}).files || []].forEach(upload); });
+}
+wireDrop($("#drop"));
 
 function showPage(on) {
   $("#control").hidden = !on; $(".thread").hidden = on;
@@ -893,10 +897,71 @@ async function openPane(name) {
   try { body.innerHTML = await PANES[name](); } catch (e) { body.innerHTML = `<p class="caveat">${esc(e.message)}</p>`; }
   body.focus();
   if (name === "suites") loadSuites();
+  if (name === "files" && $("#dropPg")) { wireDrop($("#dropPg")); if (S.filesTask) loadFiles(S.filesTask, S.filesPath || ""); }
 }
 $(".nav-list").addEventListener("click", e => { const b = e.target.closest("button[data-pane]"); if (b) openPane(b.dataset.pane); });
 
 const PANES = {
+  async sessions() {
+    const q = S.sessQ || "", arch = !!S.sessArch;
+    const d = await api(`/conversations?q=${encodeURIComponent(q)}&archived=${arch}`);
+    const row = c => `<tr><td><button class="link" data-action="selectConversation" ${args(c.id)}>${c.pinned
+        ? '<span class="pin" aria-label="Pinned">●</span> ' : ""}${esc(c.title)}</button></td>
+      <td class="r">${c.n_tasks}</td><td class="r st-needs">${c.needs_you || ""}</td><td>${ago(c.updated_at)}</td>
+      <td class="r acts"><button class="quiet" data-action="patchConversation" ${args(c.id, "pinned", !c.pinned)}>${c.pinned ? "Unpin" : "Pin"}</button>
+        <button class="quiet" data-action="patchConversation" ${args(c.id, "archived", !arch)}>${arch ? "Unarchive" : "Archive"}</button>
+        <button class="quiet" data-action="exportOne" ${args(c.id, c.title)}>Export</button></td></tr>`;
+    return `<h3>Sessions</h3><p class="lede">Every conversation and the tasks in it. Archiving hides one from the
+      sidebar; nothing is deleted, because each task's record is a hash chain.</p>
+      <div class="page-tools"><input id="sessQ" class="search" type="search" value="${esc(q)}" data-change="sessSearch"
+        placeholder="Search titles and goals, then Enter" aria-label="Search conversations">
+        <button class="btn" data-action="sessArchived">${arch ? "Show active" : "Show archived"}</button></div>
+      <table><tr><th>Conversation</th><th class="r">Tasks</th><th class="r">Needs you</th><th>Updated</th><th></th></tr>
+      ${d.conversations.map(row).join("") || `<tr><td colspan="5" class="empty">${q ? "Nothing matches." : arch
+        ? "Nothing archived." : "No conversations yet."}</td></tr>`}</table>`;
+  },
+  async files() {
+    const d = await api("/tasks?limit=100");
+    return `<h3>Files</h3><p class="lede">Each task reads and writes only its own workspace. A file you add is marked
+      untrusted: the agent reads it as data, never as instructions.</p>
+      <div class="split"><nav class="task-list" aria-label="Tasks">${d.tasks.map(t => `<button class="side-item"
+        data-action="pickWorkspace" ${args(t.task_id)} aria-current="${t.task_id === S.filesTask}">
+        <span class="t">${esc(firstLine(t.goal))}</span><span class="s">${esc(statusWord(t.status))}, ${ago(t.created_at)}</span></button>`).join("")
+        || '<div class="empty">No tasks yet.</div>'}</nav>
+      <section class="ws" aria-label="Workspace"><p class="crumb" id="filePathPg">Pick a task to see its workspace.</p>
+        <div id="fileListPg" class="file-list"></div>
+        <div id="filePreviewPg" class="preview" tabindex="0" aria-label="File preview"></div>
+        <div class="drop" id="dropPg" tabindex="0">Drop or paste a file here to add it to this task's workspace, marked untrusted.</div></section></div>`;
+  },
+  async models() {
+    const d = await api("/models"); MODELS = d;
+    const ex = d.executor, gb = b => b ? (b / 1e9).toFixed(1) + " GB" : "";
+    const server = s => {
+      const ours = s.managed && ex && ex.local && ex.endpoint === s.endpoint;
+      const loaded = new Map(s.loaded.map(m => [m.name, m]));
+      const acts = m => ours ? `${m.name !== ex.model ? `<button class="quiet" data-action="useModel" ${args(m.name)}>Use for new tasks</button>` : ""}
+        ${loaded.has(m.name) ? `<button class="quiet" data-action="unloadModel" ${args(m.name)}>Unload</button>`
+          : `<button class="quiet" data-action="loadModel" ${args(m.name)}>Load</button>`}` : "";
+      const state = m => [m.name === (ex && ex.model) && ex.endpoint === s.endpoint ? "New tasks" : "",
+        loaded.has(m.name) ? `Loaded${loaded.get(m.name).context_length ? `, ${ktok(loaded.get(m.name).context_length)} context` : ""}` : ""]
+        .filter(Boolean).join("; ");
+      return `<h4><code>${esc(s.endpoint)}</code></h4><p class="note">${s.managed
+        ? s.up ? `Running${s.owned ? ", started by this console" : ""}.` : "Not running."
+        : "Your own model server. This console never starts, loads or unloads anything on it."}</p>
+        ${s.managed ? s.up ? `<table><tr><th>Model</th><th class="r">Size</th><th>State</th><th></th></tr>
+          ${s.installed.map(m => `<tr><td><code>${esc(m.name)}</code></td><td class="r">${gb(m.bytes)}</td>
+            <td>${esc(state(m))}</td><td class="r acts">${acts(m)}</td></tr>`).join("")
+            || '<tr><td colspan="4" class="empty">No models installed.</td></tr>'}</table>`
+          : ours ? `<button class="btn" data-action="loadModel" ${args(ex.model)}>Start it and load ${esc(ex.model)}</button>` : ""
+        : ""}`;
+    };
+    return `<h3>Models</h3><p class="lede">What new tasks run on. Switching is refused while a task is running.
+      Only local servers on the console's own port are managed here; the config sets everything else.</p>
+      ${ex ? `<dl class="kv"><dt>New tasks run on</dt><dd><code>${esc(ex.model)}</code></dd>
+        <dt>Served by</dt><dd>${ex.local ? `<code>${esc(ex.endpoint)}</code>` : "not a local server; set in the config"}</dd></dl>
+        ${ex.warning ? `<p class="caveat">${esc(ex.warning)}</p>` : ""}` : '<p class="note">No executor is configured.</p>'}
+      ${d.servers.map(server).join("") || '<p class="note">No local model servers in the config.</p>'}`;
+  },
   async memory() {
     const m = await api("/memory");
     const state = {intact: "Blessed. It matches what you last accepted.",
@@ -1046,6 +1111,27 @@ What to do, in the words a model reads.</textarea></label>
   },
 };
 
+async function patchConversation(id, field, value) {
+  try { await api("/conversations/" + id, {method: "PATCH", body: JSON.stringify({[field]: value})}); }
+  catch (e) { return toast(e.message, true); }
+  S.lastSide = ""; loadSide(); if (id === S.conv) refreshThread(); openPane("sessions");
+}
+function exportOne(id, title) {
+  download(`/conversations/${id}/export?format=md`, `${String(title).slice(0, 60).replace(/[^\w.-]+/g, "-")}.md`);
+}
+function sessArchived() { S.sessArch = !S.sessArch; openPane("sessions"); }
+function pickWorkspace(id) {
+  S.filesPath = "";
+  $$(".task-list .side-item").forEach(b => b.setAttribute("aria-current", String(b.dataset.args === JSON.stringify([id]))));
+  F("filePreview").textContent = ""; loadFiles(id, "");
+}
+async function modelCall(req, done) {
+  try { const r = await req; toast(r.warning || done(r), !!r.warning); } catch (e) { toast(e.message, true); }
+  loadModels(); if (S.pane === "models" && !$("#control").hidden) openPane("models");
+}
+function useModel(m) { modelCall(post("/models/select", {model: m}), () => `New tasks run on ${m}.`); }
+function loadModel(m) { toast(`Loading ${m}`); modelCall(post("/models/run", {model: m}), r => `${m} is loaded (${r.seconds} s).`); }
+function unloadModel(m) { modelCall(post("/models/unload", {model: m}), () => `${m} is out of memory.`); }
 async function forgetMemory(text) {
   if (!confirm(`Forget this line?\n\n${text}`)) return;
   try { const r = await post("/memory/forget", {text}); toast(`Forgot ${r.removed.length} line${r.removed.length === 1 ? "" : "s"}.`); openPane("memory"); }
@@ -1220,7 +1306,8 @@ const COMMANDS = [
   ["Switch light or dark", "toggleTheme"],
   ["Pin or unpin this conversation", "pinConversation"], ["Export this conversation as Markdown", "exportConversation", "md"],
   ["Export this conversation as JSON", "exportConversation", "json"], ["Turn on notifications", "enableNotifications"],
-  ["Open Control Center", "openControl"], ["Memory", "openPane", "memory"], ["Schedules", "openPane", "schedules"],
+  ["Open Control Center", "openControl"], ["Sessions", "openPane", "sessions"], ["Files", "openPane", "files"],
+  ["Models", "openPane", "models"], ["Memory", "openPane", "memory"], ["Schedules", "openPane", "schedules"],
   ["Channels", "openPane", "channels"], ["Skills", "openPane", "skills"], ["Eval suites", "openPane", "suites"],
   ["Reviewer policy", "openPane", "policy"], ["Integrity", "openPane", "integrity"],
   ["Measurement", "openPane", "measurement"], ["Settings", "openPane", "settings"], ["Logs", "openPane", "logs"],
@@ -1286,7 +1373,8 @@ const ACTIONS = {newConversation, selectConversation, renameConversation, archiv
   toggleFiles, toggleSide, openFile, openControl, closeControl, openPane, openPalette, focusSearch,
   toggleTheme, acceptMemory, createSuite, saveTask, closeSuite, addSkill, savePolicy,
   openSuite, delSuite, delTask, checkGate, pinConversation, exportConversation, enableNotifications,
-  runModel, stopTask, resumeTask, toggleTool, setView, closeTrace, traceTask, traceNode, closeTraceDetail, showRewind, showChanges, doRewind, askAgain, editAsk, copyAnswer, copyCode, forgetMemory, addSchedule, removeSchedule, viewSkill};
+  runModel, stopTask, resumeTask, toggleTool, setView, closeTrace, traceTask, traceNode, closeTraceDetail, showRewind, showChanges, doRewind, askAgain, editAsk, copyAnswer, copyCode, forgetMemory, addSchedule, removeSchedule, viewSkill,
+  patchConversation, exportOne, sessArchived, pickWorkspace, useModel, loadModel, unloadModel};
 document.addEventListener("click", e => {
   $$("details.more[open]").forEach(d => { if (!d.contains(e.target)) d.open = false; });
   const el = e.target.closest("[data-action]");
@@ -1298,6 +1386,7 @@ document.addEventListener("change", e => {
   if (e.target.dataset.change === "critChanged") critChanged();
   if (e.target.dataset.change === "rewindStep" && S.rewind) S.rewind.step = Number(e.target.value);
   if (e.target.dataset.change === "longFiles") setLongFiles(e.target.value);
+  if (e.target.dataset.change === "sessSearch") { S.sessQ = e.target.value.trim(); openPane("sessions"); }
 });
 new MutationObserver(() => document.querySelectorAll("i[data-pct]").forEach(i => {
   i.style.width = i.dataset.pct + "%";

@@ -224,8 +224,8 @@ Plan, in order:
    unchanged. `tests/test_console_reskin_guards.py` holds every route, control, pane, view and slash command the
    console had, refuses a call to a route the server lacks, and holds WCAG AA. Done: the dashboard shell and palette
    (nav sidebar, Control Center panes as pages, Hermes Teal / blue light); the chat thread after their desktop app's
-   chat (pinned request bubble, prose reply, quiet tool rows, step rail, floating composer). Next: each page in their
-   page patterns, with Sessions, Files and Models pages over existing routes only. Later, each its own plan: the dashboard pages we lack
+   chat (pinned request bubble, prose reply, quiet tool rows, step rail, floating composer); the pages in their page
+   patterns, plus Sessions, Files and Models pages over existing routes only. Next, each its own plan: the dashboard pages we lack
    (analytics, docs, profiles, config editor, keys, MCP, plugins, webhooks, pairing, system), each with risks
    written down before it is built (plugins on our origin could sign plans; keys need storage off OneDrive).
 

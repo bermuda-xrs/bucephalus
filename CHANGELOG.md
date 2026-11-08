@@ -10,6 +10,17 @@
 Dates are commit dates. `0.1.0` is not released yet — see "Unreleased" for
 what still stands between here and a first iteration.
 
+## The Hermes pages - 2026-11-08 (no HARNESS_VERSION change: console only)
+
+- Three new pages, each over routes the server already had. Sessions lists every conversation, active or archived,
+  with search, pin, archive and export per row; nothing is deleted. Files browses any task's workspace and takes
+  dropped files, marked untrusted as in the side panel. Models shows what new tasks run on and every installed model,
+  with use, load and unload on the console's own server only; your own model server is listed and never touched.
+  The console now calls `/models/unload`, which the server had and nothing used.
+- Every page takes the dashboard's patterns: tables and key-value lists sit in bordered panels with upper-case
+  headers and row hover, and empty states are centred. On a phone, wide tables scroll inside their panel.
+- `tests/test_console_pages.py` holds the three pages, their routes, and no controls for a server we do not manage.
+
 ## The Hermes chat - 2026-11-08 (no HARNESS_VERSION change: console only)
 
 - The thread takes the Hermes desktop app's chat look. Your request is a rounded bubble that stays pinned at the top
