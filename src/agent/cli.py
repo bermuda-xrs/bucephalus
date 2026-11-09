@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import sys
 import time
 import tomllib
@@ -13,6 +12,7 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 
+from . import keystore
 from .assure.monitor import flags as monitor_flags
 from .context import AgentContext
 from .execute.loop import run_task
@@ -580,7 +580,7 @@ def cmd_channel(ctx, args, console) -> int:
             "channels.telegram.allowed_senders is empty, which means NOBODY. "
             "Add your own Telegram user id before starting the bot.")
         return 2
-    if not os.environ.get(cfg.token_env):
+    if not keystore.get(cfg.token_env):
         console.print(
             f"no bot token: set {cfg.token_env}. It must not go in config.yaml.")
         return 2

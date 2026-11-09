@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import collections
 import json
-import os
 import threading
 import time
 import urllib.error
@@ -10,6 +9,7 @@ import urllib.request
 from dataclasses import dataclass, field
 from typing import Protocol
 
+from .. import keystore
 from ..execute.loop import run_task
 from ..kernel.events import sha256_hex
 from ..kernel.tasks import create_task
@@ -374,5 +374,5 @@ class TelegramBot:
 def build(ctx, transport: Transport | None = None) -> TelegramBot:
     cfg = ctx.config.channels.telegram
     if transport is None:
-        transport = HttpTransport(os.environ.get(cfg.token_env, ""))
+        transport = HttpTransport(keystore.get(cfg.token_env) or "")
     return TelegramBot(ctx, transport, cfg)

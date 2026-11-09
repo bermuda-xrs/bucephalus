@@ -108,6 +108,10 @@ class LongFilesIn(BaseModel):
     mode: Literal["pages", "elide", "whole"]
 
 
+class KeyIn(BaseModel):
+    value: str
+
+
 class ModelIn(BaseModel):
     model: str
     slot: str = "cloud"
@@ -685,6 +689,43 @@ def create_app(ctx: AgentContext) -> FastAPI:
         if busy or any(t.is_alive() for t in _runs.values()):
             raise HTTPException(409, "a task is running; test a server when it has finished")
         return mcp_page.test(ctx, name)
+
+    @app.get("/keys")
+    def get_keys() -> dict:
+        from .. import keystore
+
+        return {"keys": [{"name": n, "used_by": u, "set": keystore.source(n) is not None, "source": keystore.source(n)}
+                         for n, u in sorted(keystore.declared(ctx.config).items())]}
+
+    def _declared_key(name: str) -> None:
+        from .. import keystore
+
+        if name not in keystore.declared(ctx.config):
+            raise HTTPException(404, f"{name} is not a key the config declares")
+
+    @app.put("/keys/{name}")
+    def put_key(name: str, body: KeyIn) -> dict:
+        from .. import keystore
+
+        _declared_key(name)
+        try:
+            keystore.put(name, body.value)
+        except ValueError as e:
+            raise HTTPException(400, str(e)) from None
+        except keystore.SyncedFolder as e:
+            raise HTTPException(409, str(e)) from None
+        return {"name": name, "set": True}
+
+    @app.delete("/keys/{name}")
+    def delete_key(name: str) -> dict:
+        from .. import keystore
+
+        _declared_key(name)
+        try:
+            keystore.remove(name)
+        except keystore.SyncedFolder as e:
+            raise HTTPException(409, str(e)) from None
+        return {"name": name, "set": False}
 
     @app.get("/system")
     def get_system() -> dict:

@@ -85,9 +85,11 @@ def state_paths(ctx) -> tuple[Path, ...]:
     if mem is not None:
         out.append(Path(mem))
     from ..control.guard import TOKEN_FILE
+    from ..keystore import path as keystore_path
     from ..paths import user_config_dir
 
     out.append(user_config_dir() / TOKEN_FILE)
+    out.append(keystore_path())
     return tuple(Path(os.path.abspath(p)) for p in out)
 
 

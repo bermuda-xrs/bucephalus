@@ -10,6 +10,18 @@
 Dates are commit dates. `0.1.0` is not released yet — see "Unreleased" for
 what still stands between here and a first iteration.
 
+## Keys page - 2026-11-09 (no HARNESS_VERSION change: the bump comes with the config editor)
+
+- A Keys page sets or clears the secrets the config names: the Telegram bot token and each backend's `api_key_env`.
+  Write only: nothing returns a value, not even part of one. Only names the config declares are accepted, so a request
+  cannot set `PATH` or `LD_PRELOAD`.
+- Stored in `keys.json` in the config folder, written 0600 in a 0700 folder, never inside a synced folder (409), never in
+  a backup. The environment variable of the same name wins and is reported as such. The agent's file tools treat the file
+  as protected state, like the console token.
+- `agent.keystore.get` replaces the three `os.environ` reads (backend headers, the bot, the `channel` command).
+- `tests/test_console_keys.py` holds the declared-name closure, write-only, malformed values, synced folder, backup,
+  environment precedence, protection from the agent, POSIX modes and the page.
+
 ## Reviewer model - 2026-11-09 (no HARNESS_VERSION change: console only)
 
 - Models shows the reviewer beside the executor and, for a local server the console manages, "Use as reviewer" on an
