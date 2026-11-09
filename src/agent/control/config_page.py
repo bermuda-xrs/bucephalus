@@ -93,7 +93,13 @@ def _flat(prefix: str, v, out: list) -> None:
         for k, x in v.items():
             if not prefix and k in HIDDEN:
                 continue
+            if k == "env" and isinstance(x, dict):
+                out.append({"path": f"{prefix}.env" if prefix else "env", "value": ", ".join(sorted(x))})
+                continue
             _flat(f"{prefix}.{k}" if prefix else str(k), x, out)
+    elif isinstance(v, list) and any(isinstance(x, dict) for x in v):
+        for i, x in enumerate(v):
+            _flat(f"{prefix}[{i}]", x, out)
     else:
         out.append({"path": prefix, "value": ", ".join(map(str, v)) if isinstance(v, list) else v})
 

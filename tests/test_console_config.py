@@ -171,3 +171,14 @@ def test_a_backup_is_named_so_the_protected_config_glob_covers_it(api, cfg_file)
 def test_the_page_calls_only_its_routes():
     assert {("GET", "/config"), ("POST", "/config/propose"), ("POST", "/config/apply")} <= _calls(UI)
     assert 'data-pane="config"' in HTML
+
+
+def test_environment_values_in_the_config_are_never_returned(ctx, api):
+    from agent.config import HookConfig, McpServerConfig
+
+    ctx.config.mcp_servers = {"s": McpServerConfig(argv=["x"], env={"API_TOKEN": "S3CRET-ENV-VALUE"})}
+    ctx.config.hooks.pre_tool = [HookConfig(argv=["y"], env={"HOOK_KEY": "S3CRET-HOOK-VALUE"})]
+    r = api.get("/config")
+    assert "S3CRET" not in r.text
+    rows = {x["path"]: x["value"] for x in r.json()["readonly"]}
+    assert rows["mcp_servers.s.env"] == "API_TOKEN" and "HOOK_KEY" in str(rows)
