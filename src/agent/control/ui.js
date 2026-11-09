@@ -1019,6 +1019,26 @@ const PANES = {
             ? `, ${x.kind}` : ""}</span></button>`).join("")}</nav>
         <article class="doc md" id="docBody" tabindex="0" aria-label="Document"></article></div>`;
   },
+  async system() {
+    const d = await api("/system");
+    const b = await api("/system/backups");
+    const mb = n => (n / 1048576).toFixed(n < 1048576 * 10 ? 1 : 0) + " MB", up = s => s < 3600 ? Math.round(s / 60) + " min" : (s / 3600).toFixed(1) + " h";
+    return `<h3>System</h3><p class="lede">This machine and this console's record. Read only, except backups.</p>
+      <dl class="kv"><dt>Host</dt><dd>${esc(d.os)}, ${d.cpus} CPUs, Python ${esc(d.python)}</dd>
+      <dt>Disk free</dt><dd>${mb(d.disk_free)} where <code>${esc(d.state_dir)}</code> lives</dd>
+      <dt>Versions</dt><dd>harness ${d.harness_version}, toolset ${d.toolset_version}</dd>
+      <dt>Console up</dt><dd>${up(d.uptime_s)}</dd>
+      <dt>Record</dt><dd>database ${mb(d.db_bytes)}, anchor ${mb(d.anchor_bytes)}</dd></dl>
+      <h4>Backups</h4><p class="note">A zip of the database, the anchor and memory, copied while tasks run. Kept in
+      <code>${esc(d.backups_dir)}</code>, which must not be a synced folder.</p>
+      <button class="btn" data-action="makeBackup">Back up now</button>
+      <table><tr><th>Backup</th><th class="r">Size</th><th>Made</th><th></th></tr>
+      ${b.backups.map(x => `<tr><td><code>${esc(x.name)}</code></td><td class="r">${mb(x.bytes)}</td><td>${ago(x.created)}</td>
+        <td class="r"><button class="quiet" data-action="getBackup" ${args(x.name)}>Download</button></td></tr>`).join("")
+        || '<tr><td colspan="4" class="empty">No backups yet.</td></tr>'}</table>
+      <p class="note">Restoring swaps the live database, so it is a command with the console stopped, never a button here:
+      unzip over the state folder.</p>`;
+  },
   async memory() {
     const m = await api("/memory");
     const state = {intact: "Blessed. It matches what you last accepted.",
@@ -1203,6 +1223,11 @@ async function readDoc(name) {
   $$(".doc-list .side-item").forEach(b => b.setAttribute("aria-current", String(b.dataset.args === JSON.stringify([name]))));
   const el = $("#docBody"); el.innerHTML = renderMarkdown(d.text); el.scrollTop = 0;
 }
+async function makeBackup() {
+  try { const r = await post("/system/backup", {}); toast(`Wrote ${r.name}.`); openPane("system"); }
+  catch (e) { toast(e.message, true); }
+}
+function getBackup(name) { download(`/system/backups/${encodeURIComponent(name)}`, name); }
 async function forgetMemory(text) {
   if (!confirm(`Forget this line?\n\n${text}`)) return;
   try { const r = await post("/memory/forget", {text}); toast(`Forgot ${r.removed.length} line${r.removed.length === 1 ? "" : "s"}.`); openPane("memory"); }
@@ -1422,7 +1447,7 @@ const COMMANDS = [
   ["Models", "openPane", "models"], ["Analytics", "openPane", "analytics"], ["Memory", "openPane", "memory"], ["Schedules", "openPane", "schedules"],
   ["Channels", "openPane", "channels"], ["Skills", "openPane", "skills"], ["Eval suites", "openPane", "suites"],
   ["Reviewer policy", "openPane", "policy"], ["Integrity", "openPane", "integrity"],
-  ["Measurement", "openPane", "measurement"], ["Settings", "openPane", "settings"], ["Logs", "openPane", "logs"], ["Docs", "openPane", "docs"],
+  ["Measurement", "openPane", "measurement"], ["Settings", "openPane", "settings"], ["Logs", "openPane", "logs"], ["Docs", "openPane", "docs"], ["System", "openPane", "system"],
 ];
 let PAL = [], PAL_I = 0;
 function openPalette() {
@@ -1487,7 +1512,7 @@ const ACTIONS = {newConversation, selectConversation, renameConversation, archiv
   openSuite, delSuite, delTask, checkGate, pinConversation, exportConversation, enableNotifications,
   runModel, stopTask, resumeTask, toggleTool, setView, closeTrace, traceTask, traceNode, closeTraceDetail, showRewind, showChanges, doRewind, askAgain, editAsk, copyAnswer, copyCode, forgetMemory, addSchedule, removeSchedule, viewSkill,
   patchConversation, exportOne, sessArchived, pickWorkspace, useModel, loadModel, unloadModel, anDays, readDoc,
-  editSchedule, cancelScheduleEdit, pauseSchedule, resumeSchedule, runSchedule, archiveOlder, newFolder, removeFile};
+  editSchedule, cancelScheduleEdit, pauseSchedule, resumeSchedule, runSchedule, archiveOlder, newFolder, removeFile, makeBackup, getBackup};
 document.addEventListener("click", e => {
   $$("details.more[open]").forEach(d => { if (!d.contains(e.target)) d.open = false; });
   const el = e.target.closest("[data-action]");

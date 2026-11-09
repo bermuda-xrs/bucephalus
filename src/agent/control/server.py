@@ -6,7 +6,7 @@ import threading
 from pathlib import Path
 
 from fastapi import FastAPI, Header, HTTPException
-from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -664,6 +664,36 @@ def create_app(ctx: AgentContext) -> FastAPI:
         if not sched.remove(ctx.conn, sid):
             raise HTTPException(404, "no such active schedule")
         return {"removed": sid}
+
+    @app.get("/system")
+    def get_system() -> dict:
+        from . import system
+
+        return system.info(ctx)
+
+    @app.post("/system/backup")
+    def post_backup() -> dict:
+        from . import system
+
+        try:
+            return system.backup(ctx)
+        except system.SyncedFolder as e:
+            raise HTTPException(409, str(e)) from None
+
+    @app.get("/system/backups")
+    def get_backups() -> dict:
+        from . import system
+
+        return {"backups": system.listing()}
+
+    @app.get("/system/backups/{name}")
+    def get_backup(name: str):
+        from . import system
+
+        p = system.find(name)
+        if p is None:
+            raise HTTPException(404, "no such backup")
+        return FileResponse(p, media_type="application/zip", filename=name)
 
     @app.get("/documents")
     def get_documents() -> dict:

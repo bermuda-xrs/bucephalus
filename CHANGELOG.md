@@ -10,6 +10,17 @@
 Dates are commit dates. `0.1.0` is not released yet — see "Unreleased" for
 what still stands between here and a first iteration.
 
+## System page - 2026-11-09 (no HARNESS_VERSION change: console only)
+
+- A System page: host (OS, Python, CPUs), disk free where the state lives, versions, console uptime, database and anchor
+  sizes, and backups. A backup is a zip of a WAL-safe copy of the database, the anchor and memory, written to
+  `<config dir>/backups` while tasks run; it is refused if that folder is inside a synced folder (OneDrive and the
+  like), since it holds your conversations. A backup downloads only by its exact listed name.
+- Not built: restart (it kills the server serving the page), update (installs code from the network), debug share (sends
+  data to a third party) and restore. Restore stays a command with the console stopped; the page says so and has no button.
+- `tests/test_console_system.py` holds the report, a backup that opens and holds a task, the sync refusal, backing up
+  during a run, four download names that must 404, and a page with no restore, update or restart control.
+
 ## Schedules, archive and files - 2026-11-08 (HARNESS_VERSION 20)
 
 - Schedules pause, resume, run now and edit. A paused schedule records its occurrences as missed and never runs them
