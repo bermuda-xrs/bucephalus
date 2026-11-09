@@ -108,6 +108,16 @@ class LongFilesIn(BaseModel):
     mode: Literal["pages", "elide", "whole"]
 
 
+class ConfigProposeIn(BaseModel):
+    changes: dict
+
+
+class ConfigApplyIn(BaseModel):
+    hash: str
+    phrase: str
+    acks: list[str] = []
+
+
 class AllowIn(BaseModel):
     sender: str
     confirm: str
@@ -694,6 +704,34 @@ def create_app(ctx: AgentContext) -> FastAPI:
         if busy or any(t.is_alive() for t in _runs.values()):
             raise HTTPException(409, "a task is running; test a server when it has finished")
         return mcp_page.test(ctx, name)
+
+    proposals: dict = {}
+
+    def _config_call(fn, *a):
+        from . import config_page
+
+        try:
+            return fn(*a)
+        except config_page.Refused as e:
+            raise HTTPException(e.status, str(e)) from None
+
+    @app.get("/config")
+    def get_config() -> dict:
+        from . import config_page
+
+        return _config_call(config_page.view, ctx)
+
+    @app.post("/config/propose")
+    def post_config_propose(body: ConfigProposeIn) -> dict:
+        from . import config_page
+
+        return _config_call(config_page.propose, ctx, proposals, body.changes)
+
+    @app.post("/config/apply")
+    def post_config_apply(body: ConfigApplyIn) -> dict:
+        from . import config_page
+
+        return _config_call(config_page.apply, ctx, proposals, body.hash, body.phrase, body.acks)
 
     @app.post("/channels/telegram/allow")
     def post_allow(body: AllowIn) -> dict:

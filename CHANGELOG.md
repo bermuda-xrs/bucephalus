@@ -10,6 +10,25 @@
 Dates are commit dates. `0.1.0` is not released yet — see "Unreleased" for
 what still stands between here and a first iteration.
 
+## Config editor - 2026-11-09 (HARNESS_VERSION 21)
+
+- A Config page edits a closed set: the numeric limits (steps, refinement iterations, parallel tools, task budget in
+  dollars and seconds, delegation threshold, context fill ratio), `long_files`, and each backend's `model`. Everything
+  that widens what the agent may do stays in the file: autonomy and review, hooks, MCP servers, channels, gate, the
+  profile, the sandbox root, endpoints and keys' env names. A request for one of those is refused with 400.
+- Review, then apply: `POST /config/propose` validates with the real loader, returns the diff and any loosenings and
+  writes nothing. `POST /config/apply` needs the proposal's hash, the typed phrase `apply config` and a tick for each
+  loosening (a limit raised more than 10x; the reviewer and executor becoming the same model). It refuses a file that
+  changed since the review (409), copies the file to `config.bak-<time>.yaml` (matches the protected `config*.yaml`),
+  writes through a random-named staging file and renames. A proposal is used once.
+- The running config is never altered: the change takes effect at the next start. Comments in the file are not kept; the
+  backup has them. The page also shows the profile, whether cloud backends or provider keys are present, and every other
+  setting read only.
+- HARNESS_VERSION 21 for Wave 3 as a whole: the gate protects the key file, backends and the bot read keys through
+  `keystore`, the Telegram allowlist is config plus a table. Prompts and tools are unchanged.
+- `tests/test_console_config.py`: editable closure, invalid values, hash and phrase, atomic write and backup, stale file,
+  single use, loosenings and their acks, the loader's refusal, no token, no config file, the page.
+
 ## Telegram senders - 2026-11-09 (no HARNESS_VERSION change: the bump comes with the config editor)
 
 - Channels can allow a Telegram sender: the id is typed twice (or "Allow this sender" on a dropped message fills the

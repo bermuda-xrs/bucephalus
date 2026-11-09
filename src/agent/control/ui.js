@@ -1076,6 +1076,28 @@ const PANES = {
           ${k.source === "console" ? `<button class="quiet" data-action="clearKey" ${args(k.name)}>Clear</button>` : ""}</td></tr>`).join("")
         || '<tr><td colspan="5" class="empty">The config names no keys.</td></tr>'}</table>`;
   },
+  async config() {
+    const d = await api("/config");
+    S.cfg = d;
+    const field = e => e.kind === "choice"
+      ? `<select class="cfg-in" data-path="${esc(e.path)}" data-kind="choice" aria-label="${esc(e.path)}">${e.choices.map(c => `<option${c === e.value ? " selected" : ""}>${esc(c)}</option>`).join("")}</select>`
+      : `<input class="cfg-in" data-path="${esc(e.path)}" data-kind="${e.kind}" value="${esc(String(e.value))}" aria-label="${esc(e.path)}" ${e.kind === "text" ? "" : 'inputmode="decimal"'}>`;
+    return `<h3>Config</h3><p class="lede">Change what a few settings are, then review before anything is written. A change takes
+      effect the next time the console starts; the running one is never altered. Everything that widens what the agent may
+      do (autonomy, review, hooks, MCP servers, channels, the sandbox, the profile) stays in the file${d.path ? ` <code>${esc(d.path)}</code>` : ""}, edited by you.</p>
+      ${d.editable.length ? `<table><tr><th>Setting</th><th>Value</th></tr>
+        ${d.editable.map(e => `<tr><td><code>${esc(e.path)}</code></td><td>${field(e)}</td></tr>`).join("")}</table>
+        <button class="btn" data-action="reviewConfig">Review changes</button><div id="cfgReview"></div>`
+        : '<p class="note">This console was not started from a config file, so nothing can be edited here.</p>'}
+      <h4>Profile</h4><dl class="kv"><dt>Running as</dt><dd><code>${esc(d.profile.name)}</code></dd>
+        <dt>Cloud backends</dt><dd>${d.profile.cloud_backends.length ? d.profile.cloud_backends.map(x => `<code>${esc(x)}</code>`).join(", ") : "none"}</dd>
+        <dt>Provider keys in the environment</dt><dd>${d.profile.credentials_present.length ? d.profile.credentials_present.map(x => `<code>${esc(x)}</code>`).join(", ") : "none"}</dd></dl>
+      <h4>Everything else, as the console started</h4>
+      <table>${d.readonly.map(r => `<tr><td><code>${esc(r.path)}</code></td><td>${esc(String(r.value))}</td></tr>`).join("")}</table>
+      <h4>Backups</h4><p class="note">Every apply first copies the file to <code>config.bak-&lt;time&gt;.yaml</code> beside it. Comments are not kept in the new file; the backup has them.</p>
+      <table>${d.backups.map(b => `<tr><td><code>${esc(b.name)}</code></td><td>${ago(b.created)}</td></tr>`).join("")
+        || '<tr><td class="empty">None yet.</td></tr>'}</table>`;
+  },
   async memory() {
     const m = await api("/memory");
     const state = {intact: "Blessed. It matches what you last accepted.",
@@ -1277,6 +1299,37 @@ async function makeBackup() {
   catch (e) { toast(e.message, true); }
 }
 function getBackup(name) { download(`/system/backups/${encodeURIComponent(name)}`, name); }
+async function reviewConfig() {
+  const changes = {};
+  for (const i of $$(".cfg-in")) {
+    const e = S.cfg.editable.find(x => x.path === i.dataset.path);
+    const v = i.dataset.kind === "int" || i.dataset.kind === "float" ? Number(i.value) : i.value;
+    if (v !== e.value) changes[i.dataset.path] = v;
+  }
+  if (!Object.keys(changes).length) return toast("Nothing changed.", true);
+  let p;
+  try {
+    p = await post("/config/propose", {changes});
+  } catch (e) { return toast(e.message, true); }
+  S.cfgProposal = p;
+  const box = F("cfgReview");
+  box.innerHTML = `<h4>Review</h4><table><tr><th>Setting</th><th>Now</th><th>Becomes</th></tr>
+    ${p.diff.map(x => `<tr><td><code>${esc(x.path)}</code></td><td>${esc(String(x.old))}</td><td>${esc(String(x.new))}</td></tr>`).join("")}</table>
+    ${p.error ? `<p class="caveat">The loader would refuse this: ${esc(p.error)}</p>` : `
+    ${p.loosens.map(f => `<label class="note"><input type="checkbox" class="cfg-ack" data-path="${esc(f.path)}">
+      <code>${esc(f.path)}</code>: ${esc(f.why)}. I accept this.</label>`).join("")}
+    <label class="field">Type <code>${esc(p.phrase)}</code> to write it
+      <input id="cfgPhrase" autocomplete="off"></label>
+    <button class="btn primary" data-action="applyConfig">Apply</button>`}`;
+}
+async function applyConfig() {
+  const acks = $$(".cfg-ack").filter(c => c.checked).map(c => c.dataset.path);
+  try {
+    const r = await post("/config/apply", {hash: S.cfgProposal.hash, phrase: $("#cfgPhrase").value.trim(), acks});
+    toast(`Written. Backup ${r.backup}. It takes effect at the next start.`);
+  } catch (e) { return toast(e.message, true); }
+  S.cfgProposal = null; openPane("config");
+}
 function fillSender(sender) {
   $("#alId").value = sender; $("#alId2").value = ""; $("#alId2").focus();
   toast("Type the id again to allow it.");
@@ -1540,7 +1593,7 @@ const COMMANDS = [
   ["Models", "openPane", "models"], ["Analytics", "openPane", "analytics"], ["Memory", "openPane", "memory"], ["Schedules", "openPane", "schedules"],
   ["Channels", "openPane", "channels"], ["Skills", "openPane", "skills"], ["Eval suites", "openPane", "suites"],
   ["Reviewer policy", "openPane", "policy"], ["Integrity", "openPane", "integrity"],
-  ["Measurement", "openPane", "measurement"], ["Settings", "openPane", "settings"], ["Logs", "openPane", "logs"], ["Docs", "openPane", "docs"], ["System", "openPane", "system"], ["MCP", "openPane", "mcp"], ["Keys", "openPane", "keys"],
+  ["Measurement", "openPane", "measurement"], ["Settings", "openPane", "settings"], ["Logs", "openPane", "logs"], ["Docs", "openPane", "docs"], ["System", "openPane", "system"], ["MCP", "openPane", "mcp"], ["Keys", "openPane", "keys"], ["Config", "openPane", "config"],
 ];
 let PAL = [], PAL_I = 0;
 function openPalette() {
@@ -1605,7 +1658,7 @@ const ACTIONS = {newConversation, selectConversation, renameConversation, archiv
   openSuite, delSuite, delTask, checkGate, pinConversation, exportConversation, enableNotifications,
   runModel, stopTask, resumeTask, toggleTool, setView, closeTrace, traceTask, traceNode, closeTraceDetail, showRewind, showChanges, doRewind, askAgain, editAsk, copyAnswer, copyCode, forgetMemory, addSchedule, removeSchedule, viewSkill,
   patchConversation, exportOne, sessArchived, pickWorkspace, useModel, useReviewer, loadModel, unloadModel, anDays, readDoc,
-  editSchedule, cancelScheduleEdit, pauseSchedule, resumeSchedule, runSchedule, archiveOlder, newFolder, removeFile, makeBackup, getBackup, testMcp, saveKey, clearKey, fillSender, allowSender, revokeSender};
+  editSchedule, cancelScheduleEdit, pauseSchedule, resumeSchedule, runSchedule, archiveOlder, newFolder, removeFile, makeBackup, getBackup, testMcp, saveKey, clearKey, fillSender, allowSender, revokeSender, reviewConfig, applyConfig};
 document.addEventListener("click", e => {
   $$("details.more[open]").forEach(d => { if (!d.contains(e.target)) d.open = false; });
   const el = e.target.closest("[data-action]");
