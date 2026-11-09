@@ -10,6 +10,16 @@
 Dates are commit dates. `0.1.0` is not released yet — see "Unreleased" for
 what still stands between here and a first iteration.
 
+## MCP page - 2026-11-09 (no HARNESS_VERSION change: console only)
+
+- An MCP page lists the servers in your config: command, environment variable names (never values), which tools count as
+  read only, limits. "Test it" starts that one server with the existing client, lists its tools with their descriptions
+  as escaped text (a server's words are data, never followed) and stops it. Refused while a task runs. Only configured
+  servers can be tested; nothing is fetched or installed.
+- Not built: adding or removing servers (a config edit), their catalog and install, OAuth.
+- `tests/test_console_mcp.py` holds the masking, the test run against the fake server, a server that will not start, an
+  unconfigured name, the running-task refusal and an escaped page.
+
 ## System page - 2026-11-09 (no HARNESS_VERSION change: console only)
 
 - A System page: host (OS, Python, CPUs), disk free where the state lives, versions, console uptime, database and anchor

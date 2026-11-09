@@ -1039,6 +1039,24 @@ const PANES = {
       <p class="note">Restoring swaps the live database, so it is a command with the console stopped, never a button here:
       unzip over the state folder.</p>`;
   },
+  async mcp() {
+    const d = await api("/mcp");
+    const r = S.mcpTest || {};
+    return `<h3>MCP</h3><p class="lede">Outside tool servers you listed in your config. Their tools are untrusted input: a
+      task that uses one has its results tainted, and scheduled and channel tasks can never call them. Adding or removing a
+      server is a config edit; this page runs only what is already there.</p>
+      ${d.servers.map(s => `<h4><code>${esc(s.name)}</code></h4>
+        <dl class="kv"><dt>Command</dt><dd><code>${esc(s.argv.join(" "))}</code></dd>
+        <dt>Environment</dt><dd>${s.env.length ? s.env.map(k => `<code>${esc(k)}</code>`).join(", ") + " (values never shown)" : "none"}</dd>
+        <dt>Read only</dt><dd>${s.read_only.length ? s.read_only.map(k => `<code>${esc(k)}</code>`).join(", ") : "none: every tool counts as writing"}</dd>
+        <dt>Limits</dt><dd>${s.timeout_s} s a call, ${s.start_timeout_s} s to start, paths ${s.strict_paths === null ? "checked for writes" : s.strict_paths ? "always checked" : "checked loosely"}</dd></dl>
+        <button class="btn" data-action="testMcp" ${args(s.name)}>Test it</button>
+        ${r.name === s.name ? (r.ok ? `<table><tr><th>Tool</th><th>Counts as</th><th>What the server says it does</th></tr>
+          ${r.tools.map(t => `<tr><td><code>${esc(t.name)}</code></td><td>${t.writes ? "writing" : "read only"}</td>
+            <td>${esc(String(t.description || "").slice(0, 300))}</td></tr>`).join("")}</table>
+          <p class="note">That text is the server's own words, shown as data and never followed.</p>`
+          : `<p class="caveat">${esc(r.error)}</p>`) : ""}`).join("") || '<p class="note">No servers in your config. Add them under <code>mcp_servers</code> there.</p>'}`;
+  },
   async memory() {
     const m = await api("/memory");
     const state = {intact: "Blessed. It matches what you last accepted.",
@@ -1228,6 +1246,12 @@ async function makeBackup() {
   catch (e) { toast(e.message, true); }
 }
 function getBackup(name) { download(`/system/backups/${encodeURIComponent(name)}`, name); }
+async function testMcp(name) {
+  toast(`Starting ${name}`);
+  try { S.mcpTest = Object.assign({name}, await post(`/mcp/${encodeURIComponent(name)}/test`, {})); }
+  catch (e) { return toast(e.message, true); }
+  openPane("mcp");
+}
 async function forgetMemory(text) {
   if (!confirm(`Forget this line?\n\n${text}`)) return;
   try { const r = await post("/memory/forget", {text}); toast(`Forgot ${r.removed.length} line${r.removed.length === 1 ? "" : "s"}.`); openPane("memory"); }
@@ -1447,7 +1471,7 @@ const COMMANDS = [
   ["Models", "openPane", "models"], ["Analytics", "openPane", "analytics"], ["Memory", "openPane", "memory"], ["Schedules", "openPane", "schedules"],
   ["Channels", "openPane", "channels"], ["Skills", "openPane", "skills"], ["Eval suites", "openPane", "suites"],
   ["Reviewer policy", "openPane", "policy"], ["Integrity", "openPane", "integrity"],
-  ["Measurement", "openPane", "measurement"], ["Settings", "openPane", "settings"], ["Logs", "openPane", "logs"], ["Docs", "openPane", "docs"], ["System", "openPane", "system"],
+  ["Measurement", "openPane", "measurement"], ["Settings", "openPane", "settings"], ["Logs", "openPane", "logs"], ["Docs", "openPane", "docs"], ["System", "openPane", "system"], ["MCP", "openPane", "mcp"],
 ];
 let PAL = [], PAL_I = 0;
 function openPalette() {
@@ -1512,7 +1536,7 @@ const ACTIONS = {newConversation, selectConversation, renameConversation, archiv
   openSuite, delSuite, delTask, checkGate, pinConversation, exportConversation, enableNotifications,
   runModel, stopTask, resumeTask, toggleTool, setView, closeTrace, traceTask, traceNode, closeTraceDetail, showRewind, showChanges, doRewind, askAgain, editAsk, copyAnswer, copyCode, forgetMemory, addSchedule, removeSchedule, viewSkill,
   patchConversation, exportOne, sessArchived, pickWorkspace, useModel, loadModel, unloadModel, anDays, readDoc,
-  editSchedule, cancelScheduleEdit, pauseSchedule, resumeSchedule, runSchedule, archiveOlder, newFolder, removeFile, makeBackup, getBackup};
+  editSchedule, cancelScheduleEdit, pauseSchedule, resumeSchedule, runSchedule, archiveOlder, newFolder, removeFile, makeBackup, getBackup, testMcp};
 document.addEventListener("click", e => {
   $$("details.more[open]").forEach(d => { if (!d.contains(e.target)) d.open = false; });
   const el = e.target.closest("[data-action]");

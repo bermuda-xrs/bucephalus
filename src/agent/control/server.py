@@ -665,6 +665,23 @@ def create_app(ctx: AgentContext) -> FastAPI:
             raise HTTPException(404, "no such active schedule")
         return {"removed": sid}
 
+    @app.get("/mcp")
+    def get_mcp() -> dict:
+        from . import mcp_page
+
+        return mcp_page.listing(ctx)
+
+    @app.post("/mcp/{name}/test")
+    def post_mcp_test(name: str) -> dict:
+        from . import mcp_page
+
+        if name not in ctx.config.mcp_servers:
+            raise HTTPException(404, "no such configured server")
+        busy = ctx.conn.execute("SELECT 1 FROM tasks WHERE status='running' LIMIT 1").fetchone()
+        if busy or any(t.is_alive() for t in _runs.values()):
+            raise HTTPException(409, "a task is running; test a server when it has finished")
+        return mcp_page.test(ctx, name)
+
     @app.get("/system")
     def get_system() -> dict:
         from . import system
