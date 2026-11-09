@@ -10,6 +10,15 @@
 Dates are commit dates. `0.1.0` is not released yet — see "Unreleased" for
 what still stands between here and a first iteration.
 
+## Reviewer model - 2026-11-09 (no HARNESS_VERSION change: console only)
+
+- Models shows the reviewer beside the executor and, for a local server the console manages, "Use as reviewer" on an
+  installed model. It uses the existing `/models/select` with the reviewer's slot, so the same refusals apply: not while
+  a task runs, not a model that is not installed, not a server the console does not manage. The executor is untouched.
+  Same model for both is flagged, not blocked: the rule is two backends (anti-collusion), and a config may choose one model.
+- `/models` gains `reviewer`; none is listed when none is configured.
+- `tests/test_local_models.py`: listing, select leaves the executor alone, running-task refusal, uninstalled model, no reviewer.
+
 ## MCP page - 2026-11-09 (no HARNESS_VERSION change: console only)
 
 - An MCP page lists the servers in your config: command, environment variable names (never values), which tools count as

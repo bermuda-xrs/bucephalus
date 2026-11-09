@@ -79,6 +79,9 @@ def api(ctx, workspace, fake):
     cfg = BackendConfig(kind="ollama", model="granite4.1:3b", endpoint=fake.endpoint, model_server="ollama")
     ctx.config.backends["cloud"] = cfg
     ctx.backends["cloud"] = OllamaBackend("cloud", cfg)
+    rcfg = BackendConfig(kind="ollama", model="granite4.1:3b", endpoint=fake.endpoint, model_server="ollama")
+    ctx.config.backends["review"] = rcfg
+    ctx.backends["review"] = OllamaBackend("review", rcfg)
     app = create_app(ctx)
     c = TestClient(app, base_url="http://127.0.0.1")
     c.headers["Authorization"] = "Bearer " + app.state.token
@@ -230,3 +233,45 @@ def test_the_users_port_is_never_started_whoever_asks(monkeypatch, tmp_path):
     for url in ("http://127.0.0.1:11434", "http://localhost"):
         with pytest.raises(local.Refused, match="user's own"):
             local.start_server(url, tmp_path)
+
+
+def test_the_reviewer_is_listed_apart_from_the_executor(api, fake):
+    d = api.get("/models").json()
+    assert d["reviewer"] == {"slot": "review", "model": "granite4.1:3b", "endpoint": fake.endpoint, "local": True}
+
+
+def test_selecting_the_reviewer_model_leaves_the_executor_alone(api, ctx):
+    r = api.post("/models/select", json={"model": "granite4.1:8b", "slot": "review"})
+    assert r.status_code == 200, r.text
+    assert ctx.backends["review"].cfg.model == "granite4.1:8b" and ctx.config.backends["review"].model == "granite4.1:8b"
+    assert ctx.backends["cloud"].cfg.model == "granite4.1:3b"
+    assert api.get("/models").json()["reviewer"]["model"] == "granite4.1:8b"
+
+
+def test_the_reviewer_model_is_not_switched_under_a_running_task(api, ctx, monkeypatch):
+    import agent.control.server as srv
+
+    class Alive:
+        def is_alive(self):
+            return True
+
+    monkeypatch.setitem(srv._runs, "t_busy", Alive())
+    assert api.post("/models/select", json={"model": "granite4.1:8b", "slot": "review"}).status_code == 409
+    assert ctx.backends["review"].cfg.model == "granite4.1:3b"
+
+
+def test_an_uninstalled_reviewer_model_is_refused(api, ctx):
+    assert api.post("/models/select", json={"model": "nope:1b", "slot": "review"}).status_code == 400
+    assert ctx.backends["review"].cfg.model == "granite4.1:3b"
+
+
+def test_no_reviewer_is_listed_when_none_is_configured(api, ctx):
+    del ctx.backends["review"]
+    assert api.get("/models").json()["reviewer"] is None
+
+
+def test_the_models_page_offers_the_reviewer_pick_with_its_slot_on_its_own_line():
+    block = UI[UI.index("async models()"):]
+    block = block[:block.index("\n  async ")]
+    assert "useReviewer" in block and "Reviewer" in block
+    assert "slot: MODELS.reviewer.slot" in UI
