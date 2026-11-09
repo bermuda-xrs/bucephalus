@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import os
 import time
 
 from typing import TYPE_CHECKING
@@ -9,6 +8,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     import httpx
 
+from .. import keystore
 from ..config import BackendConfig
 from ..kernel.types import ModelResponse, TokenUsage
 from .base import BackendBase, BackendError
@@ -57,7 +57,7 @@ class OpenAICompatibleBackend(BackendBase):
         h = {"Content-Type": "application/json"}
         env = self.cfg.api_key_env
         if env:
-            key = os.environ.get(env)
+            key = keystore.get(env)
             if not key:
                 raise BackendError(
                     f"backend {self.name!r} declares api_key_env={env!r} but "

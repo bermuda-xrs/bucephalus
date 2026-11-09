@@ -1063,6 +1063,19 @@ const PANES = {
           <p class="note">That text is the server's own words, shown as data and never followed.</p>`
           : `<p class="caveat">${esc(r.error)}</p>`) : ""}`).join("") || '<p class="note">No servers in your config. Add them under <code>mcp_servers</code> there.</p>'}`;
   },
+  async keys() {
+    const d = await api("/keys");
+    return `<h3>Keys</h3><p class="lede">The secrets your config names: the Telegram bot token and any backend's API key. You can
+      set or clear one here, but nothing ever shows it back, not even part of it. The console keeps it in a private file in
+      your config folder, outside the workspace and out of backups, and an environment variable of the same name wins.</p>
+      <table><tr><th>Key</th><th>Used by</th><th>State</th><th>New value</th><th></th></tr>
+      ${d.keys.map(k => `<tr><td><code>${esc(k.name)}</code></td><td>${esc(k.used_by)}</td>
+        <td>${k.set ? "Set" + (k.source === "environment" ? " (environment)" : "") : "Not set"}</td>
+        <td><input class="key-in" type="password" autocomplete="off" spellcheck="false" data-key="${esc(k.name)}" aria-label="New value for ${esc(k.name)}"></td>
+        <td class="r acts"><button class="quiet" data-action="saveKey" ${args(k.name)}>Save</button>
+          ${k.source === "console" ? `<button class="quiet" data-action="clearKey" ${args(k.name)}>Clear</button>` : ""}</td></tr>`).join("")
+        || '<tr><td colspan="5" class="empty">The config names no keys.</td></tr>'}</table>`;
+  },
   async memory() {
     const m = await api("/memory");
     const state = {intact: "Blessed. It matches what you last accepted.",
@@ -1255,6 +1268,24 @@ async function makeBackup() {
   catch (e) { toast(e.message, true); }
 }
 function getBackup(name) { download(`/system/backups/${encodeURIComponent(name)}`, name); }
+async function saveKey(name) {
+  const input = $$(".key-in").find(i => i.dataset.key === name), value = input ? input.value : "";
+  if (input) input.value = "";
+  if (!value.trim()) return toast("Type the new value first.", true);
+  try {
+    await api(`/keys/${encodeURIComponent(name)}`, {method: "PUT", body: JSON.stringify({value})});
+    toast(`Saved ${name}. It is not shown again.`);
+  } catch (e) { toast(e.message, true); }
+  openPane("keys");
+}
+async function clearKey(name) {
+  if (!confirm(`Clear ${name} from this console? Anything using it stops working until you set it again.`)) return;
+  try {
+    await api(`/keys/${encodeURIComponent(name)}`, {method: "DELETE"});
+    toast(`Cleared ${name}.`);
+  } catch (e) { toast(e.message, true); }
+  openPane("keys");
+}
 async function testMcp(name) {
   toast(`Starting ${name}`);
   try { S.mcpTest = Object.assign({name}, await post(`/mcp/${encodeURIComponent(name)}/test`, {})); }
@@ -1480,7 +1511,7 @@ const COMMANDS = [
   ["Models", "openPane", "models"], ["Analytics", "openPane", "analytics"], ["Memory", "openPane", "memory"], ["Schedules", "openPane", "schedules"],
   ["Channels", "openPane", "channels"], ["Skills", "openPane", "skills"], ["Eval suites", "openPane", "suites"],
   ["Reviewer policy", "openPane", "policy"], ["Integrity", "openPane", "integrity"],
-  ["Measurement", "openPane", "measurement"], ["Settings", "openPane", "settings"], ["Logs", "openPane", "logs"], ["Docs", "openPane", "docs"], ["System", "openPane", "system"], ["MCP", "openPane", "mcp"],
+  ["Measurement", "openPane", "measurement"], ["Settings", "openPane", "settings"], ["Logs", "openPane", "logs"], ["Docs", "openPane", "docs"], ["System", "openPane", "system"], ["MCP", "openPane", "mcp"], ["Keys", "openPane", "keys"],
 ];
 let PAL = [], PAL_I = 0;
 function openPalette() {
@@ -1545,7 +1576,7 @@ const ACTIONS = {newConversation, selectConversation, renameConversation, archiv
   openSuite, delSuite, delTask, checkGate, pinConversation, exportConversation, enableNotifications,
   runModel, stopTask, resumeTask, toggleTool, setView, closeTrace, traceTask, traceNode, closeTraceDetail, showRewind, showChanges, doRewind, askAgain, editAsk, copyAnswer, copyCode, forgetMemory, addSchedule, removeSchedule, viewSkill,
   patchConversation, exportOne, sessArchived, pickWorkspace, useModel, useReviewer, loadModel, unloadModel, anDays, readDoc,
-  editSchedule, cancelScheduleEdit, pauseSchedule, resumeSchedule, runSchedule, archiveOlder, newFolder, removeFile, makeBackup, getBackup, testMcp};
+  editSchedule, cancelScheduleEdit, pauseSchedule, resumeSchedule, runSchedule, archiveOlder, newFolder, removeFile, makeBackup, getBackup, testMcp, saveKey, clearKey};
 document.addEventListener("click", e => {
   $$("details.more[open]").forEach(d => { if (!d.contains(e.target)) d.open = false; });
   const el = e.target.closest("[data-action]");
