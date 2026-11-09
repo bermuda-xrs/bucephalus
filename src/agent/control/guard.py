@@ -65,6 +65,11 @@ def is_loopback_host(host_header: str) -> bool:
     return _host_only(host_header).lower() in LOOPBACK_HOSTS
 
 
+def _peer_is_loopback(request) -> bool:
+    peer = request.client.host if request.client else ""
+    return peer in {"127.0.0.1", "::1", "::ffff:127.0.0.1"}
+
+
 PUBLIC_UI = frozenset({"/", "/ui.js", "/md.js", "/ui.css"})
 
 SECURITY_HEADERS = {
@@ -115,6 +120,11 @@ class AccessGuard(BaseHTTPMiddleware):
                 )
 
         if path in OPEN_PATHS:
+            return await call_next(request)
+
+        if path.startswith("/hooks/") and request.method == "POST":
+            if not (is_loopback_host(host) and _peer_is_loopback(request)):
+                return JSONResponse({"detail": "Webhooks are for this computer only."}, status_code=403)
             return await call_next(request)
 
         if path in PUBLIC_UI and request.method == "GET" and is_loopback_host(host):

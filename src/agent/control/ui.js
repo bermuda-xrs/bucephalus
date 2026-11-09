@@ -1098,6 +1098,29 @@ const PANES = {
       <table>${d.backups.map(b => `<tr><td><code>${esc(b.name)}</code></td><td>${ago(b.created)}</td></tr>`).join("")
         || '<tr><td class="empty">None yet.</td></tr>'}</table>`;
   },
+  async webhooks() {
+    const d = await api("/webhooks"), fresh = S.hookSecret;
+    S.hookSecret = null;
+    return `<h3>Webhooks</h3><p class="lede">Let a script on this computer, such as a git hook, hand the agent a task. A delivery
+      makes a pending task; it never runs by itself, and its plan still needs your signature. What the script sends is saved
+      as an untrusted file the agent reads as data, never as instructions, and the task has the same limits as a Telegram one:
+      a smaller budget and no approving anything. Webhooks answer on loopback only. Reaching them from another machine would
+      need a separate plan, so there is no tunnel and no setting for it.</p>
+      ${fresh ? `<div class="caveat"><p>Secret for <code>${esc(fresh.name)}</code>. It is shown once and kept only as a hash:</p>
+        <p><code>${esc(fresh.secret)}</code></p>
+        <pre>curl -X POST ${esc(location.origin)}/hooks/${esc(fresh.name)} -H "X-Hook-Secret: ${esc(fresh.secret)}" -H "X-Delivery-Id: $(date +%s)" --data-binary @payload.txt</pre></div>` : ""}
+      <table><tr><th>Name</th><th>Goal</th><th>Folder</th><th>Last delivery</th><th>State</th><th></th></tr>
+      ${d.hooks.map(h => `<tr><td><code>${esc(h.name)}</code></td><td>${esc(firstLine(h.goal))}</td><td><code>${esc(h.scope)}</code></td>
+        <td>${h.last_fired ? ago(h.last_fired) : "never"}</td><td>${h.enabled ? "On" : "Off"}</td>
+        <td class="r acts"><button class="quiet" data-action="toggleHook" ${args(h.name, !h.enabled)}>${h.enabled ? "Turn off" : "Turn on"}</button>
+          <button class="quiet" data-action="deleteHook" ${args(h.name)}>Delete</button></td></tr>`).join("")
+        || '<tr><td colspan="6" class="empty">No webhooks yet.</td></tr>'}</table>
+      <h4>Add a webhook</h4>
+      <div class="grid2"><label class="field">Name<input id="hkName" autocomplete="off" placeholder="notes"></label>
+        <label class="field">Folder the payload lands in<input id="hkScope" value="work"></label></div>
+      <label class="field">What the agent should do with each delivery<input id="hkGoal" autocomplete="off"></label>
+      <button class="btn primary" data-action="addHook">Add webhook</button>`;
+  },
   async memory() {
     const m = await api("/memory");
     const state = {intact: "Blessed. It matches what you last accepted.",
@@ -1329,6 +1352,24 @@ async function applyConfig() {
     toast(`Written. Backup ${r.backup}. It takes effect at the next start.`);
   } catch (e) { return toast(e.message, true); }
   S.cfgProposal = null; openPane("config");
+}
+async function addHook() {
+  try {
+    const r = await post("/webhooks", {name: $("#hkName").value.trim(), goal: $("#hkGoal").value.trim(), scope: $("#hkScope").value.trim() || "work"});
+    S.hookSecret = r;
+  } catch (e) { return toast(e.message, true); }
+  openPane("webhooks");
+}
+async function toggleHook(name, enabled) {
+  try { await post(`/webhooks/${encodeURIComponent(name)}/enabled`, {enabled: enabled === true || enabled === "true"}); }
+  catch (e) { toast(e.message, true); }
+  openPane("webhooks");
+}
+async function deleteHook(name) {
+  if (!confirm(`Delete ${name}? Scripts that call it will be refused.`)) return;
+  try { await api(`/webhooks/${encodeURIComponent(name)}`, {method: "DELETE"}); toast(`Deleted ${name}.`); }
+  catch (e) { toast(e.message, true); }
+  openPane("webhooks");
 }
 function fillSender(sender) {
   $("#alId").value = sender; $("#alId2").value = ""; $("#alId2").focus();
@@ -1593,7 +1634,7 @@ const COMMANDS = [
   ["Models", "openPane", "models"], ["Analytics", "openPane", "analytics"], ["Memory", "openPane", "memory"], ["Schedules", "openPane", "schedules"],
   ["Channels", "openPane", "channels"], ["Skills", "openPane", "skills"], ["Eval suites", "openPane", "suites"],
   ["Reviewer policy", "openPane", "policy"], ["Integrity", "openPane", "integrity"],
-  ["Measurement", "openPane", "measurement"], ["Settings", "openPane", "settings"], ["Logs", "openPane", "logs"], ["Docs", "openPane", "docs"], ["System", "openPane", "system"], ["MCP", "openPane", "mcp"], ["Keys", "openPane", "keys"], ["Config", "openPane", "config"],
+  ["Measurement", "openPane", "measurement"], ["Settings", "openPane", "settings"], ["Logs", "openPane", "logs"], ["Docs", "openPane", "docs"], ["System", "openPane", "system"], ["MCP", "openPane", "mcp"], ["Keys", "openPane", "keys"], ["Config", "openPane", "config"], ["Webhooks", "openPane", "webhooks"],
 ];
 let PAL = [], PAL_I = 0;
 function openPalette() {
@@ -1658,7 +1699,7 @@ const ACTIONS = {newConversation, selectConversation, renameConversation, archiv
   openSuite, delSuite, delTask, checkGate, pinConversation, exportConversation, enableNotifications,
   runModel, stopTask, resumeTask, toggleTool, setView, closeTrace, traceTask, traceNode, closeTraceDetail, showRewind, showChanges, doRewind, askAgain, editAsk, copyAnswer, copyCode, forgetMemory, addSchedule, removeSchedule, viewSkill,
   patchConversation, exportOne, sessArchived, pickWorkspace, useModel, useReviewer, loadModel, unloadModel, anDays, readDoc,
-  editSchedule, cancelScheduleEdit, pauseSchedule, resumeSchedule, runSchedule, archiveOlder, newFolder, removeFile, makeBackup, getBackup, testMcp, saveKey, clearKey, fillSender, allowSender, revokeSender, reviewConfig, applyConfig};
+  editSchedule, cancelScheduleEdit, pauseSchedule, resumeSchedule, runSchedule, archiveOlder, newFolder, removeFile, makeBackup, getBackup, testMcp, saveKey, clearKey, fillSender, allowSender, revokeSender, reviewConfig, applyConfig, addHook, toggleHook, deleteHook};
 document.addEventListener("click", e => {
   $$("details.more[open]").forEach(d => { if (!d.contains(e.target)) d.open = false; });
   const el = e.target.closest("[data-action]");

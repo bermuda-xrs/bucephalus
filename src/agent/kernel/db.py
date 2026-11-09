@@ -284,6 +284,24 @@ CREATE TABLE IF NOT EXISTS channel_allowlist (
     PRIMARY KEY (channel, sender)
 );
 
+CREATE TABLE IF NOT EXISTS webhooks (
+    name        TEXT PRIMARY KEY,
+    goal        TEXT NOT NULL,
+    scope       TEXT NOT NULL,
+    secret_hash TEXT NOT NULL,
+    enabled     INTEGER NOT NULL DEFAULT 1,
+    created_at  REAL NOT NULL,
+    last_fired  REAL
+);
+
+CREATE TABLE IF NOT EXISTS webhook_deliveries (
+    hook        TEXT NOT NULL,
+    delivery_id TEXT NOT NULL,
+    task_id     TEXT,
+    created_at  REAL NOT NULL,
+    PRIMARY KEY (hook, delivery_id)
+);
+
 CREATE TABLE IF NOT EXISTS channel_routes (
     task_id     TEXT PRIMARY KEY REFERENCES tasks(id),
     channel     TEXT NOT NULL,

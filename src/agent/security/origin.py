@@ -5,8 +5,9 @@ from .exposure import UNRESTRICTED, ToolPolicy
 LOCAL = "local"
 BENCH = "bench"
 TELEGRAM = "telegram"
+WEBHOOK = "webhook"
 
-CHANNEL_ORIGINS = frozenset({TELEGRAM})
+CHANNEL_ORIGINS = frozenset({TELEGRAM, WEBHOOK})
 
 SCHEDULE = "schedule"
 
