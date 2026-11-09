@@ -108,6 +108,11 @@ class LongFilesIn(BaseModel):
     mode: Literal["pages", "elide", "whole"]
 
 
+class AllowIn(BaseModel):
+    sender: str
+    confirm: str
+
+
 class KeyIn(BaseModel):
     value: str
 
@@ -690,6 +695,27 @@ def create_app(ctx: AgentContext) -> FastAPI:
             raise HTTPException(409, "a task is running; test a server when it has finished")
         return mcp_page.test(ctx, name)
 
+    @app.post("/channels/telegram/allow")
+    def post_allow(body: AllowIn) -> dict:
+        from ..channel.telegram import allow_sender
+
+        if not (body.sender.isascii() and body.sender.isdigit() and len(body.sender) <= 20):
+            raise HTTPException(400, "a Telegram sender is a number")
+        if body.confirm != body.sender:
+            raise HTTPException(400, "type the sender id again to confirm")
+        allow_sender(ctx.conn, body.sender)
+        return {"sender": body.sender, "source": "console"}
+
+    @app.delete("/channels/telegram/allow/{sender}")
+    def delete_allow(sender: str) -> dict:
+        from ..channel.telegram import revoke_sender
+
+        if revoke_sender(ctx.conn, sender):
+            return {"sender": sender, "removed": True}
+        if sender in {str(x) for x in ctx.config.channels.telegram.allowed_senders}:
+            raise HTTPException(409, "this sender is in your config; edit the config to remove it")
+        raise HTTPException(404, "no such sender")
+
     @app.get("/keys")
     def get_keys() -> dict:
         from .. import keystore
@@ -708,6 +734,10 @@ def create_app(ctx: AgentContext) -> FastAPI:
         from .. import keystore
 
         _declared_key(name)
+        from ..profiles import LOCAL, PROVIDER_CREDENTIALS
+
+        if ctx.config.profile == LOCAL and name in PROVIDER_CREDENTIALS:
+            raise HTTPException(409, "profile=local refuses provider credentials; run with --profile mixed to use one")
         try:
             keystore.put(name, body.value)
         except ValueError as e:

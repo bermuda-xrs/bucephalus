@@ -10,6 +10,18 @@
 Dates are commit dates. `0.1.0` is not released yet — see "Unreleased" for
 what still stands between here and a first iteration.
 
+## Telegram senders - 2026-11-09 (no HARNESS_VERSION change: the bump comes with the config editor)
+
+- Channels can allow a Telegram sender: the id is typed twice (or "Allow this sender" on a dropped message fills the
+  first box), digits only. Stored in a new `channel_allowlist` table; the bot reads config plus table on every message,
+  so it takes effect without a restart. Revoke removes console-added senders only; a config sender answers 409 "edit
+  your config". No pairing codes: a code sent over Telegram would be a credential.
+- Allowed senders stay `origin='telegram'`: the budget clamp, `CHANNEL_DENIED` and no approving over the chat are
+  unchanged. `bucephalus channel` counts the table when it checks the list is not empty.
+- Keys: under `profile=local` a provider credential (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, ...) is refused with 409.
+- `tests/test_console_channels.py`: typed-id confirm, digits only, sources, heard at once and still a channel task,
+  revoke, config sender, idempotent, the page.
+
 ## Keys page - 2026-11-09 (no HARNESS_VERSION change: the bump comes with the config editor)
 
 - A Keys page sets or clears the secrets the config names: the Telegram bot token and each backend's `api_key_env`.

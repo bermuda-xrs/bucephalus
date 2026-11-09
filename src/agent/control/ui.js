@@ -1119,12 +1119,21 @@ const PANES = {
     const d = await api("/panels/channels");
     return `<h3>Channels</h3><p class="lede">Telegram is ${d.telegram.enabled ? "on" : "off"}. An empty allowlist
       means nobody, not everybody.</p>
-      <h4>Allowed senders</h4>${d.telegram.allowed_senders.map(s => `<code>${esc(s)}</code>`).join(", ") || '<span class="empty">Nobody.</span>'}
+      <h4>Allowed senders</h4><table><tr><th>Sender</th><th>Added in</th><th></th></tr>
+      ${d.allowed.map(a => `<tr><td><code>${esc(a.sender)}</code></td><td>${a.source === "config" ? "Your config" : "This console"}</td>
+        <td class="r">${a.source === "console" ? `<button class="quiet" data-action="revokeSender" ${args(a.sender)}>Revoke</button>` : "Edit your config to remove"}</td></tr>`).join("")
+        || '<tr><td colspan="3" class="empty">Nobody.</td></tr>'}</table>
+      <h4>Allow a sender</h4><p class="note">Someone you allow can send this agent tasks over Telegram. Their tasks stay limited
+        as channel tasks are: smaller budget, no approving anything over the chat. Type the id twice to confirm.</p>
+      <div class="page-tools"><label class="field">Telegram id<input id="alId" inputmode="numeric" autocomplete="off"></label>
+        <label class="field">Type it again<input id="alId2" inputmode="numeric" autocomplete="off"></label>
+        <button class="btn" data-action="allowSender">Allow</button></div>
       <h4>Dropped messages</h4><p class="note">From senders not on the list. Only a hash and a length are kept, never the text.</p>
-      <table><tr><th>When</th><th>Sender</th><th>Why</th><th>Hash</th><th class="r">Length</th></tr>
+      <table><tr><th>When</th><th>Sender</th><th>Why</th><th>Hash</th><th class="r">Length</th><th></th></tr>
       ${d.drops.map(x => `<tr><td>${ago(x.created_at)}</td><td><code>${esc(x.sender)}</code></td><td>${esc(x.reason)}</td>
-        <td><code>${esc(String(x.body_sha256).slice(0, 12))}</code></td><td class="r">${x.body_len}</td></tr>`).join("")
-        || '<tr><td colspan="5" class="empty">None.</td></tr>'}</table>`;
+        <td><code>${esc(String(x.body_sha256).slice(0, 12))}</code></td><td class="r">${x.body_len}</td>
+        <td class="r"><button class="quiet" data-action="fillSender" ${args(x.sender)}>Allow this sender</button></td></tr>`).join("")
+        || '<tr><td colspan="6" class="empty">None.</td></tr>'}</table>`;
   },
   async skills() {
     const d = await api("/skills");
@@ -1268,6 +1277,26 @@ async function makeBackup() {
   catch (e) { toast(e.message, true); }
 }
 function getBackup(name) { download(`/system/backups/${encodeURIComponent(name)}`, name); }
+function fillSender(sender) {
+  $("#alId").value = sender; $("#alId2").value = ""; $("#alId2").focus();
+  toast("Type the id again to allow it.");
+}
+async function allowSender() {
+  const sender = $("#alId").value.trim(), confirm = $("#alId2").value.trim();
+  try {
+    await post("/channels/telegram/allow", {sender, confirm});
+    toast(`Allowed ${sender}. The bot hears them from the next message.`);
+  } catch (e) { return toast(e.message, true); }
+  openPane("channels");
+}
+async function revokeSender(sender) {
+  if (!confirm(`Stop listening to ${sender}?`)) return;
+  try {
+    await api(`/channels/telegram/allow/${encodeURIComponent(sender)}`, {method: "DELETE"});
+    toast(`Revoked ${sender}.`);
+  } catch (e) { toast(e.message, true); }
+  openPane("channels");
+}
 async function saveKey(name) {
   const input = $$(".key-in").find(i => i.dataset.key === name), value = input ? input.value : "";
   if (input) input.value = "";
@@ -1576,7 +1605,7 @@ const ACTIONS = {newConversation, selectConversation, renameConversation, archiv
   openSuite, delSuite, delTask, checkGate, pinConversation, exportConversation, enableNotifications,
   runModel, stopTask, resumeTask, toggleTool, setView, closeTrace, traceTask, traceNode, closeTraceDetail, showRewind, showChanges, doRewind, askAgain, editAsk, copyAnswer, copyCode, forgetMemory, addSchedule, removeSchedule, viewSkill,
   patchConversation, exportOne, sessArchived, pickWorkspace, useModel, useReviewer, loadModel, unloadModel, anDays, readDoc,
-  editSchedule, cancelScheduleEdit, pauseSchedule, resumeSchedule, runSchedule, archiveOlder, newFolder, removeFile, makeBackup, getBackup, testMcp, saveKey, clearKey};
+  editSchedule, cancelScheduleEdit, pauseSchedule, resumeSchedule, runSchedule, archiveOlder, newFolder, removeFile, makeBackup, getBackup, testMcp, saveKey, clearKey, fillSender, allowSender, revokeSender};
 document.addEventListener("click", e => {
   $$("details.more[open]").forEach(d => { if (!d.contains(e.target)) d.open = false; });
   const el = e.target.closest("[data-action]");
