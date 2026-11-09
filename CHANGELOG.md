@@ -22,6 +22,8 @@ what still stands between here and a first iteration.
   over 64 KB (413).
 - Loopback only, enforced in the guard for this route even with `BUCEPHALUS_ALLOW_REMOTE=1`: Host and the connecting
   address must both be loopback, and a request with an Origin is refused. Everything else still needs the bearer token.
+- The secret is checked before the body is read; the body streams with a hard 64 KB cut-off (Content-Length checked first);
+  the rate-limit, pending-cap and delivery-id checks and the reservation run under one lock, so a burst gets one task.
 - HARNESS_VERSION 22 for the new origin; prompts and tools unchanged.
 - D81 expanded with what would unblock each item; D83 records the loopback-only decision.
 - `tests/test_console_webhooks.py`: 32 cases covering the above, the management routes and the page.

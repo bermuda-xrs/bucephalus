@@ -739,9 +739,17 @@ def create_app(ctx: AgentContext) -> FastAPI:
 
         from . import webhooks
 
-        body = await request.body()
-        return await run_in_threadpool(_hook_call, webhooks.receive, ctx, name,
-                                       request.headers.get("x-hook-secret", ""),
+        secret = request.headers.get("x-hook-secret", "")
+        await run_in_threadpool(_hook_call, webhooks.authenticate, ctx, name, secret)
+        declared = request.headers.get("content-length", "0")
+        if not declared.isdigit() or int(declared) > webhooks.MAX_BODY:
+            raise HTTPException(413, "too large")
+        body = b""
+        async for chunk in request.stream():
+            body += chunk
+            if len(body) > webhooks.MAX_BODY:
+                raise HTTPException(413, "too large")
+        return await run_in_threadpool(_hook_call, webhooks.receive, ctx, name, secret,
                                        request.headers.get("x-delivery-id", ""), body)
 
     @app.get("/webhooks")

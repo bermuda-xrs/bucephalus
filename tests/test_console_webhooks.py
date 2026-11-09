@@ -180,3 +180,51 @@ def test_the_page_calls_only_its_routes_and_shows_the_secret_once():
     block = UI[UI.index("async webhooks()"):]
     block = block[:block.index("\n  async ")]
     assert "secret" in block and "loopback" in block.lower() and "separate plan" in block
+
+
+def test_the_secret_is_checked_before_the_body_is_read(ctx, sender, hook, monkeypatch):
+    big = b"x" * (webhooks.MAX_BODY * 4)
+    assert deliver(sender, hook, body=big, secret="wrong").status_code == 401
+
+
+def test_a_streamed_body_is_cut_off_at_the_cap(ctx, sender, hook):
+    chunks = iter([b"x" * 40000] * 3)
+    r = sender.post("/hooks/notes", content=chunks, headers={"X-Hook-Secret": hook["secret"], "X-Delivery-Id": "s"})
+    assert r.status_code == 413 and ctx.conn.execute("SELECT COUNT(*) FROM tasks").fetchone()[0] == 0
+
+
+def test_a_burst_of_deliveries_gets_one_task(ctx, app, hook, monkeypatch):
+    import threading
+
+    monkeypatch.setattr(webhooks, "MIN_GAP_S", 10)
+    codes, lock = [], threading.Lock()
+
+    def go(i):
+        c = TestClient(app, base_url="http://127.0.0.1", client=("127.0.0.1", 51000 + i))
+        r = deliver(c, hook, delivery=f"b{i}")
+        with lock:
+            codes.append(r.status_code)
+
+    ts = [threading.Thread(target=go, args=(i,)) for i in range(8)]
+    [t.start() for t in ts]
+    [t.join() for t in ts]
+    assert sorted(codes).count(202) == 1, codes
+    assert ctx.conn.execute("SELECT COUNT(*) FROM tasks").fetchone()[0] == 1
+
+
+def test_a_burst_cannot_pass_the_pending_cap(ctx, app, hook, monkeypatch):
+    import threading
+
+    monkeypatch.setattr(webhooks, "MAX_PENDING", 2)
+    codes, lock = [], threading.Lock()
+
+    def go(i):
+        c = TestClient(app, base_url="http://127.0.0.1", client=("127.0.0.1", 52000 + i))
+        r = deliver(c, hook, delivery=f"p{i}")
+        with lock:
+            codes.append(r.status_code)
+
+    ts = [threading.Thread(target=go, args=(i,)) for i in range(8)]
+    [t.start() for t in ts]
+    [t.join() for t in ts]
+    assert sorted(codes).count(202) == 2, codes
