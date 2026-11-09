@@ -45,10 +45,11 @@ def schedules(ctx) -> dict:
 
 
 def channels(ctx) -> dict:
-    from ..channel.telegram import recent_drops
+    from ..channel.telegram import allowed_senders, recent_drops
 
     tg = ctx.config.channels.telegram
     return {"telegram": {"enabled": tg.enabled, "allowed_senders": list(tg.allowed_senders)},
+            "allowed": allowed_senders(ctx.conn, tg),
             "drops": recent_drops(ctx.conn, limit=50)}
 
 

@@ -568,14 +568,14 @@ def cmd_serve(ctx, args, console) -> int:
 
 
 def cmd_channel(ctx, args, console) -> int:
-    from .channel.telegram import build
+    from .channel.telegram import allowed_senders, build
     from .security.origin import CHANNEL_DENIED
 
     cfg = ctx.config.channels.telegram
     if not cfg.enabled:
         console.print("channels.telegram.enabled is false. Nothing started.")
         return 2
-    if not cfg.allowed_senders:
+    if not allowed_senders(ctx.conn, cfg):
         console.print(
             "channels.telegram.allowed_senders is empty, which means NOBODY. "
             "Add your own Telegram user id before starting the bot.")
@@ -587,7 +587,7 @@ def cmd_channel(ctx, args, console) -> int:
 
     bot = build(ctx)
     console.print(
-        f"telegram bot polling; {len(cfg.allowed_senders)} allowed sender(s); "
+        f"telegram bot polling; {len(allowed_senders(ctx.conn, cfg))} allowed sender(s); "
         f"channel tasks are denied {', '.join(sorted(CHANNEL_DENIED))}")
     bot.serve_forever()
     return 0

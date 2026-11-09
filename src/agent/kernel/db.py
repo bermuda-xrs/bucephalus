@@ -276,6 +276,14 @@ CREATE TABLE IF NOT EXISTS channel_drops (
 );
 CREATE INDEX IF NOT EXISTS idx_drops_created ON channel_drops(created_at);
 
+CREATE TABLE IF NOT EXISTS channel_allowlist (
+    channel     TEXT NOT NULL,
+    sender      TEXT NOT NULL,
+    added_at    REAL NOT NULL,
+    added_by    TEXT NOT NULL,
+    PRIMARY KEY (channel, sender)
+);
+
 CREATE TABLE IF NOT EXISTS channel_routes (
     task_id     TEXT PRIMARY KEY REFERENCES tasks(id),
     channel     TEXT NOT NULL,

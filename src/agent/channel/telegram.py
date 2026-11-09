@@ -112,6 +112,29 @@ def record_drop(conn, channel: str, sender: str, reason: str, body: str) -> None
     conn.commit()
 
 
+def console_allowed(conn) -> list[str]:
+    return [r[0] for r in conn.execute(
+        "SELECT sender FROM channel_allowlist WHERE channel=? ORDER BY added_at, rowid", (TELEGRAM,)).fetchall()]
+
+
+def allow_sender(conn, sender: str) -> None:
+    conn.execute("INSERT OR IGNORE INTO channel_allowlist(channel, sender, added_at, added_by) VALUES (?,?,?,?)",
+                 (TELEGRAM, str(sender), time.time(), "console"))
+    conn.commit()
+
+
+def revoke_sender(conn, sender: str) -> bool:
+    n = conn.execute("DELETE FROM channel_allowlist WHERE channel=? AND sender=?", (TELEGRAM, str(sender))).rowcount
+    conn.commit()
+    return n > 0
+
+
+def allowed_senders(conn, cfg) -> list[dict]:
+    seen = [str(x) for x in cfg.allowed_senders]
+    return ([{"sender": s, "source": "config"} for s in seen]
+            + [{"sender": s, "source": "console"} for s in console_allowed(conn) if s not in seen])
+
+
 def recent_drops(conn, limit: int = 50) -> list[dict]:
     rows = conn.execute(
         """SELECT channel, sender, reason, body_sha256, body_len, created_at
@@ -171,7 +194,7 @@ class TelegramBot:
         return [r[0] for r in rows]
 
     def allowed(self, sender) -> bool:
-        return str(sender) in {str(x) for x in self.cfg.allowed_senders}
+        return str(sender) in {a["sender"] for a in allowed_senders(self.ctx.conn, self.cfg)}
 
     def handle_update(self, update: dict) -> dict:
         if "callback_query" in update:

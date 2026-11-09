@@ -134,3 +134,14 @@ def test_a_failed_write_leaves_no_staging_file_and_none_has_a_fixed_name(api, mo
     monkeypatch.setattr(os, "replace", lambda a, b: (seen.append(str(a)), real(a, b))[1])
     keystore.put("REMOTE_KEY", SECRET)
     assert seen and not seen[0].endswith("keys.json.tmp")
+
+
+def test_a_provider_key_is_refused_under_the_local_profile(api, ctx):
+    from agent.config import BackendConfig as BC
+
+    ctx.config.backends["claude"] = BC(kind="mock", model="m", api_key_env="ANTHROPIC_API_KEY")
+    ctx.config.profile = "local"
+    assert api.put("/keys/ANTHROPIC_API_KEY", json={"value": SECRET}).status_code == 409
+    assert keystore.get("ANTHROPIC_API_KEY") is None
+    ctx.config.profile = "mixed"
+    assert api.put("/keys/ANTHROPIC_API_KEY", json={"value": SECRET}).status_code == 200
