@@ -13,6 +13,7 @@ An entry is removed in the change that closes it; its history is in git and CHAN
 | D78 | known: a read-only MCP tool's arguments are checked by heuristics; `path_args` or `strict_paths` closes it per server |
 | D80 | known: what a hook collects from the workspace (a `conftest.py`) runs outside the sandbox |
 | D81 | decided: dashboard features not built, each needs its own plan and the user's go |
+| D83 | decided: webhooks answer on loopback only; reaching them from another machine needs its own plan |
 | D82 | known: a schedule added before 2026-11-08 is sealed as it stands at its first tick |
 
 ---
@@ -266,22 +267,25 @@ and the files it names are protected state. What it loads on purpose from the wo
 a model-written `conftest.py` and runs it outside the sandbox. README says so. **What closes it:** run hooks in the
 sandbox.
 
-## D81 - dashboard features not built (2026-11-08)
+## D81 - dashboard features not built (2026-11-08, expanded 2026-11-09)
 
-Decided with the plan for the pages the console lacked. Each would need its own plan and the user's go.
+Decided with the plan for the pages the console lacked (the Hermes dashboard was the reference). Each would need its own
+plan and the user's go. The console's rule behind all of them: it may read, supervise and make bounded, reviewed changes;
+it never fetches or runs code from the network, never sends the user's data to a third party, and never gives the agent
+a power the user did not sign for.
 
-| Feature | Why not |
-|---|---|
-| Session delete, prune-delete | Deleting tasks breaks the integrity chain on purpose; bulk archive covers tidying |
-| Session import | An imported task has no chain, so it would show records nothing can verify |
-| Skills hub search and install | Downloads third-party instructions that change the prompt; Add a candidate plus the gate is the path |
-| MCP catalog and install | Downloads and runs third-party code |
-| Plugins UI | Plugin script on the console's origin could read the token and sign plans; needs a separate-origin sandbox |
-| WhatsApp onboarding | Needs a third-party Node bridge |
-| Debug share, shared metrics | Send the user's data to a third party |
-| Update, restart, restore from the UI | Installs code from the network; kills the serving process; swaps the live database |
-| MoA, cloud providers, OAuth | Data leaves the machine and measurements change meaning |
-| Their docs in an iframe | The CSP forbids it, and it would advertise their product |
+| Feature | Why not | What would unblock it |
+|---|---|---|
+| Session delete, prune-delete | Every task is a link in the integrity chain, and `verify` reports a deleted one as tampering on purpose. A delete button would either trip that alarm or need an exception that hides a real deletion. Bulk archive already covers tidying. | A tombstone design: a signed, anchored "removed on date X" record that `verify` accepts, with the content gone. |
+| Session import | An imported task has no chain, so the console would show records nothing can verify, next to records it can. | Import into a clearly separate, never-verified area, labelled so. |
+| Skills hub search and install | A skill is instructions that change the agent's prompt. Installing one from the network lets a stranger write them. The existing path, Add a candidate then the paired-trial gate, is the point of the project. | A hub whose skills arrive only as candidates and still pass the gate; fetching is the part to design. |
+| MCP catalog and install | Downloads and runs third-party code with the user's permissions. | Pinned, hash-checked packages run inside the sandbox. The MCP page today only tests servers you already listed. |
+| Plugins UI | Plugin JavaScript on the console's origin could read the bearer token and sign plans, defeating the two-touch rule. | A separate-origin sandbox for plugin code, with no access to the token. |
+| WhatsApp onboarding | Needs a third-party Node bridge that holds a logged-in session to your phone. | A bridge you audit and pin, or an official API path. |
+| Debug share, shared metrics | Send your conversations or usage to a third party. | A local-only export you choose to send yourself (System backups already do that). |
+| Update, restart, restore from the UI | Update installs code from the network. Restart kills the process serving the page. Restore swaps the live database under a running chain. | Restore stays a command with the console stopped. Update could be a signed-release check that only tells you; installing stays yours. |
+| MoA, cloud providers, OAuth | Data leaves the machine, and a benchmark run on a cloud provider no longer measures what the profile claims. | Only under `profile=mixed`, labelled in every result. The Keys page already refuses provider keys under `local`. |
+| Their docs in an iframe | The CSP forbids frames, and it would advertise their product. | None wanted; the Docs page reads our own files. |
 
 ## D82 - a schedule from before sealing is trusted at its first tick (2026-11-08)
 
@@ -289,3 +293,14 @@ Since 2026-11-08 a schedule's spec, goal and budget are sealed in the anchor whe
 row no longer matches is refused, recorded as `tampered`, pauses the schedule and is reported by `verify`. A schedule
 added before then has no seal; its first tick (or Run now) seals it as it stands. An edit to the database before that
 first tick would be sealed with it. Closes when no unsealed schedule remains: remove and re-add old ones to be sure.
+
+## D83 - webhooks are loopback only (2026-11-09)
+
+`POST /hooks/{name}` is the one console route that takes no bearer token, so it is the one that must never face a
+network. It refuses any request whose Host is not a loopback name or whose connecting address is not 127.0.0.1 or ::1,
+whatever `BUCEPHALUS_ALLOW_REMOTE` says, and a browser request (it carries an Origin) is refused. A shared secret in a
+header, stored hashed, identifies the caller; a delivery id makes a retry safe. The payload is saved as an untrusted
+file, never put in the goal, and the task is a channel task: pending, plan unsigned, smaller budget, no approving.
+
+Not built: a tunnel, a public URL or any setting that lets another machine reach a hook. That needs its own plan: TLS,
+a signature over the body (HMAC, which needs the secret kept, not hashed), replay windows, and an abuse budget.

@@ -5,7 +5,7 @@ import os
 import threading
 from pathlib import Path
 
-from fastapi import FastAPI, Header, HTTPException
+from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 from typing import Literal
 
@@ -106,6 +106,16 @@ class PatchConversation(BaseModel):
 
 class LongFilesIn(BaseModel):
     mode: Literal["pages", "elide", "whole"]
+
+
+class WebhookIn(BaseModel):
+    name: str
+    goal: str
+    scope: str = "work"
+
+
+class EnabledIn(BaseModel):
+    enabled: bool
 
 
 class ConfigProposeIn(BaseModel):
@@ -714,6 +724,49 @@ def create_app(ctx: AgentContext) -> FastAPI:
             return fn(*a)
         except config_page.Refused as e:
             raise HTTPException(e.status, str(e)) from None
+
+    def _hook_call(fn, *a):
+        from . import webhooks
+
+        try:
+            return fn(*a)
+        except webhooks.Refused as e:
+            raise HTTPException(e.status, str(e), headers=e.headers or None) from None
+
+    @app.post("/hooks/{name}", status_code=202)
+    async def post_hook(name: str, request: Request) -> dict:
+        from starlette.concurrency import run_in_threadpool
+
+        from . import webhooks
+
+        body = await request.body()
+        return await run_in_threadpool(_hook_call, webhooks.receive, ctx, name,
+                                       request.headers.get("x-hook-secret", ""),
+                                       request.headers.get("x-delivery-id", ""), body)
+
+    @app.get("/webhooks")
+    def get_webhooks() -> dict:
+        from . import webhooks
+
+        return {"hooks": webhooks.listing(ctx)}
+
+    @app.post("/webhooks")
+    def post_webhook(body: WebhookIn) -> dict:
+        from . import webhooks
+
+        return _hook_call(webhooks.create, ctx, body.name, body.goal, body.scope)
+
+    @app.post("/webhooks/{name}/enabled")
+    def post_webhook_enabled(name: str, body: EnabledIn) -> dict:
+        from . import webhooks
+
+        return _hook_call(webhooks.set_enabled, ctx, name, body.enabled)
+
+    @app.delete("/webhooks/{name}")
+    def delete_webhook(name: str) -> dict:
+        from . import webhooks
+
+        return _hook_call(webhooks.delete, ctx, name)
 
     @app.get("/config")
     def get_config() -> dict:

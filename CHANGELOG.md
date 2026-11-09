@@ -10,6 +10,22 @@
 Dates are commit dates. `0.1.0` is not released yet — see "Unreleased" for
 what still stands between here and a first iteration.
 
+## Webhooks - 2026-11-09 (HARNESS_VERSION 22)
+
+- A Webhooks page makes hooks a local script can call: `POST /hooks/{name}` with `X-Hook-Secret` and `X-Delivery-Id`.
+  The secret is shown once and stored as a hash (an HMAC would need the secret kept, so a header secret it is; D83).
+- A delivery creates a pending task with `origin='webhook'`, which joins `CHANNEL_ORIGINS`: the Telegram tool denials,
+  the 0.2 budget clamp and no approving. The body (at most 64 KB) is saved as an untrusted file through the same path as a
+  console upload and is never in the goal, so the plan still needs your signature and nothing runs by itself.
+- Refused: a wrong, missing or disabled secret or an unknown name (all 401, no hint which); a bad or missing delivery
+  id (400); a repeated one (409, no second task); more than 1 a hook per 10 s or 5 pending webhook tasks (429); a body
+  over 64 KB (413).
+- Loopback only, enforced in the guard for this route even with `BUCEPHALUS_ALLOW_REMOTE=1`: Host and the connecting
+  address must both be loopback, and a request with an Origin is refused. Everything else still needs the bearer token.
+- HARNESS_VERSION 22 for the new origin; prompts and tools unchanged.
+- D81 expanded with what would unblock each item; D83 records the loopback-only decision.
+- `tests/test_console_webhooks.py`: 32 cases covering the above, the management routes and the page.
+
 ## Config editor - 2026-11-09 (HARNESS_VERSION 21)
 
 - A Config page edits a closed set: the numeric limits (steps, refinement iterations, parallel tools, task budget in
