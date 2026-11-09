@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import tempfile
 from pathlib import Path
 
 from .paths import sync_root, user_config_dir
@@ -46,12 +47,14 @@ def _write(d: dict[str, str]) -> None:
                            "Set BUCEPHALUS_CONFIG_DIR to a local folder.")
     p.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     os.chmod(p.parent, 0o700)
-    tmp = p.with_name(p.name + ".tmp")
-    tmp.unlink(missing_ok=True)
-    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0), 0o600)
-    with os.fdopen(fd, "w", encoding="utf-8") as fh:
-        json.dump(d, fh)
-    os.replace(tmp, p)
+    fd, tmp = tempfile.mkstemp(prefix="keys-", suffix=".part", dir=p.parent)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            json.dump(d, fh)
+        os.replace(tmp, p)
+    except BaseException:
+        Path(tmp).unlink(missing_ok=True)
+        raise
 
 
 def put(name: str, value: str) -> None:

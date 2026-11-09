@@ -116,3 +116,21 @@ def test_the_agent_cannot_read_or_write_the_key_file(ctx, api):
 
     api.put("/keys/REMOTE_KEY", json={"value": SECRET})
     assert keystore.path().resolve() in {p.resolve() for p in state_paths(ctx)}
+
+
+def test_a_failed_write_leaves_no_staging_file_and_none_has_a_fixed_name(api, monkeypatch):
+    import json as _json
+
+    def boom(*a, **k):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(_json, "dump", boom)
+    with pytest.raises(OSError):
+        keystore.put("REMOTE_KEY", SECRET)
+    assert list(keystore.path().parent.glob("keys*")) == []
+    monkeypatch.undo()
+    seen = []
+    real = os.replace
+    monkeypatch.setattr(os, "replace", lambda a, b: (seen.append(str(a)), real(a, b))[1])
+    keystore.put("REMOTE_KEY", SECRET)
+    assert seen and not seen[0].endswith("keys.json.tmp")
