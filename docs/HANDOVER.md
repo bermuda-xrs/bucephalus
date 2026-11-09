@@ -231,7 +231,7 @@ Plan, in order:
    MCP install, MoA, cloud providers, update/restart/restore and anything that sends data out are not built.
    Wave 1 done: Analytics (measurement tasks carry `origin='bench'` and are left out), Docs (read only, source
    checkout), bulk archive, new folder and removing a file you added, and schedules that pause, resume, run now,
-   edit as a new record and are sealed in the anchor. Wave 2: System and MCP read-only done; next the reviewer model, then Wave 3.
+   edit as a new record and are sealed in the anchor. Wave 2 done: System, MCP read-only, the reviewer model. Next Wave 3.
 
 The branches already in `main` were deleted on 2026-10-27 at the user's yes; the tags stay.
 

@@ -539,7 +539,11 @@ def create_app(ctx: AgentContext) -> FastAPI:
         srv = executor and next((s for s in servers if s["endpoint"] == executor["endpoint"]), None)
         if srv:
             executor.update(local.window_warning(srv["loaded"], b.cfg.model, b.cfg.budgeted_window) or {})
-        return {"servers": servers, "executor": executor}
+        rname = ctx.config.autonomy.auto_review_backend
+        r = ctx.backends.get(rname) if rname != "cloud" else None
+        reviewer = r and {"slot": rname, "model": r.cfg.model, "endpoint": local.server_of(r.cfg),
+                          "local": local.server_of(r.cfg) is not None}
+        return {"servers": servers, "executor": executor, "reviewer": reviewer}
 
     @app.post("/models/run")
     def post_model_run(body: ModelIn) -> dict:

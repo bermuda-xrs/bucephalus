@@ -942,14 +942,17 @@ const PANES = {
   },
   async models() {
     const d = await api("/models"); MODELS = d;
-    const ex = d.executor, gb = b => b ? (b / 1e9).toFixed(1) + " GB" : "";
+    const ex = d.executor, rv = d.reviewer, gb = b => b ? (b / 1e9).toFixed(1) + " GB" : "";
     const server = s => {
       const ours = s.managed && ex && ex.local && ex.endpoint === s.endpoint;
       const loaded = new Map(s.loaded.map(m => [m.name, m]));
-      const acts = m => ours ? `${m.name !== ex.model ? `<button class="quiet" data-action="useModel" ${args(m.name)}>Use for new tasks</button>` : ""}
+      const rvOurs = s.managed && rv && rv.local && rv.endpoint === s.endpoint;
+      const acts = m => ours || rvOurs ? `${ours && m.name !== ex.model ? `<button class="quiet" data-action="useModel" ${args(m.name)}>Use for new tasks</button>` : ""}
+        ${rvOurs && m.name !== rv.model ? `<button class="quiet" data-action="useReviewer" ${args(m.name)}>Use as reviewer</button>` : ""}
         ${loaded.has(m.name) ? `<button class="quiet" data-action="unloadModel" ${args(m.name)}>Unload</button>`
           : `<button class="quiet" data-action="loadModel" ${args(m.name)}>Load</button>`}` : "";
       const state = m => [m.name === (ex && ex.model) && ex.endpoint === s.endpoint ? "New tasks" : "",
+        m.name === (rv && rv.model) && rv.endpoint === s.endpoint ? "Reviewer" : "",
         loaded.has(m.name) ? `Loaded${loaded.get(m.name).context_length ? `, ${ktok(loaded.get(m.name).context_length)} context` : ""}` : ""]
         .filter(Boolean).join("; ");
       return `<h4><code>${esc(s.endpoint)}</code></h4><p class="note">${s.managed
@@ -967,6 +970,9 @@ const PANES = {
       ${ex ? `<dl class="kv"><dt>New tasks run on</dt><dd><code>${esc(ex.model)}</code></dd>
         <dt>Served by</dt><dd>${ex.local ? `<code>${esc(ex.endpoint)}</code>` : "not a local server; set in the config"}</dd></dl>
         ${ex.warning ? `<p class="caveat">${esc(ex.warning)}</p>` : ""}` : '<p class="note">No executor is configured.</p>'}
+      ${rv ? `<dl class="kv"><dt>Reviewer</dt><dd><code>${esc(rv.model)}</code></dd>
+        <dt>Served by</dt><dd>${rv.local ? `<code>${esc(rv.endpoint)}</code>` : "not a local server; set in the config"}</dd></dl>
+        ${ex && rv.model === ex.model && rv.endpoint === ex.endpoint ? '<p class="caveat">The reviewer and the executor are the same model, so the reviewer can share its blind spots. A different model reviews more independently.</p>' : ""}` : ""}
       ${d.servers.map(server).join("") || '<p class="note">No local model servers in the config.</p>'}`;
   },
   async analytics() {
@@ -1231,6 +1237,9 @@ async function modelCall(req, done) {
   loadModels(); if (S.pane === "models" && !$("#control").hidden) openPane("models");
 }
 function useModel(m) { modelCall(post("/models/select", {model: m}), () => `New tasks run on ${m}.`); }
+function useReviewer(m) {
+  modelCall(post("/models/select", {model: m, slot: MODELS.reviewer.slot}), () => `The reviewer now runs on ${m}.`);
+}
 function loadModel(m) { toast(`Loading ${m}`); modelCall(post("/models/run", {model: m}), r => `${m} is loaded (${r.seconds} s).`); }
 function unloadModel(m) { modelCall(post("/models/unload", {model: m}), () => `${m} is out of memory.`); }
 function anDays(n) { S.anDays = n; openPane("analytics"); }
@@ -1535,7 +1544,7 @@ const ACTIONS = {newConversation, selectConversation, renameConversation, archiv
   toggleTheme, acceptMemory, createSuite, saveTask, closeSuite, addSkill, savePolicy,
   openSuite, delSuite, delTask, checkGate, pinConversation, exportConversation, enableNotifications,
   runModel, stopTask, resumeTask, toggleTool, setView, closeTrace, traceTask, traceNode, closeTraceDetail, showRewind, showChanges, doRewind, askAgain, editAsk, copyAnswer, copyCode, forgetMemory, addSchedule, removeSchedule, viewSkill,
-  patchConversation, exportOne, sessArchived, pickWorkspace, useModel, loadModel, unloadModel, anDays, readDoc,
+  patchConversation, exportOne, sessArchived, pickWorkspace, useModel, useReviewer, loadModel, unloadModel, anDays, readDoc,
   editSchedule, cancelScheduleEdit, pauseSchedule, resumeSchedule, runSchedule, archiveOlder, newFolder, removeFile, makeBackup, getBackup, testMcp};
 document.addEventListener("click", e => {
   $$("details.more[open]").forEach(d => { if (!d.contains(e.target)) d.open = false; });
