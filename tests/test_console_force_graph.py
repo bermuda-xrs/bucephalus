@@ -1,0 +1,67 @@
+from __future__ import annotations
+
+import hashlib
+from pathlib import Path
+
+import pytest
+from fastapi.testclient import TestClient
+
+from agent.control.server import create_app
+
+CONTROL = Path(__file__).resolve().parents[1] / "src" / "agent" / "control"
+ROOT = Path(__file__).resolve().parents[1]
+VENDORED = CONTROL / "force-graph.min.js"
+SHA256 = "f59db59ba92ff5a76ed93d7a4d77a703b176260e5d9cd29f4f8eb4f6c369a629"
+UI = (CONTROL / "ui.js").read_text(encoding="utf-8")
+HTML = (CONTROL / "ui.html").read_text(encoding="utf-8")
+CSS = (CONTROL / "ui.css").read_text(encoding="utf-8")
+
+
+def test_the_vendored_library_is_the_pinned_release_byte_for_byte():
+    data = VENDORED.read_bytes()
+    assert hashlib.sha256(data).hexdigest() == SHA256, "force-graph changed; re-verify against the npm integrity hash"
+    assert data.startswith(b"// Version 1.52.0 force-graph")
+
+
+def test_the_library_has_no_network_eval_or_worker_paths():
+    src = VENDORED.read_text(encoding="utf-8")
+    for bad in ("fetch(", "XMLHttpRequest", "new Function", "eval(", "Worker(", "importScripts", "localStorage",
+                "document.cookie", "sendBeacon", "WebSocket"):
+        assert bad not in src, bad
+
+
+@pytest.fixture
+def client(ctx, workspace):
+    return TestClient(create_app(ctx), base_url="http://127.0.0.1")
+
+
+def test_it_is_served_from_our_origin_like_the_console_script(client):
+    r = client.get("/force-graph.min.js")
+    assert r.status_code == 200 and r.content == VENDORED.read_bytes()
+    assert r.headers["content-type"].startswith("text/javascript")
+    assert "script-src 'self'" in r.headers["content-security-policy"]
+
+
+def test_the_page_loads_it_from_here_before_the_console_and_from_no_cdn():
+    assert HTML.index('src="/force-graph.min.js"') < HTML.index('src="/ui.js"')
+    assert "cdn" not in HTML.lower() and "//unpkg" not in HTML
+
+
+def test_the_graph_never_hands_agent_text_to_the_librarys_html_tooltip():
+    block = UI[UI.index("function forceView("):]
+    block = block[:block.index("\nfunction ", 10)]
+    assert '.nodeLabel(() => "")' in block and '.linkLabel(() => "")' in block
+    assert ".float-tooltip-kap { display: none" in CSS
+
+
+def test_the_css_the_library_would_inject_is_in_our_stylesheet():
+    assert ".force-graph-container canvas" in CSS
+
+
+def test_the_graph_has_a_node_cap():
+    assert "const MAX_GRAPH_NODES = 5000;" in UI
+
+
+def test_the_notice_names_the_library_and_its_license():
+    notes = (ROOT / "THIRD_PARTY_NOTICES.md").read_text(encoding="utf-8")
+    assert "force-graph 1.52.0" in notes and "Vasco Asturiano" in notes and SHA256 in notes

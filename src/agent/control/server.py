@@ -1135,7 +1135,7 @@ def create_app(ctx: AgentContext) -> FastAPI:
     from fastapi.responses import Response
 
     for name, media in (("ui.js", "text/javascript"), ("md.js", "text/javascript"),
-                        ("ui.css", "text/css")):
+                        ("force-graph.min.js", "text/javascript"), ("ui.css", "text/css")):
         def asset(name=name, media=media) -> Response:
             body = (Path(__file__).parent / name).read_text(encoding="utf-8")
             return Response(body, media_type=media, headers={"Cache-Control": "no-store"})

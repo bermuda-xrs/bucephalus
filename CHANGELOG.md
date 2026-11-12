@@ -10,6 +10,22 @@
 Dates are commit dates. `0.1.0` is not released yet — see "Unreleased" for
 what still stands between here and a first iteration.
 
+## Graph view - 2026-11-12 (no HARNESS_VERSION change: console only)
+
+- The trace's Graph view is a force-directed graph in the style of Obsidian's: steps chained in order, each tool call,
+  check and hold linked to its step, and changed files as shared nodes linked to every step that changed them. Drag,
+  zoom, hover to light a node's neighbours, click for the same detail panel as before. Labels show for steps and files
+  when zoomed in and for everything closer in; above 1500 nodes only on hover.
+- Uses force-graph 1.52.0 (MIT), vendored as `src/agent/control/force-graph.min.js`, byte for byte the npm release whose
+  sha512 matched the registry; its SHA-256 is pinned by a test. Served from our origin, so the CSP is unchanged. The
+  library's HTML tooltip is turned off and hidden, so no agent text reaches `innerHTML`; the CSS it would inject is in
+  `ui.css` (the browser console reports its two blocked `<style>` tags at load, which is expected).
+- No hard limit in the library (its own demo runs about 75k elements on canvas). The view caps at 5000 nodes, keeping
+  the latest, and says so. Measured: painting 5000 nodes takes about 6 ms a frame zoomed out and 4 ms zoomed in.
+- `tests/test_console_force_graph.py`: the pin, no network, eval or worker paths in the bundle, served from here and
+  loaded before the console, no HTML tooltip, the CSS, the cap and the notice. The trace test's SVG pin now checks the
+  canvas graph sets no inline style.
+
 ## Webhooks - 2026-11-09 (HARNESS_VERSION 22)
 
 - A Webhooks page makes hooks a local script can call: `POST /hooks/{name}` with `X-Hook-Secret` and `X-Delivery-Id`.

@@ -54,4 +54,5 @@ def test_the_page_offers_each_view_and_draws_the_graph_without_inline_style():
     views = set(re.findall(r'data-view="(\w+)"', html))
     assert views == {"normal", "thinking", "verbose", "graph"}, views
     assert all(f"{v}:" in ui[ui.index("const VIEWS = {"):] for v in views)
-    assert "<svg" in ui and "marker" in ui
+    graph = ui[ui.index("function forceView("):ui.index("function dropForceView(")]
+    assert "new ForceGraph(" in graph and 'style="' not in graph and ".style." not in graph
