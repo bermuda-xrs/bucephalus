@@ -868,6 +868,16 @@ const GRAPH_HELP = `<summary aria-label="How this graph is laid out" title="How 
       <li><span class="lg lg-bad"></span>Solid amber: it failed</li>
     </ul>
   </div>`;
+function loadForceGraph() {
+  if (!S.fgLib) S.fgLib = new Promise((ok, fail) => {
+    const el = document.createElement("script");
+    el.src = "/force-graph.min.js";
+    el.onload = ok;
+    el.onerror = () => { S.fgLib = null; el.remove(); fail(new Error("the graph library did not load")); };
+    document.head.appendChild(el);
+  });
+  return S.fgLib;
+}
 function forceView(t) {
   const body = $("#traceBody");
   let host = $("#fgHost");
@@ -878,7 +888,12 @@ function forceView(t) {
     host = $("#fgHost");
     if (S.fg) { S.fg._destructor(); S.fg = null; }
   }
-  if (typeof ForceGraph !== "function") { host.textContent = "The graph library did not load."; return; }
+  if (typeof ForceGraph !== "function") {
+    host.textContent = "Loading the graph";
+    loadForceGraph().then(() => { if (VIEW === "graph") renderTrace(); },
+                          e => { if (VIEW === "graph" && $("#fgHost")) $("#fgHost").textContent = e.message; });
+    return;
+  }
   const data = graphData(t), sig = data.nodes.map(n => n.id + (n.ok === undefined ? "" : n.ok)).join(",") + "|" + data.links.length;
   host.setAttribute("aria-label", `Trace graph: ${t.nodes.filter(n => n.kind === "step").length} steps, ${data.nodes.length} nodes`);
   $("#fgNote").textContent = (data.capped ? `Showing the last ${MAX_GRAPH_NODES} of ${data.nodes.length + data.capped} nodes. ` : "")

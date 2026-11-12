@@ -42,9 +42,14 @@ def test_it_is_served_from_our_origin_like_the_console_script(client):
     assert "script-src 'self'" in r.headers["content-security-policy"]
 
 
-def test_the_page_loads_it_from_here_before_the_console_and_from_no_cdn():
-    assert HTML.index('src="/force-graph.min.js"') < HTML.index('src="/ui.js"')
-    assert "cdn" not in HTML.lower() and "//unpkg" not in HTML
+def test_the_library_loads_only_when_the_graph_opens_and_only_from_here():
+    assert "force-graph" not in HTML, "not on every page load"
+    loader = UI[UI.index("function loadForceGraph("):]
+    loader = loader[:loader.index("\n}\n") + 3]
+    assert 'el.src = "/force-graph.min.js"' in loader and "cdn" not in loader.lower()
+    assert "S.fgLib" in loader, "one load, shared by every caller"
+    view = UI[UI.index("function forceView("):UI.index("function dropForceView(")]
+    assert "loadForceGraph()" in view
 
 
 def test_the_graph_never_hands_agent_text_to_the_librarys_html_tooltip():
