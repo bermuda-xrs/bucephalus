@@ -843,11 +843,37 @@ function fade(hex, a) {
 }
 const GRAPH_COLOR = {step: "--text", tool: "--dim", edit: "--accent", check: "--done", hold: "--needs", human: "--accent",
                      end: "--text", file: "--accent"};
+const GRAPH_HELP = `<summary aria-label="How this graph is laid out" title="How this graph is laid out">
+  <svg class="q" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false">
+    <circle cx="8" cy="8" r="7"/><path d="M6 6.2a2 2 0 1 1 2.9 1.8c-.6.3-.9.7-.9 1.3v.5"/><circle class="dot" cx="8" cy="11.9" r=".7"/></svg>
+  </summary>
+  <div class="fg-legend">
+    <h4>How it is laid out</h4>
+    <ul>
+      <li>The spine runs down the middle: one dot per model step, in the order they ran, joined by arrows, ending in how the task finished.</li>
+      <li>What a step did sits to its left, level with it: the tools it called, the checks that ran, anything that held it back.</li>
+      <li>Files it changed sit in a column on the right, level with the average of the steps that changed them, joined to each of those steps. Files appear once the task has finished.</li>
+      <li>A bigger dot has more lines. Drag moves a dot, scroll zooms, hover lights its neighbours, click opens its detail.</li>
+    </ul>
+    <h4>What each dot is</h4>
+    <ul class="fg-keys">
+      <li><span class="lg lg-step"></span>Large dot: a step, one model call</li>
+      <li><span class="lg lg-tool"></span>Grey dot: a tool call that reads or runs</li>
+      <li><span class="lg lg-edit"></span>Ring: a tool call that changes a file</li>
+      <li><span class="lg lg-check"></span>Green dot: a check by a verifier or the reviewer</li>
+      <li><span class="lg lg-hold"></span>Dashed amber ring: a hold, where the harness stopped or warned the model</li>
+      <li><span class="lg lg-human"></span>Diamond: you, a message or an allow or refuse</li>
+      <li><span class="lg lg-end"></span>Last large dot: how the task finished</li>
+      <li><span class="lg lg-file"></span>Square: a file the task changed</li>
+      <li><span class="lg lg-bad"></span>Solid amber: it failed</li>
+    </ul>
+  </div>`;
 function forceView(t) {
   const body = $("#traceBody");
   let host = $("#fgHost");
   if (!host) {
-    body.innerHTML = `<div id="fgHost" class="fg-host" role="img"></div>
+    body.innerHTML = `<div class="fg-wrap"><div id="fgHost" class="fg-host" role="img"></div>
+      <details class="fg-help">${GRAPH_HELP}</details></div>
       <p class="note" id="fgNote">Drag to move, scroll to zoom, click a node for its detail. Verbose lists the same as text.</p>`;
     host = $("#fgHost");
     if (S.fg) { S.fg._destructor(); S.fg = null; }
@@ -874,9 +900,17 @@ function forceView(t) {
       .nodeCanvasObject((n, ctx, scale) => {
         const deg = n.__deg || 1, r = n.kind === "step" || n.kind === "end" ? 5 + Math.sqrt(deg) : 3 + Math.sqrt(deg) * .7;
         ctx.globalAlpha = !hover || n === hover || near.has(n) ? 1 : .15;
-        ctx.beginPath(); ctx.arc(n.x, n.y, r, 0, 2 * Math.PI);
-        ctx.fillStyle = n.ok === false ? bad : col(n.kind); ctx.fill();
-        if (n.kind === "file" || n.kind === "check" || n.kind === "hold") { ctx.lineWidth = 1 / scale; ctx.strokeStyle = ground; ctx.stroke(); }
+        const c = n.ok === false ? bad : col(n.kind);
+        ctx.beginPath();
+        if (n.kind === "file") ctx.rect(n.x - r, n.y - r, 2 * r, 2 * r);
+        else if (n.kind === "human") { ctx.moveTo(n.x, n.y - r * 1.3); ctx.lineTo(n.x + r * 1.3, n.y); ctx.lineTo(n.x, n.y + r * 1.3); ctx.lineTo(n.x - r * 1.3, n.y); ctx.closePath(); }
+        else ctx.arc(n.x, n.y, r, 0, 2 * Math.PI);
+        if (n.kind === "edit" || n.kind === "hold") {
+          ctx.fillStyle = ground; ctx.fill(); ctx.lineWidth = 1.6; ctx.strokeStyle = c;
+          if (n.kind === "hold") ctx.setLineDash([2, 2]);
+          ctx.stroke(); ctx.setLineDash([]);
+        }
+        else { ctx.fillStyle = c; ctx.fill(); }
         if (S.traceSel === n.i && n.i !== undefined) { ctx.lineWidth = 2 / scale; ctx.strokeStyle = ink; ctx.stroke(); }
         if (n === hover || near.has(n) || (!S.fgCrowd && (scale > 2.2 || (scale > .8 && (SPINE.has(n.kind) || n.kind === "file"))))) {
           const left = !SPINE.has(n.kind) && n.kind !== "file";

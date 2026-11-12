@@ -502,6 +502,32 @@ button.tr-row:hover, .tr-row.sel { background: var(--raised); }
 .tr-live:empty { display: none; }
 .fg-host { width: 100%; min-height: 320px; border: 1px solid var(--line-soft); border-radius: var(--r); overflow: hidden; }
 .fg-host.fg-pointing canvas { cursor: pointer; }
+.fg-wrap { position: relative; }
+.fg-help { position: absolute; top: 8px; right: 8px; z-index: 2; }
+.fg-help > summary { list-style: none; cursor: pointer; display: flex; padding: 4px; border-radius: var(--r-sm);
+                     color: var(--dim); background: var(--panel); border: 1px solid var(--line); }
+.fg-help > summary::-webkit-details-marker { display: none; }
+.fg-help > summary:hover, .fg-help[open] > summary { color: var(--text); }
+.fg-help > summary:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.fg-help .q { fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; }
+.fg-help .q .dot { fill: currentColor; stroke: none; }
+.fg-legend { position: absolute; right: 0; top: calc(100% + 6px); width: min(300px, calc(100vw - 48px));
+             max-height: 60vh; overflow: auto; padding: 10px 12px; background: var(--panel);
+             border: 1px solid var(--line); border-radius: var(--r); font-size: 12px; line-height: 1.45; }
+.fg-legend h4 { margin: 0 0 6px; font-size: 12px; }
+.fg-legend h4 + ul { margin-bottom: 10px; }
+.fg-legend ul { margin: 0; padding-left: 16px; }
+.fg-legend .fg-keys { list-style: none; padding: 0; }
+.fg-keys li { display: flex; align-items: center; gap: 8px; margin: 3px 0; }
+.lg { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+.lg-step, .lg-end { background: var(--text); width: 12px; height: 12px; }
+.lg-tool { background: var(--dim); }
+.lg-edit { background: none; border: 2px solid var(--accent); }
+.lg-human { background: var(--accent); border-radius: 1px; transform: rotate(45deg) scale(.85); }
+.lg-file { background: var(--accent); border-radius: 1px; }
+.lg-check { background: var(--done); }
+.lg-hold { background: none; border: 2px dashed var(--needs); }
+.lg-bad { background: var(--needs); }
 .force-graph-container canvas { display: block; user-select: none; outline: none; -webkit-tap-highlight-color: transparent; }
 .force-graph-container .clickable { cursor: pointer; }
 .force-graph-container .grabbable { cursor: grab; }

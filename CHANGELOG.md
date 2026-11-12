@@ -24,6 +24,10 @@ what still stands between here and a first iteration.
   its height, and changed files in a column on the right at the average height of the steps that changed them. Nodes
   start at their place, so the view fits at once and settles in a few frames; the fit leaves room for the labels. Drag
   still moves anything. File labels show the name; the detail panel shows the path.
+- A question-mark icon (drawn in SVG, top right of the graph) opens a key: how the graph is laid out and what each
+  dot is. Shapes now carry the kind where colours could not, since the accent equals the text colour in the dark
+  theme: a ring is a call that changes a file, a square is a file, a diamond is you. A hold is a dashed amber ring, so it no
+  longer looks like a failure (solid amber); red stays reserved for integrity. Native `<details>`, so it opens by keyboard too.
 - Licenses: force-graph and its whole bundled dependency tree are MIT, ISC or BSD-3-Clause (d3-ease), all listed in
   `THIRD_PARTY_NOTICES.md`. The console's look adapted from Hermes Agent is MIT and was already there.
 - No hard limit in the library (its own demo runs about 75k elements on canvas). The view caps at 5000 nodes, keeping

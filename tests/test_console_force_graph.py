@@ -89,3 +89,19 @@ process.stdout.write(JSON.stringify(nodes));"""
     assert spine[0]["fy"] < spine[1]["fy"] < spine[2]["fy"]
     assert out["t1"]["tx"] < 0 and out["t1"]["ty"] == out["a"]["fy"] and out["t2"]["ty"] == out["b"]["fy"]
     assert out["f:x"]["tx"] > 0 and out["f:x"]["ty"] == (out["a"]["fy"] + out["b"]["fy"]) / 2
+
+
+def test_a_question_icon_explains_the_layout_and_every_dot():
+    block = UI[UI.index("function forceView("):UI.index("function dropForceView(")]
+    legend = UI[UI.index("const GRAPH_HELP"):UI.index("function forceView(")]
+    assert '<details class="fg-help">${GRAPH_HELP}</details>' in block
+    assert legend.index("<summary") < legend.index("<svg") and 'aria-label="How this graph is laid out"' in legend
+    assert "<svg" in legend and "</svg>" in legend, "a drawn question mark, not an emoji"
+    assert not any(ord(c) > 0x2000 and c != "…" for c in legend), "no emoji or pictographs"
+    for kind in ("step", "tool", "edit", "check", "hold", "human", "end", "file"):
+        assert f'class="lg lg-{kind}"' in legend, kind
+    assert 'class="lg lg-bad"' in legend
+    for rule in ("spine", "left", "right", "Drag"):
+        assert rule in legend, rule
+    for kind in ("step", "tool", "edit", "check", "hold", "human", "end", "file", "bad"):
+        assert f".lg-{kind}" in CSS, kind
