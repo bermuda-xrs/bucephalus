@@ -157,13 +157,7 @@ Other commands:
 .\bucephalus.ps1 serve               control plane on :8901 for phone/web clients
 ```
 
-`serve` prints a link to the console: conversations whose follow-ups see the
-earlier exchanges, a plan card you sign before anything runs, Pause and
-Resume, approvals that park inline, Markdown answers, export, pinning, and a
-Control Center (memory, schedules, skills, suites, policy, integrity,
-settings, logs). For a backend marked `model_server: ollama` the composer has
-a model picker and a Run model button that starts the project's server on
-11435 if needed and loads the model; the Ollama on 11434 is never touched.
+`serve` prints a link to the console. See "The console" below.
 
 The control plane also runs under any ASGI server via a module-level app:
 
@@ -176,6 +170,40 @@ Verified working: `POST /tasks` creates, `GET /tasks/{id}` returns state and
 budget, `/metrics/{id}` returns telemetry, and `/alerts` stays separate from
 `/approvals`. **One worker only** — the hash chain assumes a single writer,
 and the lock protecting it is process-wide.
+
+## The console
+
+`serve` prints a link to a web console on 127.0.0.1. The bearer token lives in your config folder, outside the
+project, and every route needs it except the one webhook route below.
+
+- **Work:** conversations whose follow-ups see the earlier exchanges, a plan card you sign before anything runs, Pause
+  and Resume, approvals that park inline, Markdown answers, export, pinning, bulk archive of idle conversations, and
+  a file browser per task (make a folder, remove a file you added; your files are marked untrusted).
+- **Watch:** Analytics (usage and cost by day, model and origin; measurement runs are left out), Logs, Integrity (the
+  hash chain, schedules and memory), System (host, disk, a backup of the database, anchor and memory), and Docs
+  (this project's own documents, read only).
+- **Control:** Schedules (add, pause, resume, run now, edit; each is sealed in the anchor, and a tampered one will not
+  fire), Models (what new tasks run on, and the reviewer, for a backend marked `model_server: ollama`; it starts the
+  project's server on 11435 if needed and never touches the Ollama on 11434), MCP (the servers in your config, and a
+  test that lists a server's tools), Skills, Suites and Policy.
+- **Set up:**
+  - *Keys* sets or clears the Telegram token and each backend's API key. It is write only: nothing is ever shown back.
+    The file is private to your config folder, refused inside a synced folder, left out of backups, and protected from
+    the agent. An environment variable of the same name wins.
+  - *Config* edits a closed set (limits, budgets, `long_files`, each backend's model). You review a diff, type
+    `apply config`, and tick any loosening (a limit raised tenfold; reviewer and executor the same model). The file is
+    backed up first, comments are not kept, and the change takes effect at the next start. Anything that widens what the
+    agent may do stays in the file for you to edit by hand.
+  - *Channels* allows or revokes a Telegram sender by typing their id twice. Their tasks stay channel tasks: a smaller
+    budget, no approving over the chat.
+  - *Webhooks* lets a script on this computer hand the agent a task: `POST /hooks/{name}` with a secret and a delivery
+    id. It creates a pending task whose plan you still sign; the payload is saved as an untrusted file, never put in
+    the goal. Loopback only, whatever `BUCEPHALUS_ALLOW_REMOTE` says.
+
+What it does not do, and why (DEFERRED D81, D83): install skills, MCP servers or plugins from the network, update or
+restore from the page, send your data anywhere, delete a session, or take a webhook from another machine. The rule
+behind the list is that the console may read, supervise and make bounded, reviewed changes. It never fetches or runs
+code from the network, never sends your data to a third party, and never gives the agent a power you did not sign for.
 
 ## Measuring a skill, start to finish
 
@@ -525,6 +553,7 @@ environment variable alone.
 
 ```powershell
 # Telegram. A bot token from @BotFather; the test only READS.
+# (This test reads the environment variable only, not the console's Keys page.)
 $env:BUCEPHALUS_TELEGRAM_TOKEN = "123456:ABC..."
 ..\..\..\.bucephalus-venv\Scripts\python.exe -m pytest tests/test_live_credentials.py -k telegram -v
 
