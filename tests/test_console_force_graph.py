@@ -65,3 +65,27 @@ def test_the_graph_has_a_node_cap():
 def test_the_notice_names_the_library_and_its_license():
     notes = (ROOT / "THIRD_PARTY_NOTICES.md").read_text(encoding="utf-8")
     assert "force-graph 1.52.0" in notes and "Vasco Asturiano" in notes and SHA256 in notes
+
+
+NODE = __import__("shutil").which("node")
+
+
+@pytest.mark.skipif(NODE is None, reason="node is not installed")
+def test_the_layout_puts_steps_on_a_spine_calls_left_and_files_right():
+    import json
+    import subprocess
+
+    src = UI[UI.index("const ROW = "):UI.index("function fitGraph(")]
+    script = src + """
+const nodes = [{id: "a", kind: "step"}, {id: "t1", kind: "tool"}, {id: "c1", kind: "check"},
+               {id: "b", kind: "step"}, {id: "t2", kind: "edit"}, {id: "e", kind: "end"},
+               {id: "f:x", kind: "file"}];
+layOut(nodes, [{source: "a", target: "f:x"}, {source: "b", target: "f:x"}, {source: "a", target: "t1"}]);
+process.stdout.write(JSON.stringify(nodes));"""
+    out = {n["id"]: n for n in json.loads(subprocess.run([NODE, "-e", script], capture_output=True, text=True,
+                                                         check=True).stdout)}
+    spine = [out[k] for k in ("a", "b", "e")]
+    assert all(n["fx"] == 0 for n in spine) and [n["fy"] for n in spine] == sorted(n["fy"] for n in spine)
+    assert spine[0]["fy"] < spine[1]["fy"] < spine[2]["fy"]
+    assert out["t1"]["tx"] < 0 and out["t1"]["ty"] == out["a"]["fy"] and out["t2"]["ty"] == out["b"]["fy"]
+    assert out["f:x"]["tx"] > 0 and out["f:x"]["ty"] == (out["a"]["fy"] + out["b"]["fy"]) / 2

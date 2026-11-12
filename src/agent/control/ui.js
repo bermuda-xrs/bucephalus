@@ -780,13 +780,15 @@ function graphData(t) {
     else if (step) links.push({source: step, target: n.id});
     else if (prevStep === null && nodes[0] !== n) links.push({source: nodes[0].id, target: n.id});
   });
-  const files = new Map();
+  const files = new Map(), stepAt = new Map();
+  t.nodes.forEach((n, i) => { if (n.kind === "step" && !stepAt.has(n.step)) stepAt.set(n.step, i); });
   for (const d of t.diffs || []) for (const f of d.files || []) {
-    const id = "f:" + f, from = t.nodes.findIndex(n => n.kind === "step" && n.step === d.step);
-    if (!files.has(id)) files.set(id, {id, kind: "file", text: f, path: f});
+    const id = "f:" + f, from = stepAt.has(d.step) ? stepAt.get(d.step) : -1;
+    if (!files.has(id)) files.set(id, {id, kind: "file", text: f.split("/").pop(), path: f});
     if (from >= 0) links.push({source: "n" + from, target: id});
   }
   nodes = nodes.concat([...files.values()]);
+  layOut(nodes, links);
   let capped = 0;
   if (nodes.length > MAX_GRAPH_NODES) {
     capped = nodes.length - MAX_GRAPH_NODES;
@@ -794,6 +796,43 @@ function graphData(t) {
   }
   const keep = new Set(nodes.map(n => n.id));
   return {nodes, links: links.filter(l => keep.has(l.source) && keep.has(l.target)), capped};
+}
+const ROW = 36, SIDE = 70, FILE_X = 110;
+const SPINE = new Set(["step", "end"]);
+function layOut(nodes, links) {
+  const byId = new Map(nodes.map(n => [n.id, n]));
+  let row = -1;
+  for (const n of nodes) {
+    if (n.kind === "file") continue;
+    if (SPINE.has(n.kind)) { row += 1; n.fx = 0; n.fy = row * ROW; n.tx = 0; n.ty = n.fy; continue; }
+    n.tx = -SIDE; n.ty = Math.max(row, 0) * ROW;
+  }
+  const into = new Map();
+  for (const l of links) if (!into.has(l.target)) into.set(l.target, [l.source]); else into.get(l.target).push(l.source);
+  for (const f of nodes.filter(n => n.kind === "file")) {
+    const ys = (into.get(f.id) || []).map(id => byId.get(id)).filter(Boolean).map(n => n.ty);
+    f.tx = FILE_X; f.ty = ys.length ? ys.reduce((a, b) => a + b, 0) / ys.length : 0;
+  }
+}
+function fitGraph() {
+  const fg = S.fg;
+  if (!fg) return;
+  fg.zoomToFit(0, 32);
+  const right = fg.graphData().nodes.filter(n => n.kind === "file" || SPINE.has(n.kind)).map(n => cut(n.text, 28).length);
+  const px = Math.max(0, ...right) * 7 + 8, w = fg.width(), z = fg.zoom() * Math.max(.5, (w - px) / w), c = fg.centerAt();
+  fg.zoom(z, 0);
+  fg.centerAt(c.x + px / 2 / z, c.y, 0);
+}
+function toTargets(k) {
+  let nodes = [];
+  const force = a => {
+    for (const n of nodes) if (n.fx === undefined && n.tx !== undefined) {
+      n.vx += (n.tx - n.x) * k * a;
+      n.vy += (n.ty - n.y) * k * (n.kind === "file" ? .5 : 1) * a;
+    }
+  };
+  force.initialize = ns => { nodes = ns; };
+  return force;
 }
 function cssVar(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
 function fade(hex, a) {
@@ -839,10 +878,11 @@ function forceView(t) {
         ctx.fillStyle = n.ok === false ? bad : col(n.kind); ctx.fill();
         if (n.kind === "file" || n.kind === "check" || n.kind === "hold") { ctx.lineWidth = 1 / scale; ctx.strokeStyle = ground; ctx.stroke(); }
         if (S.traceSel === n.i && n.i !== undefined) { ctx.lineWidth = 2 / scale; ctx.strokeStyle = ink; ctx.stroke(); }
-        if (n === hover || near.has(n) || (!S.fgCrowd && (scale > 2.2 || (scale > 1 && (n.kind === "step" || n.kind === "end" || n.kind === "file"))))) {
+        if (n === hover || near.has(n) || (!S.fgCrowd && (scale > 2.2 || (scale > .8 && (SPINE.has(n.kind) || n.kind === "file"))))) {
+          const left = !SPINE.has(n.kind) && n.kind !== "file";
           ctx.font = `${11 / scale}px ${mono}`;
-          ctx.fillStyle = ink; ctx.textAlign = "center"; ctx.textBaseline = "top";
-          ctx.fillText(cut(n.text, 32), n.x, n.y + r + 2 / scale);
+          ctx.fillStyle = ink; ctx.textAlign = left ? "right" : "left"; ctx.textBaseline = "middle";
+          ctx.fillText(cut(n.text, 28), n.x + (left ? -1 : 1) * (r + 3 / scale), n.y);
         }
         ctx.globalAlpha = 1;
       })
@@ -855,13 +895,22 @@ function forceView(t) {
         host.classList.toggle("fg-pointing", !!n);
       })
       .onNodeClick(n => n.i !== undefined ? traceNode(n.i) : fileNode(n.path))
-      .cooldownTicks(200);
+      .cooldownTicks(300)
+      .onEngineStop(() => { if (S.fgFit) { S.fgFit = false; fitGraph(); } });
+    S.fg.d3Force("charge").strength(-25).distanceMax(90);
+    S.fg.d3Force("link").distance(l => l.chain ? ROW : l.target.kind === "file" ? FILE_X : SIDE * .7)
+      .strength(l => l.chain ? 0 : l.target.kind === "file" ? .03 : .4);
+    S.fg.d3Force("center", null);
+    S.fg.d3Force("layout", toTargets(.25));
     S.fgResize = new ResizeObserver(() => S.fg && S.fg.width(host.clientWidth || 320));
     S.fgResize.observe(host);
   }
   if (S.fgSig === sig) return;
   const old = new Map(S.fg.graphData().nodes.map(n => [n.id, n]));
-  data.nodes = data.nodes.map(n => Object.assign(old.get(n.id) || {}, n));
+  data.nodes = data.nodes.map(n => {
+    const o = old.get(n.id);
+    return o ? Object.assign(o, n) : Object.assign(n, {x: n.tx, y: n.ty});
+  });
   const deg = new Map();
   for (const l of data.links) for (const k of [l.source, l.target]) deg.set(k, (deg.get(k) || 0) + 1);
   for (const n of data.nodes) n.__deg = deg.get(n.id) || 0;
@@ -869,7 +918,7 @@ function forceView(t) {
   const first = !S.fgSig;
   S.fgSig = sig;
   S.fg.graphData({nodes: data.nodes, links: data.links});
-  if (first) setTimeout(() => S.fg && S.fg.zoomToFit(400, 24), 600);
+  if (first) { S.fgFit = true; setTimeout(fitGraph, 50); }
 }
 function dropForceView() {
   if (S.fgResize) { S.fgResize.disconnect(); S.fgResize = null; }

@@ -33,9 +33,19 @@ SOFTWARE.
 `src/agent/control/force-graph.min.js` is force-graph 1.52.0 (https://github.com/vasturiano/force-graph), the
 unmodified `dist/force-graph.min.js` from the npm tarball, whose sha512 matched the registry's integrity value. Its
 SHA-256 is f59db59ba92ff5a76ed93d7a4d77a703b176260e5d9cd29f4f8eb4f6c369a629, pinned by `tests/test_console_force_graph.py`.
-The bundle includes its dependencies: d3-array, d3-drag, d3-scale, d3-scale-chromatic, d3-selection and d3-zoom (ISC,
-Mike Bostock), d3-force-3d, kapsule, accessor-fn, index-array-by, float-tooltip and canvas-color-tracker (MIT, Vasco
-Asturiano), bezier-js (MIT), @tweenjs/tween.js (MIT) and lodash-es (MIT).
+The bundle includes its dependency tree. Licenses as each package declares on npm (checked 2026-11-12), all
+permissive and compatible with this project's Apache 2.0:
+
+| License | Packages |
+|---|---|
+| ISC (Mike Bostock) | d3-array, d3-color, d3-dispatch, d3-drag, d3-format, d3-interpolate, d3-quadtree, d3-scale, d3-scale-chromatic, d3-selection, d3-time, d3-time-format, d3-timer, d3-transition, d3-zoom, internmap |
+| BSD-3-Clause (Mike Bostock; easing equations Robert Penner) | d3-ease |
+| MIT (Vasco Asturiano) | force-graph, d3-force-3d, d3-binarytree, d3-octree, kapsule, accessor-fn, index-array-by, float-tooltip, canvas-color-tracker |
+| MIT (others) | preact (Jason Miller), tinycolor2 (Brian Grinstead), bezier-js (Mike Kamermans), @tweenjs/tween.js (tween.js authors), lodash-es (OpenJS Foundation) |
+
+ISC and MIT ask only that the copyright and permission notice travel with the code; BSD-3-Clause adds that the
+authors' names are not used to endorse this project. The force-graph license follows; the others are the same MIT or
+ISC terms with their own copyright lines above.
 
 ```
 MIT License

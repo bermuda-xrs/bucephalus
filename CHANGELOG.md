@@ -20,6 +20,12 @@ what still stands between here and a first iteration.
   sha512 matched the registry; its SHA-256 is pinned by a test. Served from our origin, so the CSP is unchanged. The
   library's HTML tooltip is turned off and hidden, so no agent text reaches `innerHTML`; the CSS it would inject is in
   `ui.css` (the browser console reports its two blocked `<style>` tags at load, which is expected).
+- Laid out, not tangled: steps sit on a vertical spine in order, each step's calls, checks and holds to its left at
+  its height, and changed files in a column on the right at the average height of the steps that changed them. Nodes
+  start at their place, so the view fits at once and settles in a few frames; the fit leaves room for the labels. Drag
+  still moves anything. File labels show the name; the detail panel shows the path.
+- Licenses: force-graph and its whole bundled dependency tree are MIT, ISC or BSD-3-Clause (d3-ease), all listed in
+  `THIRD_PARTY_NOTICES.md`. The console's look adapted from Hermes Agent is MIT and was already there.
 - No hard limit in the library (its own demo runs about 75k elements on canvas). The view caps at 5000 nodes, keeping
   the latest, and says so. Measured: painting 5000 nodes takes about 6 ms a frame zoomed out and 4 ms zoomed in.
 - `tests/test_console_force_graph.py`: the pin, no network, eval or worker paths in the bundle, served from here and
