@@ -179,7 +179,8 @@ project, and every route needs it except the one webhook route below.
 - **Work:** conversations whose follow-ups see the earlier exchanges, a plan card you sign before anything runs, Pause
   and Resume, approvals that park inline, Markdown answers, export, pinning, bulk archive of idle conversations, and
   a file browser per task (make a folder, remove a file you added; your files are marked untrusted).
-- **Watch:** Analytics (usage and cost by day, model and origin; measurement runs are left out), Logs, Integrity (the
+- **Watch:** Graph (every conversation and task as one graph: a tree of conversations zoomed out, each task's
+  steps zoomed in), Analytics (usage and cost by day, model and origin; measurement runs are left out), Logs, Integrity (the
   hash chain, schedules and memory), System (host, disk, a backup of the database, anchor and memory), and Docs
   (this project's own documents, read only).
 - **Control:** Schedules (add, pause, resume, run now, edit; each is sealed in the anchor, and a tampered one will not

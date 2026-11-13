@@ -98,9 +98,12 @@ process.stdout.write(JSON.stringify(nodes));"""
 
 def test_a_question_icon_explains_the_layout_and_every_dot():
     block = UI[UI.index("function forceView("):UI.index("function dropForceView(")]
-    legend = UI[UI.index("const GRAPH_HELP"):UI.index("function forceView(")]
+    legend = UI[UI.index("const GRAPH_KEYS"):UI.index("const MAP_COL")]
     assert '<details class="fg-help">${GRAPH_HELP}</details>' in block
-    assert legend.index("<summary") < legend.index("<svg") and 'aria-label="How this graph is laid out"' in legend
+    help_ = legend[legend.index("const GRAPH_HELP"):]
+    assert help_.index("<summary") < help_.index("${HELP_ICON}") and 'aria-label="How this graph is laid out"' in help_
+    icon = legend[legend.index("const HELP_ICON"):legend.index("const GRAPH_HELP")]
+    assert "<svg" in icon and "</svg>" in icon
     assert "<svg" in legend and "</svg>" in legend, "a drawn question mark, not an emoji"
     assert not any(ord(c) > 0x2000 and c != "…" for c in legend), "no emoji or pictographs"
     for kind in ("step", "tool", "edit", "check", "hold", "human", "end", "file"):
