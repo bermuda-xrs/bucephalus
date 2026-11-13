@@ -354,10 +354,10 @@ def create_app(ctx: AgentContext) -> FastAPI:
         return [{"seq": seq, "type": t, "data": json.loads(p)} for seq, t, p in rows]
 
     @app.get("/graph/overview")
-    def get_overview(limit: int = Query(40, ge=1, le=200)) -> dict:
+    def get_overview(limit: int = Query(2000, ge=1, le=5000)) -> dict:
         from .overview import overview
 
-        return overview(ctx, TRACE_EVENTS, limit)
+        return overview(ctx, limit)
 
     @app.get("/tasks/{task_id}/call")
     def get_call(task_id: str, key: str) -> dict:

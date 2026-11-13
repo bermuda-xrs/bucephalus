@@ -893,9 +893,10 @@ function paintDot(ctx, n, r, c, ground) {
     ctx.stroke(); ctx.setLineDash([]);
   } else { ctx.fillStyle = c; ctx.fill(); }
 }
-const MAP_COL = 460, MAP_RAIL = -150, MAP_LOD = .45;
-function mapLayout(data) {
-  const nodes = [], links = [], byTask = new Map(data.tasks.map(t => [t.id, t]));
+const MAP_COL = 460, MAP_RAIL = -150, MAP_LOD = .45, MAP_FILES = 1.2, MAP_GAP = 16;
+const MAP_LIVE = new Set(["pending", "running", "paused"]);
+function mapLayout(data, details) {
+  const nodes = [], links = [], blocks = [], byTask = new Map(data.tasks.map(t => [t.id, t]));
   const cols = data.conversations.map(c => ({id: c.id, title: c.title || "Conversation", tasks: c.tasks.filter(id => byTask.has(id))}));
   const loose = data.tasks.filter(t => !t.conversation_id).map(t => t.id);
   if (loose.length) cols.push({id: "", title: "Tasks outside a conversation", tasks: loose});
@@ -905,22 +906,31 @@ function mapLayout(data) {
     links.push({source: "root", target: sid, kind: "tree"});
     let y = 2 * ROW, prev = sid;
     for (const tid of col.tasks) {
-      const t = byTask.get(tid), id = "t:" + tid;
+      const t = byTask.get(tid), id = "t:" + tid, det = details.get(tid);
       nodes.push({id, kind: "task", text: t.goal, status: t.status, task: tid, fx: cx + MAP_RAIL, fy: y, col: c});
       links.push({source: prev, target: id, kind: "tree"});
       prev = id;
-      const g = graphData({nodes: t.nodes || [], diffs: []}), seen = new Map();
-      let rows = 0;
-      for (const n of g.nodes) {
-        const side = n.fx === undefined;
-        const k = n.ty + (side ? "" : "s"), j = seen.get(k) || 0;
-        seen.set(k, j + 1);
-        rows = Math.max(rows, n.ty / ROW + 1);
-        nodes.push({...n, id: tid + ":" + n.id, detail: true, task: tid, col: c, tx: undefined, ty: undefined,
-                    fx: cx + (side ? n.tx - j * 16 : n.fx), fy: y + ROW + (side ? n.ty : n.fy)});
+      let rows = Math.max(1, (t.steps || 0) + (MAP_LIVE.has(t.status) ? 0 : 1));
+      if (det) {
+        const g = graphData({nodes: det.nodes, diffs: det.diffs || []}), seen = new Map(), files = [];
+        for (const n of g.nodes) {
+          const base = {...n, id: tid + ":" + n.id, detail: true, task: tid, col: c, tx: undefined, ty: undefined};
+          if (n.kind === "file") { files.push([n.ty, base]); continue; }
+          const side = n.fx === undefined, k = n.ty + (side ? "" : "s"), j = seen.get(k) || 0;
+          seen.set(k, j + 1);
+          rows = Math.max(rows, n.ty / ROW + 1);
+          nodes.push({...base, fx: cx + (side ? n.tx - j * MAP_GAP : n.fx), fy: y + ROW + (side ? n.ty : n.fy)});
+        }
+        let last = -Infinity;
+        for (const [ty, n] of files.sort((p, q) => p[0] - q[0])) {
+          last = Math.max(ty, last + MAP_GAP);
+          rows = Math.max(rows, last / ROW + 1);
+          nodes.push({...n, fx: cx + FILE_X, fy: y + ROW + last});
+        }
+        for (const l of g.links) links.push({...l, source: tid + ":" + l.source, target: tid + ":" + l.target});
+        if (g.nodes.length) links.push({source: id, target: tid + ":" + g.nodes[0].id});
       }
-      for (const l of g.links) links.push({...l, source: tid + ":" + l.source, target: tid + ":" + l.target});
-      if (g.nodes.length) links.push({source: id, target: tid + ":" + g.nodes[0].id});
+      blocks.push({task: tid, x0: cx + MAP_RAIL - 20, x1: cx + FILE_X + 220, y0: y, y1: y + ROW * (rows + 1)});
       y += ROW * (rows + 3);
     }
   });
@@ -928,7 +938,36 @@ function mapLayout(data) {
   nodes.unshift({id: "root", kind: "root", text: "Everything", fx: xs.length ? (Math.min(...xs) + Math.max(...xs)) / 2 : 0, fy: -3 * ROW});
   for (const t of data.tasks) if (t.parent_id && byTask.has(t.parent_id))
     links.push({source: "t:" + t.parent_id, target: "t:" + t.id, kind: "delegated"});
-  return {nodes, links};
+  return {nodes, links, blocks};
+}
+function mapVisible(blocks, v) {
+  return blocks.filter(b => b.x1 >= v.x0 && b.x0 <= v.x1 && b.y1 >= v.y0 && b.y0 <= v.y1).map(b => b.task);
+}
+function mapEvict(details, inView, cap) {
+  let total = 0;
+  for (const d of details.values()) total += d.nodes.length;
+  const gone = [];
+  for (const [id, d] of [...details].filter(([id]) => !inView.has(id)).sort((p, q) => p[1].seen - q[1].seen)) {
+    if (total <= cap) break;
+    total -= d.nodes.length; details.delete(id); gone.push(id);
+  }
+  return gone;
+}
+function mapStep(nodes, from, key, detail) {
+  const cur = nodes.find(n => n.id === from);
+  if (!cur || key === "Home") return "root";
+  const pool = nodes.filter(n => n.kind !== "root" && (detail || !n.detail));
+  const colOf = c => pool.filter(n => n.col === c).sort((p, q) => p.fy - q.fy || p.fx - q.fx);
+  if (cur.kind === "root") {
+    const first = colOf(Math.min(...pool.map(n => n.col)))[0];
+    return key === "ArrowDown" && first ? first.id : "root";
+  }
+  const col = colOf(cur.col), i = col.indexOf(cur);
+  if (key === "ArrowDown") return (col[i + 1] || cur).id;
+  if (key === "ArrowUp") return i > 0 ? col[i - 1].id : "root";
+  const next = colOf(cur.col + (key === "ArrowRight" ? 1 : -1));
+  if (!next.length) return cur.id;
+  return next.reduce((b, n) => Math.abs(n.fy - cur.fy) < Math.abs(b.fy - cur.fy) ? n : b).id;
 }
 const MAP_HELP = `<summary aria-label="How this map is laid out" title="How this map is laid out">
   ${HELP_ICON}
@@ -944,6 +983,10 @@ const MAP_HELP = `<summary aria-label="How this map is laid out" title="How this
         steps, with what each step did to its left.</li>
       <li>Click a conversation or a task to zoom to it; click a step or a call to see what it was. Drag the background
         to move around.</li>
+      <li>Steps load only for the tasks on screen once you zoom in, and the files a finished task changed load when you
+        zoom in further. It refreshes every 15 seconds while the page is open.</li>
+      <li>By keyboard: Tab into the graph, arrow keys move between dots, Enter zooms in or opens, Escape shows
+        everything, Home goes to the top.</li>
     </ul>
     <h4>The tree</h4>
     <ul class="fg-keys">
@@ -955,28 +998,98 @@ const MAP_HELP = `<summary aria-label="How this map is laid out" title="How this
     ${GRAPH_KEYS}
   </div>`;
 const TASK_COLOR = {done: "--done", failed: "--needs", halted: "--needs", running: "--accent"};
+async function mapOutline() {
+  const d = await api("/graph/overview");
+  S.mapOutline = d;
+  const note = $("#mapNote");
+  if (note) note.textContent = `${d.tasks.length} ${d.tasks.length === 1 ? "task" : "tasks"}${d.truncated ? ", the newest only" : ""}. `
+    + "Scroll or pinch to zoom, drag the background to move, click a dot, or Tab in and use the arrow keys.";
+  return d;
+}
+function mapRender() {
+  if (!S.map || !S.mapOutline) return;
+  const L = mapLayout(S.mapOutline, S.mapDetail);
+  S.mapBlocks = L.blocks;
+  S.map.graphData({nodes: L.nodes, links: L.links});
+}
+async function mapPool(jobs, n) {
+  const run = async () => { while (jobs.length) await jobs.shift()(); };
+  await Promise.all(Array.from({length: n}, run));
+}
+async function mapFetchTrace(id, seen) {
+  const evs = await api(`/tasks/${encodeURIComponent(id)}/trace`).catch(() => null);
+  if (evs) S.mapDetail.set(id, {nodes: traceNodes(evs), seen});
+}
+async function mapFetchDiff(id) {
+  const r = await api(`/tasks/${encodeURIComponent(id)}/diff`).catch(() => []);
+  const d = S.mapDetail.get(id);
+  if (d) d.diffs = r.map(x => ({step: x.step, files: x.files || []}));
+}
+async function mapLoadVisible() {
+  const fg = S.map;
+  if (!fg || !S.mapReady || (S.mapZoom || 0) < MAP_LOD) return;
+  if (S.mapBusy) { S.mapAgain = true; return; }
+  S.mapBusy = true;
+  try {
+    const a = fg.screen2GraphCoords(0, 0), b = fg.screen2GraphCoords(fg.width(), fg.height());
+    const inView = mapVisible(S.mapBlocks || [], {x0: a.x, y0: a.y, x1: b.x, y1: b.y}), seen = ++S.mapTick;
+    const status = new Map(S.mapOutline.tasks.map(t => [t.id, t.status]));
+    for (const id of inView) { const d = S.mapDetail.get(id); if (d) d.seen = seen; }
+    const jobs = inView.filter(id => !S.mapDetail.has(id)).slice(0, 24).map(id => () => mapFetchTrace(id, seen));
+    if (S.mapZoom >= MAP_FILES) for (const id of inView) {
+      const d = S.mapDetail.get(id);
+      if (d && !d.diffs && !MAP_LIVE.has(status.get(id))) jobs.push(() => mapFetchDiff(id));
+    }
+    if (!jobs.length) return;
+    await mapPool(jobs, 4);
+    mapEvict(S.mapDetail, new Set(inView), MAX_GRAPH_NODES);
+    mapRender();
+  } finally {
+    S.mapBusy = false;
+    if (S.mapAgain) { S.mapAgain = false; mapLoadVisible(); }
+  }
+}
+async function mapRefresh() {
+  if (document.hidden || S.pane !== "map" || !S.map) return;
+  const before = new Map((S.mapOutline.tasks || []).map(t => [t.id, t.status + t.steps]));
+  try { await mapOutline(); } catch { return; }
+  for (const t of S.mapOutline.tasks) if (before.get(t.id) !== t.status + t.steps) S.mapDetail.delete(t.id);
+  mapRender();
+  mapLoadVisible();
+}
+function mapSay(n) {
+  if (n.kind === "root") return "Everything";
+  if (n.kind === "session") return `Conversation: ${n.text}`;
+  if (n.kind === "task") return `Task: ${n.text}, ${statusWord(n.status)}`;
+  return `${KIND[n.kind] || n.kind}: ${n.text}${n.ok === false ? ", failed" : ""}`;
+}
+function mapKey(e) {
+  if (!S.map) return;
+  const nodes = S.map.graphData().nodes, cur = nodes.find(n => n.id === S.mapFocus);
+  if ((e.key === "Enter" || e.key === " ") && cur) { e.preventDefault(); mapClick(cur); return; }
+  if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); mapFit(400); return; }
+  if (!["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Home"].includes(e.key)) return;
+  e.preventDefault();
+  S.mapFocus = mapStep(nodes, S.mapFocus, e.key, (S.mapZoom || 0) >= MAP_LOD);
+  const n = nodes.find(m => m.id === S.mapFocus);
+  if (!n) return;
+  S.map.centerAt(n.x ?? n.fx, n.y ?? n.fy, 250);
+  $("#mapLive").textContent = mapSay(n);
+}
 async function drawMap() {
   const host = $("#mapHost");
   if (!host) return;
   try { await loadForceGraph(); } catch (e) { host.textContent = e.message; return; }
-  let d;
-  try { d = await api("/graph/overview?limit=40"); } catch (e) { host.textContent = e.message; return; }
-  if (S.pane !== "map" || !$("#mapHost")) return;
-  for (const t of d.tasks) t.nodes = traceNodes(t.events);
-  let data = mapLayout(d);
-  if (data.nodes.length > MAX_GRAPH_NODES) {
-    const keep = new Set(data.nodes.filter(n => !n.detail).map(n => n.id));
-    for (const n of data.nodes) if (n.detail && keep.size < MAX_GRAPH_NODES) keep.add(n.id);
-    data = {nodes: data.nodes.filter(n => keep.has(n.id)), links: data.links.filter(l => keep.has(l.source) && keep.has(l.target))};
-    $("#mapNote").textContent = `Too many steps to draw them all; some tasks show only their dot. ${$("#mapNote").textContent}`;
-  }
-  if (!d.tasks.length) { host.textContent = "No tasks yet. Each task you run appears here, under its conversation."; return; }
   dropMap();
+  S.mapDetail = new Map(); S.mapTick = 0; S.mapFocus = null; S.mapZoom = 0; S.mapReady = false;
+  try { await mapOutline(); } catch (e) { host.textContent = e.message; return; }
+  if (S.pane !== "map" || !$("#mapHost")) return;
+  if (!S.mapOutline.tasks.length) { host.textContent = "No tasks yet. Each task you run appears here, under its conversation."; return; }
   const pal = Object.fromEntries(Object.entries(GRAPH_COLOR).map(([k, v]) => [k, cssVar(v)]));
   const tcol = st => cssVar(TASK_COLOR[st] || "--dim"), bad = cssVar("--needs"), ground = cssVar("--ground");
   const ink = cssVar("--text"), mono = cssVar("--mono") || "monospace", treeC = fade(cssVar("--dim"), .7), linkC = fade(cssVar("--dim"), .35);
   let hover = null, near = new Set();
-  const lod = () => (S.mapZoom || 1) >= MAP_LOD;
+  const lod = () => (S.mapZoom || 0) >= MAP_LOD;
   S.map = new ForceGraph(host)
     .width(host.clientWidth || 320).height(Math.max(360, innerHeight - host.getBoundingClientRect().top - 72))
     .backgroundColor("rgba(0,0,0,0)").nodeLabel(() => "").linkLabel(() => "")
@@ -988,20 +1101,25 @@ async function drawMap() {
     .linkLineDash(l => l.kind === "delegated" ? [4, 3] : null)
     .linkCurvature(l => l.kind === "delegated" ? -.3 : 0)
     .onZoom(z => { S.mapZoom = z.k; })
+    .onZoomEnd(() => mapLoadVisible())
     .nodeCanvasObject((n, ctx, scale) => {
       const r = n.kind === "root" ? 9 : n.kind === "session" ? 7 : n.kind === "task" ? 6 : n.kind === "step" || n.kind === "end" ? 5 : 3.5;
       const rr = n.detail ? r : r / Math.min(1, Math.max(scale, .08)) * .5 + r * .5;
       ctx.globalAlpha = !hover || n === hover || near.has(n) ? 1 : .15;
       paintDot(ctx, n, rr, n.kind === "task" ? tcol(n.status) : n.kind === "root" || n.kind === "session" ? ink
         : n.ok === false ? bad : pal[n.kind] || pal.tool, ground);
-      const show = n === hover || near.has(n) || n.kind === "root" || n.kind === "session"
-        || (n.kind === "task" && scale > .12) || (n.detail && (scale > 2.2 || (scale > .8 && SPINE.has(n.kind))));
+      if (n.id === S.mapFocus) {
+        ctx.beginPath(); ctx.arc(n.x, n.y, rr + 4 / scale, 0, 2 * Math.PI);
+        ctx.lineWidth = 2 / scale; ctx.strokeStyle = ink; ctx.stroke();
+      }
+      const show = n === hover || near.has(n) || n.id === S.mapFocus || n.kind === "root" || n.kind === "session"
+        || (n.kind === "task" && scale > .12) || (n.detail && (scale > 2.2 || (scale > .8 && (SPINE.has(n.kind) || n.kind === "file"))));
       if (show) {
-        const left = n.detail && !SPINE.has(n.kind);
+        const left = n.detail && !SPINE.has(n.kind) && n.kind !== "file";
         ctx.font = `${(n.detail ? 11 : 12) / scale}px ${mono}`;
         ctx.fillStyle = ink; ctx.textAlign = left ? "right" : "left"; ctx.textBaseline = "middle";
-        const room = n.detail ? 28 : n.kind === "root" ? 40 : Math.max(6, Math.floor(MAP_COL * .8 * scale / 7.5));
-        ctx.fillText(cut(n.text, room), n.x + (left ? -1 : 1) * (rr + 4 / scale), n.y);
+        const room = n.detail ? 28 : n.kind === "root" ? 40 : Math.floor(MAP_COL * .8 * scale / 7.5);
+        if (room >= 4 || n === hover || n.id === S.mapFocus) ctx.fillText(cut(n.text, room >= 4 ? room : 24), n.x + (left ? -1 : 1) * (rr + 4 / scale), n.y);
       }
       ctx.globalAlpha = 1;
     })
@@ -1013,28 +1131,46 @@ async function drawMap() {
       if (n) for (const l of S.map.graphData().links) if (l.source === n || l.target === n) near.add(l).add(l.source).add(l.target);
       host.classList.toggle("fg-pointing", !!n);
     })
-    .onNodeClick(n => mapClick(n))
-    .graphData(data);
+    .onNodeClick(n => mapClick(n));
+  mapRender();
+  host.addEventListener("keydown", mapKey);
   S.mapResize = new ResizeObserver(() => S.map && S.map.width(host.clientWidth || 320));
   S.mapResize.observe(host);
-  setTimeout(() => S.map && S.map.zoomToFit(0, 40), 30);
+  S.mapTimer = setInterval(mapRefresh, 15000);
+  mapFit(0);
+  S.mapReady = true;
+}
+function mapFit(ms, keep = () => true) {
+  const ns = S.map.graphData().nodes.filter(n => !n.detail && keep(n));
+  if (!ns.length) return;
+  const xs = ns.map(n => n.fx), ys = ns.map(n => n.fy), pad = 60;
+  const x0 = Math.min(...xs) - pad, x1 = Math.max(...xs) + MAP_COL * .6, y0 = Math.min(...ys) - pad, y1 = Math.max(...ys) + pad;
+  const k = Math.min(S.map.width() / (x1 - x0), S.map.height() / (y1 - y0));
+  S.map.centerAt((x0 + x1) / 2, (y0 + y1) / 2, ms);
+  S.map.zoom(k, ms);
 }
 function mapClick(n) {
   const box = $("#mapInfo");
-  if (n.kind === "root") return S.map.zoomToFit(400, 40);
-  if (n.kind === "session") return S.map.zoomToFit(400, 40, m => m.col === n.col && !m.detail);
+  S.mapFocus = n.id;
+  if (n.kind === "root") return mapFit(400);
+  if (n.kind === "session") return mapFit(400, m => m.col === n.col);
   if (n.kind === "task") {
-    S.mapZoom = MAP_LOD;
-    return S.map.zoomToFit(400, 40, m => m.task === n.task);
+    const b = (S.mapBlocks || []).find(x => x.task === n.task);
+    if (!b) return;
+    const k = Math.max(MAP_LOD, Math.min(3, .9 * Math.min(S.map.width() / (b.x1 - b.x0), S.map.height() / (b.y1 - b.y0))));
+    S.map.centerAt((b.x0 + b.x1) / 2, (b.y0 + b.y1) / 2, 400);
+    S.map.zoom(k, 400);
+    return;
   }
   box.hidden = false;
   const goal = (S.map.graphData().nodes.find(m => m.id === "t:" + n.task) || {}).text || "";
-  box.innerHTML = `<h4>${esc(n.text)}<button class="quiet" data-action="closeMapInfo">Close</button></h4>
+  box.innerHTML = `<h4>${esc(n.kind === "file" ? n.path : n.text)}<button class="quiet" data-action="closeMapInfo">Close</button></h4>
     <p class="note">${esc(KIND[n.kind] || n.kind)} in: ${esc(goal)}</p>
     <button class="btn" data-action="openTaskOf" ${args(n.task)}>Open this task</button>`;
 }
 function closeMapInfo() { const b = $("#mapInfo"); if (b) b.hidden = true; }
 function dropMap() {
+  if (S.mapTimer) { clearInterval(S.mapTimer); S.mapTimer = null; }
   if (S.mapResize) { S.mapResize.disconnect(); S.mapResize = null; }
   if (S.map) { S.map._destructor(); S.map = null; }
 }
@@ -1250,10 +1386,11 @@ const PANES = {
   async map() {
     return `<h3>Graph</h3><p class="lede">Every conversation and task as one graph. Zoomed out it is a tree of your
       conversations; scroll in and each task opens into its steps.</p>
-      <div class="fg-wrap"><div id="mapHost" class="fg-host map-host" role="img"
-        aria-label="All conversations and tasks as a graph. Sessions and Verbose list the same as text."></div>
+      <div class="fg-wrap"><div id="mapHost" class="fg-host map-host" role="application" tabindex="0"
+        aria-label="All conversations and tasks as a graph. Arrow keys move between dots, Enter zooms in or opens, Escape shows everything, Home goes to the top."></div>
         <details class="fg-help">${MAP_HELP}</details></div>
-      <p class="note" id="mapNote">The latest 40 tasks. Scroll or pinch to zoom, drag the background to move, click a dot.</p>
+      <p class="sr-only" id="mapLive" aria-live="polite"></p>
+      <p class="note" id="mapNote">Loading</p>
       <div id="mapInfo" class="trace-detail" hidden></div>`;
   },
   async sessions() {
