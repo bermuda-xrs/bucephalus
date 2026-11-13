@@ -528,6 +528,10 @@ button.tr-row:hover, .tr-row.sel { background: var(--raised); }
 .lg-check { background: var(--done); }
 .lg-hold { background: none; border: 2px dashed var(--needs); }
 .lg-bad { background: var(--needs); }
+.lg-root { background: var(--text); border-radius: 1px; transform: rotate(45deg) scale(.9); }
+.lg-session { background: var(--text); border-radius: 1px; }
+.lg-task { background: var(--done); }
+.map-host { min-height: 360px; }
 .force-graph-container canvas { display: block; user-select: none; outline: none; -webkit-tap-highlight-color: transparent; }
 .force-graph-container .clickable { cursor: pointer; }
 .force-graph-container .grabbable { cursor: grab; }

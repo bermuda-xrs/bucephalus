@@ -5,7 +5,7 @@ import os
 import threading
 from pathlib import Path
 
-from fastapi import FastAPI, Header, HTTPException, Request
+from fastapi import FastAPI, Header, HTTPException, Query, Request
 from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 from typing import Literal
 
@@ -352,6 +352,12 @@ def create_app(ctx: AgentContext) -> FastAPI:
         rows = ctx.conn.execute(f"SELECT seq, type, payload_json FROM events WHERE task_id=? AND type IN "
                                 f"({','.join('?' * len(TRACE_EVENTS))}) ORDER BY seq", (task_id, *TRACE_EVENTS))
         return [{"seq": seq, "type": t, "data": json.loads(p)} for seq, t, p in rows]
+
+    @app.get("/graph/overview")
+    def get_overview(limit: int = Query(40, ge=1, le=200)) -> dict:
+        from .overview import overview
+
+        return overview(ctx, TRACE_EVENTS, limit)
 
     @app.get("/tasks/{task_id}/call")
     def get_call(task_id: str, key: str) -> dict:

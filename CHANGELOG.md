@@ -10,6 +10,20 @@
 Dates are commit dates. `0.1.0` is not released yet — see "Unreleased" for
 what still stands between here and a first iteration.
 
+## Graph of everything - 2026-11-14 (no HARNESS_VERSION change: console only)
+
+- A Graph page draws every conversation and task as one graph, the latest 40 tasks (measurement runs left out).
+  Zoomed out it is a tree: a root, a column per conversation, its tasks down a rail in the order asked, tasks from
+  outside a conversation in the last column, and a curved dashed line from a task to one it delegated. Scroll or pinch
+  in past a set zoom and every task opens into its steps, laid out as in its own graph. Positions are computed, not
+  simulated, so it never tangles; labels shorten to the room a column has at the current zoom.
+- Click the root or a conversation to fit it, a task to zoom to its steps, a step or call for what it was and a link
+  to open the task. The question icon explains the tree and repeats the task graph's key.
+- `GET /graph/overview?limit=` (1 to 200, default 40) returns the conversations, the tasks with their parent, and each
+  task's trace events from the same allowlist as the trace pane, every string cut to 200 characters.
+- `tests/test_console_overview.py`: grouping and order, the parent, bench left out, the allowlist and the cut, the
+  limit, the token, the page, and the tree layout run in node.
+
 ## Graph view - 2026-11-12 (no HARNESS_VERSION change: console only)
 
 - The trace's Graph view is a force-directed graph in the style of Obsidian's: steps chained in order, each tool call,

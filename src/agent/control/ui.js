@@ -843,9 +843,21 @@ function fade(hex, a) {
 }
 const GRAPH_COLOR = {step: "--text", tool: "--dim", edit: "--accent", check: "--done", hold: "--needs", human: "--accent",
                      end: "--text", file: "--accent"};
+const GRAPH_KEYS = `    <ul class="fg-keys">
+      <li><span class="lg lg-step"></span>Large dot: a step, one model call</li>
+      <li><span class="lg lg-tool"></span>Grey dot: a tool call that reads or runs</li>
+      <li><span class="lg lg-edit"></span>Ring: a tool call that changes a file</li>
+      <li><span class="lg lg-check"></span>Green dot: a check by a verifier or the reviewer</li>
+      <li><span class="lg lg-hold"></span>Dashed amber ring: a hold, where the harness stopped or warned the model</li>
+      <li><span class="lg lg-human"></span>Diamond: you, a message or an allow or refuse</li>
+      <li><span class="lg lg-end"></span>Last large dot: how the task finished</li>
+      <li><span class="lg lg-file"></span>Square: a file the task changed</li>
+      <li><span class="lg lg-bad"></span>Solid amber: it failed</li>
+    </ul>`;
+const HELP_ICON = `<svg class="q" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false">
+    <circle cx="8" cy="8" r="7"/><path d="M6 6.2a2 2 0 1 1 2.9 1.8c-.6.3-.9.7-.9 1.3v.5"/><circle class="dot" cx="8" cy="11.9" r=".7"/></svg>`;
 const GRAPH_HELP = `<summary aria-label="How this graph is laid out" title="How this graph is laid out">
-  <svg class="q" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false">
-    <circle cx="8" cy="8" r="7"/><path d="M6 6.2a2 2 0 1 1 2.9 1.8c-.6.3-.9.7-.9 1.3v.5"/><circle class="dot" cx="8" cy="11.9" r=".7"/></svg>
+  ${HELP_ICON}
   </summary>
   <div class="fg-legend">
     <h4>How it is laid out</h4>
@@ -856,17 +868,7 @@ const GRAPH_HELP = `<summary aria-label="How this graph is laid out" title="How 
       <li>A bigger dot has more lines. Drag moves a dot, scroll zooms, hover lights its neighbours, click opens its detail.</li>
     </ul>
     <h4>What each dot is</h4>
-    <ul class="fg-keys">
-      <li><span class="lg lg-step"></span>Large dot: a step, one model call</li>
-      <li><span class="lg lg-tool"></span>Grey dot: a tool call that reads or runs</li>
-      <li><span class="lg lg-edit"></span>Ring: a tool call that changes a file</li>
-      <li><span class="lg lg-check"></span>Green dot: a check by a verifier or the reviewer</li>
-      <li><span class="lg lg-hold"></span>Dashed amber ring: a hold, where the harness stopped or warned the model</li>
-      <li><span class="lg lg-human"></span>Diamond: you, a message or an allow or refuse</li>
-      <li><span class="lg lg-end"></span>Last large dot: how the task finished</li>
-      <li><span class="lg lg-file"></span>Square: a file the task changed</li>
-      <li><span class="lg lg-bad"></span>Solid amber: it failed</li>
-    </ul>
+    ${GRAPH_KEYS}
   </div>`;
 function loadForceGraph() {
   if (!S.fgLib) S.fgLib = new Promise((ok, fail) => {
@@ -877,6 +879,164 @@ function loadForceGraph() {
     document.head.appendChild(el);
   });
   return S.fgLib;
+}
+function paintDot(ctx, n, r, c, ground) {
+  ctx.beginPath();
+  if (n.kind === "file" || n.kind === "session") ctx.rect(n.x - r, n.y - r, 2 * r, 2 * r);
+  else if (n.kind === "human" || n.kind === "root") {
+    ctx.moveTo(n.x, n.y - r * 1.3); ctx.lineTo(n.x + r * 1.3, n.y); ctx.lineTo(n.x, n.y + r * 1.3); ctx.lineTo(n.x - r * 1.3, n.y);
+    ctx.closePath();
+  } else ctx.arc(n.x, n.y, r, 0, 2 * Math.PI);
+  if (n.kind === "edit" || n.kind === "hold") {
+    ctx.fillStyle = ground; ctx.fill(); ctx.lineWidth = 1.6; ctx.strokeStyle = c;
+    if (n.kind === "hold") ctx.setLineDash([2, 2]);
+    ctx.stroke(); ctx.setLineDash([]);
+  } else { ctx.fillStyle = c; ctx.fill(); }
+}
+const MAP_COL = 460, MAP_RAIL = -150, MAP_LOD = .45;
+function mapLayout(data) {
+  const nodes = [], links = [], byTask = new Map(data.tasks.map(t => [t.id, t]));
+  const cols = data.conversations.map(c => ({id: c.id, title: c.title || "Conversation", tasks: c.tasks.filter(id => byTask.has(id))}));
+  const loose = data.tasks.filter(t => !t.conversation_id).map(t => t.id);
+  if (loose.length) cols.push({id: "", title: "Tasks outside a conversation", tasks: loose});
+  cols.forEach((col, c) => {
+    const cx = c * MAP_COL, sid = "s:" + col.id;
+    nodes.push({id: sid, kind: "session", text: col.title, fx: cx + MAP_RAIL, fy: 0, col: c});
+    links.push({source: "root", target: sid, kind: "tree"});
+    let y = 2 * ROW, prev = sid;
+    for (const tid of col.tasks) {
+      const t = byTask.get(tid), id = "t:" + tid;
+      nodes.push({id, kind: "task", text: t.goal, status: t.status, task: tid, fx: cx + MAP_RAIL, fy: y, col: c});
+      links.push({source: prev, target: id, kind: "tree"});
+      prev = id;
+      const g = graphData({nodes: t.nodes || [], diffs: []}), seen = new Map();
+      let rows = 0;
+      for (const n of g.nodes) {
+        const side = n.fx === undefined;
+        const k = n.ty + (side ? "" : "s"), j = seen.get(k) || 0;
+        seen.set(k, j + 1);
+        rows = Math.max(rows, n.ty / ROW + 1);
+        nodes.push({...n, id: tid + ":" + n.id, detail: true, task: tid, col: c, tx: undefined, ty: undefined,
+                    fx: cx + (side ? n.tx - j * 16 : n.fx), fy: y + ROW + (side ? n.ty : n.fy)});
+      }
+      for (const l of g.links) links.push({...l, source: tid + ":" + l.source, target: tid + ":" + l.target});
+      if (g.nodes.length) links.push({source: id, target: tid + ":" + g.nodes[0].id});
+      y += ROW * (rows + 3);
+    }
+  });
+  const xs = nodes.filter(n => n.kind === "session").map(n => n.fx);
+  nodes.unshift({id: "root", kind: "root", text: "Everything", fx: xs.length ? (Math.min(...xs) + Math.max(...xs)) / 2 : 0, fy: -3 * ROW});
+  for (const t of data.tasks) if (t.parent_id && byTask.has(t.parent_id))
+    links.push({source: "t:" + t.parent_id, target: "t:" + t.id, kind: "delegated"});
+  return {nodes, links};
+}
+const MAP_HELP = `<summary aria-label="How this map is laid out" title="How this map is laid out">
+  ${HELP_ICON}
+  </summary>
+  <div class="fg-legend">
+    <h4>How it is laid out</h4>
+    <ul>
+      <li>Zoomed out it is a tree. The top diamond is everything; each square below it is a conversation, and that
+        conversation's tasks hang down its rail in the order you asked them. Tasks started outside a conversation share
+        the last column.</li>
+      <li>A dashed line joins a task to one it delegated.</li>
+      <li>Scroll or pinch to zoom. Closer in, each task opens into its steps, laid out as in a task's own graph: the spine of
+        steps, with what each step did to its left.</li>
+      <li>Click a conversation or a task to zoom to it; click a step or a call to see what it was. Drag the background
+        to move around.</li>
+    </ul>
+    <h4>The tree</h4>
+    <ul class="fg-keys">
+      <li><span class="lg lg-root"></span>Diamond at the top: everything shown</li>
+      <li><span class="lg lg-session"></span>Square: a conversation</li>
+      <li><span class="lg lg-task"></span>Dot on the rail: a task. Green done, amber failed or stopped, accent running, grey waiting</li>
+    </ul>
+    <h4>Inside a task</h4>
+    ${GRAPH_KEYS}
+  </div>`;
+const TASK_COLOR = {done: "--done", failed: "--needs", halted: "--needs", running: "--accent"};
+async function drawMap() {
+  const host = $("#mapHost");
+  if (!host) return;
+  try { await loadForceGraph(); } catch (e) { host.textContent = e.message; return; }
+  let d;
+  try { d = await api("/graph/overview?limit=40"); } catch (e) { host.textContent = e.message; return; }
+  if (S.pane !== "map" || !$("#mapHost")) return;
+  for (const t of d.tasks) t.nodes = traceNodes(t.events);
+  let data = mapLayout(d);
+  if (data.nodes.length > MAX_GRAPH_NODES) {
+    const keep = new Set(data.nodes.filter(n => !n.detail).map(n => n.id));
+    for (const n of data.nodes) if (n.detail && keep.size < MAX_GRAPH_NODES) keep.add(n.id);
+    data = {nodes: data.nodes.filter(n => keep.has(n.id)), links: data.links.filter(l => keep.has(l.source) && keep.has(l.target))};
+    $("#mapNote").textContent = `Too many steps to draw them all; some tasks show only their dot. ${$("#mapNote").textContent}`;
+  }
+  if (!d.tasks.length) { host.textContent = "No tasks yet. Each task you run appears here, under its conversation."; return; }
+  dropMap();
+  const pal = Object.fromEntries(Object.entries(GRAPH_COLOR).map(([k, v]) => [k, cssVar(v)]));
+  const tcol = st => cssVar(TASK_COLOR[st] || "--dim"), bad = cssVar("--needs"), ground = cssVar("--ground");
+  const ink = cssVar("--text"), mono = cssVar("--mono") || "monospace", treeC = fade(cssVar("--dim"), .7), linkC = fade(cssVar("--dim"), .35);
+  let hover = null, near = new Set();
+  const lod = () => (S.mapZoom || 1) >= MAP_LOD;
+  S.map = new ForceGraph(host)
+    .width(host.clientWidth || 320).height(Math.max(360, innerHeight - host.getBoundingClientRect().top - 72))
+    .backgroundColor("rgba(0,0,0,0)").nodeLabel(() => "").linkLabel(() => "")
+    .enableNodeDrag(false).cooldownTicks(0)
+    .nodeVisibility(n => !n.detail || lod())
+    .linkVisibility(l => lod() || !(l.source.detail || l.target.detail))
+    .linkColor(l => hover ? (near.has(l) ? ink : "rgba(0,0,0,0)") : l.kind ? treeC : linkC)
+    .linkWidth(l => l.kind === "tree" ? 1.4 : 0.8)
+    .linkLineDash(l => l.kind === "delegated" ? [4, 3] : null)
+    .linkCurvature(l => l.kind === "delegated" ? -.3 : 0)
+    .onZoom(z => { S.mapZoom = z.k; })
+    .nodeCanvasObject((n, ctx, scale) => {
+      const r = n.kind === "root" ? 9 : n.kind === "session" ? 7 : n.kind === "task" ? 6 : n.kind === "step" || n.kind === "end" ? 5 : 3.5;
+      const rr = n.detail ? r : r / Math.min(1, Math.max(scale, .08)) * .5 + r * .5;
+      ctx.globalAlpha = !hover || n === hover || near.has(n) ? 1 : .15;
+      paintDot(ctx, n, rr, n.kind === "task" ? tcol(n.status) : n.kind === "root" || n.kind === "session" ? ink
+        : n.ok === false ? bad : pal[n.kind] || pal.tool, ground);
+      const show = n === hover || near.has(n) || n.kind === "root" || n.kind === "session"
+        || (n.kind === "task" && scale > .12) || (n.detail && (scale > 2.2 || (scale > .8 && SPINE.has(n.kind))));
+      if (show) {
+        const left = n.detail && !SPINE.has(n.kind);
+        ctx.font = `${(n.detail ? 11 : 12) / scale}px ${mono}`;
+        ctx.fillStyle = ink; ctx.textAlign = left ? "right" : "left"; ctx.textBaseline = "middle";
+        const room = n.detail ? 28 : n.kind === "root" ? 40 : Math.max(6, Math.floor(MAP_COL * .8 * scale / 7.5));
+        ctx.fillText(cut(n.text, room), n.x + (left ? -1 : 1) * (rr + 4 / scale), n.y);
+      }
+      ctx.globalAlpha = 1;
+    })
+    .nodePointerAreaPaint((n, color, ctx, scale) => {
+      ctx.fillStyle = color; ctx.beginPath(); ctx.arc(n.x, n.y, Math.max(8, 8 / scale), 0, 2 * Math.PI); ctx.fill();
+    })
+    .onNodeHover(n => {
+      hover = n || null; near = new Set();
+      if (n) for (const l of S.map.graphData().links) if (l.source === n || l.target === n) near.add(l).add(l.source).add(l.target);
+      host.classList.toggle("fg-pointing", !!n);
+    })
+    .onNodeClick(n => mapClick(n))
+    .graphData(data);
+  S.mapResize = new ResizeObserver(() => S.map && S.map.width(host.clientWidth || 320));
+  S.mapResize.observe(host);
+  setTimeout(() => S.map && S.map.zoomToFit(0, 40), 30);
+}
+function mapClick(n) {
+  const box = $("#mapInfo");
+  if (n.kind === "root") return S.map.zoomToFit(400, 40);
+  if (n.kind === "session") return S.map.zoomToFit(400, 40, m => m.col === n.col && !m.detail);
+  if (n.kind === "task") {
+    S.mapZoom = MAP_LOD;
+    return S.map.zoomToFit(400, 40, m => m.task === n.task);
+  }
+  box.hidden = false;
+  const goal = (S.map.graphData().nodes.find(m => m.id === "t:" + n.task) || {}).text || "";
+  box.innerHTML = `<h4>${esc(n.text)}<button class="quiet" data-action="closeMapInfo">Close</button></h4>
+    <p class="note">${esc(KIND[n.kind] || n.kind)} in: ${esc(goal)}</p>
+    <button class="btn" data-action="openTaskOf" ${args(n.task)}>Open this task</button>`;
+}
+function closeMapInfo() { const b = $("#mapInfo"); if (b) b.hidden = true; }
+function dropMap() {
+  if (S.mapResize) { S.mapResize.disconnect(); S.mapResize = null; }
+  if (S.map) { S.map._destructor(); S.map = null; }
 }
 function forceView(t) {
   const body = $("#traceBody");
@@ -915,17 +1075,7 @@ function forceView(t) {
       .nodeCanvasObject((n, ctx, scale) => {
         const deg = n.__deg || 1, r = n.kind === "step" || n.kind === "end" ? 5 + Math.sqrt(deg) : 3 + Math.sqrt(deg) * .7;
         ctx.globalAlpha = !hover || n === hover || near.has(n) ? 1 : .15;
-        const c = n.ok === false ? bad : col(n.kind);
-        ctx.beginPath();
-        if (n.kind === "file") ctx.rect(n.x - r, n.y - r, 2 * r, 2 * r);
-        else if (n.kind === "human") { ctx.moveTo(n.x, n.y - r * 1.3); ctx.lineTo(n.x + r * 1.3, n.y); ctx.lineTo(n.x, n.y + r * 1.3); ctx.lineTo(n.x - r * 1.3, n.y); ctx.closePath(); }
-        else ctx.arc(n.x, n.y, r, 0, 2 * Math.PI);
-        if (n.kind === "edit" || n.kind === "hold") {
-          ctx.fillStyle = ground; ctx.fill(); ctx.lineWidth = 1.6; ctx.strokeStyle = c;
-          if (n.kind === "hold") ctx.setLineDash([2, 2]);
-          ctx.stroke(); ctx.setLineDash([]);
-        }
-        else { ctx.fillStyle = c; ctx.fill(); }
+        paintDot(ctx, n, r, n.ok === false ? bad : col(n.kind), ground);
         if (S.traceSel === n.i && n.i !== undefined) { ctx.lineWidth = 2 / scale; ctx.strokeStyle = ink; ctx.stroke(); }
         if (n === hover || near.has(n) || (!S.fgCrowd && (scale > 2.2 || (scale > .8 && (SPINE.has(n.kind) || n.kind === "file"))))) {
           const left = !SPINE.has(n.kind) && n.kind !== "file";
@@ -1079,9 +1229,10 @@ function showPage(on) {
   if (!on) $$(".nav-list [data-pane]").forEach(b => b.setAttribute("aria-current", "false"));
 }
 function openControl() { openPane(S.pane); }
-function closeControl() { showPage(false); }
+function closeControl() { dropMap(); showPage(false); }
 function restoreFocus() { const r = RETURN_FOCUS; RETURN_FOCUS = null; if (r && r.focus && r.offsetParent !== null) r.focus(); }
 async function openPane(name) {
+  dropMap();
   S.pane = name; showPage(true); closeSideOnPhone();
   $$(".nav-list [data-pane]").forEach(b => b.setAttribute("aria-current", String(b.dataset.pane === name)));
   const body = $("#ccBody");
@@ -1089,12 +1240,22 @@ async function openPane(name) {
   try { body.innerHTML = await PANES[name](); } catch (e) { body.innerHTML = `<p class="caveat">${esc(e.message)}</p>`; }
   body.focus();
   if (name === "suites") loadSuites();
+  if (name === "map") drawMap();
   if (name === "docs" && $("#docBody")) readDoc(S.doc || "README.md");
   if (name === "files" && $("#dropPg")) { wireDrop($("#dropPg")); if (S.filesTask) loadFiles(S.filesTask, S.filesPath || ""); }
 }
 $(".nav-list").addEventListener("click", e => { const b = e.target.closest("button[data-pane]"); if (b) openPane(b.dataset.pane); });
 
 const PANES = {
+  async map() {
+    return `<h3>Graph</h3><p class="lede">Every conversation and task as one graph. Zoomed out it is a tree of your
+      conversations; scroll in and each task opens into its steps.</p>
+      <div class="fg-wrap"><div id="mapHost" class="fg-host map-host" role="img"
+        aria-label="All conversations and tasks as a graph. Sessions and Verbose list the same as text."></div>
+        <details class="fg-help">${MAP_HELP}</details></div>
+      <p class="note" id="mapNote">The latest 40 tasks. Scroll or pinch to zoom, drag the background to move, click a dot.</p>
+      <div id="mapInfo" class="trace-detail" hidden></div>`;
+  },
   async sessions() {
     const q = S.sessQ || "", arch = !!S.sessArch;
     const d = await api(`/conversations?q=${encodeURIComponent(q)}&archived=${arch}`);
@@ -1889,7 +2050,7 @@ const ACTIONS = {newConversation, selectConversation, renameConversation, archiv
   openSuite, delSuite, delTask, checkGate, pinConversation, exportConversation, enableNotifications,
   runModel, stopTask, resumeTask, toggleTool, setView, closeTrace, traceTask, traceNode, closeTraceDetail, showRewind, showChanges, doRewind, askAgain, editAsk, copyAnswer, copyCode, forgetMemory, addSchedule, removeSchedule, viewSkill,
   patchConversation, exportOne, sessArchived, pickWorkspace, useModel, useReviewer, loadModel, unloadModel, anDays, readDoc,
-  editSchedule, cancelScheduleEdit, pauseSchedule, resumeSchedule, runSchedule, archiveOlder, newFolder, removeFile, makeBackup, getBackup, testMcp, saveKey, clearKey, fillSender, allowSender, revokeSender, reviewConfig, applyConfig, addHook, toggleHook, deleteHook};
+  editSchedule, cancelScheduleEdit, pauseSchedule, resumeSchedule, runSchedule, archiveOlder, newFolder, removeFile, makeBackup, getBackup, testMcp, saveKey, clearKey, fillSender, allowSender, revokeSender, closeMapInfo, reviewConfig, applyConfig, addHook, toggleHook, deleteHook};
 document.addEventListener("click", e => {
   $$("details.more[open]").forEach(d => { if (!d.contains(e.target)) d.open = false; });
   const el = e.target.closest("[data-action]");
