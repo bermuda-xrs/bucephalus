@@ -70,7 +70,7 @@ def _peer_is_loopback(request) -> bool:
     return peer in {"127.0.0.1", "::1", "::ffff:127.0.0.1"}
 
 
-PUBLIC_UI = frozenset({"/", "/ui.js", "/md.js", "/ui.css"})
+PUBLIC_UI = frozenset({"/", "/ui.js", "/md.js", "/force-graph.min.js", "/ui.css"})
 
 SECURITY_HEADERS = {
     "Content-Security-Policy": (

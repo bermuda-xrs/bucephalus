@@ -10,6 +10,33 @@
 Dates are commit dates. `0.1.0` is not released yet — see "Unreleased" for
 what still stands between here and a first iteration.
 
+## Graph view - 2026-11-12 (no HARNESS_VERSION change: console only)
+
+- The trace's Graph view is a force-directed graph in the style of Obsidian's: steps chained in order, each tool call,
+  check and hold linked to its step, and changed files as shared nodes linked to every step that changed them. Drag,
+  zoom, hover to light a node's neighbours, click for the same detail panel as before. Labels show for steps and files
+  when zoomed in and for everything closer in; above 1500 nodes only on hover.
+- Uses force-graph 1.52.0 (MIT), vendored as `src/agent/control/force-graph.min.js`, byte for byte the npm release whose
+  sha512 matched the registry; its SHA-256 is pinned by a test. Served from our origin, so the CSP is unchanged. It is
+  fetched only the first time the Graph view opens (173 KB), never on an ordinary page load, and only once. The
+  library's HTML tooltip is turned off and hidden, so no agent text reaches `innerHTML`; the CSS it would inject is in
+  `ui.css` (the browser console reports its two blocked `<style>` tags at load, which is expected).
+- Laid out, not tangled: steps sit on a vertical spine in order, each step's calls, checks and holds to its left at
+  its height, and changed files in a column on the right at the average height of the steps that changed them. Nodes
+  start at their place, so the view fits at once and settles in a few frames; the fit leaves room for the labels. Drag
+  still moves anything. File labels show the name; the detail panel shows the path.
+- A question-mark icon (drawn in SVG, top right of the graph) opens a key: how the graph is laid out and what each
+  dot is. Shapes now carry the kind where colours could not, since the accent equals the text colour in the dark
+  theme: a ring is a call that changes a file, a square is a file, a diamond is you. A hold is a dashed amber ring, so it no
+  longer looks like a failure (solid amber); red stays reserved for integrity. Native `<details>`, so it opens by keyboard too.
+- Licenses: force-graph and its whole bundled dependency tree are MIT, ISC or BSD-3-Clause (d3-ease), all listed in
+  `THIRD_PARTY_NOTICES.md`. The console's look adapted from Hermes Agent is MIT and was already there.
+- No hard limit in the library (its own demo runs about 75k elements on canvas). The view caps at 5000 nodes, keeping
+  the latest, and says so. Measured: painting 5000 nodes takes about 6 ms a frame zoomed out and 4 ms zoomed in.
+- `tests/test_console_force_graph.py`: the pin, no network, eval or worker paths in the bundle, served from here and
+  loaded only on demand, no HTML tooltip, the CSS, the cap and the notice. The trace test's SVG pin now checks the
+  canvas graph sets no inline style.
+
 ## Webhooks - 2026-11-09 (HARNESS_VERSION 22)
 
 - A Webhooks page makes hooks a local script can call: `POST /hooks/{name}` with `X-Hook-Secret` and `X-Delivery-Id`.

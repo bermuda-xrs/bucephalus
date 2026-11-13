@@ -710,7 +710,7 @@ async function loadTrace() {
     const evs = await api(`/tasks/${id}/trace`);
     const st = [...evs].reverse().find(e => e.type === "task.status_changed");
     const status = st ? st.data.status : "pending";
-    const diffs = VIEW === "verbose" && TERMINAL(status) ? await api(`/tasks/${id}/diff`).catch(() => []) : [];
+    const diffs = (VIEW === "verbose" || VIEW === "graph") && TERMINAL(status) ? await api(`/tasks/${id}/diff`).catch(() => []) : [];
     if (id !== S.traceTask) return;
     if (!S.trace || S.trace.task !== id) { S.traceSel = null; $("#traceDetail").hidden = true; }
     S.trace = {task: id, status, nodes: traceNodes(evs), diffs};
@@ -720,12 +720,15 @@ async function loadTrace() {
 function renderTrace() {
   const body = $("#traceBody"), t = S.trace;
   $("#traceTask").textContent = S.traceTask ? firstLine(goalOf(S.traceTask)) : "";
+  if (VIEW !== "graph" || !S.traceTask || !t || t.task !== S.traceTask || t.error || !t.nodes.length) dropForceView();
   if (VIEW === "normal") return;
   if (!S.traceTask) { body.innerHTML = `<p class="note">Pick a task. Its steps show here while it works.</p>`; return; }
   if (!t || t.task !== S.traceTask) { body.innerHTML = `<p class="note"><span class="spin"></span> Loading</p>`; return; }
   if (t.error) { body.innerHTML = `<p class="caveat">${esc(t.error)}</p>`; return; }
   if (!t.nodes.length) { body.innerHTML = `<p class="note">Nothing has run yet. Steps show here once the plan is signed.</p>`; return; }
-  body.innerHTML = VIEW === "thinking" ? thinkingView(t) : VIEW === "graph" ? graphView(t.nodes) : verboseView(t);
+  if (VIEW === "graph") return forceView(t);
+  dropForceView();
+  body.innerHTML = VIEW === "thinking" ? thinkingView(t) : verboseView(t);
 }
 const tokens = n => `${ktok(n.tin)} in${n.tout == null ? "" : `, ${n.tout} out`}`;
 function rowResult(n) {
@@ -765,30 +768,217 @@ function verboseView(t) {
   flush();
   return out.join("");
 }
-const LANE_X = {model: 8, tool: 208, check: 408, end: 208};
+const MAX_GRAPH_NODES = 5000;
+const GRAPH_LABEL_LIMIT = 1500;
 const cut = (s, n) => { const x = String(s || "").replace(/\s+/g, " "); return x.length > n ? x.slice(0, n - 1) + "…" : x; };
-const nodeSub = n => n.kind === "step" ? n.thought || n.carry || tokens(n) : n.text || rowResult(n).replace(/<[^>]*>/g, "");
-function graphView(nodes) {
-  const NW = 184, NH = 36, GAP = 18, TOP = 28, y = i => TOP + i * (NH + GAP), H = y(nodes.length) - GAP + 8;
-  const cx = lane => LANE_X[lane] + NW / 2;
-  const lanes = [["model", "model"], ["tool", "tools and edits"], ["check", "checks"]].map(([k, l]) =>
-    `<text class="lane-label" x="${LANE_X[k]}" y="14">${l}</text><line class="lane" x1="${cx(k)}" y1="20" x2="${cx(k)}" y2="${H}"/>`).join("");
-  const edges = nodes.slice(1).map((n, i) => {
-    const x1 = cx(nodes[i].lane), y1 = y(i) + NH, x2 = cx(n.lane), mid = y1 + GAP / 2;
-    return `<path class="edge" d="M${x1} ${y1} V${mid} H${x2} V${y(i + 1) - 2}" marker-end="url(#ah)"/>`;
-  }).join("");
-  const boxes = nodes.map((n, i) => {
-    const x = LANE_X[n.lane], top = y(i), sub = nodeSub(n), full = n.label + (sub ? ": " + sub : "");
-    return `<g class="node k-${n.kind}${n.ok === false ? " bad" : n.ok ? " ok" : ""}${S.traceSel === i ? " sel" : ""}"
-      data-action="traceNode" ${args(i)} tabindex="0" role="button" aria-label="${esc(full)}"><title>${esc(full)}</title>
-      <rect x="${x}" y="${top}" width="${NW}" height="${NH}" rx="3"/>
-      ${n.kind === "edit" ? `<rect class="mark" x="${x + NW - 12}" y="${top + 6}" width="6" height="6"/>` : ""}
-      <text class="l" x="${x + 10}" y="${top + 15}">${esc(cut(n.label, 24))}</text>
-      <text class="s" x="${x + 10}" y="${top + 28}">${esc(cut(sub, 28))}</text></g>`;
-  }).join("");
-  return `<svg class="graph" viewBox="0 0 600 ${H}" role="group" aria-label="Trace graph">
-    <defs><marker id="ah" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto">
-    <path class="ah" d="M1 1 L7 4 L1 7"/></marker></defs>${lanes}${edges}${boxes}</svg>`;
+function graphData(t) {
+  let nodes = t.nodes.map((n, i) => ({id: "n" + i, i, kind: n.kind, ok: n.ok, text: n.label}));
+  const links = [];
+  let prevStep = null, step = null;
+  nodes.forEach(n => {
+    if (n.kind === "step") { if (prevStep) links.push({source: prevStep, target: n.id, chain: true}); prevStep = step = n.id; }
+    else if (step) links.push({source: step, target: n.id});
+    else if (prevStep === null && nodes[0] !== n) links.push({source: nodes[0].id, target: n.id});
+  });
+  const files = new Map(), stepAt = new Map();
+  t.nodes.forEach((n, i) => { if (n.kind === "step" && !stepAt.has(n.step)) stepAt.set(n.step, i); });
+  for (const d of t.diffs || []) for (const f of d.files || []) {
+    const id = "f:" + f, from = stepAt.has(d.step) ? stepAt.get(d.step) : -1;
+    if (!files.has(id)) files.set(id, {id, kind: "file", text: f.split("/").pop(), path: f});
+    if (from >= 0) links.push({source: "n" + from, target: id});
+  }
+  nodes = nodes.concat([...files.values()]);
+  layOut(nodes, links);
+  let capped = 0;
+  if (nodes.length > MAX_GRAPH_NODES) {
+    capped = nodes.length - MAX_GRAPH_NODES;
+    nodes = nodes.slice(-MAX_GRAPH_NODES);
+  }
+  const keep = new Set(nodes.map(n => n.id));
+  return {nodes, links: links.filter(l => keep.has(l.source) && keep.has(l.target)), capped};
+}
+const ROW = 36, SIDE = 70, FILE_X = 110;
+const SPINE = new Set(["step", "end"]);
+function layOut(nodes, links) {
+  const byId = new Map(nodes.map(n => [n.id, n]));
+  let row = -1;
+  for (const n of nodes) {
+    if (n.kind === "file") continue;
+    if (SPINE.has(n.kind)) { row += 1; n.fx = 0; n.fy = row * ROW; n.tx = 0; n.ty = n.fy; continue; }
+    n.tx = -SIDE; n.ty = Math.max(row, 0) * ROW;
+  }
+  const into = new Map();
+  for (const l of links) if (!into.has(l.target)) into.set(l.target, [l.source]); else into.get(l.target).push(l.source);
+  for (const f of nodes.filter(n => n.kind === "file")) {
+    const ys = (into.get(f.id) || []).map(id => byId.get(id)).filter(Boolean).map(n => n.ty);
+    f.tx = FILE_X; f.ty = ys.length ? ys.reduce((a, b) => a + b, 0) / ys.length : 0;
+  }
+}
+function fitGraph() {
+  const fg = S.fg;
+  if (!fg) return;
+  fg.zoomToFit(0, 32);
+  const right = fg.graphData().nodes.filter(n => n.kind === "file" || SPINE.has(n.kind)).map(n => cut(n.text, 28).length);
+  const px = Math.max(0, ...right) * 7 + 8, w = fg.width(), z = fg.zoom() * Math.max(.5, (w - px) / w), c = fg.centerAt();
+  fg.zoom(z, 0);
+  fg.centerAt(c.x + px / 2 / z, c.y, 0);
+}
+function toTargets(k) {
+  let nodes = [];
+  const force = a => {
+    for (const n of nodes) if (n.fx === undefined && n.tx !== undefined) {
+      n.vx += (n.tx - n.x) * k * a;
+      n.vy += (n.ty - n.y) * k * (n.kind === "file" ? .5 : 1) * a;
+    }
+  };
+  force.initialize = ns => { nodes = ns; };
+  return force;
+}
+function cssVar(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+function fade(hex, a) {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex);
+  if (!m) return hex;
+  const v = parseInt(m[1], 16);
+  return `rgba(${v >> 16},${(v >> 8) & 255},${v & 255},${a})`;
+}
+const GRAPH_COLOR = {step: "--text", tool: "--dim", edit: "--accent", check: "--done", hold: "--needs", human: "--accent",
+                     end: "--text", file: "--accent"};
+const GRAPH_HELP = `<summary aria-label="How this graph is laid out" title="How this graph is laid out">
+  <svg class="q" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false">
+    <circle cx="8" cy="8" r="7"/><path d="M6 6.2a2 2 0 1 1 2.9 1.8c-.6.3-.9.7-.9 1.3v.5"/><circle class="dot" cx="8" cy="11.9" r=".7"/></svg>
+  </summary>
+  <div class="fg-legend">
+    <h4>How it is laid out</h4>
+    <ul>
+      <li>The spine runs down the middle: one dot per model step, in the order they ran, joined by arrows, ending in how the task finished.</li>
+      <li>What a step did sits to its left, level with it: the tools it called, the checks that ran, anything that held it back.</li>
+      <li>Files it changed sit in a column on the right, level with the average of the steps that changed them, joined to each of those steps. Files appear once the task has finished.</li>
+      <li>A bigger dot has more lines. Drag moves a dot, scroll zooms, hover lights its neighbours, click opens its detail.</li>
+    </ul>
+    <h4>What each dot is</h4>
+    <ul class="fg-keys">
+      <li><span class="lg lg-step"></span>Large dot: a step, one model call</li>
+      <li><span class="lg lg-tool"></span>Grey dot: a tool call that reads or runs</li>
+      <li><span class="lg lg-edit"></span>Ring: a tool call that changes a file</li>
+      <li><span class="lg lg-check"></span>Green dot: a check by a verifier or the reviewer</li>
+      <li><span class="lg lg-hold"></span>Dashed amber ring: a hold, where the harness stopped or warned the model</li>
+      <li><span class="lg lg-human"></span>Diamond: you, a message or an allow or refuse</li>
+      <li><span class="lg lg-end"></span>Last large dot: how the task finished</li>
+      <li><span class="lg lg-file"></span>Square: a file the task changed</li>
+      <li><span class="lg lg-bad"></span>Solid amber: it failed</li>
+    </ul>
+  </div>`;
+function loadForceGraph() {
+  if (!S.fgLib) S.fgLib = new Promise((ok, fail) => {
+    const el = document.createElement("script");
+    el.src = "/force-graph.min.js";
+    el.onload = ok;
+    el.onerror = () => { S.fgLib = null; el.remove(); fail(new Error("the graph library did not load")); };
+    document.head.appendChild(el);
+  });
+  return S.fgLib;
+}
+function forceView(t) {
+  const body = $("#traceBody");
+  let host = $("#fgHost");
+  if (!host) {
+    body.innerHTML = `<div class="fg-wrap"><div id="fgHost" class="fg-host" role="img"></div>
+      <details class="fg-help">${GRAPH_HELP}</details></div>
+      <p class="note" id="fgNote">Drag to move, scroll to zoom, click a node for its detail. Verbose lists the same as text.</p>`;
+    host = $("#fgHost");
+    if (S.fg) { S.fg._destructor(); S.fg = null; }
+  }
+  if (typeof ForceGraph !== "function") {
+    host.textContent = "Loading the graph";
+    loadForceGraph().then(() => { if (VIEW === "graph") renderTrace(); },
+                          e => { if (VIEW === "graph" && $("#fgHost")) $("#fgHost").textContent = e.message; });
+    return;
+  }
+  const data = graphData(t), sig = data.nodes.map(n => n.id + (n.ok === undefined ? "" : n.ok)).join(",") + "|" + data.links.length;
+  host.setAttribute("aria-label", `Trace graph: ${t.nodes.filter(n => n.kind === "step").length} steps, ${data.nodes.length} nodes`);
+  $("#fgNote").textContent = (data.capped ? `Showing the last ${MAX_GRAPH_NODES} of ${data.nodes.length + data.capped} nodes. ` : "")
+    + "Drag to move, scroll to zoom, click a node for its detail. Verbose lists the same as text.";
+  if (!S.fg) {
+    const pal = Object.fromEntries(Object.entries(GRAPH_COLOR).map(([k, v]) => [k, cssVar(v)]));
+    const col = k => pal[k] || pal.tool, bad = cssVar("--needs"), ground = cssVar("--ground"), ink = cssVar("--text");
+    const mono = cssVar("--mono") || "monospace";
+    const chainC = fade(cssVar("--dim"), .8), linkC = fade(cssVar("--dim"), .35), hotC = cssVar("--text");
+    let hover = null, near = new Set();
+    S.fg = new ForceGraph(host)
+      .width(host.clientWidth || 320).height(Math.max(320, body.clientHeight - 48))
+      .backgroundColor("rgba(0,0,0,0)")
+      .nodeLabel(() => "").linkLabel(() => "")
+      .nodeRelSize(4)
+      .linkColor(l => hover ? (near.has(l) ? hotC : "rgba(0,0,0,0)") : l.chain ? chainC : linkC)
+      .linkWidth(l => l.chain ? 1.4 : 0.8)
+      .linkDirectionalArrowLength(l => l.chain ? 3 : 0).linkDirectionalArrowRelPos(1)
+      .nodeCanvasObject((n, ctx, scale) => {
+        const deg = n.__deg || 1, r = n.kind === "step" || n.kind === "end" ? 5 + Math.sqrt(deg) : 3 + Math.sqrt(deg) * .7;
+        ctx.globalAlpha = !hover || n === hover || near.has(n) ? 1 : .15;
+        const c = n.ok === false ? bad : col(n.kind);
+        ctx.beginPath();
+        if (n.kind === "file") ctx.rect(n.x - r, n.y - r, 2 * r, 2 * r);
+        else if (n.kind === "human") { ctx.moveTo(n.x, n.y - r * 1.3); ctx.lineTo(n.x + r * 1.3, n.y); ctx.lineTo(n.x, n.y + r * 1.3); ctx.lineTo(n.x - r * 1.3, n.y); ctx.closePath(); }
+        else ctx.arc(n.x, n.y, r, 0, 2 * Math.PI);
+        if (n.kind === "edit" || n.kind === "hold") {
+          ctx.fillStyle = ground; ctx.fill(); ctx.lineWidth = 1.6; ctx.strokeStyle = c;
+          if (n.kind === "hold") ctx.setLineDash([2, 2]);
+          ctx.stroke(); ctx.setLineDash([]);
+        }
+        else { ctx.fillStyle = c; ctx.fill(); }
+        if (S.traceSel === n.i && n.i !== undefined) { ctx.lineWidth = 2 / scale; ctx.strokeStyle = ink; ctx.stroke(); }
+        if (n === hover || near.has(n) || (!S.fgCrowd && (scale > 2.2 || (scale > .8 && (SPINE.has(n.kind) || n.kind === "file"))))) {
+          const left = !SPINE.has(n.kind) && n.kind !== "file";
+          ctx.font = `${11 / scale}px ${mono}`;
+          ctx.fillStyle = ink; ctx.textAlign = left ? "right" : "left"; ctx.textBaseline = "middle";
+          ctx.fillText(cut(n.text, 28), n.x + (left ? -1 : 1) * (r + 3 / scale), n.y);
+        }
+        ctx.globalAlpha = 1;
+      })
+      .nodePointerAreaPaint((n, color, ctx) => {
+        ctx.fillStyle = color; ctx.beginPath(); ctx.arc(n.x, n.y, 8, 0, 2 * Math.PI); ctx.fill();
+      })
+      .onNodeHover(n => {
+        hover = n || null; near = new Set();
+        if (n) for (const l of S.fg.graphData().links) if (l.source === n || l.target === n) near.add(l).add(l.source).add(l.target);
+        host.classList.toggle("fg-pointing", !!n);
+      })
+      .onNodeClick(n => n.i !== undefined ? traceNode(n.i) : fileNode(n.path))
+      .cooldownTicks(300)
+      .onEngineStop(() => { if (S.fgFit) { S.fgFit = false; fitGraph(); } });
+    S.fg.d3Force("charge").strength(-25).distanceMax(90);
+    S.fg.d3Force("link").distance(l => l.chain ? ROW : l.target.kind === "file" ? FILE_X : SIDE * .7)
+      .strength(l => l.chain ? 0 : l.target.kind === "file" ? .03 : .4);
+    S.fg.d3Force("center", null);
+    S.fg.d3Force("layout", toTargets(.25));
+    S.fgResize = new ResizeObserver(() => S.fg && S.fg.width(host.clientWidth || 320));
+    S.fgResize.observe(host);
+  }
+  if (S.fgSig === sig) return;
+  const old = new Map(S.fg.graphData().nodes.map(n => [n.id, n]));
+  data.nodes = data.nodes.map(n => {
+    const o = old.get(n.id);
+    return o ? Object.assign(o, n) : Object.assign(n, {x: n.tx, y: n.ty});
+  });
+  const deg = new Map();
+  for (const l of data.links) for (const k of [l.source, l.target]) deg.set(k, (deg.get(k) || 0) + 1);
+  for (const n of data.nodes) n.__deg = deg.get(n.id) || 0;
+  S.fgCrowd = data.nodes.length > GRAPH_LABEL_LIMIT;
+  const first = !S.fgSig;
+  S.fgSig = sig;
+  S.fg.graphData({nodes: data.nodes, links: data.links});
+  if (first) { S.fgFit = true; setTimeout(fitGraph, 50); }
+}
+function dropForceView() {
+  if (S.fgResize) { S.fgResize.disconnect(); S.fgResize = null; }
+  if (S.fg) { S.fg._destructor(); S.fg = null; }
+  S.fgSig = null;
+}
+function fileNode(path) {
+  const box = $("#traceDetail");
+  box.hidden = false;
+  box.innerHTML = `<h4>${esc(path)}<button class="quiet" data-action="closeTraceDetail">Close</button></h4>
+    <p class="note">Changed by the steps it is linked to. Verbose shows each step's diff.</p>`;
 }
 async function traceNode(i) {
   const t = S.trace, n = t && t.nodes[i];

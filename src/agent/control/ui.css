@@ -500,23 +500,36 @@ button.tr-row:hover, .tr-row.sel { background: var(--raised); }
 .tr-live { font: 12px/1.5 var(--mono); white-space: pre-wrap; background: var(--ground); border-radius: var(--r-sm);
            padding: 8px 10px; max-height: 220px; overflow: auto; margin: 4px 0 0; }
 .tr-live:empty { display: none; }
-.graph { display: block; width: 100%; height: auto; }
-.graph .lane-label { font: 10px var(--mono); fill: var(--dim); }
-.graph .lane { stroke: var(--line-soft); stroke-dasharray: 2 5; }
-.graph .edge { fill: none; stroke: var(--dim); stroke-width: 1; }
-.graph .ah { fill: none; stroke: var(--dim); stroke-width: 1.3; stroke-linecap: round; stroke-linejoin: round; }
-.graph .node { cursor: pointer; }
-.graph .node:focus { outline: none; }
-.graph .node rect { fill: var(--raised); stroke: var(--line); stroke-width: 1; }
-.graph .node.k-step rect { fill: var(--ground); stroke: var(--dim); }
-.graph .node.k-edit rect { stroke: var(--accent); }
-.graph .node .mark { fill: var(--accent); stroke: none; }
-.graph .node.k-check rect, .graph .node.k-hold rect, .graph .node.k-human rect { fill: none; }
-.graph .node.k-check.ok rect { stroke: var(--done); }
-.graph .node.k-hold rect { stroke: var(--needs); stroke-dasharray: 3 3; }
-.graph .node.bad rect { stroke: var(--needs); }
-.graph .node.k-end rect { fill: var(--text); stroke: var(--text); }
-.graph .node.k-end text { fill: var(--ground); }
-.graph .node.sel rect, .graph .node:focus-visible rect { stroke: var(--text); stroke-width: 2; }
-.graph text.l { font: 600 11px var(--mono); fill: var(--text); }
-.graph text.s { font: 10px var(--mono); fill: var(--dim); }
+.fg-host { width: 100%; min-height: 320px; border: 1px solid var(--line-soft); border-radius: var(--r); overflow: hidden; }
+.fg-host.fg-pointing canvas { cursor: pointer; }
+.fg-wrap { position: relative; }
+.fg-help { position: absolute; top: 8px; right: 8px; z-index: 2; }
+.fg-help > summary { list-style: none; cursor: pointer; display: flex; padding: 4px; border-radius: var(--r-sm);
+                     color: var(--dim); background: var(--panel); border: 1px solid var(--line); }
+.fg-help > summary::-webkit-details-marker { display: none; }
+.fg-help > summary:hover, .fg-help[open] > summary { color: var(--text); }
+.fg-help > summary:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.fg-help .q { fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; }
+.fg-help .q .dot { fill: currentColor; stroke: none; }
+.fg-legend { position: absolute; right: 0; top: calc(100% + 6px); width: min(300px, calc(100vw - 48px));
+             max-height: 60vh; overflow: auto; padding: 10px 12px; background: var(--panel);
+             border: 1px solid var(--line); border-radius: var(--r); font-size: 12px; line-height: 1.45; }
+.fg-legend h4 { margin: 0 0 6px; font-size: 12px; }
+.fg-legend h4 + ul { margin-bottom: 10px; }
+.fg-legend ul { margin: 0; padding-left: 16px; }
+.fg-legend .fg-keys { list-style: none; padding: 0; }
+.fg-keys li { display: flex; align-items: center; gap: 8px; margin: 3px 0; }
+.lg { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+.lg-step, .lg-end { background: var(--text); width: 12px; height: 12px; }
+.lg-tool { background: var(--dim); }
+.lg-edit { background: none; border: 2px solid var(--accent); }
+.lg-human { background: var(--accent); border-radius: 1px; transform: rotate(45deg) scale(.85); }
+.lg-file { background: var(--accent); border-radius: 1px; }
+.lg-check { background: var(--done); }
+.lg-hold { background: none; border: 2px dashed var(--needs); }
+.lg-bad { background: var(--needs); }
+.force-graph-container canvas { display: block; user-select: none; outline: none; -webkit-tap-highlight-color: transparent; }
+.force-graph-container .clickable { cursor: pointer; }
+.force-graph-container .grabbable { cursor: grab; }
+.force-graph-container .grabbable:active { cursor: grabbing; }
+.float-tooltip-kap { display: none !important; }
