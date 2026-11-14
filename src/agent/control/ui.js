@@ -1576,17 +1576,20 @@ const PANES = {
       <dl class="kv"><dt>Host</dt><dd>${esc(d.os)}, ${d.cpus} CPUs, Python ${esc(d.python)}</dd>
       <dt>Disk free</dt><dd>${mb(d.disk_free)} where <code>${esc(d.state_dir)}</code> lives</dd>
       <dt>Versions</dt><dd>harness ${d.harness_version}, toolset ${d.toolset_version}</dd>
-      <dt>Console up</dt><dd>${up(d.uptime_s)}</dd>
+      <dt>Console up</dt><dd>${up(d.uptime_s)}${d.code_changed ? `. <strong>The code on disk changed after this
+        console started</strong>, so it still runs the old code; stop it and start it again` : ""}</dd>
       <dt>Record</dt><dd>database ${mb(d.db_bytes)}, anchor ${mb(d.anchor_bytes)}</dd></dl>
       <h4>Backups</h4><p class="note">A zip of the database, the anchor and memory, copied while tasks run. Kept in
       <code>${esc(d.backups_dir)}</code>, which must not be a synced folder.</p>
       <button class="btn" data-action="makeBackup">Back up now</button>
       <table><tr><th>Backup</th><th class="r">Size</th><th>Made</th><th></th></tr>
       ${b.backups.map(x => `<tr><td><code>${esc(x.name)}</code></td><td class="r">${mb(x.bytes)}</td><td>${ago(x.created)}</td>
-        <td class="r"><button class="quiet" data-action="getBackup" ${args(x.name)}>Download</button></td></tr>`).join("")
+        <td class="r acts"><button class="quiet" data-action="checkBackup" ${args(x.name)}>Check</button>
+          <button class="quiet" data-action="getBackup" ${args(x.name)}>Download</button></td></tr>`).join("")
         || '<tr><td colspan="4" class="empty">No backups yet.</td></tr>'}</table>
-      <p class="note">Restoring swaps the live database, so it is a command with the console stopped, never a button here:
-      unzip over the state folder.</p>`;
+      <p class="note">Check unpacks a backup to a temporary folder and verifies its whole record; nothing live is touched.
+      Putting one back swaps the live database, so it is a command with the console stopped, never a button here:
+      <code>${esc(d.restore)}</code></p>`;
   },
   async mcp() {
     const d = await api("/mcp");
@@ -1884,6 +1887,14 @@ async function readDoc(name) {
 async function makeBackup() {
   try { const r = await post("/system/backup", {}); toast(`Wrote ${r.name}.`); openPane("system"); }
   catch (e) { toast(e.message, true); }
+}
+async function checkBackup(name) {
+  let r;
+  try {
+    r = await post(`/system/backups/${encodeURIComponent(name)}/check`, {});
+  } catch (e) { return toast(e.message, true); }
+  toast(r.ok ? `${name} verifies: ${r.tasks} tasks, ${r.events} records.`
+             : `${name} does not verify: ${r.problems[0]}`, !r.ok);
 }
 function getBackup(name) { download(`/system/backups/${encodeURIComponent(name)}`, name); }
 async function reviewConfig() {
@@ -2267,7 +2278,7 @@ document.addEventListener("keydown", e => {
 });
 $("#palette").addEventListener("click", e => { if (e.target === $("#palette")) closePalette(); });
 
-const ACTIONS = {savePreset, applyPreset, deletePreset, deleteConversation, newConversation, selectConversation, renameConversation, archiveConversation,
+const ACTIONS = {checkBackup, savePreset, applyPreset, deletePreset, deleteConversation, newConversation, selectConversation, renameConversation, archiveConversation,
   toggleArchived, openLooseList, openTaskAlone, openTaskOf, draft, showSendBack, sign, sendBack, decide,
   toggleFiles, toggleSide, openFile, openControl, closeControl, openPane, openPalette, focusSearch,
   toggleTheme, acceptMemory, createSuite, saveTask, closeSuite, addSkill, savePolicy,

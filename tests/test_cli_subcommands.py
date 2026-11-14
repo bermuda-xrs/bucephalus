@@ -318,6 +318,14 @@ def test_verify(cli):
     assert cli("verify").stdout == cli("alerts").stdout
 
 
+def test_restore_refuses_a_file_that_is_not_a_sound_backup(cli, tmp_path):
+    bad = tmp_path / "bucephalus-bad.zip"
+    bad.write_bytes(b"not a zip")
+    r = cli("restore", str(bad), expect=1)
+    assert "not restored" in r.stdout
+    assert "all chains verify" in cli("verify").stdout
+
+
 def test_tui_starts_and_keeps_running(cli):
     pytest.importorskip("textual")
     from agent.proc import kill_tree

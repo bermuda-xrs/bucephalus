@@ -1000,6 +1000,15 @@ def create_app(ctx: AgentContext) -> FastAPI:
             raise HTTPException(404, "no such backup")
         return FileResponse(p, media_type="application/zip", filename=name)
 
+    @app.post("/system/backups/{name}/check")
+    def check_backup(name: str) -> dict:
+        from . import system
+
+        p = system.find(name)
+        if p is None:
+            raise HTTPException(404, "no such backup")
+        return {"name": name, **system.check(p)}
+
     @app.get("/documents")
     def get_documents() -> dict:
         from . import docs
@@ -1290,6 +1299,9 @@ _runs_lock = threading.Lock()
 def serve(config_path: str = "config.yaml", host: str = "127.0.0.1", port: int = 8901) -> None:
     import uvicorn
 
+    from .system import hold_console_lock
+
     ctx = AgentContext.open(config_path)
+    hold_console_lock(ctx)
     uvicorn.run(create_app(ctx), host=host, port=port,
                 timeout_graceful_shutdown=GRACEFUL_SHUTDOWN_S)
