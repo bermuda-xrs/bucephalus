@@ -255,3 +255,99 @@ def test_a_rebuild_that_fails_keeps_the_old_index(conn):
     with pytest.raises(RuntimeError):
         search_mod.rebuild(FailsOnArtifacts(conn))
     assert conn.execute("SELECT COUNT(*) FROM search_index").fetchone()[0] == before
+
+
+def _act(conn, tid, step, tool, preview):
+    from agent.kernel.events import EventLog
+
+    EventLog(conn).append(tid, "tool.intent", {"tool": tool, "step": step, "key": f"{tid}-{step}", "preview": preview})
+
+
+def test_an_action_is_found_by_the_file_it_touched(conn):
+    add_task(conn, "t1", "tidy the quarterly numbers")
+    add_task(conn, "t2", "something unrelated")
+    _act(conn, "t1", 0, "read_file", "read_file(path='work/ledger_q3.csv')")
+    hits = search_mod.search(conn, "ledger_q3")
+    assert [(h.task_id, h.source, h.kind) for h in hits] == [("t1", "action", "action")]
+    assert "read_file" in hits[0].snippet
+
+
+def test_many_actions_of_one_task_take_one_place_in_the_results(conn):
+    add_task(conn, "t1", "goal one")
+    add_task(conn, "t2", "goal two")
+    for i in range(8):
+        _act(conn, "t1", i, "read_file", "read_file(path='work/walrus.md')")
+    add_artifact(conn, "a2", "t2", "answer", "the walrus report says the pond is full")
+    hits = search_mod.search(conn, "walrus", limit=5)
+    assert sorted((h.task_id, h.source) for h in hits) == [("t1", "action"), ("t2", "artifact")]
+    assert search_mod.search(conn, "walrus", limit=5, offset=2) == []
+
+
+def test_an_action_body_is_cut_short(conn):
+    add_task(conn, "t1", "goal")
+    _act(conn, "t1", 0, "write_file", "write_file(path='work/a.txt', content='" + "zebra " * 500 + "')")
+    body = conn.execute("SELECT body FROM search_index WHERE source='action'").fetchone()[0]
+    assert len(body) <= 400
+
+
+def test_a_rebuild_reproduces_actions_and_verify_counts_them(conn):
+    add_task(conn, "t1", "goal")
+    _act(conn, "t1", 0, "read_file", "read_file(path='work/a.txt')")
+    _act(conn, "t1", 1, "run_command", "run_command(command='pytest -q')")
+    before = sorted(conn.execute("SELECT body, source, ref, task_id, kind FROM search_index"))
+    assert search_mod.verify(conn)["consistent"]
+    search_mod.rebuild(conn)
+    assert sorted(conn.execute("SELECT body, source, ref, task_id, kind FROM search_index")) == before
+    assert search_mod.verify(conn)["consistent"] and search_mod.verify(conn)["actions"] == 2
+
+
+def test_a_database_from_before_actions_were_indexed_is_caught_up_when_opened(tmp_path):
+    c = open_db(tmp_path / "old.db")
+    add_task(c, "t1", "goal")
+    _act(c, "t1", 0, "read_file", "read_file(path='work/otter.txt')")
+    c.execute("DELETE FROM search_index WHERE source='action'")
+    c.close()
+    c = open_db(tmp_path / "old.db")
+    assert [h.task_id for h in search_mod.search(c, "otter")] == ["t1"]
+    c.close()
+
+
+def test_isolated_retrieval_hides_other_tasks_actions(conn):
+    from agent.execute.tools import tool_search_history
+
+    add_task(conn, "t1", "mine")
+    add_task(conn, "t2", "theirs")
+    _act(conn, "t2", 0, "read_file", "read_file(path='work/heron.txt')")
+    ctx = _ctx(conn)
+    ctx.config.isolate_retrieval = True
+
+    class T:
+        id = "t1"
+
+    try:
+        assert tool_search_history(ctx, T(), "heron")["results"] == []
+    finally:
+        ctx.config.isolate_retrieval = False
+
+
+def test_a_hit_says_which_conversation_it_sits_in(conn):
+    import time
+
+    from agent.execute.tools import tool_search_history
+
+    add_task(conn, "t1", "plan the heron survey")
+    conn.execute("INSERT INTO conversations(id, title, created_at, updated_at) VALUES ('c1', 'Birds', ?, ?)",
+                 (time.time(), time.time()))
+    conn.execute("INSERT INTO conversation_tasks(task_id, conversation_id, position) VALUES ('t1', 'c1', 0)")
+    out = tool_search_history(_ctx(conn), None, "heron")
+    assert out["results"][0]["conversation"] == {"id": "c1", "title": "Birds", "position": 0}
+    add_task(conn, "t2", "a loose task about otters")
+    assert [r["conversation"] for r in tool_search_history(_ctx(conn), None, "otters")["results"]] == [None]
+
+
+def test_the_tools_prompt_text_is_unchanged():
+    from agent.execute.tools import default_registry
+
+    spec = default_registry().get("search_history")
+    assert spec.description == "search goals and answers from earlier sessions"
+    assert sorted(spec.schema["properties"]) == ["limit", "offset", "query"]
