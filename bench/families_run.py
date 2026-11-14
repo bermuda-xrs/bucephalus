@@ -95,6 +95,7 @@ def _main(argv=None) -> int:
                    help="wall-clock budget per instance instead of the spec's 600; for a machine slower than the baseline's")
     p.add_argument("--shard", default=None, metavar="K/N",
                    help="run only instances K, K+N, K+2N... of the list (one machine of N); pool the outputs with families_merge.py")
+    p.add_argument("--dry-run", action="store_true", help="write plan.json and list this machine's instances; load no model")
     args = p.parse_args(argv)
     shard = None
     if args.shard is not None:
@@ -116,6 +117,18 @@ def _main(argv=None) -> int:
         specs = specs[shard[0]::shard[1]]
     if args.budget_seconds:
         specs = [{**s, "budget_seconds": args.budget_seconds} for s in specs]
+    plan = {"shard": args.shard or "0/1", "split": args.split, "families": fams, "per_family": args.n, "skip": args.skip,
+            "budget_seconds": args.budget_seconds, "family_versions": {s["family"]: s["family_version"] for s in specs},
+            "arms": arms, "keys": {a: [s["key"] for s in specs if runs_on(a, s)] for a in arms}}
+    pf = out / "plan.json"
+    if pf.exists() and json.loads(pf.read_text(encoding="utf-8")) != plan:
+        print(f"REFUSING TO START.\n{pf} was written with other settings; resume with the same ones or use a new --out")
+        return 2
+    pf.write_text(json.dumps(plan, indent=2), encoding="utf-8")
+    if args.dry_run:
+        for a in arms:
+            print(f"{a}: {len(plan['keys'][a])} instances: {' '.join(plan['keys'][a])}")
+        return 0
     try:
         lock = RunLock(measurement_lock_path(ROOT), "measurement").acquire()
     except RunLockBusy as e:

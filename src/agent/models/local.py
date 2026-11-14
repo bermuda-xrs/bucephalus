@@ -116,7 +116,13 @@ def run(endpoint: str, model: str, root: Path, num_ctx: int | None = None) -> di
         raise ValueError(f"{model} is not installed on {endpoint}; ollama pull it first")
     t0 = time.monotonic()
     body = {"model": model, "prompt": "", "keep_alive": KEEP_ALIVE, **({"options": {"num_ctx": num_ctx}} if num_ctx else {})}
-    httpx.post(f"{endpoint}/api/generate", json=body, timeout=600.0).raise_for_status()
+    for attempt in (1, 2):
+        try:
+            httpx.post(f"{endpoint}/api/generate", json=body, timeout=600.0).raise_for_status()
+            break
+        except httpx.HTTPError:
+            if attempt == 2:
+                raise
     return {"model": model, "endpoint": endpoint, "loaded": True, "seconds": round(time.monotonic() - t0, 2),
             "context_length": next((m.get("context_length") for m in status(endpoint)["loaded"]
                                     if m["name"] == model), None)}

@@ -49,6 +49,25 @@ suite must include tasks the thing under test should NOT help with.
 | `tasks/` | four example tasks and the format they follow |
 | `suites/archive/`, `tasks/archive/` | the retired aerospace suite. Every published result remains reproducible from it; see FINDINGS 1.13 for why it was retired |
 
+## One run over many machines
+
+`families_run.py --shard K/N` gives a machine every N-th instance, with both arms of an instance on the same
+machine. On each machine:
+
+1. Check out the same commit with a clean tree; `cards.json` records the commit and `git_dirty`.
+2. Use the same Ollama version and the same model ID (`ollama list`) everywhere; the runner's server listens on
+   11435, so an Ollama on the default 11434 is left alone. Give it a new, empty `BUCEPHALUS_DATA_DIR`.
+3. Dry run: the same command with `--dry-run` writes `plan.json` and lists this machine's instances without
+   loading a model. The shares across machines add up to the whole run.
+4. Run the command without `--dry-run`. After a crash, run the same command again: finished instances are
+   skipped. A restart into that folder with other settings is refused.
+5. Copy every machine's `--out` folder to one place and run `families_merge.py <folders> --out <pooled>`. It
+   refuses a missing shard, a shard that has not finished, shards with different settings or a different N, and
+   an instance measured twice.
+
+A cold model load that fails (Ollama gives up after 5 minutes on a slow disk) is tried once more before the run
+stops.
+
 **Never run anything else during a timed run.** Wall clock is this project's
 cost axis and contention corrupts it — the suite alone took 8 minutes under
 contention against 1.5 — and contention can manufacture a `budget_exhausted`
