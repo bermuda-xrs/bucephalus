@@ -173,3 +173,38 @@ def test_the_listing_and_the_overview_name_the_parent(ctx, api, conv):
 def test_the_page_offers_both_through_their_routes():
     assert {("POST", "/conversations/{}/branch"), ("POST", "/conversations/{}/merge")} <= _calls(UI)
     assert "branchConversation" in UI and "mergeConversation" in UI
+
+
+def test_the_map_draws_a_branch_from_the_exchange_it_left():
+    import json
+    import shutil
+    import subprocess
+
+    from test_console_overview import MAP_SRC
+
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("node is not installed")
+    script = MAP_SRC + """
+const data = {conversations: [{id: "c1", title: "One", tasks: ["a"], branch_after: null},
+                              {id: "c2", title: "Two", tasks: ["b"], branch_after: "a"},
+                              {id: "c3", title: "Gone", tasks: [], branch_after: "zzz"}],
+              tasks: [{id: "a", goal: "A", status: "done", parent_id: null, conversation_id: "c1", steps: 1},
+                      {id: "b", goal: "B", status: "done", parent_id: null, conversation_id: "c2", steps: 1}]};
+process.stdout.write(JSON.stringify(mapLayout(data, new Map())));"""
+    out = json.loads(subprocess.run([node, "-e", script], capture_output=True, text=True, check=True).stdout)
+    branch_links = [(lk["source"], lk["target"]) for lk in out["links"] if lk.get("kind") == "branch"]
+    assert branch_links == [("t:a", "s:c2")]
+    nodes = {n["id"]: n for n in out["nodes"]}
+    assert nodes["s:c2"]["conv"] == "c2" and nodes["t:b"]["conv"] == "c2"
+
+
+def test_the_controls_are_where_sessions_live():
+    sessions = UI[UI.index("async sessions()"):]
+    sessions = sessions[:sessions.index("\n  async ")]
+    assert "pickMerge" in sessions and "mergeConversation" in sessions
+    item = UI[UI.index("function renderItem(it)"):UI.index("function stateCard(it)")]
+    assert "branchConversation" in item
+    click = UI[UI.index("function mapClick(n)"):UI.index("function closeMapInfo()")]
+    assert "branchConversation" in click and "mergeConversation" in click
+    assert "branched_from" in UI and "branch_of" in UI

@@ -107,7 +107,7 @@ async function loadSide() {
   document.title = (needs.length ? `(${needs.length}) ` : "") + "Bucephalus";
   const item = c => `<button class="side-item" data-action="selectConversation" ${args(c.id)}
       ${c.id === S.conv ? 'aria-current="true"' : ""}><span class="t">${c.pinned ? '<span class="pin" aria-label="Pinned">●</span> ' : ""}${esc(c.title)}</span>
-      <span class="s">${c.n_tasks} ${c.n_tasks === 1 ? "task" : "tasks"}, ${ago(c.updated_at)}</span></button>`;
+      <span class="s">${c.branch_of ? "branch, " : ""}${c.n_tasks} ${c.n_tasks === 1 ? "task" : "tasks"}, ${ago(c.updated_at)}</span></button>`;
   const groups = [];
   for (const c of convs) {
     const g = c.pinned ? "Pinned" : dayGroup(c.updated_at);
@@ -230,6 +230,48 @@ async function deleteConversation(id, title, n) {
   if (S.traceTask && r.removed.includes(S.traceTask)) { S.traceTask = null; S.trace = null; renderTrace(); }
   S.lastSide = ""; loadSide(); openPane("sessions");
 }
+async function branchConversation(cid, taskId) {
+  if (!confirm("Cut here? Everything asked after this exchange moves to a new conversation. Follow-ups there still see "
+      + "the exchanges up to this one. If nothing follows, the branch starts empty. Merging the two puts it back.")) return;
+  let c;
+  try {
+    c = await post(`/conversations/${encodeURIComponent(cid)}/branch`, {after_task: taskId});
+  } catch (e) { return toast(e.message, true); }
+  toast(`Created "${c.title}".`);
+  regrouped();
+}
+function pickMerge(id, title) {
+  S.mapMerge = {id, title};
+  if (S.pane === "map" && !$("#control").hidden) {
+    const box = $("#mapInfo");
+    box.hidden = false;
+    box.innerHTML = `<h4>Merge "${esc(title)}"<button class="quiet" data-action="closeMapInfo">Close</button></h4>
+      <p class="note">Click the conversation that should receive it.</p>
+      <button class="btn" data-action="cancelMerge">Cancel the merge</button>`;
+  } else openPane("sessions");
+}
+function mergeThis() {
+  if (!S.conv || !S.thread) return toast("Open a conversation to merge it.", true);
+  pickMerge(S.conv, S.thread.conversation.title);
+}
+function cancelMerge() { S.mapMerge = null; closeMapInfo(); if (S.pane === "sessions" && !$("#control").hidden) openPane("sessions"); }
+async function mergeConversation(into, other, intoTitle, otherTitle) {
+  if (!confirm(`Merge "${otherTitle}" into "${intoTitle}"? Their exchanges become one conversation, in the order they `
+      + "were asked, and the first one's title goes. Nothing is erased; a cut can separate them again.")) return;
+  try {
+    await post(`/conversations/${encodeURIComponent(into)}/merge`, {other});
+  } catch (e) { return toast(e.message, true); }
+  toast(`Merged into "${intoTitle}".`);
+  if (S.conv === other) S.conv = into;
+  regrouped();
+}
+function regrouped() {
+  S.mapMerge = null; S.lastSide = ""; closeMapInfo(); loadSide();
+  if (S.conv) refreshThread(false);
+  if ($("#control").hidden) return;
+  if (S.pane === "map") mapRefresh();
+  if (S.pane === "sessions") openPane("sessions");
+}
 async function archiveConversation() {
   if (!S.conv || !S.thread) return;
   const now = !S.thread.conversation.archived;
@@ -239,15 +281,21 @@ async function archiveConversation() {
 }
 
 function renderItems(items) {
-  if (!items.length) return renderWelcome();
-  $("#items").innerHTML = items.map(renderItem).join("");
+  const from = S.conv && S.thread && S.thread.conversation.branched_from;
+  const note = from ? `<p class="note branch-note">Branched from <button class="link" data-action="selectConversation"
+    ${args(from.conversation_id)}>${esc(from.title)}</button> after "${esc(from.goal)}". Follow-ups here see the
+    exchanges up to there.</p>` : "";
+  if (!items.length && !from) return renderWelcome();
+  $("#items").innerHTML = note + items.map(renderItem).join("");
 }
 function renderItem(it) {
   return `<article class="exchange" id="t-${esc(it.task_id)}" aria-label="${esc(firstLine(it.goal))}">
     <div class="ask-bubble">${esc(it.goal)}</div>
     <div class="ask-meta">${it.scope && it.scope.length ? `may touch <code>${it.scope.map(esc).join(", ")}</code>, ` : "no files, "}${ago(it.created_at)}
       ${TERMINAL(it.status) || (it.plan && it.plan.status === "rejected") ? `<button class="link" data-action="askAgain" ${args(it.task_id)}>Ask again</button>
-      <button class="link" data-action="editAsk" ${args(it.task_id)}>Edit and ask</button>` : ""}</div>
+      <button class="link" data-action="editAsk" ${args(it.task_id)}>Edit and ask</button>` : ""}
+      ${S.conv ? `<button class="link" data-action="branchConversation" ${args(S.conv, it.task_id)}
+        title="Move what follows into a new conversation that still sees the exchanges up to here">Cut here</button>` : ""}</div>
     ${stateCard(it)}
     ${(it.approvals || []).map(approvalCard).join("")}
   </article>`;
@@ -953,12 +1001,12 @@ function mapLayout(data, details) {
   if (loose.length) cols.push({id: "", title: "Tasks outside a conversation", tasks: loose});
   cols.forEach((col, c) => {
     const cx = c * MAP_COL, sid = "s:" + col.id;
-    nodes.push({id: sid, kind: "session", text: col.title, fx: cx + MAP_RAIL, fy: 0, col: c});
+    nodes.push({id: sid, kind: "session", text: col.title, fx: cx + MAP_RAIL, fy: 0, col: c, conv: col.id});
     links.push({source: "root", target: sid, kind: "tree"});
     let y = 2 * ROW, prev = sid;
     for (const tid of col.tasks) {
       const t = byTask.get(tid), id = "t:" + tid, det = details.get(tid);
-      nodes.push({id, kind: "task", text: t.goal, status: t.status, task: tid, fx: cx + MAP_RAIL, fy: y, col: c});
+      nodes.push({id, kind: "task", text: t.goal, status: t.status, task: tid, fx: cx + MAP_RAIL, fy: y, col: c, conv: col.id});
       links.push({source: prev, target: id, kind: "tree"});
       prev = id;
       let rows = Math.max(1, (t.steps || 0) + (MAP_LIVE.has(t.status) ? 0 : 1));
@@ -989,6 +1037,8 @@ function mapLayout(data, details) {
   nodes.unshift({id: "root", kind: "root", text: "Everything", fx: xs.length ? (Math.min(...xs) + Math.max(...xs)) / 2 : 0, fy: -3 * ROW});
   for (const t of data.tasks) if (t.parent_id && byTask.has(t.parent_id))
     links.push({source: "t:" + t.parent_id, target: "t:" + t.id, kind: "delegated"});
+  for (const c of data.conversations) if (c.branch_after && byTask.has(c.branch_after))
+    links.push({source: "t:" + c.branch_after, target: "s:" + c.id, kind: "branch"});
   return {nodes, links, blocks};
 }
 function mapVisible(blocks, v) {
@@ -1029,7 +1079,10 @@ const MAP_HELP = `<summary aria-label="How this map is laid out" title="How this
       <li>Zoomed out it is a tree. The top diamond is everything; each square below it is a conversation, and that
         conversation's tasks hang down its rail in the order you asked them. Tasks started outside a conversation share
         the last column.</li>
-      <li>A dashed line joins a task to one it delegated.</li>
+      <li>A dashed line joins a task to one it delegated. A dotted line joins an exchange to a conversation that
+        branched from it.</li>
+      <li>Click a task and choose Cut here to move what follows it into a new branch. Click a conversation and choose
+        Merge to fold it into another; the next conversation you click receives it.</li>
       <li>Scroll or pinch to zoom. Closer in, each task opens into its steps, laid out as in a task's own graph: the spine of
         steps, with what each step did to its left.</li>
       <li>Click a conversation or a task to zoom to it; click a step or a call to see what it was. Drag the background
@@ -1149,8 +1202,8 @@ async function drawMap() {
     .linkVisibility(l => lod() || !(l.source.detail || l.target.detail))
     .linkColor(l => hover ? (near.has(l) ? ink : "rgba(0,0,0,0)") : l.kind ? treeC : linkC)
     .linkWidth(l => l.kind === "tree" ? 1.4 : 0.8)
-    .linkLineDash(l => l.kind === "delegated" ? [4, 3] : null)
-    .linkCurvature(l => l.kind === "delegated" ? -.3 : 0)
+    .linkLineDash(l => l.kind === "delegated" ? [4, 3] : l.kind === "branch" ? [1, 3] : null)
+    .linkCurvature(l => l.kind === "delegated" ? -.3 : l.kind === "branch" ? .25 : 0)
     .onZoom(z => { S.mapZoom = z.k; })
     .onZoomEnd(() => mapLoadVisible())
     .nodeCanvasObject((n, ctx, scale) => {
@@ -1204,13 +1257,29 @@ function mapClick(n) {
   const box = $("#mapInfo");
   S.mapFocus = n.id;
   if (n.kind === "root") return mapFit(400);
-  if (n.kind === "session") return mapFit(400, m => m.col === n.col);
+  if (n.kind === "session") {
+    const from = S.mapMerge;
+    if (from && n.conv && from.id !== n.conv) return mergeConversation(n.conv, from.id, n.text, from.title);
+    mapFit(400, m => m.col === n.col);
+    if (!n.conv) return;
+    box.hidden = false;
+    box.innerHTML = `<h4>${esc(n.text)}<button class="quiet" data-action="closeMapInfo">Close</button></h4>
+      <p class="note">${from ? "Click the conversation that should receive this one." : "A conversation."}</p>
+      <button class="btn" data-action="selectConversation" ${args(n.conv)}>Open</button>
+      ${from ? `<button class="btn" data-action="cancelMerge">Cancel the merge</button>`
+             : `<button class="btn" data-action="pickMerge" ${args(n.conv, n.text)}>Merge into another</button>`}`;
+    return;
+  }
   if (n.kind === "task") {
     const b = (S.mapBlocks || []).find(x => x.task === n.task);
     if (!b) return;
     const k = Math.max(MAP_LOD, Math.min(3, .9 * Math.min(S.map.width() / (b.x1 - b.x0), S.map.height() / (b.y1 - b.y0))));
     S.map.centerAt((b.x0 + b.x1) / 2, (b.y0 + b.y1) / 2, 400);
     S.map.zoom(k, 400);
+    box.hidden = false;
+    box.innerHTML = `<h4>${esc(n.text)}<button class="quiet" data-action="closeMapInfo">Close</button></h4>
+      <button class="btn" data-action="openTaskOf" ${args(n.task)}>Open this task</button>
+      ${n.conv ? `<button class="btn" data-action="branchConversation" ${args(n.conv, n.task)}>Cut here</button>` : ""}`;
     return;
   }
   box.hidden = false;
@@ -1449,16 +1518,24 @@ const PANES = {
   async sessions() {
     const q = S.sessQ || "", arch = !!S.sessArch;
     const d = await api(`/conversations?q=${encodeURIComponent(q)}&archived=${arch}`);
+    const from = S.mapMerge, titles = new Map(d.conversations.map(c => [c.id, c.title]));
     const row = c => `<tr><td><button class="link" data-action="selectConversation" ${args(c.id)}>${c.pinned
-        ? '<span class="pin" aria-label="Pinned">●</span> ' : ""}${esc(c.title)}</button></td>
+        ? '<span class="pin" aria-label="Pinned">●</span> ' : ""}${esc(c.title)}</button>${c.branch_of
+        ? ` <span class="note">branch of ${esc(titles.get(c.branch_of) || "another conversation")}</span>` : ""}</td>
       <td class="r">${c.n_tasks}</td><td class="r st-needs">${c.needs_you || ""}</td><td>${ago(c.updated_at)}</td>
       <td class="r acts"><button class="quiet" data-action="patchConversation" ${args(c.id, "pinned", !c.pinned)}>${c.pinned ? "Unpin" : "Pin"}</button>
         <button class="quiet" data-action="patchConversation" ${args(c.id, "archived", !arch)}>${arch ? "Unarchive" : "Archive"}</button>
         <button class="quiet" data-action="exportOne" ${args(c.id, c.title)}>Export</button>
+        ${!from ? `<button class="quiet" data-action="pickMerge" ${args(c.id, c.title)}>Merge</button>`
+          : from.id === c.id ? `<button class="quiet" data-action="cancelMerge">Cancel merge</button>`
+          : `<button class="quiet" data-action="mergeConversation" ${args(c.id, from.id, c.title, from.title)}>Merge here</button>`}
         <button class="quiet" data-action="deleteConversation" ${args(c.id, c.title, c.n_tasks)}>Delete</button></td></tr>`;
     return `<h3>Sessions</h3><p class="lede">Every conversation and the tasks in it. Archiving hides one from the
       sidebar and keeps everything. Delete erases a conversation's content for good; the integrity record keeps only a
-      note that it was removed, so verify reports a removal, not tampering.</p>
+      note that it was removed, so verify reports a removal, not tampering. Merge folds one conversation into
+      another, in the order things were asked; Cut here, on any exchange or in the Graph, splits one again.</p>
+      ${from ? `<p class="note" role="status">Merging "${esc(from.title)}": choose Merge here on the conversation that
+        should receive it.</p>` : ""}
       <div class="page-tools"><input id="sessQ" class="search" type="search" value="${esc(q)}" data-change="sessSearch"
         placeholder="Search titles and goals, then Enter" aria-label="Search conversations">
         <button class="btn" data-action="sessArchived">${arch ? "Show active" : "Show archived"}</button></div>
@@ -2267,7 +2344,7 @@ document.addEventListener("keydown", e => {
 });
 $("#palette").addEventListener("click", e => { if (e.target === $("#palette")) closePalette(); });
 
-const ACTIONS = {savePreset, applyPreset, deletePreset, deleteConversation, newConversation, selectConversation, renameConversation, archiveConversation,
+const ACTIONS = {branchConversation, mergeConversation, pickMerge, mergeThis, cancelMerge, savePreset, applyPreset, deletePreset, deleteConversation, newConversation, selectConversation, renameConversation, archiveConversation,
   toggleArchived, openLooseList, openTaskAlone, openTaskOf, draft, showSendBack, sign, sendBack, decide,
   toggleFiles, toggleSide, openFile, openControl, closeControl, openPane, openPalette, focusSearch,
   toggleTheme, acceptMemory, createSuite, saveTask, closeSuite, addSkill, savePolicy,

@@ -10,6 +10,25 @@
 Dates are commit dates. `0.1.0` is not released yet — see "Unreleased" for
 what still stands between here and a first iteration.
 
+## Branch and merge conversations, search past actions - 2026-11-15 (HARNESS_VERSION 24)
+
+- Cut here, on any exchange in a conversation and on a task in the Graph: the exchanges after it move to a new
+  conversation, a branch. A follow-up in the branch is given the exchanges up to the cut as its history, then the
+  branch's own; the original no longer sees what moved. Cutting after the last exchange starts an empty branch.
+- Merge, in Sessions, in a conversation's More menu and on a conversation in the Graph: one conversation folds into
+  another, exchanges in the order they were asked. Merging a branch back undoes the cut. Branches of a merged
+  conversation follow the exchange they left.
+- No task is copied or rewritten: a conversation is a list of tasks, outside the hash chain, so `verify` is
+  unaffected. What a task was shown as history is recorded when it first runs and does not change afterwards.
+  `conversations.branch_after` names the exchange a branch left; its parent is wherever that exchange now lives.
+- The Graph draws a dotted line from that exchange to the branch. The sidebar and Sessions mark branches.
+- `search_history` finds past tool calls: each `tool.intent` is indexed as the tool's name and its call preview, cut
+  at 400 characters. One task's actions take one place in the results so they cannot crowd out answers. Each hit
+  says which conversation it sits in and where. Results stay untrusted and scoped by `isolate_retrieval`. No new
+  tool and no change to the tool's schema or description, so prompts are byte-identical and earlier numbers
+  compare. An existing database is caught up when opened; `search --verify` counts actions.
+- `tests/test_console_branches.py`, `tests/test_search_history.py`.
+
 ## Atomic removal and reindex - 2026-11-15 (no HARNESS_VERSION change)
 
 - The database connection commits each statement by itself, and `with conn:` opens no transaction in that mode. So
