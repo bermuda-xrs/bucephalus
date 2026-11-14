@@ -434,6 +434,43 @@ async function sayToRunning(text) {
   try { await post(`/tasks/${open[open.length - 1].task_id}/message`, {text}); $("#ask").value = ""; toast("Sent. It reaches the task at its next step."); }
   catch (e) { toast(e.message, true); }
 }
+function showPreset() {
+  const chip = $("#chipProfile");
+  if (chip) chip.textContent = S.preset ? `Preset: ${S.preset}` : "Profile";
+}
+for (const id of ["scope", "budUsd", "modelPick"]) {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener("input", () => { if (S.preset) { S.preset = null; showPreset(); } });
+}
+async function savePreset() {
+  const name = $("#presetName").value.trim(), usd = $("#budUsd").value;
+  const ex = MODELS && MODELS.executor, rv = MODELS && MODELS.reviewer;
+  const body = {executor_model: ex && ex.local ? ex.model : null, reviewer_model: rv && rv.local ? rv.model : null,
+                scope: $("#scope").value.trim() || "work", budget_usd: usd === "" ? null : Number(usd), budget_seconds: null};
+  try {
+    await api(`/presets/${encodeURIComponent(name)}`, {method: "PUT", body: JSON.stringify(body)});
+    toast(`Saved ${name}.`);
+  } catch (e) { return toast(e.message, true); }
+  openPane("settings");
+}
+async function applyPreset(name) {
+  let p;
+  try {
+    p = await post(`/presets/${encodeURIComponent(name)}/apply`, {});
+  } catch (e) { return toast(e.message, true); }
+  $("#scope").value = p.scope;
+  $("#budUsd").value = p.budget_usd == null ? "" : p.budget_usd;
+  S.preset = name; showPreset(); loadModels();
+  toast(`New tasks start from ${name}.`);
+}
+async function deletePreset(name) {
+  if (!confirm(`Delete the preset ${name}? Tasks that started from it keep the record.`)) return;
+  try {
+    await api(`/presets/${encodeURIComponent(name)}`, {method: "DELETE"});
+  } catch (e) { return toast(e.message, true); }
+  if (S.preset === name) { S.preset = null; showPreset(); }
+  openPane("settings");
+}
 async function send(given) {
   const text = (typeof given === "string" ? given : $("#ask").value).trim();
   if (!text) return $("#ask").focus();
@@ -448,7 +485,7 @@ async function send(given) {
     if (!S.conv) { const c = await post("/conversations", {}); S.conv = c.id; }
     const usd = $("#budUsd").value;
     const m = await post(`/conversations/${S.conv}/messages`, {text,
-      artifact_scope: [$("#scope").value.trim() || "work"], budget_usd: usd === "" ? null : Number(usd)});
+      artifact_scope: [$("#scope").value.trim() || "work"], budget_usd: usd === "" ? null : Number(usd), preset: S.preset});
     if (typeof given !== "string") $("#ask").value = "";
     S.lastSide = ""; loadSide();
     await draft(m.task_id);
@@ -1767,12 +1804,26 @@ What to do, in the words a model reads.</textarea></label>
   },
   async settings() {
     const d = await api("/panels/settings");
+    const presets = (await api("/presets")).presets;
     return `<h3>Settings</h3><p class="lede">Read from the config this console was started with. Change them there;
       the console does not rewrite your config.</p>
       <h4>Appearance</h4><button class="btn" data-action="toggleTheme">Switch to ${document.documentElement.dataset.theme === "light" ? "dark" : "light"}</button>
       <h4>Notifications</h4><p class="note">A desktop notification when something needs you or a watched task finishes,
       only while this tab is in the background. ${"Notification" in window ? `Now: ${esc(Notification.permission)}.` : "Not available here."}</p>
       <button class="btn" data-action="enableNotifications">Turn on notifications</button>
+      <h4>Presets</h4><p class="note">A named set of the model each role uses, the workspace and the budget. Apply one
+        and new tasks start from it; each task records which preset it started from. Change a field by hand and the
+        preset label drops, so the record never claims a preset you did not use. No persona text: the agent's
+        instructions stay the same, so measurements still compare.</p>
+      <table><tr><th>Preset</th><th>Models</th><th>Workspace</th><th>Budget</th><th></th></tr>
+      ${presets.map(p => `<tr><td>${esc(p.name)}</td><td><code>${esc(p.body.executor_model || "as now")}</code> /
+        <code>${esc(p.body.reviewer_model || "as now")}</code></td><td><code>${esc(p.body.scope)}</code></td>
+        <td>${p.body.budget_usd == null ? "default" : "$" + p.body.budget_usd}</td>
+        <td class="r acts"><button class="quiet" data-action="applyPreset" ${args(p.name)}>Apply</button>
+          <button class="quiet" data-action="deletePreset" ${args(p.name)}>Delete</button></td></tr>`).join("")
+        || '<tr><td colspan="5" class="empty">No presets yet.</td></tr>'}</table>
+      <div class="page-tools"><label class="field">Name<input id="presetName" autocomplete="off" maxlength="40"></label>
+        <button class="btn" data-action="savePreset">Save what the composer uses now</button></div>
       <h4>Long files</h4><p class="note">How a file longer than the model can take at once reaches it. For new tasks;
       your config file is not changed.</p>
       <label class="field"><select id="longFiles" data-change="longFiles">${d.long_files.choices.map(c =>
@@ -2213,7 +2264,7 @@ document.addEventListener("keydown", e => {
 });
 $("#palette").addEventListener("click", e => { if (e.target === $("#palette")) closePalette(); });
 
-const ACTIONS = {deleteConversation, newConversation, selectConversation, renameConversation, archiveConversation,
+const ACTIONS = {savePreset, applyPreset, deletePreset, deleteConversation, newConversation, selectConversation, renameConversation, archiveConversation,
   toggleArchived, openLooseList, openTaskAlone, openTaskOf, draft, showSendBack, sign, sendBack, decide,
   toggleFiles, toggleSide, openFile, openControl, closeControl, openPane, openPalette, focusSearch,
   toggleTheme, acceptMemory, createSuite, saveTask, closeSuite, addSkill, savePolicy,

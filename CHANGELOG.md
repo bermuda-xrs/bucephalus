@@ -10,6 +10,20 @@
 Dates are commit dates. `0.1.0` is not released yet — see "Unreleased" for
 what still stands between here and a first iteration.
 
+## Presets - 2026-11-15 (no HARNESS_VERSION change: the agent's prompts, tools and gate are unchanged)
+
+- Settings has Presets: a named set of the executor's model, the reviewer's model, the workspace and the budget. Save
+  what the composer uses now; Apply switches both models through the same checks as the Models page (not while a task
+  runs, only installed models, nothing switched if one is missing) and fills the composer. The composer's chip shows
+  the preset; changing the workspace, budget or model by hand drops it.
+- Each task started from a preset records `task.preset` with the preset's name and the SHA-256 of its contents, so a
+  result says what it started from even after the preset is edited or deleted. An unknown preset on a message is
+  refused before a task is made.
+- No persona text and no per-preset skills, by design (the Hermes "profiles" idea, reduced): a persona changes the
+  agent's instructions and measurements would stop comparing. `profile` (local or mixed) is unchanged and separate.
+- `tests/test_console_presets.py`: save, replace, delete, validation (a persona field is refused), apply with and
+  without models, refusals, the record on the task and after deletion, the page.
+
 ## Delete a conversation - 2026-11-15 (HARNESS_VERSION 23)
 
 - Sessions has Delete. Typing `delete` erases a conversation and every task in it, with anything those tasks

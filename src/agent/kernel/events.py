@@ -110,6 +110,7 @@ EVENT_TYPES = frozenset(
         "git.committed",
         "git.skipped",
         "git.worktree",
+        "task.preset",
     }
 )
 

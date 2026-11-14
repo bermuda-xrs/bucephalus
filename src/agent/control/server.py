@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import os
 import threading
 from pathlib import Path
@@ -9,7 +10,7 @@ from fastapi import FastAPI, Header, HTTPException, Query, Request
 from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from ..assure.monitor import flags as monitor_flags
 from ..context import AgentContext
@@ -137,6 +138,15 @@ class KeyIn(BaseModel):
     value: str
 
 
+class PresetIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    executor_model: str | None = None
+    reviewer_model: str | None = None
+    scope: str = "work"
+    budget_usd: float | None = None
+    budget_seconds: int | None = None
+
+
 class ModelIn(BaseModel):
     model: str
     slot: str = "cloud"
@@ -167,6 +177,7 @@ class Message(BaseModel):
     artifact_scope: list[str] = Field(default_factory=lambda: ["work"])
     budget_usd: float | None = None
     budget_seconds: int | None = None
+    preset: str | None = None
 
 
 class Upload(BaseModel):
@@ -557,11 +568,17 @@ def create_app(ctx: AgentContext) -> FastAPI:
 
         if not body.text.strip():
             raise HTTPException(400, "an empty message asks for nothing")
+        preset = _preset(body.preset, 400) if body.preset else None
         try:
-            return conv.add_message(ctx, cid, body.text.strip(), body.artifact_scope,
-                                    body.budget_usd, body.budget_seconds)
+            out = conv.add_message(ctx, cid, body.text.strip(), body.artifact_scope,
+                                   body.budget_usd, body.budget_seconds)
         except KeyError:
             raise HTTPException(404, "no such conversation") from None
+        if preset:
+            from ..kernel.events import canonical, sha256_hex
+
+            ctx.log.append(out["task_id"], "task.preset", {"name": body.preset, "sha256": sha256_hex(canonical(preset))})
+        return out
 
     @app.get("/context")
     def get_context(task_id: str | None = None) -> dict:
@@ -632,6 +649,67 @@ def create_app(ctx: AgentContext) -> FastAPI:
             return local.unload(endpoint, body.model)
         except Exception as e:  # noqa: BLE001
             raise HTTPException(502, f"the model server failed: {e}") from None
+
+    PRESET_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 _.-]{0,39}$")
+    PRESET_SCOPE = re.compile(r"^[A-Za-z0-9_-]+(/[A-Za-z0-9_-]+)*$")
+
+    def _preset(name: str, missing: int = 404) -> dict:
+        row = ctx.conn.execute("SELECT body_json FROM presets WHERE name=?", (name,)).fetchone()
+        if row is None:
+            raise HTTPException(missing, f"no preset named {name!r}")
+        return json.loads(row[0])
+
+    @app.get("/presets")
+    def get_presets() -> dict:
+        return {"presets": [{"name": n, "body": json.loads(b), "updated_at": t} for n, b, t in
+                            ctx.conn.execute("SELECT name, body_json, updated_at FROM presets ORDER BY name")]}
+
+    @app.put("/presets/{name}")
+    def put_preset(name: str, body: PresetIn) -> dict:
+        import time as _time
+
+        if not PRESET_NAME.match(name):
+            raise HTTPException(400, "a preset name is 1 to 40 letters, digits, spaces, dots, dashes or underscores")
+        if not PRESET_SCOPE.match(body.scope):
+            raise HTTPException(400, "the workspace is a relative folder inside the project")
+        if body.budget_usd is not None and not 0 < body.budget_usd <= 1000:
+            raise HTTPException(400, "the budget is more than $0 and at most $1000")
+        if body.budget_seconds is not None and not 0 < body.budget_seconds <= 86400:
+            raise HTTPException(400, "the time budget is 1 second to 1 day")
+        for m in (body.executor_model, body.reviewer_model):
+            if m is not None and (not m.strip() or len(m) > 200 or "\n" in m):
+                raise HTTPException(400, "a model name is one line of at most 200 characters")
+        ctx.conn.execute("INSERT OR REPLACE INTO presets(name, body_json, updated_at) VALUES (?,?,?)",
+                         (name, json.dumps(body.model_dump()), _time.time()))
+        ctx.conn.commit()
+        return {"name": name, "body": body.model_dump()}
+
+    @app.delete("/presets/{name}")
+    def delete_preset(name: str) -> dict:
+        _preset(name)
+        ctx.conn.execute("DELETE FROM presets WHERE name=?", (name,))
+        ctx.conn.commit()
+        return {"name": name, "removed": True}
+
+    @app.post("/presets/{name}/apply")
+    def apply_preset(name: str) -> dict:
+        p = _preset(name)
+        wanted = [(slot, m) for slot, m in (("cloud", p.get("executor_model")),
+                                            (ctx.config.autonomy.auto_review_backend, p.get("reviewer_model"))) if m]
+        if wanted and any(t.is_alive() for t in _runs.values()):
+            raise HTTPException(409, "a task is running; apply the preset when it has finished")
+        picked = []
+        for slot, m in wanted:
+            local, b, endpoint = _local(ModelIn(model=m, slot=slot))
+            if m not in local.installed(endpoint):
+                raise HTTPException(400, f"{m} is not installed on {endpoint}")
+            picked.append((slot, b, m))
+        for slot, b, m in picked:
+            b.cfg.model = m
+            if hasattr(b, "model"):
+                b.model = m
+            ctx.config.backends[slot].model = m
+        return {"name": name, **p}
 
     @app.post("/models/select")
     def post_model_select(body: ModelIn) -> dict:
