@@ -174,6 +174,12 @@ class Upload(BaseModel):
     content_b64: str
 
 
+class SkillFileIn(BaseModel):
+    file_name: str
+    text: str
+    drafted_from_none: bool = False
+
+
 class SkillIn(BaseModel):
     name: str
     body: str
@@ -1122,6 +1128,27 @@ def create_app(ctx: AgentContext) -> FastAPI:
                 provenance={"drafted_by": "human", "source": "ui"},
                 status="candidate",
             )
+        except ValueError as e:
+            raise HTTPException(400, str(e)) from None
+        return {"id": sid, "status": "candidate"}
+
+    @app.post("/skills/import")
+    def import_skill(body: SkillFileIn) -> dict:
+        import hashlib
+
+        from ..skills.store import import_external_skill, split_skill_file
+
+        if not body.text.strip() or len(body.text.encode()) > 64 * 1024:
+            raise HTTPException(400, "a skill file is 1 byte to 64 KB of text")
+        fname = body.file_name.replace("\\", "/").rsplit("/", 1)[-1][:200] or "skill.md"
+        try:
+            meta, text = split_skill_file(body.text)
+            extra = {"source_file": fname, "sha256": hashlib.sha256(body.text.encode()).hexdigest()}
+            if body.drafted_from_none:
+                extra["drafted_from"] = []
+            sid = import_external_skill(ctx.skills, str(meta.get("name") or Path(fname).stem)[:120], text,
+                                        f"file:{fname}", str(meta.get("description") or meta.get("applies_when") or "")[:500]
+                                        or None, extra)
         except ValueError as e:
             raise HTTPException(400, str(e)) from None
         return {"id": sid, "status": "candidate"}
