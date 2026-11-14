@@ -10,6 +10,17 @@
 Dates are commit dates. `0.1.0` is not released yet — see "Unreleased" for
 what still stands between here and a first iteration.
 
+## Backup check, restore, stale code - 2026-11-15 (no HARNESS_VERSION change: console and CLI only)
+
+- System has Check beside each backup: the zip is unpacked to a temporary folder and its whole record is verified
+  (SQLite's own check, every chain against the backup's anchor, memory against its fingerprint). Nothing live is
+  touched.
+- `bucephalus restore <backup.zip>` puts a backup in place of the current record. It refuses a backup that fails the
+  check and refuses while a console runs (the console now holds `console.lock` in the state folder). The database,
+  anchor and memory it replaces are moved to `replaced-<time>` beside the database, never deleted.
+- System says when a source file is newer than the running console, which then still runs the old code.
+- README no longer says a session cannot be deleted. DEFERRED D81's restore row records what was built.
+
 ## Ready for the many-machine run - 2026-11-15 (no HARNESS_VERSION change: bench and model loading only)
 
 - `families_run.py` writes `plan.json` (shard, settings, each arm's instance keys) before it loads a model;
