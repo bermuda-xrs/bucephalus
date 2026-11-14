@@ -62,6 +62,7 @@ class Anchor:
         return out
 
 
+TOMBSTONE = "tombstone:"
 ANCHOR_BEHIND = "anchor_behind"
 ANCHOR_REWRITTEN = "anchor_rewritten"
 
@@ -144,7 +145,15 @@ def verify_all(conn: sqlite3.Connection, log: EventLog, anchor: Anchor,
         if found:
             findings.append(found)
     known = {r[0] for r in conn.execute("SELECT id FROM tasks").fetchall()}
-    for task_id in sorted(anchor.all_tasks() - known):
+    marked = anchor.all_tasks()
+    for task_id in sorted(marked - known):
+        if task_id.startswith(TOMBSTONE):
+            continue
+        if TOMBSTONE + task_id in marked:
+            findings.append({"task_id": task_id, "severity": "info",
+                             "detail": "removed on purpose from the console; the anchor holds its last hash "
+                                       f"({anchor.latest(TOMBSTONE + task_id)[:12]}) and nothing of its content"})
+            continue
         if not task_id.startswith(("plan:", "schedule:")):
             findings.append({"task_id": task_id, "severity": "critical",
                              "detail": "the anchor has a checkpoint for this task and the "

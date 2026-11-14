@@ -329,6 +329,13 @@ CREATE TABLE IF NOT EXISTS sessions (
 );
 CREATE INDEX IF NOT EXISTS idx_sessions_task ON sessions(task_id);
 
+CREATE TABLE IF NOT EXISTS task_tombstones (
+    task_id     TEXT PRIMARY KEY,
+    removed_at  REAL NOT NULL,
+    head        TEXT NOT NULL,
+    events      INTEGER NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS conversations (
     id          TEXT PRIMARY KEY,
     title       TEXT NOT NULL,

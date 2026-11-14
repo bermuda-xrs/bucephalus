@@ -216,6 +216,18 @@ function exportConversation(format) {
   const f = format === "json" ? "json" : "md";
   download(`/conversations/${S.conv}/export?format=${f}`, `${$("#convTitle").textContent.slice(0, 60).replace(/[^\w.-]+/g, "-")}.${f}`);
 }
+async function deleteConversation(id, title, n) {
+  const typed = prompt(`Delete "${title}" and its ${n} task${n === 1 ? "" : "s"}, with every step, answer, plan and approval in them? `
+    + "This cannot be undone. The integrity record keeps only a note that they were removed. Backups you made before "
+    + "still hold them. Files the tasks wrote in your workspace stay. Type delete to go on.");
+  if (typed === null) return;
+  try {
+    const r = await post(`/conversations/${encodeURIComponent(id)}/delete`, {phrase: typed.trim()});
+    toast(`Deleted ${r.removed.length} task${r.removed.length === 1 ? "" : "s"} and ${r.events} records.`);
+  } catch (e) { return toast(e.message, true); }
+  if (S.conv === id) { S.conv = null; S.thread = null; }
+  S.lastSide = ""; loadSide(); openPane("sessions");
+}
 async function archiveConversation() {
   if (!S.conv || !S.thread) return;
   const now = !S.thread.conversation.archived;
@@ -1402,9 +1414,11 @@ const PANES = {
       <td class="r">${c.n_tasks}</td><td class="r st-needs">${c.needs_you || ""}</td><td>${ago(c.updated_at)}</td>
       <td class="r acts"><button class="quiet" data-action="patchConversation" ${args(c.id, "pinned", !c.pinned)}>${c.pinned ? "Unpin" : "Pin"}</button>
         <button class="quiet" data-action="patchConversation" ${args(c.id, "archived", !arch)}>${arch ? "Unarchive" : "Archive"}</button>
-        <button class="quiet" data-action="exportOne" ${args(c.id, c.title)}>Export</button></td></tr>`;
+        <button class="quiet" data-action="exportOne" ${args(c.id, c.title)}>Export</button>
+        <button class="quiet" data-action="deleteConversation" ${args(c.id, c.title, c.n_tasks)}>Delete</button></td></tr>`;
     return `<h3>Sessions</h3><p class="lede">Every conversation and the tasks in it. Archiving hides one from the
-      sidebar; nothing is deleted, because each task's record is a hash chain.</p>
+      sidebar and keeps everything. Delete erases a conversation's content for good; the integrity record keeps only a
+      note that it was removed, so verify reports a removal, not tampering.</p>
       <div class="page-tools"><input id="sessQ" class="search" type="search" value="${esc(q)}" data-change="sessSearch"
         placeholder="Search titles and goals, then Enter" aria-label="Search conversations">
         <button class="btn" data-action="sessArchived">${arch ? "Show active" : "Show archived"}</button></div>
@@ -2199,7 +2213,7 @@ document.addEventListener("keydown", e => {
 });
 $("#palette").addEventListener("click", e => { if (e.target === $("#palette")) closePalette(); });
 
-const ACTIONS = {newConversation, selectConversation, renameConversation, archiveConversation,
+const ACTIONS = {deleteConversation, newConversation, selectConversation, renameConversation, archiveConversation,
   toggleArchived, openLooseList, openTaskAlone, openTaskOf, draft, showSendBack, sign, sendBack, decide,
   toggleFiles, toggleSide, openFile, openControl, closeControl, openPane, openPalette, focusSearch,
   toggleTheme, acceptMemory, createSuite, saveTask, closeSuite, addSkill, savePolicy,
