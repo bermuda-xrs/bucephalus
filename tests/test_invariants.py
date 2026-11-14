@@ -68,14 +68,22 @@ def test_monitor_is_not_imported_by_prompt_builders():
         assert "assure.monitor" not in text, f"{path.name} imports the monitor"
 
 
-def test_events_table_is_append_only():
-    offenders = []
+def test_events_are_never_updated_and_deleted_only_whole_by_removal_after_the_anchor():
+    import re
+
+    offenders, deletes = [], []
     for path in SRC.rglob("*.py"):
         text = path.read_text(encoding="utf-8").lower()
-        for stmt in ("update events", "delete from events"):
-            if stmt in text:
-                offenders.append(f"{path.name}: {stmt}")
+        rel = path.relative_to(SRC).as_posix()
+        if "update events" in text:
+            offenders.append(f"{rel}: update events")
+        deletes += [rel] * text.count("delete from events")
+        if re.search(r"(delete from|update) \{", text) and re.search(r"[\"']events[\"']", text):
+            offenders.append(f"{rel}: a delete or update whose table is a variable, in a file that names 'events'")
     assert not offenders, offenders
+    assert deletes == ["kernel/removal.py"], deletes
+    src = (SRC / "kernel" / "removal.py").read_text(encoding="utf-8")
+    assert src.index("ctx.anchor.record(TOMBSTONE") < src.index("DELETE FROM events WHERE task_id IN")
 
 
 def test_side_effecting_tools_route_through_execute_once():

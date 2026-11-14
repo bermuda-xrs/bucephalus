@@ -10,6 +10,26 @@
 Dates are commit dates. `0.1.0` is not released yet — see "Unreleased" for
 what still stands between here and a first iteration.
 
+## Delete a conversation - 2026-11-15 (HARNESS_VERSION 23)
+
+- Sessions has Delete. Typing `delete` erases a conversation and every task in it, with anything those tasks
+  delegated: steps, answers, plans, approvals, reviews, monitor flags, deviations, cached tool results, search index
+  entries and the per-task checkpoints. Secure delete is on, the search index is compacted and the WAL truncated, so the
+  text is gone from the database files, not only from queries. Spend (`calls`) and trial counts (`skill_invocations`)
+  stay, since they hold no content and the gate and Analytics depend on them. Files the tasks wrote in the workspace stay;
+  backups made before still hold everything.
+- Refused: a running or paused task, and a task whose record already fails `verify` (deleting it would destroy the
+  evidence).
+- The record: before anything is erased, the anchor gets `tombstone:<task>` with the task's last hash; inside the same
+  transaction as the delete, `task_tombstones` records that hash. `verify` reports a removal as info only when both agree.
+  A marker without the row, or one revoked because the delete failed, excuses nothing: rows deleted by hand are still
+  critical. A marker for a task still present is reported as an unfinished removal.
+- INVARIANTS 22 amended with the user's go: nothing updates `events`; only `kernel/removal.py` deletes from it, a whole
+  chain, after the anchor marker. Its test is stricter than before: it also catches a delete whose table name is a
+  variable.
+- `tests/test_console_delete.py`: erasure in tables and on disk, spend kept, verify's wording, hand deletion and forged
+  or orphaned markers still critical, delegated tasks, refusals, the typed word, checkpoints, anchor failure, the page.
+
 ## Skill import - 2026-11-15 (no HARNESS_VERSION change: console only)
 
 - Skills can import a Markdown skill file. The browser reads the file and sends only its text (at most 64 KB) to

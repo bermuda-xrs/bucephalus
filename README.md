@@ -176,7 +176,8 @@ and the lock protecting it is process-wide.
 `serve` prints a link to a web console on 127.0.0.1. The bearer token lives in your config folder, outside the
 project, and every route needs it except the one webhook route below.
 
-- **Work:** conversations whose follow-ups see the earlier exchanges, a plan card you sign before anything runs, Pause
+- **Work:** conversations whose follow-ups see the earlier exchanges (delete one for good from Sessions; the
+  integrity record keeps only a note of the removal), a plan card you sign before anything runs, Pause
   and Resume, approvals that park inline, Markdown answers, export, pinning, bulk archive of idle conversations, and
   a file browser per task (make a folder, remove a file you added; your files are marked untrusted).
 - **Watch:** Graph (every conversation and task as one graph: a tree of conversations zoomed out, each task's

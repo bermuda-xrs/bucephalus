@@ -180,6 +180,10 @@ class SkillFileIn(BaseModel):
     drafted_from_none: bool = False
 
 
+class PhraseIn(BaseModel):
+    phrase: str
+
+
 class SkillIn(BaseModel):
     name: str
     body: str
@@ -485,6 +489,26 @@ def create_app(ctx: AgentContext) -> FastAPI:
         from . import conversations as conv
 
         return conv.create(ctx.conn, body.title)
+
+    @app.post("/conversations/{cid}/delete")
+    def delete_conversation(cid: str, body: PhraseIn) -> dict:
+        from ..kernel.removal import Refused, remove_tasks
+
+        if body.phrase != "delete":
+            raise HTTPException(400, "type delete to remove it")
+        if not ctx.conn.execute("SELECT 1 FROM conversations WHERE id=?", (cid,)).fetchone():
+            raise HTTPException(404, "no such conversation")
+        ids = [r[0] for r in ctx.conn.execute("SELECT task_id FROM conversation_tasks WHERE conversation_id=?", (cid,))]
+        with _runs_lock:
+            if any(_runs.get(t) and _runs[t].is_alive() for t in ids):
+                raise HTTPException(409, "a task in it is running; stop it first")
+            try:
+                out = remove_tasks(ctx, ids) if ids else {"removed": [], "events": 0}
+            except Refused as e:
+                raise HTTPException(e.status, str(e)) from None
+            ctx.conn.execute("DELETE FROM conversations WHERE id=?", (cid,))
+            ctx.conn.commit()
+        return out
 
     @app.post("/conversations/archive_older")
     def post_archive_older(body: ArchiveOlder) -> dict:

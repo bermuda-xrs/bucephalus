@@ -101,8 +101,12 @@ a killed pass stopped.
          `test_quarantine_call_passes_no_tools`
 21. ☐ Replayable code never reads the clock or generates randomness
        — `test_replayable_code_is_deterministic`, `test_prefix_builder_never_reads_the_clock`
-22. ☐ Nothing UPDATEs or DELETEs from `events`
-       — `test_events_table_is_append_only`
+22. ☐ Nothing UPDATEs `events`. Only `kernel/removal.py` DELETEs from it: a task's whole chain at once, after
+       the removal marker is in the anchor, and a database row records the same last hash. A marker without that row,
+       or revoked because the delete failed, excuses nothing (amended 2026-11-15 with the user's go, for deleting a
+       conversation; was "Nothing UPDATEs or DELETEs from `events`")
+       — `test_events_are_never_updated_and_deleted_only_whole_by_removal_after_the_anchor`,
+         `tests/test_console_delete.py`
 
 ## Where the build spec and its own acceptance tests disagreed
 
