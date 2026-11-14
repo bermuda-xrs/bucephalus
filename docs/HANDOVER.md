@@ -63,7 +63,7 @@ rebuilt `bucephalus.exe`'s window, and the WSL2 suite (see the Branch row for wh
 | Lint | bug rules only | `python -m ruff check src tests scripts packaging demo.py` |
 | CI | `.github/workflows/ci.yml`: ruff and the parallel suite on GitHub's Windows, Ubuntu and macOS runners, Python 3.11, every push and PR; first green 2026-10-28 (`bermuda-xrs/bucephalus#2`). The dev extras cap pytest below 9.2, which silently drops every `xdist_group` (`tests/test_xdist_groups_hold.py`) | the repository's Actions tab |
 | Open issues | `docs/DEFERRED.md`, open entries only | its state table |
-| CLI | 30 subcommands, each smoke-tested | `.\bucephalus.ps1 --help` |
+| CLI | 31 subcommands, each smoke-tested | `.\bucephalus.ps1 --help` |
 | Platforms | Windows. POSIX has run six times, in WSL2 (`docs/evidence/wsl-2026-10-12/` is the last full checklist; the suite passed again 2026-10-25). Since 2026-10-28 CI runs the suite on GitHub-hosted Ubuntu and macOS VMs: macOS (`src/agent/platform/darwin.py`) first ran there and needed four fixes (zombies, orphan adoption, commit ratio, a 35 s reverse DNS lookup; `bermuda-xrs/bucephalus#2`). Bare-metal Linux never, and the PLATFORMS checklist has never been run on a Mac | `docs/PLATFORMS.md` section 5 is the checklist |
 | Security posture | the capability gate is the boundary; the sandbox (Job Object limits, advisory path/network fence) constrains a mistaken agent, not a hostile one: D32 | |
 | Phase program | complete | `RELEASE.md`, "ITERATION TWO: COMPLETE" |

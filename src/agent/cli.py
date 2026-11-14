@@ -565,9 +565,37 @@ def cmd_serve(ctx, args, console) -> int:
     from .control.guard import resolve_token
     from .control.server import GRACEFUL_SHUTDOWN_S, console_url, create_app
 
-    console.print(f"control plane: {console_url(args.port, resolve_token(ctx.config.root), args.host)}")
-    uvicorn.run(create_app(ctx), host=args.host, port=args.port, log_level="warning",
-                timeout_graceful_shutdown=GRACEFUL_SHUTDOWN_S)
+    from .control.system import hold_console_lock
+
+    lock = hold_console_lock(ctx)
+    try:
+        console.print(f"control plane: {console_url(args.port, resolve_token(ctx.config.root), args.host)}")
+        uvicorn.run(create_app(ctx), host=args.host, port=args.port, log_level="warning",
+                    timeout_graceful_shutdown=GRACEFUL_SHUTDOWN_S)
+    finally:
+        if lock:
+            lock.release()
+    return 0
+
+
+def cmd_restore(ctx, args, console) -> int:
+    from .control import system
+    from .runlock import RunLockBusy
+
+    try:
+        r = system.restore(ctx, args.backup)
+    except system.Unsound as e:
+        console.print(f"[red]not restored:[/red] the backup fails its check: {e}")
+        return 1
+    except RunLockBusy:
+        console.print("[red]not restored:[/red] the console is running; stop it first")
+        return 2
+    except OSError as e:
+        console.print(f"[red]not restored:[/red] {e}. Stop anything else using the state folder and try again; "
+                      "what was already moved is in the newest replaced-* folder there.")
+        return 1
+    console.print(f"restored {r['restored']}: {r['tasks']} tasks, {r['events']} records. "
+                  f"What it replaced is in {r['replaced']}")
     return 0
 
 
@@ -868,6 +896,9 @@ def build_parser() -> argparse.ArgumentParser:
     al = sub.add_parser("alerts", help="integrity + monitor findings")
     al.set_defaults(fn=cmd_alerts)
 
+    rs = sub.add_parser("restore", help="put a backup in place of the current record; the console must be stopped")
+    rs.add_argument("backup", help="a backup zip made on the System page")
+    rs.set_defaults(fn=cmd_restore)
     v = sub.add_parser("verify", help="verify every chain against the anchor")
     v.set_defaults(fn=cmd_verify)
 

@@ -206,7 +206,7 @@ project, and every route needs it except the one webhook route below.
     the goal. Loopback only, whatever `BUCEPHALUS_ALLOW_REMOTE` says.
 
 What it does not do, and why (DEFERRED D81, D83): install skills, MCP servers or plugins from the network, update or
-restore from the page, send your data anywhere, delete a session, or take a webhook from another machine. The rule
+restore from the page, send your data anywhere, or take a webhook from another machine. The rule
 behind the list is that the console may read, supervise and make bounded, reviewed changes. It never fetches or runs
 code from the network, never sends your data to a third party, and never gives the agent a power you did not sign for.
 
