@@ -10,6 +10,22 @@
 Dates are commit dates. `0.1.0` is not released yet — see "Unreleased" for
 what still stands between here and a first iteration.
 
+## Graph page loads on demand - 2026-11-14 (no HARNESS_VERSION change: console only)
+
+- The outline is every task, up to 2000 by default (5000 at most, and the page says when it cut): id, title, status,
+  parent, conversation and a step count from one grouped query. No events are sent with it. 121 tasks came to 25 KB.
+- Steps load only for the tasks on screen, once zoomed in, 4 requests at a time through the existing
+  `/tasks/{id}/trace`; a finished task's changed files load at a closer zoom through `/tasks/{id}/diff`. A task's
+  height is reserved from its step count, so loading never moves anything. At most 5000 step dots stay in memory;
+  the longest unseen tasks are dropped first and fetched again if you come back. Measured: panning across all 121
+  tasks fetched each once and held at most 4996 dots. Nothing loads while zoomed out.
+- Every 15 seconds while the page is open and visible, the outline refreshes and any task whose status or step count
+  changed is fetched again when in view.
+- Keyboard: Tab into the graph; arrow keys move along a column and across columns, Enter zooms in or opens, Escape shows
+  everything, Home goes to the top. A screen reader hears the dot it lands on. Fitting uses the known positions, so the
+  whole tree fits on first draw; names that have no room at the current zoom are hidden until you zoom, hover or focus.
+- HANDOVER has the four steps for upgrading force-graph. The CSP stays as it was: no hashes for the library's styles.
+
 ## Graph of everything - 2026-11-14 (no HARNESS_VERSION change: console only)
 
 - A Graph page draws every conversation and task as one graph, the latest 40 tasks (measurement runs left out).

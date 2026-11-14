@@ -532,6 +532,9 @@ button.tr-row:hover, .tr-row.sel { background: var(--raised); }
 .lg-session { background: var(--text); border-radius: 1px; }
 .lg-task { background: var(--done); }
 .map-host { min-height: 360px; }
+.map-host:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden;
+           clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 .force-graph-container canvas { display: block; user-select: none; outline: none; -webkit-tap-highlight-color: transparent; }
 .force-graph-container .clickable { cursor: pointer; }
 .force-graph-container .grabbable { cursor: grab; }

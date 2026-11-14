@@ -78,6 +78,16 @@ whose `ci` run is green on all three OSes, never by a direct push; a results bra
 (gitignored, so added with `git add -f`; such a push skips CI) and is not merged. Delete a branch once
 it is merged.
 
+## Upgrading the vendored graph library
+
+`src/agent/control/force-graph.min.js` is force-graph, vendored unmodified. To move to a new release:
+1. Download `https://registry.npmjs.org/force-graph/-/force-graph-<version>.tgz` into an empty folder and check its
+   sha512 against the `dist.integrity` the registry lists for that version. Never run anything from it.
+2. Copy `package/dist/force-graph.min.js` over ours, byte for byte (`.gitattributes` keeps line endings).
+3. Put the new SHA-256 and version in `tests/test_console_force_graph.py` and `THIRD_PARTY_NOTICES.md`, and re-check the
+   dependency licenses listed there.
+4. Run the suite; the bundle scan (no network, eval or worker paths) and the CSP tests must pass unchanged.
+
 ## Next step
 
 Iteration 4 (harness 15, CHANGELOG "Harness 15") measured every item on held-out generated families
