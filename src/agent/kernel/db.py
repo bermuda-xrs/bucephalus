@@ -336,6 +336,12 @@ CREATE TABLE IF NOT EXISTS task_tombstones (
     events      INTEGER NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS presets (
+    name        TEXT PRIMARY KEY,
+    body_json   TEXT NOT NULL,
+    updated_at  REAL NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS conversations (
     id          TEXT PRIMARY KEY,
     title       TEXT NOT NULL,
