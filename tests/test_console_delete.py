@@ -174,3 +174,47 @@ def test_the_task_checkpoints_on_disk_go_too(ctx, api, conv):
 def test_the_page_offers_delete_through_its_route():
     assert ("POST", "/conversations/{}/delete") in _calls(UI)
     assert "deleteConversation" in UI
+
+
+def test_if_the_anchor_cannot_be_written_nothing_is_deleted(ctx, api, conv, monkeypatch):
+    def fail(*a, **k):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(ctx.anchor, "record", fail)
+    assert delete(api, conv[0]).status_code == 500
+    assert SECRET in _dump(ctx.conn)
+    assert ctx.conn.execute("SELECT COUNT(*) FROM conversations WHERE id=?", (conv[0],)).fetchone()[0] == 1
+
+
+def test_a_failed_removal_leaves_no_marker_that_could_hide_a_later_hand_deletion(ctx, api, conv, monkeypatch):
+    cid, ids = conv
+    import agent.kernel.removal as removal
+
+    monkeypatch.setattr(removal, "DETACH", removal.DETACH + ("no_such_table",))
+    assert delete(api, cid).status_code == 500
+    monkeypatch.undo()
+    assert SECRET in _dump(ctx.conn)
+    for t in ids:
+        for table in ("events", "artifacts", "plans", "approvals", "conversation_tasks"):
+            ctx.conn.execute(f"DELETE FROM {table} WHERE task_id=?", (t,))
+        ctx.conn.execute("DELETE FROM tasks WHERE id=?", (t,))
+    ctx.conn.commit()
+    assert len(critical(verify_all(ctx.conn, ctx.log, ctx.anchor))) == 2, "a revoked marker excuses nothing"
+
+
+def test_an_anchor_marker_without_the_matching_database_row_excuses_nothing(ctx, conv):
+    _, ids = conv
+    t = ids[0]
+    ctx.anchor.record(TOMBSTONE + t, ctx.log.head(t))
+    for table in ("events", "artifacts", "plans", "approvals", "conversation_tasks"):
+        ctx.conn.execute(f"DELETE FROM {table} WHERE task_id=?", (t,))
+    ctx.conn.execute("DELETE FROM tasks WHERE id=?", (t,))
+    ctx.conn.commit()
+    assert [f["task_id"] for f in critical(verify_all(ctx.conn, ctx.log, ctx.anchor))] == [t]
+
+
+def test_a_marker_for_a_task_still_present_is_reported_as_unfinished(ctx, conv):
+    t = conv[1][0]
+    ctx.anchor.record(TOMBSTONE + t, ctx.log.head(t))
+    found = [f for f in verify_all(ctx.conn, ctx.log, ctx.anchor) if f["task_id"] == t]
+    assert found and "did not finish" in found[0]["detail"]

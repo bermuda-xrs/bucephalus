@@ -63,6 +63,7 @@ class Anchor:
 
 
 TOMBSTONE = "tombstone:"
+REVOKED = "revoked"
 ANCHOR_BEHIND = "anchor_behind"
 ANCHOR_REWRITTEN = "anchor_rewritten"
 
@@ -146,13 +147,22 @@ def verify_all(conn: sqlite3.Connection, log: EventLog, anchor: Anchor,
             findings.append(found)
     known = {r[0] for r in conn.execute("SELECT id FROM tasks").fetchall()}
     marked = anchor.all_tasks()
+    try:  # a record from before removals has no table; this check never migrates what it reads
+        removed = dict(conn.execute("SELECT task_id, head FROM task_tombstones").fetchall())
+    except sqlite3.OperationalError:
+        removed = {}
+    for task_id in sorted(t[len(TOMBSTONE):] for t in marked if t.startswith(TOMBSTONE)):
+        if task_id in known and anchor.latest(TOMBSTONE + task_id) != REVOKED:
+            findings.append({"task_id": task_id, "severity": "info",
+                             "detail": "a removal of this task did not finish; it is still here, so delete it again"})
     for task_id in sorted(marked - known):
         if task_id.startswith(TOMBSTONE):
             continue
-        if TOMBSTONE + task_id in marked:
+        last = anchor.latest(TOMBSTONE + task_id)
+        if last and last != REVOKED and removed.get(task_id) == last:
             findings.append({"task_id": task_id, "severity": "info",
-                             "detail": "removed on purpose from the console; the anchor holds its last hash "
-                                       f"({anchor.latest(TOMBSTONE + task_id)[:12]}) and nothing of its content"})
+                             "detail": f"removed on purpose from the console; the anchor holds its last hash "
+                                       f"({last[:12]}) and nothing of its content"})
             continue
         if not task_id.startswith(("plan:", "schedule:")):
             findings.append({"task_id": task_id, "severity": "critical",

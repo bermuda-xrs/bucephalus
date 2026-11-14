@@ -7,11 +7,11 @@ import time
 from pathlib import Path
 
 from .events import GENESIS
-from .integrity import ANCHOR_REWRITTEN, TOMBSTONE, _classify
+from .integrity import ANCHOR_REWRITTEN, REVOKED, TOMBSTONE, _classify
 
 LIVE = ("running", "paused")
 TASK_ID = re.compile(r"^[A-Za-z0-9_-]{1,80}$")
-DELETE = ("events", "artifacts", "approvals", "plans", "sessions", "channel_routes", "conversation_tasks",
+DELETE = ("artifacts", "approvals", "plans", "sessions", "channel_routes", "conversation_tasks",
           "review_decisions", "monitor_flags", "deviations")
 DETACH = ("schedule_firings", "notifications", "webhook_deliveries")
 
@@ -52,11 +52,14 @@ def remove_tasks(ctx, ids: list[str]) -> dict:
         f"SELECT payload_json FROM events WHERE type='tool.intent' AND task_id IN ({marks})", ids)]
     counts = dict(conn.execute(f"SELECT task_id, COUNT(*) FROM events WHERE task_id IN ({marks}) GROUP BY task_id", ids))
     now, last = time.time(), {t: log.head(t) or GENESIS for t in ids}
-    for t in ids:
-        ctx.anchor.record(TOMBSTONE + t, last[t])
+    marked, committed = [], False
     conn.execute("PRAGMA secure_delete = ON")
     try:
+        for t in ids:
+            ctx.anchor.record(TOMBSTONE + t, last[t])
+            marked.append(t)
         with conn:
+            conn.execute(f"DELETE FROM events WHERE task_id IN ({marks})", ids)
             conn.execute(f"DELETE FROM search_index WHERE task_id IN ({marks})", ids)
             for table in DELETE:
                 conn.execute(f"DELETE FROM {table} WHERE task_id IN ({marks})", ids)
@@ -68,9 +71,15 @@ def remove_tasks(ctx, ids: list[str]) -> dict:
                 conn.execute("INSERT OR REPLACE INTO task_tombstones(task_id, removed_at, head, events) VALUES (?,?,?,?)",
                              (t, now, last[t], counts.get(t, 0)))
             conn.execute(f"DELETE FROM tasks WHERE id IN ({marks})", ids)
+        committed = True
         conn.execute("INSERT INTO search_index(search_index) VALUES ('optimize')")
         conn.commit()
         conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+    except BaseException:
+        if not committed:
+            for t in marked:
+                ctx.anchor.record(TOMBSTONE + t, REVOKED)
+        raise
     finally:
         conn.execute("PRAGMA secure_delete = OFF")
     shadow = Path(ctx.config.resolve_state("shadow")).resolve()
@@ -78,4 +87,4 @@ def remove_tasks(ctx, ids: list[str]) -> dict:
         d = (shadow / t).resolve()
         if d.parent == shadow and d.is_dir():
             shutil.rmtree(d, ignore_errors=True)
-    return {"removed": ids, "events": sum(counts.values())}
+    return {"removed": ids, "records": sum(counts.values())}

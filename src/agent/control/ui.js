@@ -223,7 +223,7 @@ async function deleteConversation(id, title, n) {
   if (typed === null) return;
   try {
     const r = await post(`/conversations/${encodeURIComponent(id)}/delete`, {phrase: typed.trim()});
-    toast(`Deleted ${r.removed.length} task${r.removed.length === 1 ? "" : "s"} and ${r.events} records.`);
+    toast(`Deleted ${r.removed.length} task${r.removed.length === 1 ? "" : "s"} and ${r.records} records.`);
   } catch (e) { return toast(e.message, true); }
   if (S.conv === id) { S.conv = null; S.thread = null; }
   S.lastSide = ""; loadSide(); openPane("sessions");

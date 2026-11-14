@@ -276,7 +276,7 @@ a power the user did not sign for.
 
 | Feature | Why not | What would unblock it |
 |---|---|---|
-| Session delete, prune-delete | Every task is a link in the integrity chain, and `verify` reports a deleted one as tampering on purpose. A delete button would either trip that alarm or need an exception that hides a real deletion. Bulk archive already covers tidying. | A tombstone design: a signed, anchored "removed on date X" record that `verify` accepts, with the content gone. |
+| Session delete, prune-delete | **Built 2026-11-15** as the tombstone design: deleting a conversation erases its tasks' content and `verify` accepts the removal only when the anchor marker and a database row agree. Prune-delete (bulk by age) stays unbuilt; archive covers tidying. | - |
 | Session import | An imported task has no chain, so the console would show records nothing can verify, next to records it can. | Import into a clearly separate, never-verified area, labelled so. |
 | Skills hub search and install | A skill is instructions that change the agent's prompt. Installing one from the network lets a stranger write them. The existing path, Add a candidate then the paired-trial gate, is the point of the project. | A hub whose skills arrive only as candidates and still pass the gate; fetching is the part to design. |
 | MCP catalog and install | Downloads and runs third-party code with the user's permissions. | Pinned, hash-checked packages run inside the sandbox. The MCP page today only tests servers you already listed. |
