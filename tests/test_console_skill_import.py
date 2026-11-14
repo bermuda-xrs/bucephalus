@@ -83,3 +83,20 @@ def test_the_page_imports_through_its_route_from_a_local_file():
     block = UI[UI.index("async skills()"):]
     block = block[:block.index("\n  async ")]
     assert 'type="file"' in block and 'accept=".md,.markdown,.txt"' in block and "kNoEval" in block
+
+
+BOMB = "---\na: &a [x, x, x, x, x, x, x, x, x, x]\nb: &b [*a, *a, *a, *a, *a, *a, *a, *a, *a, *a]\n" \
+       "c: &c [*b, *b, *b, *b, *b, *b, *b, *b, *b, *b]\nd: &d [*c, *c, *c, *c, *c, *c, *c, *c, *c, *c]\n" \
+       "e: &e [*d, *d, *d, *d, *d, *d, *d, *d, *d, *d]\nf: &f [*e, *e, *e, *e, *e, *e, *e, *e, *e, *e]\n" \
+       "name: *f\ndescription: *f\n---\n# body\n"
+
+
+def test_front_matter_values_must_be_plain_text_so_an_alias_bomb_is_refused_at_once(api):
+    import time
+
+    t0 = time.monotonic()
+    r = imp(api, BOMB)
+    assert r.status_code == 400 and "text" in r.json()["detail"]
+    assert time.monotonic() - t0 < 2
+    assert imp(api, "---\nname: [a, b]\n---\n# x\n").status_code == 400
+    assert imp(api, "---\ndescription: 12\n---\n# y\n").status_code == 400

@@ -171,6 +171,8 @@ def split_skill_file(text: str) -> tuple[dict, str]:
         raise ValueError(f"the front matter is not valid YAML: {e}") from None
     if not isinstance(meta, dict):
         raise ValueError("the front matter must be key: value lines")
+    if any(k in meta and not isinstance(meta[k], str) for k in ("name", "description", "applies_when")):
+        raise ValueError("the front matter name and description must be plain text")
     return meta, text[end + 4:].lstrip("\n")
 
 
