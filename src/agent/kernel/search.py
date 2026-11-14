@@ -13,6 +13,10 @@ MAX_BODY_CHARS = 400
 
 INDEXED_ARTIFACT_KINDS = ("answer", "plan", "doc", "skill_draft")
 
+# ponytail: one task's actions take one result, picked from the best ACTION_SCAN matches; past that a page can
+# come up short. Raise it, or dedupe in SQL, if histories outgrow it.
+ACTION_SCAN = 500
+
 CONTRACT_INDEX_BODY = (
     "coalesce(json_extract(contract_json, '$.goal'), '') || ' ' || "
     "coalesce(json_extract(contract_json, '$.success_criterion'), '')")
@@ -82,8 +86,8 @@ def search(conn: sqlite3.Connection, query: str, limit: int = DEFAULT_LIMIT,
                 FROM search_index
                 WHERE search_index MATCH ?{scope_sql}
                 ORDER BY rank
-                LIMIT ? OFFSET ?""",
-            (query, *scope_args, limit, offset),
+                LIMIT ?""",
+            (query, *scope_args, ACTION_SCAN),
         ).fetchall()
     except sqlite3.OperationalError as e:
         if "no such table" in str(e):
@@ -92,6 +96,14 @@ def search(conn: sqlite3.Connection, query: str, limit: int = DEFAULT_LIMIT,
             ) from e
         raise ValueError(f"malformed search query {query!r}: {e}") from e
 
+    acted, kept = set(), []
+    for row in rows:
+        if row[1] == "action":
+            if row[3] in acted:
+                continue
+            acted.add(row[3])
+        kept.append(row)
+    rows = kept[offset:offset + limit]
     return [
         Hit(session_id=_session_of(conn, task_id), task_id=task_id,
             source=source, kind=kind, ref=ref, created_at=created_at,
@@ -118,6 +130,13 @@ def rebuild(conn: sqlite3.Connection) -> int:
                 ORDER BY created_at, rowid""",
             INDEXED_ARTIFACT_KINDS,
         )
+        conn.execute(
+            """INSERT INTO search_index(body, source, ref, task_id, kind, created_at)
+               SELECT substr(coalesce(json_extract(payload_json, '$.tool'), '') || ' ' ||
+                             coalesce(json_extract(payload_json, '$.preview'), ''), 1, 400),
+                      'action', task_id || ':' || seq, task_id, 'action', created_at
+               FROM events WHERE type = 'tool.intent' ORDER BY id"""
+        )
         conn.execute("COMMIT")
     except BaseException:
         conn.execute("ROLLBACK")
@@ -134,12 +153,14 @@ def verify(conn: sqlite3.Connection) -> dict:
         f"SELECT COUNT(*) FROM artifacts WHERE kind IN ({placeholders})",
         INDEXED_ARTIFACT_KINDS,
     ).fetchone()[0]
-    expected = contracts + arts
+    actions = conn.execute("SELECT COUNT(*) FROM events WHERE type = 'tool.intent'").fetchone()[0]
+    expected = contracts + arts + actions
     return {
         "indexed": indexed,
         "expected": expected,
         "contracts": contracts,
         "artifacts": arts,
+        "actions": actions,
         "consistent": indexed == expected,
         "excluded_tool_outputs": conn.execute(
             "SELECT COUNT(*) FROM artifacts WHERE kind = 'tool_output'"

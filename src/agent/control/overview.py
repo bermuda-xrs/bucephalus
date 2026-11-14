@@ -25,7 +25,8 @@ def overview(ctx, limit: int) -> dict:
                       "created_at": created, "conversation_id": cid, "steps": steps.get(tid, 0)})
     convs = []
     for cid in dict.fromkeys(r[5] for r in rows if r[5]):
-        title = ctx.conn.execute("SELECT title FROM conversations WHERE id=?", (cid,)).fetchone()
+        c = ctx.conn.execute("SELECT title, branch_after FROM conversations WHERE id=?", (cid,)).fetchone() or ("", None)
         order = sorted((r[6], r[0]) for r in rows if r[5] == cid)
-        convs.append({"id": cid, "title": title[0] if title else "", "tasks": [t for _, t in order]})
+        convs.append({"id": cid, "title": c[0], "tasks": [t for _, t in order],
+                      "branch_after": c[1] if c[1] not in {t for _, t in order} else None})
     return {"conversations": convs, "tasks": tasks, "truncated": truncated}

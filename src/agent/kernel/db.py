@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 import sqlite3
+from contextlib import contextmanager
 import threading
 from pathlib import Path
 
@@ -265,6 +266,15 @@ BEGIN
             new.created_at);
 END;
 
+CREATE TRIGGER IF NOT EXISTS trg_search_action_ai AFTER INSERT ON events
+WHEN new.type = 'tool.intent'
+BEGIN
+    INSERT INTO search_index(body, source, ref, task_id, kind, created_at)
+    VALUES (substr(coalesce(json_extract(new.payload_json, '$.tool'), '') || ' ' ||
+                   coalesce(json_extract(new.payload_json, '$.preview'), ''), 1, 400),
+            'action', new.task_id || ':' || new.seq, new.task_id, 'action', new.created_at);
+END;
+
 CREATE TABLE IF NOT EXISTS channel_drops (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     channel     TEXT NOT NULL,
@@ -348,7 +358,8 @@ CREATE TABLE IF NOT EXISTS conversations (
     created_at  REAL NOT NULL,
     updated_at  REAL NOT NULL,
     archived    INTEGER NOT NULL DEFAULT 0,
-    pinned      INTEGER NOT NULL DEFAULT 0
+    pinned      INTEGER NOT NULL DEFAULT 0,
+    branch_after TEXT
 );
 CREATE TABLE IF NOT EXISTS conversation_tasks (
     task_id         TEXT PRIMARY KEY REFERENCES tasks(id),
@@ -416,6 +427,7 @@ _ADDED_COLUMNS = (
     ("calls", "model", "TEXT"),
     ("calls", "est_input_tokens", "INTEGER"),
     ("conversations", "pinned", "INTEGER NOT NULL DEFAULT 0"),
+    ("conversations", "branch_after", "TEXT"),
     ("schedules", "paused_at", "REAL"),
 )
 
@@ -494,12 +506,41 @@ def _search_indexes_no_grader(conn: sqlite3.Connection) -> bool:
     return True
 
 
+def _search_indexes_actions(conn: sqlite3.Connection) -> bool:
+    if (conn.execute("SELECT 1 FROM search_index WHERE source='action' LIMIT 1").fetchone()
+            or not conn.execute("SELECT 1 FROM events WHERE type='tool.intent' LIMIT 1").fetchone()):
+        return False
+    from .search import rebuild
+
+    rebuild(conn)
+    return True
+
+
+@contextmanager
+def transaction(conn: sqlite3.Connection):
+    w = connect(conn.execute("PRAGMA database_list").fetchone()[2])
+    try:
+        w.execute("BEGIN IMMEDIATE")
+        try:
+            yield w
+            w.execute("COMMIT")
+        except BaseException:
+            w.execute("ROLLBACK")
+            raise
+    finally:
+        w.close()
+
+
 def init_schema(conn: sqlite3.Connection) -> None:
     conn.executescript(SCHEMA_SQL)
     _add_missing_columns(conn)
     _calls_allow_unreturned(conn)
     _plans_keyed_by_task(conn)
     _search_indexes_no_grader(conn)
+    try:
+        _search_indexes_actions(conn)
+    except sqlite3.OperationalError:
+        pass
     conn.commit()
 
 

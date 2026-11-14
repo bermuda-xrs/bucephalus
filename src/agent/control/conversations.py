@@ -4,6 +4,7 @@ import json
 import time
 import uuid
 
+from ..kernel.db import transaction
 from ..kernel.tasks import create_task
 from ..kernel.types import Budget, TaskContract
 
@@ -23,13 +24,61 @@ def get_row(conn, cid: str) -> dict:
     if r is None:
         raise KeyError(cid)
     return {"id": r[0], "title": r[1], "created_at": r[2], "updated_at": r[3],
-            "archived": bool(r[4]), "pinned": bool(r[5])}
+            "archived": bool(r[4]), "pinned": bool(r[5]), "branched_from": branched_from(conn, cid)}
+
+
+def branched_from(conn, cid: str) -> dict | None:
+    r = conn.execute(
+        """SELECT p.id, p.title, t.id, t.contract_json FROM conversations c
+             JOIN conversation_tasks x ON x.task_id = c.branch_after
+             JOIN conversations p ON p.id = x.conversation_id
+             JOIN tasks t ON t.id = x.task_id
+            WHERE c.id = ? AND p.id != c.id""", (cid,)).fetchone()
+    return r and {"conversation_id": r[0], "title": r[1], "task_id": r[2], "goal": firstline(json.loads(r[3]).get("goal", ""))}
+
+
+def branch(conn, cid: str, after_task: str) -> dict:
+    src = get_row(conn, cid)
+    at = conn.execute("SELECT position FROM conversation_tasks WHERE conversation_id=? AND task_id=?",
+                      (cid, after_task)).fetchone()
+    if at is None:
+        raise KeyError(after_task)
+    new, now = "c_" + uuid.uuid4().hex[:12], time.time()
+    with transaction(conn) as w:
+        w.execute("INSERT INTO conversations(id, title, created_at, updated_at, branch_after) VALUES (?,?,?,?,?)",
+                  (new, (src["title"][:110] + " (branch)"), now, now, after_task))
+        w.execute("UPDATE conversation_tasks SET conversation_id=?, position=position-? "
+                  "WHERE conversation_id=? AND position>?", (new, at[0] + 1, cid, at[0]))
+    return get_row(conn, new)
+
+
+def merge(conn, cid: str, other: str) -> dict:
+    get_row(conn, cid)
+    get_row(conn, other)
+    if cid == other:
+        raise ValueError("a conversation cannot be merged with itself")
+    with transaction(conn) as w:
+        inherited = w.execute("SELECT branch_after FROM conversations WHERE id=?", (other,)).fetchone()[0]
+        w.execute("UPDATE conversation_tasks SET conversation_id=? WHERE conversation_id=?", (cid, other))
+        order = [r[0] for r in w.execute(
+            "SELECT x.task_id FROM conversation_tasks x JOIN tasks t ON t.id = x.task_id "
+            "WHERE x.conversation_id=? ORDER BY t.created_at, t.rowid", (cid,))]
+        w.executemany("UPDATE conversation_tasks SET position=? WHERE task_id=?", [(i, t) for i, t in enumerate(order)])
+        mine = w.execute("SELECT branch_after FROM conversations WHERE id=?", (cid,)).fetchone()[0]
+        if mine in order:
+            w.execute("UPDATE conversations SET branch_after=? WHERE id=?",
+                      (None if inherited in order else inherited, cid))
+        w.execute("UPDATE conversations SET updated_at=? WHERE id=?", (time.time(), cid))
+        w.execute("DELETE FROM conversations WHERE id=?", (other,))
+    return get_row(conn, cid)
 
 
 def listing(conn, q: str = "", archived: bool = False) -> list[dict]:
     like = f"%{q.strip()}%"
     rows = conn.execute(
         """SELECT c.id, c.title, c.updated_at, c.archived, c.pinned,
+                  (SELECT x.conversation_id FROM conversation_tasks x
+                    WHERE x.task_id = c.branch_after AND x.conversation_id != c.id),
                   (SELECT COUNT(*) FROM conversation_tasks x WHERE x.conversation_id=c.id),
                   (SELECT COUNT(*) FROM conversation_tasks x
                      JOIN approvals a ON a.task_id = x.task_id AND a.status = 'pending'
@@ -45,7 +94,7 @@ def listing(conn, q: str = "", archived: bool = False) -> list[dict]:
             ORDER BY c.pinned DESC, c.updated_at DESC, c.rowid DESC LIMIT 200""",
         (1 if archived else 0, q.strip(), like, like)).fetchall()
     return [{"id": r[0], "title": r[1], "updated_at": r[2], "archived": bool(r[3]),
-             "pinned": bool(r[4]), "n_tasks": r[5], "needs_you": r[6]} for r in rows]
+             "pinned": bool(r[4]), "branch_of": r[5], "n_tasks": r[6], "needs_you": r[7]} for r in rows]
 
 
 _IDLE_AND_OLD = """archived=0 AND pinned=0 AND updated_at < ? AND NOT EXISTS (
@@ -171,13 +220,17 @@ HISTORY_ANSWER_CHARS = 1500
 
 
 def history(conn, task_id: str) -> tuple[str, int]:
-    rows = conn.execute(
-        """SELECT t.id, t.contract_json FROM conversation_tasks me
-             JOIN conversation_tasks x ON x.conversation_id = me.conversation_id
-                                      AND x.position < me.position
-             JOIN tasks t ON t.id = x.task_id
-            WHERE me.task_id = ? ORDER BY x.position DESC LIMIT ?""",
-        (task_id, HISTORY_EXCHANGES)).fetchall()
+    rows, seen, at, upto = [], set(), task_id, "<"
+    while len(rows) < HISTORY_EXCHANGES:
+        here = conn.execute("SELECT conversation_id, position FROM conversation_tasks WHERE task_id=?", (at,)).fetchone()
+        if here is None or here[0] in seen:
+            break
+        seen.add(here[0])
+        rows += conn.execute(
+            f"""SELECT t.id, t.contract_json FROM conversation_tasks x JOIN tasks t ON t.id = x.task_id
+                 WHERE x.conversation_id = ? AND x.position {upto} ? ORDER BY x.position DESC LIMIT ?""",
+            (here[0], here[1], HISTORY_EXCHANGES - len(rows))).fetchall()
+        at, upto = conn.execute("SELECT branch_after FROM conversations WHERE id=?", (here[0],)).fetchone()[0], "<="
     parts = []
     for tid, contract in reversed(rows):
         answer = conn.execute("SELECT content FROM artifacts WHERE task_id=? AND kind='answer' "
