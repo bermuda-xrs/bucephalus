@@ -7,9 +7,6 @@ ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src" / "agent"
 
 KNOWN_INERT = {
-    "import_external_skill":
-        "External skills go through the same gate; none imported yet.",
-
     "reset":
         "test-only hook clearing net/politeness.py's robots and rate-limit "
         "caches, which are module-level and would otherwise leak between "

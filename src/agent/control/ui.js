@@ -1377,6 +1377,7 @@ async function openPane(name) {
   body.focus();
   if (name === "suites") loadSuites();
   if (name === "map") drawMap();
+  if (name === "skills" && $("#kFile")) $("#kFile").addEventListener("change", importSkillFile);
   if (name === "docs" && $("#docBody")) readDoc(S.doc || "README.md");
   if (name === "files" && $("#dropPg")) { wireDrop($("#dropPg")); if (S.filesTask) loadFiles(S.filesTask, S.filesPath || ""); }
 }
@@ -1683,7 +1684,14 @@ const PANES = {
       <label class="field">Body<textarea id="kBody"># skill name
 
 What to do, in the words a model reads.</textarea></label>
-      <button class="btn primary" data-action="addSkill">Add as a candidate</button>`;
+      <button class="btn primary" data-action="addSkill">Add as a candidate</button>
+      <h4>Import a skill file</h4>
+      <p class="note">A Markdown skill from anywhere, such as another project. It arrives as an untrusted candidate and is
+        never put in a prompt until the gate promotes it. A front matter <code>name</code> and <code>description</code>
+        become its name and when it applies. The file is read here in the browser; only its text is sent.</p>
+      <label class="note"><input type="checkbox" id="kNoEval"> It was written without seeing any eval suite task.
+        Leave this off if you are not sure: the gate then refuses its trials until you declare it.</label>
+      <label class="btn">Choose a skill file<input type="file" id="kFile" accept=".md,.markdown,.txt" hidden></label>`;
   },
   async suites() {
     return `<h3>Eval suites</h3><p class="lede">The tasks a skill is measured against. The gate needs
@@ -2094,6 +2102,17 @@ async function saveTask() {
 async function delTask(id) {
   try { await api(`/suites/${SUITE.id}/tasks/${id}`, {method: "DELETE"}); } catch (e) { return toast(e.message, true); }
   toast("Task deleted."); await openSuite(SUITE.id); loadSuites();
+}
+async function importSkillFile(e) {
+  const f = e.target.files && e.target.files[0];
+  e.target.value = "";
+  if (!f) return;
+  if (f.size > 64 * 1024) return toast("A skill file is at most 64 KB.", true);
+  try {
+    const r = await post("/skills/import", {file_name: f.name, text: await f.text(), drafted_from_none: $("#kNoEval").checked});
+    toast(`Imported ${f.name} as candidate ${r.id.slice(0, 12)}. Run paired trials, then check the gate.`);
+  } catch (err) { return toast(err.message, true); }
+  openPane("skills");
 }
 async function addSkill() {
   try { await post("/skills", {name: $("#kName").value.trim(), body: $("#kBody").value, applies_when: $("#kWhen").value.trim()});

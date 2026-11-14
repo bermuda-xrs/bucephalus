@@ -186,7 +186,8 @@ project, and every route needs it except the one webhook route below.
 - **Control:** Schedules (add, pause, resume, run now, edit; each is sealed in the anchor, and a tampered one will not
   fire), Models (what new tasks run on, and the reviewer, for a backend marked `model_server: ollama`; it starts the
   project's server on 11435 if needed and never touches the Ollama on 11434), MCP (the servers in your config, and a
-  test that lists a server's tools), Skills, Suites and Policy.
+  test that lists a server's tools), Skills (add or import a skill file as an untrusted candidate; only the
+  gate promotes it), Suites and Policy.
 - **Set up:**
   - *Keys* sets or clears the Telegram token and each backend's API key. It is write only: nothing is ever shown back.
     The file is private to your config folder, refused inside a synced folder, left out of backups, and protected from

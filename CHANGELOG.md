@@ -10,6 +10,18 @@
 Dates are commit dates. `0.1.0` is not released yet — see "Unreleased" for
 what still stands between here and a first iteration.
 
+## Skill import - 2026-11-15 (no HARNESS_VERSION change: console only)
+
+- Skills can import a Markdown skill file. The browser reads the file and sends only its text (at most 64 KB) to
+  `POST /skills/import`. A front matter `name` and `description` become its name and when it applies; without one the
+  file name is the name and the text is kept whole. Only the file's base name is recorded, with its SHA-256.
+- It arrives through the existing `import_external_skill`: a candidate marked `drafted_by: external`,
+  `trust: untrusted`. Nothing reaches a prompt until the gate promotes it. A box declares it was written without
+  seeing any eval suite task (`drafted_from: []`); left off, the gate refuses its trials until that is declared, as
+  for any undeclared skill. No network: D81's hub stays unbuilt, and this is the local half of it.
+- `tests/test_console_skill_import.py`: front matter, plain files, base name only, the declaration, never retrieved
+  before promotion, bad files, duplicates, the page.
+
 ## Graph page loads on demand - 2026-11-14 (no HARNESS_VERSION change: console only)
 
 - The outline is every task, up to 2000 by default (5000 at most, and the page says when it cut): id, title, status,

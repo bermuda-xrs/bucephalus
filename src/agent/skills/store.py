@@ -157,15 +157,36 @@ class SkillStore:
         self.conn.commit()
 
 
-def import_external_skill(store: SkillStore, name: str, body: str, source: str) -> str:
+def split_skill_file(text: str) -> tuple[dict, str]:
+    if not text.startswith("---\n"):
+        return {}, text
+    end = text.find("\n---", 4)
+    if end < 0:
+        raise ValueError("the front matter has no closing ---")
+    import yaml
+
+    try:
+        meta = yaml.safe_load(text[4:end]) or {}
+    except yaml.YAMLError as e:
+        raise ValueError(f"the front matter is not valid YAML: {e}") from None
+    if not isinstance(meta, dict):
+        raise ValueError("the front matter must be key: value lines")
+    if any(k in meta and not isinstance(meta[k], str) for k in ("name", "description", "applies_when")):
+        raise ValueError("the front matter name and description must be plain text")
+    return meta, text[end + 4:].lstrip("\n")
+
+
+def import_external_skill(store: SkillStore, name: str, body: str, source: str,
+                          applies_when: str | None = None, extra: dict | None = None) -> str:
     return store.store(
         name=name,
         body=body,
-        contract={"applies_when": "unknown — externally sourced"},
+        contract={"applies_when": applies_when or "unknown — externally sourced"},
         provenance={
             "sources": [{"url": source, "retrieved": time.strftime("%Y-%m-%d")}],
             "drafted_by": "external",
             "trust": "untrusted",
+            **(extra or {}),
         },
         status="candidate",
     )
