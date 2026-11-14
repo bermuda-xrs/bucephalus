@@ -227,8 +227,12 @@ def cmd_alerts(ctx, args, console) -> int:
 
     theme = load_theme(ctx)
     findings = verify_all(ctx.conn, ctx.log, ctx.anchor, ctx.memory)
+    for f in findings:
+        if f.get("severity") != "critical":
+            console.print(f"integrity note: {f['task_id'][:12]}: {f['detail']}")
+    findings = [f for f in findings if f.get("severity") == "critical"]
     if findings:
-        body = "\n".join(f"{f['task_id'][:12]}: {f['detail']}" for f in findings)
+        body ="\n".join(f"{f['task_id'][:12]}: {f['detail']}" for f in findings)
         console.print(
             Panel(
                 Text(body, style="bold"),

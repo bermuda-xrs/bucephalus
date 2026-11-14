@@ -10,6 +10,17 @@
 Dates are commit dates. `0.1.0` is not released yet — see "Unreleased" for
 what still stands between here and a first iteration.
 
+## Fixes in the recent features - 2026-11-15 (no HARNESS_VERSION change)
+
+- Analytics dropped a removed task's spend: it joined calls to tasks, and a removed task has no row. Calls whose task
+  has a tombstone are counted again; measurement runs are still left out.
+- `bucephalus alerts` printed every finding under "CHAIN OR ANCHOR MISMATCH", so a removal (or an anchor that is merely
+  behind) looked like tampering. Info findings now print as notes; only critical ones get the alarm.
+- A removal now holds the chain lock, so an event appended by another task on the shared connection can neither commit
+  half a removal nor be undone by its rollback.
+- The trace's Graph view starts fresh when the task changes (it reused the last task's dot positions and skipped the
+  fit), and deleting the conversation on screen clears the trace instead of polling a task that is gone.
+- `tests/test_recent_bug_fixes.py` holds one check for each.
 ## Presets - 2026-11-15 (no HARNESS_VERSION change: the agent's prompts, tools and gate are unchanged)
 
 - Settings has Presets: a named set of the executor's model, the reviewer's model, the workspace and the budget. Save

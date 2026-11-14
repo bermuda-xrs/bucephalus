@@ -13,7 +13,9 @@ _SUMS = ("COALESCE(SUM(c.input_tokens),0), COALESCE(SUM(c.output_tokens),0), COA
 def usage(conn, days: int, now: float | None = None) -> dict:
     now = time.time() if now is None else now
     day0 = (int(now) // 86400 - days + 1) * 86400
-    rows = f"FROM calls c JOIN tasks t ON t.id = c.task_id WHERE {_MINE} AND c.created_at >= ?"
+    # a removed task keeps its spend: its calls stay, its task row is gone, its tombstone says it was not bench
+    rows = (f"FROM calls c LEFT JOIN tasks t ON t.id = c.task_id WHERE ((t.id IS NOT NULL AND {_MINE}) OR "
+            "(t.id IS NULL AND c.task_id IN (SELECT task_id FROM task_tombstones))) AND c.created_at >= ?")
     args = (BENCH, day0)
     i, o, cr, usd, n = conn.execute(f"SELECT {_SUMS} {rows}", args).fetchone()
     by_day = {int(d): r for d, *r in conn.execute(
