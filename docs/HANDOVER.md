@@ -224,7 +224,9 @@ Plan, in order:
    a shard holds every N-th instance, with both arms of an instance on one machine), then
    `bench/families_merge.py <folders> --out <pooled>` writes the pooled jsonl and summary and refuses an instance
    measured in two shards. Each shard's `cards.json` records its model-server version and quantization; the merge
-   keeps them in `shard_cards`, so mismatched setups show. Unanswerable is `family_version` 2 for this run (the
+   keeps them in `shard_cards`, so mismatched setups show. Each machine writes `plan.json` first (`--dry-run` stops
+   there, loading no model); the merge refuses a missing or unfinished shard and shards run with other settings;
+   steps in `bench/README.md` "One run over many machines". Unanswerable is `family_version` 2 for this run (the
    answer ends its own line, no full stop; CHANGELOG "Unanswerable full stop"), so its numbers do not compare with
    earlier unanswerable numbers; every other family's instances are unchanged.
 2. Arithmetic on the 8B stays open: it never calls `run_command`; a script hold (F2), a calculator (G1) and a repeat

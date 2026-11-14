@@ -10,6 +10,16 @@
 Dates are commit dates. `0.1.0` is not released yet — see "Unreleased" for
 what still stands between here and a first iteration.
 
+## Ready for the many-machine run - 2026-11-15 (no HARNESS_VERSION change: bench and model loading only)
+
+- `families_run.py` writes `plan.json` (shard, settings, each arm's instance keys) before it loads a model;
+  `--dry-run` stops there and lists the machine's share. Resuming into a folder whose plan differs is refused.
+- `families_merge.py` refuses a folder without a plan, shards with different settings or a different N, a missing
+  shard and a shard that has not finished every planned instance. Before, a pooled result could quietly lack a
+  machine's share and still report a p-value.
+- A cold model load that fails is tried once more (the 8B's first warm-up failed this way on two cloud runs).
+- `bench/README.md` "One run over many machines": the steps per machine.
+
 ## Fixes in the recent features - 2026-11-15 (no HARNESS_VERSION change)
 
 - Analytics dropped a removed task's spend: it joined calls to tasks, and a removed task has no row. Calls whose task

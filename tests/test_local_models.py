@@ -113,6 +113,33 @@ def test_a_model_is_loaded_at_the_window_it_will_be_asked_for(fake, tmp_path):
     assert "options" not in fake.generated[-1]
 
 
+def test_a_cold_load_that_fails_once_is_tried_again(fake, tmp_path, monkeypatch):
+    import httpx
+
+    real, calls = httpx.post, []
+
+    def flaky(url, **kw):
+        calls.append(url)
+        if len(calls) == 1:
+            raise httpx.ReadTimeout("loading")
+        return real(url, **kw)
+
+    monkeypatch.setattr(httpx, "post", flaky)
+    assert local.run(fake.endpoint, "granite4.1:8b", tmp_path)["loaded"] and len(calls) == 2
+
+
+def test_a_load_that_fails_twice_is_reported(fake, tmp_path, monkeypatch):
+    import httpx
+    import pytest
+
+    def down(url, **kw):
+        raise httpx.ReadTimeout("loading")
+
+    monkeypatch.setattr(httpx, "post", down)
+    with pytest.raises(httpx.ReadTimeout):
+        local.run(fake.endpoint, "granite4.1:8b", tmp_path)
+
+
 def test_a_model_that_is_not_installed_is_refused(api, fake):
     r = api.post("/models/run", json={"model": "llama-giant:405b"})
     assert r.status_code == 400 and "not installed" in r.json()["detail"]
