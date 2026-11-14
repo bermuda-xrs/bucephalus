@@ -221,11 +221,13 @@ async function deleteConversation(id, title, n) {
     + "This cannot be undone. The integrity record keeps only a note that they were removed. Backups you made before "
     + "still hold them. Files the tasks wrote in your workspace stay. Type delete to go on.");
   if (typed === null) return;
+  let r;
   try {
-    const r = await post(`/conversations/${encodeURIComponent(id)}/delete`, {phrase: typed.trim()});
+    r = await post(`/conversations/${encodeURIComponent(id)}/delete`, {phrase: typed.trim()});
     toast(`Deleted ${r.removed.length} task${r.removed.length === 1 ? "" : "s"} and ${r.records} records.`);
   } catch (e) { return toast(e.message, true); }
   if (S.conv === id) { S.conv = null; S.thread = null; }
+  if (S.traceTask && r.removed.includes(S.traceTask)) { S.traceTask = null; S.trace = null; renderTrace(); }
   S.lastSide = ""; loadSide(); openPane("sessions");
 }
 async function archiveConversation() {
@@ -1289,6 +1291,7 @@ function forceView(t) {
     S.fgResize = new ResizeObserver(() => S.fg && S.fg.width(host.clientWidth || 320));
     S.fgResize.observe(host);
   }
+  if (S.fgTask !== t.task) { S.fgSig = null; S.fgTask = t.task; S.fg.graphData({nodes: [], links: []}); }
   if (S.fgSig === sig) return;
   const old = new Map(S.fg.graphData().nodes.map(n => [n.id, n]));
   data.nodes = data.nodes.map(n => {
