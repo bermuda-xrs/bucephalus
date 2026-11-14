@@ -218,3 +218,39 @@ def test_a_marker_for_a_task_still_present_is_reported_as_unfinished(ctx, conv):
     ctx.anchor.record(TOMBSTONE + t, ctx.log.head(t))
     found = [f for f in verify_all(ctx.conn, ctx.log, ctx.anchor) if f["task_id"] == t]
     assert found and "did not finish" in found[0]["detail"]
+
+
+def test_a_removal_that_fails_part_way_changes_nothing(ctx, api, conv, monkeypatch):
+    cid, ids = conv
+    import agent.kernel.removal as removal
+
+    def counts():
+        return [ctx.conn.execute(f"SELECT COUNT(*) FROM {t} WHERE task_id=?", (i,)).fetchone()[0]
+                for t in ("events", "artifacts", "plans", "approvals", "search_index") for i in ids]
+
+    before = counts()
+    monkeypatch.setattr(removal, "DETACH", removal.DETACH + ("no_such_table",))
+    assert delete(api, cid).status_code == 500
+    assert counts() == before
+    assert all(ok for ok, _ in map(ctx.log.verify, ids))
+
+
+def test_a_write_from_another_thread_is_not_lost_when_a_removal_fails(ctx, api, conv, monkeypatch):
+    import threading
+
+    import agent.kernel.removal as removal
+
+    other = conversations.create(ctx.conn, "Someone else")["id"]
+    writer = threading.Thread(target=lambda: ctx.conn.execute(
+        "UPDATE conversations SET title='renamed' WHERE id=?", (other,)))
+
+    class WriteThenFail(str):
+        def __format__(self, spec):
+            writer.start()
+            writer.join(0.5)
+            return "no_such_table"
+
+    monkeypatch.setattr(removal, "DETACH", (WriteThenFail("x"),))
+    assert delete(api, conv[0]).status_code == 500
+    writer.join(10)
+    assert ctx.conn.execute("SELECT title FROM conversations WHERE id=?", (other,)).fetchone()[0] == "renamed"

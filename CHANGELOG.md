@@ -10,6 +10,17 @@
 Dates are commit dates. `0.1.0` is not released yet — see "Unreleased" for
 what still stands between here and a first iteration.
 
+## Atomic removal and reindex - 2026-11-15 (no HARNESS_VERSION change)
+
+- The database connection commits each statement by itself, and `with conn:` opens no transaction in that mode. So
+  deleting a conversation that failed part way kept the deletes already run (events, search entries, artifacts) and
+  revoked the marker: content lost and `verify` reporting tampering. The removal now runs `BEGIN IMMEDIATE` ...
+  `COMMIT` on its own connection, so a failure changes nothing and a write from another thread on the shared
+  connection is neither swept into the removal nor rolled back with it.
+- `bucephalus search --rebuild` had the same shape: a failure after emptying the search index left it partly empty. It is one
+  transaction now.
+- The earlier failed-removal test passed only because a cached tool result still held the text; the new tests count
+  rows in every table.
 ## Ready for the many-machine run - 2026-11-15 (no HARNESS_VERSION change: bench and model loading only)
 
 - `families_run.py` writes `plan.json` (shard, settings, each arm's instance keys) before it loads a model;

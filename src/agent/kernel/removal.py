@@ -4,9 +4,10 @@ import json
 import re
 import shutil
 import time
+from contextlib import closing
 from pathlib import Path
 
-from .db import chain_lock
+from .db import chain_lock, connect
 from .events import GENESIS
 from .integrity import ANCHOR_REWRITTEN, REVOKED, TOMBSTONE, _classify
 
@@ -55,35 +56,38 @@ def remove_tasks(ctx, ids: list[str]) -> dict:
         counts = dict(conn.execute(f"SELECT task_id, COUNT(*) FROM events WHERE task_id IN ({marks}) GROUP BY task_id", ids))
         now, last = time.time(), {t: log.head(t) or GENESIS for t in ids}
         marked, committed = [], False
-        conn.execute("PRAGMA secure_delete = ON")
-        try:
-            for t in ids:
-                ctx.anchor.record(TOMBSTONE + t, last[t])
-                marked.append(t)
-            with conn:
-                conn.execute(f"DELETE FROM events WHERE task_id IN ({marks})", ids)
-                conn.execute(f"DELETE FROM search_index WHERE task_id IN ({marks})", ids)
-                for table in DELETE:
-                    conn.execute(f"DELETE FROM {table} WHERE task_id IN ({marks})", ids)
-                for table in DETACH:
-                    conn.execute(f"UPDATE {table} SET task_id = NULL WHERE task_id IN ({marks})", ids)
-                for k in filter(None, keys):
-                    conn.execute("DELETE FROM receipts WHERE idempotency_key = ?", (k,))
+        with closing(connect(conn.execute("PRAGMA database_list").fetchone()[2])) as w:
+            w.execute("PRAGMA secure_delete = ON")
+            try:
                 for t in ids:
-                    conn.execute("INSERT OR REPLACE INTO task_tombstones(task_id, removed_at, head, events) VALUES (?,?,?,?)",
-                                 (t, now, last[t], counts.get(t, 0)))
-                conn.execute(f"DELETE FROM tasks WHERE id IN ({marks})", ids)
-            committed = True
-            conn.execute("INSERT INTO search_index(search_index) VALUES ('optimize')")
-            conn.commit()
-            conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
-        except BaseException:
-            if not committed:
-                for t in marked:
-                    ctx.anchor.record(TOMBSTONE + t, REVOKED)
-            raise
-        finally:
-            conn.execute("PRAGMA secure_delete = OFF")
+                    ctx.anchor.record(TOMBSTONE + t, last[t])
+                    marked.append(t)
+                w.execute("BEGIN IMMEDIATE")
+                try:
+                    w.execute(f"DELETE FROM events WHERE task_id IN ({marks})", ids)
+                    w.execute(f"DELETE FROM search_index WHERE task_id IN ({marks})", ids)
+                    for table in DELETE:
+                        w.execute(f"DELETE FROM {table} WHERE task_id IN ({marks})", ids)
+                    for table in DETACH:
+                        w.execute(f"UPDATE {table} SET task_id = NULL WHERE task_id IN ({marks})", ids)
+                    for k in filter(None, keys):
+                        w.execute("DELETE FROM receipts WHERE idempotency_key = ?", (k,))
+                    for t in ids:
+                        w.execute("INSERT OR REPLACE INTO task_tombstones(task_id, removed_at, head, events) "
+                                  "VALUES (?,?,?,?)", (t, now, last[t], counts.get(t, 0)))
+                    w.execute(f"DELETE FROM tasks WHERE id IN ({marks})", ids)
+                    w.execute("COMMIT")
+                except BaseException:
+                    w.execute("ROLLBACK")
+                    raise
+                committed = True
+                w.execute("INSERT INTO search_index(search_index) VALUES ('optimize')")
+                w.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+            except BaseException:
+                if not committed:
+                    for t in marked:
+                        ctx.anchor.record(TOMBSTONE + t, REVOKED)
+                raise
     shadow = Path(ctx.config.resolve_state("shadow")).resolve()
     for t in ids:
         d = (shadow / t).resolve()
