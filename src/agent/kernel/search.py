@@ -101,7 +101,8 @@ def search(conn: sqlite3.Connection, query: str, limit: int = DEFAULT_LIMIT,
 
 
 def rebuild(conn: sqlite3.Connection) -> int:
-    with conn:
+    conn.execute("BEGIN IMMEDIATE")
+    try:
         conn.execute("DELETE FROM search_index")
         conn.execute(
             f"""INSERT INTO search_index(body, source, ref, task_id, kind, created_at)
@@ -117,6 +118,10 @@ def rebuild(conn: sqlite3.Connection) -> int:
                 ORDER BY created_at, rowid""",
             INDEXED_ARTIFACT_KINDS,
         )
+        conn.execute("COMMIT")
+    except BaseException:
+        conn.execute("ROLLBACK")
+        raise
     return conn.execute("SELECT COUNT(*) FROM search_index").fetchone()[0]
 
 

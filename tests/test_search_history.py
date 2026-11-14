@@ -226,3 +226,32 @@ def test_search_output_taint_reaches_the_tracker_by_the_shared_path():
     window = src[i:end]
     assert "write_artifact" in window and "observe(" in window, (
         "the stamped taint must reach both the artifact and the tracker")
+
+
+def test_a_rebuild_that_fails_keeps_the_old_index(conn):
+    add_task(conn, "t1", "find the walrus ledger")
+    add_artifact(conn, "a1", "t1", "answer", "the walrus ledger is in the attic")
+    before = conn.execute("SELECT COUNT(*) FROM search_index").fetchone()[0]
+    assert before == 2
+
+    class FailsOnArtifacts:
+        def __init__(self, c):
+            self.c = c
+
+        def execute(self, sql, *a):
+            if "FROM artifacts" in sql:
+                raise RuntimeError("disk full")
+            return self.c.execute(sql, *a)
+
+        def __getattr__(self, name):
+            return getattr(self.c, name)
+
+        def __enter__(self):
+            return self.c.__enter__()
+
+        def __exit__(self, *a):
+            return self.c.__exit__(*a)
+
+    with pytest.raises(RuntimeError):
+        search_mod.rebuild(FailsOnArtifacts(conn))
+    assert conn.execute("SELECT COUNT(*) FROM search_index").fetchone()[0] == before
