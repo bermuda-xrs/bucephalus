@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import ast
 import json
+import operator
 import re
 import subprocess
 import time
@@ -347,8 +349,22 @@ def tool_write_file(ctx, task, path: str, content: str) -> dict:
     p = _resolve(ctx, path)
     p.parent.mkdir(parents=True, exist_ok=True)
     existed = p.exists()
+    old = p.read_text(encoding="utf-8", errors="replace") if existed and _write_diff(ctx) else None
     p.write_text(content, encoding="utf-8")
-    return {"ok": True, "path": str(p), "bytes": len(content.encode("utf-8")), "overwrote": existed}
+    out = {"ok": True, "path": str(p), "bytes": len(content.encode("utf-8")), "overwrote": existed}
+    if old is not None:
+        before, after = old.splitlines(), content.splitlines()
+        out.update(removed=_cut([x for x in before if x not in after]), added=_cut([x for x in after if x not in before]))
+    return out
+
+
+def _write_diff(ctx) -> bool:
+    b = ctx.backends.get("cloud") if hasattr(ctx, "backends") else None
+    return b is not None and b.cfg.on("write_diff")
+
+
+def _cut(lines: list[str], keep: int = 12) -> list[str]:
+    return lines if len(lines) <= keep else [*lines[:keep], f"... {len(lines) - keep} more"]
 
 
 def tool_run_code(ctx, task, code: str, timeout_s: int = 30) -> dict:
@@ -680,6 +696,39 @@ EDIT_LINES = ToolSpec(
     side_effecting=True, max_arg_taint=Taint.USER, output_taint=Taint.TRUSTED,
     description="replace the lines from anchor start to anchor end (anchors like 12:a3, as read_file shows them) "
                 "with content")
+
+
+_CALC_OPS = {ast.Add: operator.add, ast.Sub: operator.sub, ast.Mult: operator.mul, ast.Div: operator.truediv,
+             ast.FloorDiv: operator.floordiv, ast.Mod: operator.mod, ast.Pow: operator.pow}
+
+
+def _calc(node):
+    if isinstance(node, ast.Constant) and type(node.value) in (int, float):
+        return node.value
+    if isinstance(node, ast.UnaryOp) and isinstance(node.op, (ast.UAdd, ast.USub)):
+        v = _calc(node.operand)
+        return -v if isinstance(node.op, ast.USub) else v
+    if isinstance(node, ast.BinOp) and type(node.op) in _CALC_OPS:
+        a, b = _calc(node.left), _calc(node.right)
+        if isinstance(node.op, ast.Pow) and (abs(b) > 1000 or (isinstance(a, int) and a.bit_length() * abs(b) > 100_000)):
+            raise ValueError("that power is too large")
+        return _CALC_OPS[type(node.op)](a, b)
+    raise ValueError("only numbers, parentheses and + - * / // % ** are allowed")
+
+
+def tool_calc(ctx, task, expression: str) -> dict:
+    if len(expression) > 2000:
+        return {"ok": False, "error": "the expression is over 2000 characters"}
+    try:
+        return {"ok": True, "expression": expression, "value": _calc(ast.parse(expression, mode="eval").body)}
+    except (SyntaxError, ValueError, ArithmeticError, RecursionError) as e:
+        return {"ok": False, "error": f"{type(e).__name__}: {e}"}
+
+
+CALC = ToolSpec(
+    "calc", tool_calc, {"type": "object", "properties": {"expression": {"type": "string"}}, "required": ["expression"]},
+    side_effecting=False, max_arg_taint=Taint.UNTRUSTED, output_taint=Taint.UNTRUSTED,
+    description="exact arithmetic: numbers, parentheses and + - * / // % **, for example (1250 * 3) / 7")
 
 
 def apply_profile(registry: ToolRegistry, profile: str) -> ToolRegistry:

@@ -244,6 +244,7 @@ def _run_task(ctx, task_id: str) -> TaskResult:
     best_answer: Any = None
     best_score: float = -1.0
     score_history: list[float] = []
+    failed: dict[str, int] = {}  # answer text -> last receipt seq when it failed
     charged_s = 0.0
     seen: dict[str, int] = {}
     history: list[dict] = []
@@ -446,6 +447,13 @@ def _run_task(ctx, task_id: str) -> TaskResult:
                 if ok:
                     return finish(ctx, task, "done", answer=result, steps=step + 1)
 
+                note = ""
+                if backend.cfg.on("repeat_note"):
+                    same = failed.get(artifact_text)
+                    if same is not None and not _any_change_since(ctx, task, same):
+                        note = chr(10) + REPEAT_NOTE
+                    failed[artifact_text] = _last_receipt_seq(ctx, task)
+
                 if report.score > best_score:
                     best_score, best_answer = report.score, result
                 score_history.append(best_score)
@@ -467,7 +475,7 @@ def _run_task(ctx, task_id: str) -> TaskResult:
 
                 entries.append(
                     LedgerEntry.observation(
-                        ctx.mesh.feedback_for_model(report),
+                        ctx.mesh.feedback_for_model(report) + note,
                         taint=Taint.TRUSTED,
                         label="verifier",
                     )
@@ -551,6 +559,9 @@ EDIT_FIRST_NOTE = ("No answer yet: the check runs a program against the files, a
 COMPUTE_FIRST_NOTE = ("No answer yet: compute the number rather than estimate it. Write a short script with "
                       "write_file (for example work/calc.py that reads the input and prints the result), run it "
                       "with run_command `python work/calc.py`, then answer with what it prints.")
+COMPUTE_FIRST_CODE_NOTE = ("No answer yet: compute the number rather than estimate it. Run a short program with "
+                           "run_code that reads the input and prints the result, then answer with what it prints.")
+COMPUTERS = ("run_command", "run_code", "calc")
 MAX_FIRST_HOLDS = 2
 
 
@@ -569,9 +580,10 @@ def _first_hold(ctx, task, backend, step: int) -> str | None:
     ran = _receipts(ctx, task)
     changed = any((spec := ctx.tools.get(t)) is not None and spec.side_effecting for t in ran)
     c = task.contract
+    compute = COMPUTE_FIRST_NOTE if "run_command" in ctx.tools.names() else COMPUTE_FIRST_CODE_NOTE
     for name, kind, needed, note in (
             ("edit_first", "edit_first.held", c.success_criterion == "verify_program" and not changed, EDIT_FIRST_NOTE),
-            ("compute_first", "compute_first.held", _numeric(c.output_schema) and "run_command" not in ran, COMPUTE_FIRST_NOTE)):
+            ("compute_first", "compute_first.held", _numeric(c.output_schema) and not set(COMPUTERS) & set(ran), compute)):
         held = ctx.conn.execute("SELECT COUNT(*) FROM events WHERE task_id=? AND type=?", (task.id, kind)).fetchone()[0]
         if backend.cfg.on(name) and needed and held < MAX_FIRST_HOLDS:
             ctx.log.append(task.id, "edit_first.held" if kind == "edit_first.held" else "compute_first.held",
@@ -585,6 +597,8 @@ def _observed(ctx, task) -> bool:
                             (task.id,)).fetchone() is not None
 
 
+REPEAT_NOTE = ("That answer is the same, character for character, as one that already failed, and nothing has "
+               "changed since: it will fail again. Re-read the task and change the answer.")
 VERIFY_NOTE = ("You changed files and have not run a test, lint or the program since: run one now with "
                "{tool}.")
 
@@ -918,6 +932,11 @@ def _changed_since(ctx, task, seq: int) -> bool:
     row = ctx.conn.execute("SELECT payload_json FROM events WHERE task_id=? AND type='tool.receipt' AND seq>? "
                            "ORDER BY seq DESC LIMIT 1", (task.id, seq)).fetchone()
     return bool(row and json.loads(row[0]).get("changed"))
+
+
+def _any_change_since(ctx, task, seq: int) -> bool:
+    return ctx.conn.execute("SELECT 1 FROM events WHERE task_id=? AND type='tool.receipt' AND seq>? "
+                            "AND json_extract(payload_json, '$.changed') LIMIT 1", (task.id, seq)).fetchone() is not None
 
 
 def _warn_if_stuck(ctx, task, entries, step, repeats, parsed) -> None:
@@ -1348,6 +1367,8 @@ def _perform(ctx, task, tool, tool_name: str, args: dict, step: int) -> LedgerEn
 
     text = _render_result(result)
     taint = tool.output_taint
+    if isinstance(result, dict) and "removed" in result:  # write_diff quotes the old file
+        taint = Taint.UNTRUSTED
     origin = {"tool": tool_name,
               "args": {k: str(v)[:200] for k, v in args.items()}}
     if isinstance(result, dict) and isinstance(result.get("provenance"), dict):

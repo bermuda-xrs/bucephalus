@@ -48,6 +48,10 @@ class AgentContext:
             from .execute.tools import EDIT_LINES
 
             self.tools.register(EDIT_LINES)
+        if executor is not None and executor.cfg.on("calc_tool"):
+            from .execute.tools import CALC
+
+            self.tools.register(CALC)
         if not config.mechanisms.code_as_action:
             self.tools = self.tools.without("run_code")
         self.skills = SkillStore(self.conn, config.resolve(config.skills_path))

@@ -231,6 +231,8 @@ Plan, in order:
    earlier unanswerable numbers; every other family's instances are unchanged.
 2. Arithmetic on the 8B stays open: it never calls `run_command`; a script hold (F2), a calculator (G1) and a repeat
    note (H2) did not move the 3B, so a nudge for the 8B is a new candidate, not a family.
+   H1, H2, F2 and G1 are switches on every kit again (2026-11-16, the user: the harness is not sized to the 3B), off
+   until measured on a capable model; that needs a cloud runner and the D26 credentials.
 3. The console takes the look of the official Hermes Agent UI (NousResearch/hermes-agent, MIT; the user's choice
    2026-11-07): restyled in our plain JS, no React, no build, no npm, their brand fonts and names not copied, the CSP
    unchanged. `tests/test_console_reskin_guards.py` holds every route, control, pane, view and slash command the
