@@ -55,7 +55,8 @@ def test_a_program_family_is_graded_by_its_own_grader(tmp_path):
     spec = F.generate("write_function", 4)
     (path, source), = spec["reference"].items()
     act = '<action tool="write_file">' + json.dumps({"path": path, "content": source}) + "</action>"
-    steps = iter([act, _final({"path": path})])
+    run = '<action tool="run_code">' + json.dumps({"code": f"import runpy; runpy.run_path({path!r})"}) + "</action>"
+    steps = iter([act, run, _final({"path": path})])
     raw = _raw(tmp_path)
     raw["autonomy"]["approve_scoped_writes"] = True
     got = evals.run_instance(raw, spec, tmp_path / "w", backends_factory=_answering(lambda c, t: next(steps)))

@@ -74,8 +74,56 @@ def test_the_mechanism_can_be_ablated(small, run):
     assert n == 0 and "verify_before_stop" in small.config.mechanisms.ablated()
 
 
-def test_without_run_command_the_rule_does_not_apply(ctx, task, scripted):
+@pytest.fixture
+def full(ctx, task):
     ctx.config.autonomy.approve_scoped_writes = True
+
+    def go(*script):
+        t = create_task(ctx.conn, ctx.log, task.contract, task.budget)
+        ctx.backends["cloud"].queue(*script)
+        res = run_task(ctx, t.id)
+        n = ctx.conn.execute("SELECT COUNT(*) FROM events WHERE task_id=? AND type='verify.continued'",
+                             (t.id,)).fetchone()[0]
+        return res, n, ctx.backends["cloud"].calls
+    return go
+
+
+CODE = _act("run_code", code="import runpy; runpy.run_path('work/prog.py')")
+
+
+def test_the_full_kit_is_held_with_a_note_naming_run_code(full, ctx):
+    assert "run_code" in ctx.tools.names() and "run_command" not in ctx.tools.names()
+    res, n, calls = full(WRITE, FINAL, CODE, FINAL)
+    assert res.status.startswith("done") and n == 1
+    note = calls[2]["tail"][-600:]
+    assert "have not run a test, lint or the program" in note and "run_code" in note and "run_command" not in note
+
+
+def test_a_run_code_after_the_change_releases_the_full_kit(full):
+    res, n, _ = full(WRITE, CODE, FINAL)
+    assert res.status.startswith("done") and n == 0
+
+
+def test_a_failing_run_code_does_not_release_it(full):
+    res, n, _ = full(WRITE, _act("run_code", code="raise SystemExit(1)"), FINAL, CODE, FINAL)
+    assert n == 1
+
+
+def test_a_run_code_before_the_change_does_not_count(full):
+    res, n, _ = full(_act("run_code", code="pass"), WRITE, FINAL, CODE, FINAL)
+    assert n == 1
+
+
+def test_the_schema_note_names_the_kits_runner(ctx, small):
+    from agent.execute.loop import _verify_note
+
+    assert "run_code" in _verify_note(ctx) and "run_command" not in _verify_note(ctx)
+    assert "run_command" in _verify_note(small)
+
+
+def test_with_nothing_to_run_the_rule_does_not_apply(ctx, task, scripted):
+    ctx.config.autonomy.approve_scoped_writes = True
+    ctx.tools = ctx.tools.without("run_code")
     scripted("cloud", _act("write_file", path="work/a.txt", content="x"), FINAL)
     res = run_task(ctx, task.id)
     assert res.status.startswith("done")

@@ -87,6 +87,7 @@ def test_the_restore_does_not_make_the_objective_untrusted(hctx):
 
 
 def test_the_step_counter_is_not_restored(hctx):
+    hctx.config.mechanisms.verify_before_stop = False
     t, aid = _park(hctx)
     _resume(hctx, t, aid)
     steps = [e["step"] for e in _events(hctx, t.id, "model.called")]

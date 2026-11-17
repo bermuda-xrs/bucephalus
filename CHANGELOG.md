@@ -10,6 +10,15 @@
 Dates are commit dates. `0.1.0` is not released yet — see "Unreleased" for
 what still stands between here and a first iteration.
 
+## Verify before stop for the full kit - 2026-11-16 (HARNESS_VERSION 24)
+
+- `verify_before_stop` (on by default) fired only when the kit had `run_command`, which only the small kit has. A
+  capable model on the full kit could change files and answer without running anything. The hold now follows
+  whichever of `run_command`/`run_code` the kit has, and its note names that tool; a kit with neither is not held.
+- A successful `run_code` after the last file change releases it (a failing one does not). `run_command` is
+  unchanged: a test, lint or program run counts, pass or fail.
+- HARNESS_VERSION 24: the hold note now names the kit's runner, so full-kit prompts change.
+
 ## Backup check, restore, stale code - 2026-11-15 (no HARNESS_VERSION change: console and CLI only)
 
 - System has Check beside each backup: the zip is unpacked to a temporary folder and its whole record is verified
