@@ -51,7 +51,9 @@ def start_server(ctx, host: str):
     import uvicorn
 
     from .control.server import GRACEFUL_SHUTDOWN_S, create_app
+    from .control.system import hold_console_lock
 
+    hold_console_lock(ctx)
     sock = socket.socket(socket.AF_INET6 if ":" in host else socket.AF_INET)
     sock.bind((host, 0))
     port = sock.getsockname()[1]
