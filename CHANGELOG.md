@@ -10,6 +10,23 @@
 Dates are commit dates. `0.1.0` is not released yet — see "Unreleased" for
 what still stands between here and a first iteration.
 
+## Files as an explorer - 2026-11-16 (no HARNESS_VERSION change: console only)
+
+- The Files page is a code explorer: tasks, a folder tree that opens in place, tabs, and a viewer with line numbers
+  and syntax colour (Python, JavaScript and its kin, JSON, CSS, TOML/YAML, shell). Markdown shows rendered, with
+  Source beside it. Highlighting is our own (no library); it escapes everything and loses nothing.
+- Open in Cursor on a file and on the workspace (`cursor://file/...`): real editing, a terminal, extensions and
+  language servers stay in your editor. The file route now also returns the absolute path for it.
+- New file and Edit a copy write through the existing drop: a new file you added, marked untrusted, logged as
+  `human.uploaded`.
+- Edit changes a text file in place (`PUT /tasks/{id}/files`). Refused while the task runs or a step holds its lock,
+  and when the file changed since you opened it (the save names the hash it replaces). The old text is kept as an
+  untrusted `human_edit_before` artifact, `human.edited` logs both hashes, and an open task is told on resume that a
+  file was edited (not which: a file name can come from untrusted text, and that message is trusted). A link is
+  refused, and the write is a temp file plus `os.replace`, so it never writes through one. Undo save puts the old text
+  back the same way. Rewind still restores the agent's checkpoints.
+- `tests/test_console_ide.py`.
+
 ## The basilica: a new look for the console - 2026-11-15 (no HARNESS_VERSION change: console and theme only)
 
 - Palette: obsidian ground, marble text, one amethyst accent; light is marble with ink. Amber still means an

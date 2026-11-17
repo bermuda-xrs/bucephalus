@@ -180,7 +180,9 @@ project, and every route needs it except the one webhook route below.
   integrity record keeps only a note of the removal; Cut here on any exchange starts a branch that still sees
   what came before it, and Merge folds two conversations into one, both also in the Graph), a plan card you sign before anything runs, Pause
   and Resume, approvals that park inline, Markdown answers, export, pinning, bulk archive of idle conversations, and
-  a file browser per task (make a folder, remove a file you added; your files are marked untrusted).
+  a file explorer per task in Files (a folder tree, tabs, line numbers and syntax colour, Open in Cursor; a new
+  file or an edited copy is saved as a file you added, marked untrusted; Edit changes a file in place while its
+  task is stopped, keeps the old text and tells the agent).
 - **Watch:** Graph (every conversation and task as one graph: a tree of conversations zoomed out, each task's
   steps zoomed in), Analytics (usage and cost by day, model and origin; measurement runs are left out), Logs, Integrity (the
   hash chain, schedules and memory), System (host, disk, a backup of the database, anchor and memory), and Docs
