@@ -103,7 +103,7 @@ class BackendConfig(_Section):
     def inline_observation_tokens(self) -> int:
         if self.observation_tokens is not None:
             return self.observation_tokens
-        return int(self.budgeted_window * 0.4) if self.tool_profile == "small" else 400
+        return int(self.budgeted_window * 0.4)
 
     @property
     def requires_observation(self) -> bool:
