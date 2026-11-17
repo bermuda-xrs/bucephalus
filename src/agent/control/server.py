@@ -195,6 +195,14 @@ class PhraseIn(BaseModel):
     phrase: str
 
 
+class BranchIn(BaseModel):
+    after_task: str
+
+
+class MergeIn(BaseModel):
+    other: str
+
+
 class SkillIn(BaseModel):
     name: str
     body: str
@@ -520,6 +528,26 @@ def create_app(ctx: AgentContext) -> FastAPI:
             ctx.conn.execute("DELETE FROM conversations WHERE id=?", (cid,))
             ctx.conn.commit()
         return out
+
+    @app.post("/conversations/{cid}/branch")
+    def branch_conversation(cid: str, body: BranchIn) -> dict:
+        from . import conversations as conv
+
+        try:
+            return conv.branch(ctx.conn, cid, body.after_task)
+        except KeyError:
+            raise HTTPException(404, "no such conversation, or the exchange is not in it") from None
+
+    @app.post("/conversations/{cid}/merge")
+    def merge_conversation(cid: str, body: MergeIn) -> dict:
+        from . import conversations as conv
+
+        try:
+            return conv.merge(ctx.conn, cid, body.other)
+        except KeyError:
+            raise HTTPException(404, "no such conversation") from None
+        except ValueError as e:
+            raise HTTPException(400, str(e)) from None
 
     @app.post("/conversations/archive_older")
     def post_archive_older(body: ArchiveOlder) -> dict:

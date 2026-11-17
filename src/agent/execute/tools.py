@@ -301,6 +301,10 @@ def tool_search_history(ctx, task, query: str, limit: int = 5,
                 ctx.conn.execute(
                     "SELECT contract_json FROM tasks WHERE id = ?", (h.ref,)
                 ).fetchone()[0])
+        at = ctx.conn.execute(
+            "SELECT c.id, c.title, x.position FROM conversation_tasks x JOIN conversations c ON c.id = x.conversation_id "
+            "WHERE x.task_id = ?", (h.task_id,)).fetchone()
+        d["conversation"] = {"id": at[0], "title": at[1], "position": at[2]} if at else None
         out.append(d)
     return {
         "ok": True,
