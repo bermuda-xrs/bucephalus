@@ -177,7 +177,8 @@ and the lock protecting it is process-wide.
 project, and every route needs it except the one webhook route below.
 
 - **Work:** conversations whose follow-ups see the earlier exchanges (delete one for good from Sessions; the
-  integrity record keeps only a note of the removal), a plan card you sign before anything runs, Pause
+  integrity record keeps only a note of the removal; Cut here on any exchange starts a branch that still sees
+  what came before it, and Merge folds two conversations into one, both also in the Graph), a plan card you sign before anything runs, Pause
   and Resume, approvals that park inline, Markdown answers, export, pinning, bulk archive of idle conversations, and
   a file browser per task (make a folder, remove a file you added; your files are marked untrusted).
 - **Watch:** Graph (every conversation and task as one graph: a tree of conversations zoomed out, each task's
