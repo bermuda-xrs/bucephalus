@@ -10,6 +10,13 @@
 Dates are commit dates. `0.1.0` is not released yet — see "Unreleased" for
 what still stands between here and a first iteration.
 
+## Tool output sized to the window - 2026-11-16 (HARNESS_VERSION 24, the same bump)
+
+- Tool output was shown at 400 tokens on the full and patch kits but at 40% of the window on the small kit, so a
+  strong model saw less of a command's output than the 3B and spent turns asking for the rest. Every kit now gets 40%
+  of its window, still held under half the compaction ceiling (28,000 tokens on a 200k window at the default fill
+  ratio). `observation_tokens` still overrides it per backend. The 400 came from the original spec, not a measurement.
+
 ## Branch and merge conversations, search past actions - 2026-11-15 (HARNESS_VERSION 24)
 
 - Cut here, on any exchange in a conversation and on a task in the Graph: the exchanges after it move to a new

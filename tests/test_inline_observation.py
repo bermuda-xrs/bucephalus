@@ -17,11 +17,10 @@ def _big(workspace, lines=300):
     (workspace / "big.txt").write_text(chr(10).join(body), encoding="utf-8")
 
 
-def test_the_cap_follows_the_profile_and_the_window():
-    assert BackendConfig(kind="mock", model="m").inline_observation_tokens == 400
-    assert BackendConfig(kind="mock", model="m", tool_profile="patch").inline_observation_tokens == 400
-    small = BackendConfig(kind="mock", model="m", tool_profile="small", context_window=16384)
-    assert small.inline_observation_tokens == int(16384 * 0.4)
+def test_the_cap_follows_the_window_whatever_the_profile():
+    for profile in ("full", "patch", "small"):
+        b = BackendConfig(kind="mock", model="m", tool_profile=profile, context_window=16384)
+        assert b.inline_observation_tokens == int(16384 * 0.4), profile
     assert BackendConfig(kind="mock", model="m", tool_profile="small", context_window=4096,
                          usable_context_window=2048).inline_observation_tokens == int(2048 * 0.4)
     assert BackendConfig(kind="mock", model="m", observation_tokens=1234).inline_observation_tokens == 1234
@@ -38,9 +37,18 @@ def test_the_small_profile_sees_the_whole_file_it_read(small, task, workspace):
     assert "NEEDLE-IN-THE-MIDDLE" in tail and "elided" not in tail
 
 
-def test_the_full_profile_still_gets_the_head_and_the_tail(ctx, task, workspace):
+def test_the_full_profile_sees_what_its_window_holds(ctx, task, workspace):
     ctx.config.long_files = "elide"
     _big(workspace)
+    ctx.backends["cloud"].queue(READ, FINAL)
+    run_task(ctx, task.id)
+    tail = ctx.backends["cloud"].calls[1]["tail"]
+    assert "NEEDLE-IN-THE-MIDDLE" in tail and "elided" not in tail
+
+
+def test_the_full_profile_still_gets_the_head_and_the_tail_past_its_cap(ctx, task, workspace):
+    ctx.config.long_files = "elide"
+    _big(workspace, 8000)
     ctx.backends["cloud"].queue(READ, FINAL)
     run_task(ctx, task.id)
     tail = ctx.backends["cloud"].calls[1]["tail"]
