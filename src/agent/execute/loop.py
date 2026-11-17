@@ -414,7 +414,7 @@ def _run_task(ctx, task_id: str) -> TaskResult:
                 ctx.log.append(task.id, "verify.continued", {"step": step, "n": n})
                 entries.append(LedgerEntry.observation(say(ctx,
                     "You changed files but have not run a test, lint or the program since. Run one now "
-                    "with run_command, or answer again if none applies (" + str(MAX_VERIFY_CONTINUATIONS - n)
+                    "with " + _verifier(ctx) + ", or answer again if none applies (" + str(MAX_VERIFY_CONTINUATIONS - n)
                     + " reminder(s) left)."), taint=Taint.TRUSTED, label="verify-before-stop"))
                 continue
 
@@ -586,7 +586,15 @@ def _observed(ctx, task) -> bool:
 
 
 VERIFY_NOTE = ("You changed files and have not run a test, lint or the program since: run one now with "
-               "run_command.")
+               "{tool}.")
+
+
+def _verifier(ctx) -> str | None:
+    return next((t for t in ("run_command", "run_code") if t in ctx.tools), None)
+
+
+def _verify_note(ctx) -> str:
+    return VERIFY_NOTE.format(tool=_verifier(ctx))
 
 
 THOUGHT_MAX = 300
@@ -863,7 +871,7 @@ def _final_withheld(ctx, task, backend, step: int) -> str | None:
     if _must_verify_first(ctx, task):
         n = _verify_continuations(ctx, task) + 1
         ctx.log.append(task.id, "verify.continued", {"step": step, "n": n, "via": "schema"})
-        return VERIFY_NOTE
+        return _verify_note(ctx)
     return None
 
 
@@ -929,7 +937,7 @@ def _verify_continuations(ctx, task) -> int:
 
 
 def _must_verify_first(ctx, task) -> bool:
-    if not ctx.config.mechanisms.verify_before_stop or "run_command" not in ctx.tools:
+    if not ctx.config.mechanisms.verify_before_stop or _verifier(ctx) is None:
         return False
     if _verify_continuations(ctx, task) >= MAX_VERIFY_CONTINUATIONS:
         return False
@@ -1331,7 +1339,7 @@ def _perform(ctx, task, tool, tool_name: str, args: dict, step: int) -> LedgerEn
             tool_name in WRITERS and bool(result.get("ok")) and _file_bytes(ctx, args) != before)
         if changed:
             receipt["changed"] = True
-        if tool_name == "run_command" and result.get("verification"):
+        if (tool_name == "run_command" and result.get("verification")) or (tool_name == "run_code" and receipt["ok"]):
             receipt["verify"] = True
     if tool_name == "run_code":
         receipt.update(_touched_record(touched))
