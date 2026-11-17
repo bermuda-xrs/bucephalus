@@ -3,12 +3,12 @@ name = "default"
 banner = "./assets/banner.ans"
 
 [colors]
-accent      = "#FFE6CB"
+accent      = "#CDB4FF"
 success     = "#4ADE80"
 warning     = "#FFBD38"
 danger      = "#FF4B4B"   # integrity alerts ONLY — reserve it, use it nowhere else
-muted       = "#A79F8E"
-background  = "#041C1C"
+muted       = "#A59DAE"
+background  = "#0A0810"
 
 [spinner]
 style  = "braille"

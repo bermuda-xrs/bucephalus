@@ -10,6 +10,21 @@
 Dates are commit dates. `0.1.0` is not released yet — see "Unreleased" for
 what still stands between here and a first iteration.
 
+## The basilica: a new look for the console - 2026-11-15 (no HARNESS_VERSION change: console and theme only)
+
+- Palette: obsidian ground, marble text, one amethyst accent; light is marble with ink. Amber still means an
+  approval, green done, and red is still integrity only. `themes/default.toml` carries the new accent, muted and
+  background, so the terminal follows. Every pair still passes WCAG AA.
+- Type: Roman capitals for names (nav, page titles), a book serif for prose, mono capitals for labels. System
+  faces only (Palatino and its kin); nothing is loaded from outside, the CSP is unchanged.
+- Shape: square corners; corner ticks on cards and the composer, amber on an approval.
+- ASCII motion: a rose window drawn in characters on the empty conversation (it assembles once, then light moves
+  through the glass); a meander across the top of the window that a light runs along while a task drafts or runs;
+  page titles resolve from numerals when a page opens. All of it holds still under reduced motion, and the rose
+  stops drawing when it is not on screen.
+- Plan steps are numbered in Roman numerals. The wordmark is BVCEPHALVS.
+- `tests/test_console_basilica.py`.
+
 ## H1, H2, F2 and G1 for any model - 2026-11-16 (no HARNESS_VERSION change: all four are off by default)
 
 - They were rejected because the 3B could not use them, which judges no other model. Each is now a per-backend
