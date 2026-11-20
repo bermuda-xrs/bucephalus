@@ -233,8 +233,12 @@ Plan, in order:
    note (H2) did not move the 3B, so a nudge for the 8B is a new candidate, not a family.
    H1, H2, F2 and G1 are switches on every kit again (2026-11-16, the user: the harness is not sized to the 3B), off
    until measured on a capable model; that needs a cloud runner and the D26 credentials.
-3. The console takes the look of the official Hermes Agent UI (NousResearch/hermes-agent, MIT; the user's choice
-   2026-11-07): restyled in our plain JS, no React, no build, no npm, their brand fonts and names not copied, the CSP
+3. The console's look is now our own, "the basilica" (the user's request 2026-11-15): obsidian and marble with one
+   amethyst accent, Roman capitals from system faces, square corners with corner ticks, an ASCII rose window on the
+   empty conversation, a meander across the top that lights while work runs, Roman numerals on plan steps. Nothing
+   is loaded from outside; all motion stops under reduced motion (`tests/test_console_basilica.py`). The layout
+   underneath is still the one taken from the official Hermes Agent UI (NousResearch/hermes-agent, MIT; the user's
+   choice 2026-11-07): restyled in our plain JS, no React, no build, no npm, their brand fonts and names not copied, the CSP
    unchanged. `tests/test_console_reskin_guards.py` holds every route, control, pane, view and slash command the
    console had, refuses a call to a route the server lacks, and holds WCAG AA. Done: the dashboard shell and palette
    (nav sidebar, Control Center panes as pages, Hermes Teal / blue light); the chat thread after their desktop app's

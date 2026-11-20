@@ -156,10 +156,14 @@ async function newConversation() {
   closeSideOnPhone();
 }
 function renderWelcome() {
-  $("#items").innerHTML = `<div class="welcome"><h2>Plan once, walk away, get told.</h2>
+  if ($("#items .welcome")) return;
+  $("#items").innerHTML = `<div class="welcome"><div class="rose" id="rose" aria-hidden="true"><pre
+    class="glass" id="roseGlass"></pre><pre class="stone" id="roseStone"></pre></div>
+    <h2>Plan once, walk away, get told.</h2>
     <p>Describe what you want done. It drafts a plan without touching anything; you settle its
     questions and sign it. Only then does it run, and it comes back to you when it needs a decision.</p>
     <p>A follow-up in the same conversation is a new task, with its own plan.</p></div>`;
+  roseStart();
 }
 async function selectConversation(id) {
   showPage(false);
@@ -320,7 +324,7 @@ function planCard(it) {
                + list(pl.unknowns, "What it doesn't know yet");
   const steps = (pl.steps || []).map((s, i) => `
     <li class="${s.reversible === false ? "irrev" : ""}">
-      <div class="node" aria-hidden="true">${i + 1}</div>
+      <div class="node" aria-hidden="true">${roman(i + 1)}</div>
       <div>
         <p class="intent">${esc(s.intent)}</p>
         ${s.reversible === false ? `<p class="irrev-note">Can't be undone once it runs.</p>` : ""}
@@ -1495,6 +1499,7 @@ async function openPane(name) {
   const body = $("#ccBody");
   body.innerHTML = `<p class="note"><span class="spin"></span> Loading</p>`;
   try { body.innerHTML = await PANES[name](); } catch (e) { body.innerHTML = `<p class="caveat">${esc(e.message)}</p>`; }
+  decode($("#ccBody > h3:first-child"));
   body.focus();
   if (name === "suites") loadSuites();
   if (name === "map") drawMap();
@@ -2381,6 +2386,68 @@ document.addEventListener("change", e => {
   if (e.target.dataset.change === "longFiles") setLongFiles(e.target.value);
   if (e.target.dataset.change === "sessSearch") { S.sessQ = e.target.value.trim(); openPane("sessions"); }
 });
+const roman = n => [[90, "XC"], [50, "L"], [40, "XL"], [10, "X"], [9, "IX"], [5, "V"], [4, "IV"], [1, "I"]]
+  .reduce((s, [v, r]) => { while (n >= v) { s += r; n -= v; } return s; }, "");
+const ROSE = {w: 89, h: 45, ramp: " ..::;=+*", noise: "IVXLCDM01/<>+="};
+function roseFrame(t, built) {
+  const {w, h, ramp, noise} = ROSE, TAU = Math.PI * 2, glass = [], stone = [];
+  for (let j = 0; j < h; j++) {
+    let g = "", s = "";
+    for (let i = 0; i < w; i++) {
+      const x = (i - (w - 1) / 2) / ((w - 1) / 2), y = (j - (h - 1) / 2) / ((h - 1) / 2);
+      const r = Math.hypot(x, y), a = Math.atan2(y, x);
+      let gc = " ", sc = " ";
+      if (r <= 1 && (built >= 1 || r < built * 1.3 - Math.random() * .3)) {
+        const spoke = (n, off) => { const f = ((a / TAU * n + off) % 1 + 1) % 1; return Math.min(f, 1 - f) / n * TAU * r; };
+        const k = Math.floor(((a / TAU * 12) % 12 + 12) % 12), mid = (k + .5) / 12 * TAU;
+        const d = Math.hypot(x - .785 * Math.cos(mid), y - .785 * Math.sin(mid));
+        const dir = "-\\|/"[Math.round(((a % Math.PI) + Math.PI) % Math.PI / (Math.PI / 4)) % 4];
+        if (r > .955 || r < .085) sc = "#";
+        else if (Math.abs(r - .61) < .017 || Math.abs(r - .3) < .02) sc = "O";
+        else if (r > .61 && Math.abs(d - .125) < .017) sc = "O";
+        else if (r > .61 && d > .125 && spoke(12, 0) < .022) sc = dir;
+        else if (r > .3 && r < .61 && spoke(12, .5) < .02) sc = dir;
+        else if (r < .3 && spoke(6, 0) < .02) sc = dir;
+        else {
+          const v = r > .61 ? (d < .125 ? Math.sin(t * 1.3 + k * 2.1) : Math.sin(6 * a + 9 * r + t * .7))
+            : r > .3 ? Math.sin(-12 * a + 14 * r + t * .9) : Math.sin(3 * a + t * 1.6);
+          gc = ramp[Math.round((v * .5 + .5) * (ramp.length - 1))];
+        }
+      } else if (r <= 1 && Math.random() < .35) gc = noise[Math.floor(Math.random() * noise.length)];
+      g += gc; s += sc;
+    }
+    glass.push(g); stone.push(s);
+  }
+  return [glass.join("\n"), stone.join("\n")];
+}
+let roseTimer = 0;
+function roseStart() {
+  clearInterval(roseTimer);
+  const g = $("#roseGlass"), s = $("#roseStone");
+  if (!g) return;
+  const still = matchMedia("(prefers-reduced-motion: reduce)").matches, t0 = performance.now();
+  const draw = () => {
+    if (!g.isConnected) return clearInterval(roseTimer);
+    if (document.hidden || !g.offsetParent) return;
+    const t = (performance.now() - t0) / 1000;
+    [g.textContent, s.textContent] = roseFrame(still ? 4 : t, still ? 1 : t / 1.6);
+    $("#rose").style.lineHeight = g.getBoundingClientRect().width / ROSE.h + "px";
+  };
+  draw();
+  if (!still) roseTimer = setInterval(draw, 80);
+}
+function decode(el) {
+  if (!el || el.children.length || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const text = el.textContent, t0 = performance.now(), G = ROSE.noise;
+  const id = setInterval(() => {
+    const k = (performance.now() - t0) / 16;
+    el.textContent = [...text].map((c, i) => i < k || c === " " ? c : G[Math.floor(Math.random() * G.length)]).join("");
+    if (k >= text.length) clearInterval(id);
+  }, 30);
+}
+$("#frieze").textContent = $("#frieze").dataset.t = "┌─┐└─┘".repeat(120);
+setInterval(() => $("#frieze").classList.toggle("live", S.streams.size + S.drafting.size > 0), 400);
+
 new MutationObserver(() => document.querySelectorAll("i[data-pct]").forEach(i => {
   i.style.width = i.dataset.pct + "%";
 })).observe(document.body, {childList: true, subtree: true});
