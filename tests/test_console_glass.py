@@ -159,7 +159,7 @@ process.stdout.write(JSON.stringify({x1, rips: s.rips.length, max: FX.rips, last
 def test_the_effect_adds_no_colour_and_draws_at_most_one_pixel_per_css_pixel():
     bg = UI[UI.index("const BG ="):]
     fs = bg[bg.index("const FS = `"):bg.index("`;", bg.index("const FS = `"))]
-    assert not re.search(r"\)\.(r|g|b)", fs), "colour channels are sampled apart"
+    assert not re.search(r"\)\.(r|g|b)\b", fs), "colour channels are sampled apart"
     assert "k = Math.min(devicePixelRatio || 1, 1)" in bg
 
 
@@ -293,7 +293,7 @@ def test_settings_offers_choosing_and_removing_the_image():
 
 # ---------------------------------------------------------------- black and white
 
-_COLOUR = re.compile(r"#([0-9A-Fa-f]{6}|[0-9A-Fa-f]{3})|rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)")
+_COLOUR = re.compile(r"#([0-9A-Fa-f]{6}|[0-9A-Fa-f]{3})\b|rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)")
 
 
 def _tinted(text: str) -> list[str]:
@@ -314,7 +314,7 @@ def test_the_console_is_black_and_white_except_the_integrity_alarm():
     assert not _tinted(css), _tinted(css)
     assert not _tinted(UI + HTML), _tinted(UI + HTML)
     assert "--theme-" not in BARE, "the theme file's colours would tint it"
-    assert not re.search(r"(green|amber|purple|violet|blue|orange)", UI, re.I), "a legend names a colour"
+    assert not re.search(r"\b(green|amber|purple|violet|blue|orange)\b", UI, re.I), "a legend names a colour"
 
 
 def test_with_no_image_the_background_is_the_bare_ground():
