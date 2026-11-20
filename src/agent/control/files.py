@@ -4,6 +4,8 @@ import base64
 import binascii
 import hashlib
 import os
+import stat
+import tempfile
 from pathlib import Path
 
 from ..security.capabilities import is_protected, task_state_paths, within_scope
@@ -29,6 +31,10 @@ class Unwritable(Exception):
 
 
 class Busy(Exception):
+    ...
+
+
+class Stale(Exception):
     ...
 
 
@@ -71,17 +77,72 @@ def browse(ctx, task, raw: str) -> dict:
             if _visible(ctx, task, c, state):
                 entries.append({"name": c.name, "dir": c.is_dir(),
                                 "bytes": None if c.is_dir() else c.stat().st_size})
-        return {"path": rel, "kind": "dir", "entries": entries}
+        return {"path": rel, "abs": str(p), "kind": "dir", "entries": entries}
     if not is_file:
         raise Missing(rel)
     n = p.stat().st_size
+    out = {"path": rel, "abs": str(p), "kind": "file", "bytes": n}
     if n > MAX_PREVIEW_BYTES:
-        return {"path": rel, "kind": "file", "bytes": n, "too_large": True}
+        return {**out, "too_large": True}
     data = p.read_bytes()
     try:
-        return {"path": rel, "kind": "file", "bytes": n, "text": data.decode("utf-8")}
+        return {**out, "text": data.decode("utf-8"), "sha256": hashlib.sha256(data).hexdigest()}
     except UnicodeDecodeError:
-        return {"path": rel, "kind": "file", "bytes": n, "binary": True}
+        return {**out, "binary": True}
+
+
+def edit(ctx, task, raw: str, text: str, base: str) -> dict:
+    from ..execute.say import OPEN, say
+    from ..kernel.tasks import load_task
+    from ..kernel.types import Taint
+    from ..ledger.artifacts import write_artifact
+    from ..runlock import RunLockBusy, task_lock
+
+    data = text.encode("utf-8")
+    if len(data) > MAX_UPLOAD_BYTES:
+        raise Refused(f"larger than {MAX_UPLOAD_BYTES // 2**20} MB")
+    try:
+        lock = task_lock(ctx, task.id).acquire()
+    except RunLockBusy:
+        raise Busy("the task is running a step; stop it first") from None
+    try:
+        p = _allowed(ctx, task, raw)
+        rel = os.path.relpath(p, ctx.config.root).replace(os.sep, "/")
+        if p.is_symlink():
+            raise Refused("that is a link; edit the file it points to")
+        task = load_task(ctx.conn, task.id)
+        if task.status.value == "running":
+            raise Busy("the task is running; stop it first")
+        if not p.is_file():
+            raise Missing(rel)
+        old = p.read_bytes()
+        if hashlib.sha256(old).hexdigest() != base:
+            raise Stale("the file changed since you opened it; open it again")
+        try:
+            old_text = old.decode("utf-8")
+        except UnicodeDecodeError:
+            raise Refused("only a UTF-8 text file can be edited here") from None
+        aid = write_artifact(ctx.conn, task.id, "human_edit_before", old_text, Taint.UNTRUSTED, {"path": rel})
+        tmp = None
+        try:
+            fd, tmp = tempfile.mkstemp(prefix=f".{p.name}.", suffix=".edit", dir=p.parent)  # O_EXCL: no planted link
+            with os.fdopen(fd, "wb") as fh:
+                fh.write(data)
+            os.chmod(tmp, stat.S_IMODE(p.stat().st_mode))
+            os.replace(tmp, p)  # replaces the name itself: never writes through a link swapped in meanwhile
+        except OSError as e:
+            if tmp:
+                Path(tmp).unlink(missing_ok=True)
+            raise Unwritable(f"cannot write {rel}: {e.strerror or e}") from None
+        after = hashlib.sha256(data).hexdigest()
+        ctx.log.append(task.id, "human.edited", {"path": rel, "before_sha256": base, "after_sha256": after,
+                                                 "bytes": len(data), "before_artifact": aid})
+        if task.status in OPEN:  # no path: a file name may come from untrusted text, and this message is trusted
+            say(ctx, task.id, "I edited a file in the workspace by hand while you were stopped. Read a file again "
+                              "before relying on what you remember of it.")
+    finally:
+        lock.release()
+    return {"path": rel, "bytes": len(data), "sha256": after}
 
 
 def drop(ctx, task, raw: str, content_b64: str) -> dict:

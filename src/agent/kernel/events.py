@@ -53,6 +53,7 @@ EVENT_TYPES = frozenset(
         "human.approved",
         "human.uploaded",
         "human.removed",
+        "human.edited",
         "human.made_folder",
         "human.denied",
         "human.steered",

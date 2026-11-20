@@ -185,6 +185,12 @@ class Upload(BaseModel):
     content_b64: str
 
 
+class EditIn(BaseModel):
+    path: str
+    text: str
+    base_sha256: str
+
+
 class SkillFileIn(BaseModel):
     file_name: str
     text: str
@@ -1096,6 +1102,21 @@ def create_app(ctx: AgentContext) -> FastAPI:
         except files.Refused as e:
             raise HTTPException(403, str(e)) from None
         except files.Exists as e:
+            raise HTTPException(409, str(e)) from None
+        except files.Unwritable as e:
+            raise HTTPException(400, str(e)) from None
+
+    @app.put("/tasks/{task_id}/files")
+    def put_files(task_id: str, body: EditIn) -> dict:
+        from . import files
+
+        try:
+            return files.edit(ctx, _task(task_id), body.path, body.text, body.base_sha256)
+        except files.Refused as e:
+            raise HTTPException(403, str(e)) from None
+        except files.Missing as e:
+            raise HTTPException(404, f"nothing at {e}") from None
+        except (files.Busy, files.Stale) as e:
             raise HTTPException(409, str(e)) from None
         except files.Unwritable as e:
             raise HTTPException(400, str(e)) from None

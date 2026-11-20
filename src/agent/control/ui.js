@@ -1436,6 +1436,7 @@ function closeSideOnPhone() { $("#app").classList.remove("side-open"); }
 function filesPage() { return S.pane === "files" && !$("#control").hidden; }
 const F = id => $("#" + id + (filesPage() ? "Pg" : ""));
 async function loadFiles(taskId, path) {
+  if (filesPage()) return ideOpen(taskId, path);
   S.filesTask = taskId;
   let d;
   try { d = await api(`/tasks/${taskId}/files?path=${encodeURIComponent(path)}`); }
@@ -1462,6 +1463,211 @@ async function loadFiles(taskId, path) {
       : `Binary file, ${d.bytes.toLocaleString()} bytes.`;
   }
 }
+const HL_KW = {
+  py: "False None True and as assert async await break class continue def del elif else except finally for from "
+    + "global if import in is lambda match nonlocal not or pass raise return self try while with yield",
+  js: "async await break case catch class const continue default delete do else export extends false finally for "
+    + "from function if import in instanceof let new null of return static super switch this throw true try typeof "
+    + "undefined var void while yield",
+  sh: "if then else elif fi for while do done case esac function in return export local param",
+  json: "true false null",
+};
+const HL_LANG = {py: "py", pyi: "py", js: "js", mjs: "js", cjs: "js", ts: "js", tsx: "js", jsx: "js", java: "js",
+  c: "js", h: "js", cpp: "js", cs: "js", go: "js", rs: "js", json: "json", css: "css", toml: "conf", yaml: "conf",
+  yml: "conf", ini: "conf", cfg: "conf", sh: "sh", bash: "sh", ps1: "sh"};
+const HL_COMMENT = {py: "#[^\\n]*", conf: "#[^\\n]*", sh: "#[^\\n]*",
+  js: "\\/\\/[^\\n]*|\\/\\*[\\s\\S]*?(?:\\*\\/|$)", css: "\\/\\*[\\s\\S]*?(?:\\*\\/|$)"};
+const HL_STRING = ["\"(?:\\\\.|[^\"\\\\\\n])*\"?", "'(?:\\\\.|[^'\\\\\\n])*'?"];
+function hl(text, path) {
+  const name = String(path).split("/").pop(), lang = name.includes(".") ? HL_LANG[name.split(".").pop().toLowerCase()] : null;
+  if (!lang) return esc(text);
+  const str = [...(lang === "py" ? ['"""[\\s\\S]*?(?:"""|$)', "'''[\\s\\S]*?(?:'''|$)"] : []),
+               ...(lang === "js" ? ["`(?:\\\\[\\s\\S]|[^`\\\\])*`?"] : []), ...HL_STRING];
+  const kw = new Set((HL_KW[lang] || "").split(" ").filter(Boolean));
+  const re = new RegExp(`(${HL_COMMENT[lang] || "(?!)"})|(${str.join("|")})|([A-Za-z_$][\\w$]*)`, "g");
+  let out = "", at = 0;
+  for (const m of text.matchAll(re)) {
+    const cls = m[1] !== undefined ? "c" : m[2] !== undefined ? "s" : kw.has(m[3]) ? "k" : "";
+    if (!cls) continue;
+    out += esc(text.slice(at, m.index)) + `<span class="tk-${cls}">${esc(m[0])}</span>`;
+    at = m.index + m[0].length;
+  }
+  return out + esc(text.slice(at));
+}
+function codeView(text, path) {
+  const n = text.split("\n").length;
+  return `<div class="code" tabindex="0" aria-label="${esc(path)}"><pre class="gut" aria-hidden="true">${
+    Array.from({length: n}, (_, i) => i + 1).join("\n")}</pre><pre class="src"><code>${hl(text, path)}</code></pre></div>`;
+}
+const cursorUrl = abs => "cursor://file/" + encodeURI(String(abs).replace(/\\/g, "/"));
+function ideReset(task) { S.ide = {task, kids: new Map(), open: new Set(), tabs: [], tab: null, base: "", abs: "", n: 0}; }
+async function ideOpen(taskId, path) {
+  if (!S.ide || S.ide.task !== taskId) ideReset(taskId);
+  S.filesTask = taskId;
+  const I = S.ide;
+  let d;
+  try { d = await api(`/tasks/${taskId}/files?path=${encodeURIComponent(path)}`); }
+  catch (e) {
+    if (I.base) return toast(e.message, true);
+    $("#treePg").innerHTML = `<div class="empty">${esc(e.status === 404 ? "Nothing here yet." : e.message)}</div>`;
+    return;
+  }
+  if (S.ide !== I) return;
+  if (d.kind === "dir") {
+    if (!I.base) { I.base = d.path; I.abs = d.abs; }
+    I.kids.set(d.path, d.entries); I.open.add(d.path); S.filesPath = d.path;
+  } else {
+    const t = I.tabs.find(x => x.path === d.path);
+    if (t) t.d = d; else I.tabs.push({path: d.path, d});
+    I.tab = d.path;
+  }
+  ideRender();
+}
+function ideTree(dir) {
+  const kids = S.ide.kids.get(dir);
+  if (!kids) return "";
+  return `<ul>${kids.map(e => {
+    const p = `${dir}/${e.name}`;
+    if (!e.dir) return `<li><button class="tn file-n" data-action="ideFile" ${args(p)} aria-current="${p === S.ide.tab}"
+      title="${esc(p)}">${esc(e.name)}</button></li>`;
+    const open = S.ide.open.has(p);
+    return `<li><button class="tn dir-n" data-action="ideDir" ${args(p)} aria-expanded="${open}">${esc(e.name)}</button>${
+      open ? ideTree(p) : ""}</li>`;
+  }).join("") || '<li class="empty">Empty</li>'}</ul>`;
+}
+function ideRender() {
+  const I = S.ide, tree = $("#treePg"), ed = $("#edPg");
+  if (!tree || !ed) return;
+  const t = I.tabs.find(x => x.path === I.tab);
+  S.fileOpen = t && !t.draft ? t.path : null;
+  $("#filePathPg").innerHTML = I.base ? `<a class="link" href="${esc(cursorUrl(I.abs))}" title="Open this workspace in Cursor">${
+    esc(I.base)}/</a>` : "";
+  $("#removeFilePg").hidden = !S.fileOpen;
+  tree.innerHTML = I.base ? ideTree(I.base) : "";
+  const tabs = I.tabs.map(x => {
+    const label = x.draft ? x.name || "untitled" : x.path.split("/").pop(), dirty = x.draft || ideDirty(x);
+    return `<div class="tab" aria-current="${x.path === I.tab}"><button class="quiet" data-action="ideTab" ${args(x.path)}
+      title="${esc(dirty ? "Not saved" : x.path)}">${esc(label)}${dirty ? " *" : ""}</button><button class="quiet x"
+      data-action="ideClose" ${args(x.path)} aria-label="Close ${esc(label)}">&times;</button></div>`;
+  }).join("");
+  if (!t) {
+    ed.innerHTML = (tabs ? `<div class="tabs">${tabs}</div>` : "")
+      + `<p class="empty-ed">${I.base ? "Open a file from the tree, or start a new one." : "Pick a task to see its workspace."}</p>`;
+    return;
+  }
+  if (t.draft) {
+    ed.innerHTML = `<div class="tabs">${tabs}</div><div class="ed-bar"><label>Save as <code>${esc(t.dir)}/</code><input
+      id="draftName" value="${esc(t.name)}" spellcheck="false" aria-label="File name"></label><button class="btn primary"
+      data-action="ideSave" ${args(t.path)}>Save as a new file</button><span class="note">Ctrl+S. Saved as a file you
+      added, marked untrusted; nothing is overwritten.</span></div>
+      <textarea class="draft" id="draftText" spellcheck="false" aria-label="Contents of the new file">${esc(t.text)}</textarea>`;
+    return;
+  }
+  const d = t.d, md = d.text !== undefined && isMarkdownFile(d.path);
+  if (t.edit !== undefined) {
+    ed.innerHTML = `<div class="tabs">${tabs}</div><div class="ed-bar"><span class="crumb">${esc(d.path)}</span><button
+      class="btn primary" data-action="ideEditSave" ${args(d.path)}>Save</button><button class="quiet" data-action="ideEditCancel"
+      ${args(d.path)}>Cancel</button><span class="note">Ctrl+S. Overwrites the file; the old text stays in the task's
+      record and the agent is told when it resumes.</span></div>
+      <textarea class="draft" id="editText" spellcheck="false" aria-label="Contents of ${esc(d.path)}">${esc(t.edit)}</textarea>`;
+    return;
+  }
+  ed.innerHTML = `<div class="tabs">${tabs}</div><div class="ed-bar"><span class="crumb">${esc(d.path)}</span>
+    <span class="note">${d.bytes.toLocaleString()} bytes</span>
+    ${md ? `<button class="quiet" data-action="ideSource" ${args(d.path)}>${t.source ? "Preview" : "Source"}</button>` : ""}
+    ${d.text !== undefined ? `<button class="quiet" data-action="ideEdit" ${args(d.path)}>Edit</button><button class="quiet"
+      data-action="ideCopy" ${args(d.path)}>Edit a copy</button>` : ""}
+    ${t.prev ? `<button class="quiet" data-action="ideUndo" ${args(d.path)}>Undo save</button>` : ""}
+    <a class="quiet" href="${esc(cursorUrl(d.abs))}">Open in Cursor</a></div>`
+    + (d.text === undefined ? `<p class="empty-ed">${d.too_large ? `Too large to show (${d.bytes.toLocaleString()} bytes).`
+        : `Binary file, ${d.bytes.toLocaleString()} bytes.`}</p>`
+      : md && !t.source ? `<div class="md doc">${renderMarkdown(d.text)}</div>` : codeView(d.text, d.path));
+}
+function ideDir(p) {
+  const I = S.ide;
+  if (I.open.has(p)) { I.open.delete(p); return ideRender(); }
+  if (I.kids.has(p)) { I.open.add(p); S.filesPath = p; return ideRender(); }
+  ideOpen(I.task, p);
+}
+function ideFile(p) { ideOpen(S.ide.task, p); }
+function ideTab(p) { S.ide.tab = p; ideRender(); }
+function ideTabOf(p) { return S.ide.tabs.find(x => x.path === p); }
+function ideClose(p) {
+  const I = S.ide, t = ideTabOf(p);
+  if (t && t.draft && t.text && !confirm(`Discard ${t.name || "this new file"}? It is not saved.`)) return;
+  if (t && ideDirty(t) && !confirm(`Discard your changes to ${t.path}?`)) return;
+  I.tabs = I.tabs.filter(x => x.path !== p);
+  if (I.tab === p) I.tab = I.tabs.length ? I.tabs[I.tabs.length - 1].path : null;
+  ideRender();
+}
+function ideForget(p) { if (S.ide) { S.ide.tabs = S.ide.tabs.filter(x => x.path !== p); if (S.ide.tab === p) S.ide.tab = null; } }
+function ideDraft(dir, name, text) {
+  const I = S.ide;
+  if (!I || !I.base) return toast("Pick a task first: files go into a task's workspace.", true);
+  const path = `draft:${++I.n}`;
+  I.tabs.push({path, draft: true, dir, name, text}); I.tab = path; ideRender();
+  const box = $("#draftText"); if (box) box.focus();
+}
+function ideNew() { ideDraft(S.filesPath || (S.ide && S.ide.base), "untitled.txt", ""); }
+function ideCopy(p) {
+  const t = ideTabOf(p), cut = p.lastIndexOf("/"), name = p.slice(cut + 1), dot = name.lastIndexOf(".");
+  ideDraft(p.slice(0, cut), dot > 0 ? `${name.slice(0, dot)}.copy${name.slice(dot)}` : `${name}.copy`, t.d.text);
+}
+async function ideSave(key) {
+  const I = S.ide, t = ideTabOf(key);
+  if (!t || !t.name.trim()) return toast("Give the file a name.", true);
+  const b64 = await new Promise((ok, bad) => { const r = new FileReader();
+    r.onload = () => ok(String(r.result).split(",", 2)[1] || ""); r.onerror = bad; r.readAsDataURL(new Blob([t.text])); });
+  let out;
+  try {
+    out = await post(`/tasks/${S.filesTask}/files`, {path: `${t.dir}/${t.name.trim()}`, content_b64: b64});
+  } catch (e) { return toast(e.message, true); }
+  toast(`Saved ${out.path}, marked untrusted.`);
+  I.tabs = I.tabs.filter(x => x.path !== key); I.kids.delete(t.dir);
+  await ideOpen(I.task, t.dir); ideOpen(I.task, out.path);
+}
+function ideSource(p) { const t = ideTabOf(p); t.source = !t.source; ideRender(); }
+function ideDirty(t) { return !t.draft && t.edit !== undefined && t.edit !== t.d.text; }
+function ideEdit(p) {
+  const t = ideTabOf(p);
+  t.edit = t.d.text; t.base = t.d.sha256; ideRender();
+  const box = $("#editText"); if (box) box.focus();
+}
+function ideEditCancel(p) {
+  const t = ideTabOf(p);
+  if (ideDirty(t) && !confirm(`Discard your changes to ${p}?`)) return;
+  t.edit = undefined; ideRender();
+}
+async function ideEditSave(p, undo) {
+  const t = ideTabOf(p), text = undo ? t.prev.text : t.edit, base = undo ? t.prev.sha : t.base;
+  let out;
+  try {
+    out = await api(`/tasks/${S.filesTask}/files`, {method: "PUT", body: JSON.stringify({path: p, text, base_sha256: base})});
+  } catch (e) { return toast(e.status === 409 ? `${e.message}.` : e.message, true); }
+  t.prev = undo ? null : {text: t.d.text, sha: out.sha256};
+  t.d = {...t.d, text, sha256: out.sha256, bytes: out.bytes}; t.edit = undefined;
+  toast(undo ? `Put ${p} back as it was.` : `Saved ${p}.`);
+  ideRender();
+}
+function ideUndo(p) { ideEditSave(p, true); }
+document.addEventListener("input", e => {
+  const t = S.ide && ideTabOf(S.ide.tab);
+  if (!t) return;
+  if (e.target.id === "editText") {
+    t.edit = e.target.value;
+    const b = $('#edPg .tab[aria-current="true"] button');
+    if (b) b.textContent = t.path.split("/").pop() + (ideDirty(t) ? " *" : "");
+    return;
+  }
+  if (!t.draft) return;
+  if (e.target.id === "draftText") t.text = e.target.value;
+  if (e.target.id === "draftName") t.name = e.target.value;
+});
+document.addEventListener("keydown", e => {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s" && ["draftText", "draftName", "editText"].includes(e.target.id)) {
+    e.preventDefault(); e.target.id === "editText" ? ideEditSave(S.ide.tab) : ideSave(S.ide.tab);
+  }
+});
 function isMarkdownFile(path) { return /\.(md|markdown)$/i.test(path || ""); }
 function openFile(path) { if (S.filesTask) loadFiles(S.filesTask, path); }
 async function upload(file) {
@@ -1555,15 +1761,15 @@ const PANES = {
     const d = await api("/tasks?limit=100");
     return `<h3>Files</h3><p class="lede">Each task reads and writes only its own workspace. A file you add is marked
       untrusted: the agent reads it as data, never as instructions.</p>
-      <div class="split"><nav class="task-list" aria-label="Tasks">${d.tasks.map(t => `<button class="side-item"
+      <div class="split ide"><nav class="task-list" aria-label="Tasks">${d.tasks.map(t => `<button class="side-item"
         data-action="pickWorkspace" ${args(t.task_id)} aria-current="${t.task_id === S.filesTask}">
         <span class="t">${esc(firstLine(t.goal))}</span><span class="s">${esc(statusWord(t.status))}, ${ago(t.created_at)}</span></button>`).join("")
         || '<div class="empty">No tasks yet.</div>'}</nav>
-      <section class="ws" aria-label="Workspace"><p class="crumb" id="filePathPg">Pick a task to see its workspace.</p>
-        <div class="file-acts"><button class="quiet" data-action="newFolder">New folder</button><button class="quiet" data-action="removeFile" id="removeFilePg" hidden>Remove this file</button></div>
-        <div id="fileListPg" class="file-list"></div>
-        <div id="filePreviewPg" class="preview" tabindex="0" aria-label="File preview"></div>
-        <div class="drop" id="dropPg" tabindex="0">Drop or paste a file here to add it to this task's workspace, marked untrusted.</div></section></div>`;
+      <section class="tree-col" aria-label="Workspace"><p class="crumb" id="filePathPg">Pick a task to see its workspace.</p>
+        <div class="file-acts"><button class="quiet" data-action="ideNew">New file</button><button class="quiet" data-action="newFolder">New folder</button><button class="quiet" data-action="removeFile" id="removeFilePg" hidden>Remove</button></div>
+        <div id="treePg" class="tree"></div>
+        <div class="drop" id="dropPg" tabindex="0">Drop or paste a file here to add it, marked untrusted.</div></section>
+      <section class="editor" id="edPg" aria-label="Open files"></section></div>`;
   },
   async models() {
     const d = await api("/models"); MODELS = d;
@@ -1946,7 +2152,8 @@ function sessArchived() { S.sessArch = !S.sessArch; openPane("sessions"); }
 function pickWorkspace(id) {
   S.filesPath = "";
   $$(".task-list .side-item").forEach(b => b.setAttribute("aria-current", String(b.dataset.args === JSON.stringify([id]))));
-  F("filePreview").textContent = ""; loadFiles(id, "");
+  if (filesPage()) ideReset(id); else F("filePreview").textContent = "";
+  loadFiles(id, "");
 }
 async function modelCall(req, done) {
   try { const r = await req; toast(r.warning || done(r), !!r.warning); } catch (e) { toast(e.message, true); }
@@ -2121,7 +2328,8 @@ async function removeFile() {
   const p = S.fileOpen;
   if (!S.filesTask || !p || !confirm(`Remove ${p}? Only a file you added, unchanged since, can be removed.`)) return;
   try { await api(`/tasks/${S.filesTask}/files?path=${encodeURIComponent(p)}`, {method: "DELETE"});
-        toast(`Removed ${p}.`); F("filePreview").textContent = ""; loadFiles(S.filesTask, S.filesPath || "work"); }
+        toast(`Removed ${p}.`); if (filesPage()) ideForget(p); else F("filePreview").textContent = "";
+        loadFiles(S.filesTask, S.filesPath || "work"); }
   catch (e) { toast(e.message, true); }
 }
 async function removeSchedule(id) {
@@ -2360,7 +2568,7 @@ document.addEventListener("keydown", e => {
 });
 $("#palette").addEventListener("click", e => { if (e.target === $("#palette")) closePalette(); });
 
-const ACTIONS = {branchConversation, mergeConversation, pickMerge, mergeThis, cancelMerge, checkBackup, savePreset, applyPreset, deletePreset, deleteConversation, newConversation, selectConversation, renameConversation, archiveConversation,
+const ACTIONS = {ideDir, ideFile, ideTab, ideClose, ideNew, ideCopy, ideSave, ideSource, ideEdit, ideEditCancel, ideEditSave, ideUndo, branchConversation, mergeConversation, pickMerge, mergeThis, cancelMerge, checkBackup, savePreset, applyPreset, deletePreset, deleteConversation, newConversation, selectConversation, renameConversation, archiveConversation, 
   toggleArchived, openLooseList, openTaskAlone, openTaskOf, draft, showSendBack, sign, sendBack, decide,
   toggleFiles, toggleSide, openFile, openControl, closeControl, openPane, openPalette, focusSearch,
   toggleTheme, acceptMemory, createSuite, saveTask, closeSuite, addSkill, savePolicy,
