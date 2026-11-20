@@ -10,6 +10,19 @@
 Dates are commit dates. `0.1.0` is not released yet — see "Unreleased" for
 what still stands between here and a first iteration.
 
+## H1, H2, F2 and G1 for any model - 2026-11-16 (no HARNESS_VERSION change: all four are off by default)
+
+- They were rejected because the 3B could not use them, which judges no other model. Each is now a per-backend
+  switch on every kit, to be measured on a capable model: `write_diff` (H1), `repeat_note` (H2), `compute_first` (F2),
+  `calc_tool` (G1).
+- F2 on the full kit waited for `run_command`, which only the small kit has: it held every numeric answer until its
+  cap, even after `run_code` computed it. It now lets `run_code` and `calc` count, and its note names `run_code` on a
+  kit without `run_command`.
+- H1's receipt quotes lines of the old file but was stamped trusted, as every `write_file` receipt is. It is untrusted
+  now, like the `read_file` output it repeats.
+- G1 `calc` evaluates numbers, parentheses and + - * / // % ** with `ast`, nothing else; a power over 1000 or over
+  100,000 bits is refused.
+
 ## Tool output sized to the window - 2026-11-16 (HARNESS_VERSION 24, the same bump)
 
 - Tool output was shown at 400 tokens on the full and patch kits but at 40% of the window on the small kit, so a
