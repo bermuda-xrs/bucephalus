@@ -233,11 +233,14 @@ Plan, in order:
    note (H2) did not move the 3B, so a nudge for the 8B is a new candidate, not a family.
    H1, H2, F2 and G1 are switches on every kit again (2026-11-16, the user: the harness is not sized to the 3B), off
    until measured on a capable model; that needs a cloud runner and the D26 credentials.
-3. The console's look is glass (the user's request 2026-11-17; it replaces "the basilica" of 2026-11-15): every
+3. The console's look is black glass (the user's requests 2026-11-17 and 2026-11-21; it replaces "the basilica" of
+   2026-11-15): black and white only, minimalist gothic (Perpetua Titling capitals, Sitka serif; the one colour left
+   is the integrity alarm), and the bare background is black (white in light). Every
    surface is a square, translucent pane over one background, a WebGL canvas under the page. Settings chooses a
    background image (PNG, JPEG or WebP, kept in the user data dir, `ui.background_image` in the config is the
-   fallback; `ui.background_opacity` is still unused). The background under the pointer refracts, glitches and blurs,
-   more with each click; it never touches the controls. The frieze, the ASCII rose and the title animation are gone.
+   fallback; `ui.background_opacity` is still unused). Under the pointer a lens glides after it: it refracts,
+   glitches and blurs the background, with a hairline rim and a ripple per click, more with each click; no colour;
+   it never touches the controls. The frieze, the ASCII rose and the title animation are gone.
    Text holds WCAG AA over any image because each pane tints and filters what is behind it; where the browser cannot
    filter a backdrop the panes are solid. Open with the user: Roman numerals on plan steps, the BVCEPHALVS wordmark
    and the braille spinner stay until they say. Nothing is loaded from outside; all motion stops under reduced
