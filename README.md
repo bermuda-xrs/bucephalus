@@ -174,7 +174,9 @@ and the lock protecting it is process-wide.
 ## The console
 
 `serve` prints a link to a web console on 127.0.0.1. The bearer token lives in your config folder, outside the
-project, and every route needs it except the one webhook route below.
+project, and every route needs it except the one webhook route below. Its panes are translucent glass over a
+background you can set in Settings (PNG, JPEG or WebP, kept on this computer); the background bends under the
+pointer, and holds still if your system asks for reduced motion.
 
 - **Work:** conversations whose follow-ups see the earlier exchanges (delete one for good from Sessions; the
   integrity record keeps only a note of the removal; Cut here on any exchange starts a branch that still sees

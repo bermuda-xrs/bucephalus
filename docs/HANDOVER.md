@@ -233,10 +233,15 @@ Plan, in order:
    note (H2) did not move the 3B, so a nudge for the 8B is a new candidate, not a family.
    H1, H2, F2 and G1 are switches on every kit again (2026-11-16, the user: the harness is not sized to the 3B), off
    until measured on a capable model; that needs a cloud runner and the D26 credentials.
-3. The console's look is now our own, "the basilica" (the user's request 2026-11-15): obsidian and marble with one
-   amethyst accent, Roman capitals from system faces, square corners with corner ticks, an ASCII rose window on the
-   empty conversation, a meander across the top that lights while work runs, Roman numerals on plan steps. Nothing
-   is loaded from outside; all motion stops under reduced motion (`tests/test_console_basilica.py`). The layout
+3. The console's look is glass (the user's request 2026-11-17; it replaces "the basilica" of 2026-11-15): every
+   surface is a square, translucent pane over one background, a WebGL canvas under the page. Settings chooses a
+   background image (PNG, JPEG or WebP, kept in the user data dir, `ui.background_image` in the config is the
+   fallback; `ui.background_opacity` is still unused). The background under the pointer refracts, glitches and blurs,
+   more with each click; it never touches the controls. The frieze, the ASCII rose and the title animation are gone.
+   Text holds WCAG AA over any image because each pane tints and filters what is behind it; where the browser cannot
+   filter a backdrop the panes are solid. Open with the user: Roman numerals on plan steps, the BVCEPHALVS wordmark
+   and the braille spinner stay until they say. Nothing is loaded from outside; all motion stops under reduced
+   motion and in a hidden tab (`tests/test_console_glass.py`). The layout
    underneath is still the one taken from the official Hermes Agent UI (NousResearch/hermes-agent, MIT; the user's
    choice 2026-11-07): restyled in our plain JS, no React, no build, no npm, their brand fonts and names not copied, the CSP
    unchanged. `tests/test_console_reskin_guards.py` holds every route, control, pane, view and slash command the

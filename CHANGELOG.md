@@ -10,6 +10,23 @@
 Dates are commit dates. `0.1.0` is not released yet — see "Unreleased" for
 what still stands between here and a first iteration.
 
+## Glass: the console's new look - 2026-11-17 (no HARNESS_VERSION change: console only)
+
+- Every surface is a square pane of translucent glass over one background. The basilica's character-drawn graphics
+  are gone: the meander across the top, the rose window and the page-title animation. Faces are system sans.
+- A background image: Settings, Appearance, "Choose a background image" (PNG, JPEG or WebP, up to 8 MB; no SVG).
+  It is kept in the user data dir, survives restarts, and "Remove the background image" deletes it. The type is
+  read from the file's first bytes, never from its name. `ui.background_image` in the config shows when none is
+  chosen. With no image there is a built-in background. Routes: `GET`, `PUT`, `DELETE /background`, token needed.
+- The background under the pointer refracts, glitches and blurs. Each click makes it stronger, up to eight levels,
+  and sends a ripple from the click; the strength fades over a few seconds. It is drawn on a canvas under the page,
+  so it never distorts a control or text. On touch it follows the finger and fades on release. It stops under
+  reduced motion and in a hidden tab, and it rests when the pointer does.
+- Text stays at WCAG AA over any image: a pane tints what is behind it and filters it darker (light: paler). Where
+  a browser cannot filter a backdrop, panes are solid. Two surfaces stay solid on purpose: the pinned request (text
+  scrolls under it) and the integrity alert (its red needs it). No WebGL: no image, the plain ground colour.
+- `tests/test_console_glass.py` replaces `tests/test_console_basilica.py`.
+
 ## Files as an explorer - 2026-11-16 (no HARNESS_VERSION change: console only)
 
 - The Files page is a code explorer: tasks, a folder tree that opens in place, tabs, and a viewer with line numbers

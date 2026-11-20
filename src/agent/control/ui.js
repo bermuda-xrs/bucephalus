@@ -66,6 +66,7 @@ async function applyTheme() {
 }
 function setTheme(mode) {
   document.documentElement.dataset.theme = mode;
+  BG.theme();
   try { localStorage.setItem("bucephalus-theme", mode); } catch { /* per-viewer only */ }
 }
 function toggleTheme() { setTheme(document.documentElement.dataset.theme === "light" ? "dark" : "light"); }
@@ -157,13 +158,11 @@ async function newConversation() {
 }
 function renderWelcome() {
   if ($("#items .welcome")) return;
-  $("#items").innerHTML = `<div class="welcome"><div class="rose" id="rose" aria-hidden="true"><pre
-    class="glass" id="roseGlass"></pre><pre class="stone" id="roseStone"></pre></div>
+  $("#items").innerHTML = `<div class="welcome">
     <h2>Plan once, walk away, get told.</h2>
     <p>Describe what you want done. It drafts a plan without touching anything; you settle its
     questions and sign it. Only then does it run, and it comes back to you when it needs a decision.</p>
     <p>A follow-up in the same conversation is a new task, with its own plan.</p></div>`;
-  roseStart();
 }
 async function selectConversation(id) {
   showPage(false);
@@ -1705,7 +1704,6 @@ async function openPane(name) {
   const body = $("#ccBody");
   body.innerHTML = `<p class="note"><span class="spin"></span> Loading</p>`;
   try { body.innerHTML = await PANES[name](); } catch (e) { body.innerHTML = `<p class="caveat">${esc(e.message)}</p>`; }
-  decode($("#ccBody > h3:first-child"));
   body.focus();
   if (name === "suites") loadSuites();
   if (name === "map") drawMap();
@@ -2101,7 +2099,15 @@ What to do, in the words a model reads.</textarea></label>
     const presets = (await api("/presets")).presets;
     return `<h3>Settings</h3><p class="lede">Read from the config this console was started with. Change them there;
       the console does not rewrite your config.</p>
-      <h4>Appearance</h4><button class="btn" data-action="toggleTheme">Switch to ${document.documentElement.dataset.theme === "light" ? "dark" : "light"}</button>
+      <h4>Appearance</h4><div class="row">
+        <button class="btn" data-action="toggleTheme">Switch to ${document.documentElement.dataset.theme === "light" ? "dark" : "light"}</button>
+        <label class="btn file-pick">Choose a background image<input class="sr" type="file" id="bgFile"
+          accept="image/png,image/jpeg,image/webp" data-change="setBackground"></label>
+        ${BG.source === "chosen" ? '<button class="btn" data-action="removeBackground">Remove the background image</button>' : ""}</div>
+      <p class="note">${BG.source === "chosen" ? "Showing the image you chose." : BG.source === "config"
+        ? "Showing the image named in your config (ui.background_image)." : "No image: showing the built-in background."}
+        PNG, JPEG or WebP, up to 8 MB. It is kept on this computer, beside your other Bucephalus data, and stays until
+        you remove it.</p>
       <h4>Notifications</h4><p class="note">A desktop notification when something needs you or a watched task finishes,
       only while this tab is in the background. ${"Notification" in window ? `Now: ${esc(Notification.permission)}.` : "Not available here."}</p>
       <button class="btn" data-action="enableNotifications">Turn on notifications</button>
@@ -2571,7 +2577,7 @@ $("#palette").addEventListener("click", e => { if (e.target === $("#palette")) c
 const ACTIONS = {ideDir, ideFile, ideTab, ideClose, ideNew, ideCopy, ideSave, ideSource, ideEdit, ideEditCancel, ideEditSave, ideUndo, branchConversation, mergeConversation, pickMerge, mergeThis, cancelMerge, checkBackup, savePreset, applyPreset, deletePreset, deleteConversation, newConversation, selectConversation, renameConversation, archiveConversation, 
   toggleArchived, openLooseList, openTaskAlone, openTaskOf, draft, showSendBack, sign, sendBack, decide,
   toggleFiles, toggleSide, openFile, openControl, closeControl, openPane, openPalette, focusSearch,
-  toggleTheme, acceptMemory, createSuite, saveTask, closeSuite, addSkill, savePolicy,
+  toggleTheme, removeBackground, acceptMemory, createSuite, saveTask, closeSuite, addSkill, savePolicy,
   openSuite, delSuite, delTask, checkGate, pinConversation, exportConversation, enableNotifications,
   runModel, stopTask, resumeTask, toggleTool, setView, closeTrace, traceTask, traceNode, closeTraceDetail, showRewind, showChanges, doRewind, askAgain, editAsk, copyAnswer, copyCode, forgetMemory, addSchedule, removeSchedule, viewSkill,
   patchConversation, exportOne, sessArchived, pickWorkspace, useModel, useReviewer, loadModel, unloadModel, anDays, readDoc,
@@ -2592,76 +2598,201 @@ document.addEventListener("change", e => {
   if (e.target.dataset.change === "critChanged") critChanged();
   if (e.target.dataset.change === "rewindStep" && S.rewind) S.rewind.step = Number(e.target.value);
   if (e.target.dataset.change === "longFiles") setLongFiles(e.target.value);
+  if (e.target.dataset.change === "setBackground") setBackground(e.target.files[0]);
   if (e.target.dataset.change === "sessSearch") { S.sessQ = e.target.value.trim(); openPane("sessions"); }
 });
 const roman = n => [[90, "XC"], [50, "L"], [40, "XL"], [10, "X"], [9, "IX"], [5, "V"], [4, "IV"], [1, "I"]]
   .reduce((s, [v, r]) => { while (n >= v) { s += r; n -= v; } return s; }, "");
-const ROSE = {w: 89, h: 45, ramp: " ..::;=+*", noise: "IVXLCDM01/<>+="};
-function roseFrame(t, built) {
-  const {w, h, ramp, noise} = ROSE, TAU = Math.PI * 2, glass = [], stone = [];
-  for (let j = 0; j < h; j++) {
-    let g = "", s = "";
-    for (let i = 0; i < w; i++) {
-      const x = (i - (w - 1) / 2) / ((w - 1) / 2), y = (j - (h - 1) / 2) / ((h - 1) / 2);
-      const r = Math.hypot(x, y), a = Math.atan2(y, x);
-      let gc = " ", sc = " ";
-      if (r <= 1 && (built >= 1 || r < built * 1.3 - Math.random() * .3)) {
-        const spoke = (n, off) => { const f = ((a / TAU * n + off) % 1 + 1) % 1; return Math.min(f, 1 - f) / n * TAU * r; };
-        const k = Math.floor(((a / TAU * 12) % 12 + 12) % 12), mid = (k + .5) / 12 * TAU;
-        const d = Math.hypot(x - .785 * Math.cos(mid), y - .785 * Math.sin(mid));
-        const dir = "-\\|/"[Math.round(((a % Math.PI) + Math.PI) % Math.PI / (Math.PI / 4)) % 4];
-        if (r > .955 || r < .085) sc = "#";
-        else if (Math.abs(r - .61) < .017 || Math.abs(r - .3) < .02) sc = "O";
-        else if (r > .61 && Math.abs(d - .125) < .017) sc = "O";
-        else if (r > .61 && d > .125 && spoke(12, 0) < .022) sc = dir;
-        else if (r > .3 && r < .61 && spoke(12, .5) < .02) sc = dir;
-        else if (r < .3 && spoke(6, 0) < .02) sc = dir;
-        else {
-          const v = r > .61 ? (d < .125 ? Math.sin(t * 1.3 + k * 2.1) : Math.sin(6 * a + 9 * r + t * .7))
-            : r > .3 ? Math.sin(-12 * a + 14 * r + t * .9) : Math.sin(3 * a + t * 1.6);
-          gc = ramp[Math.round((v * .5 + .5) * (ramp.length - 1))];
-        }
-      } else if (r <= 1 && Math.random() < .35) gc = noise[Math.floor(Math.random() * noise.length)];
-      g += gc; s += sc;
-    }
-    glass.push(g); stone.push(s);
+const FX = {max: 8, fade: 4, calm: .7};
+const fxNew = () => ({x: 0, y: 0, hx: 0, hy: 0, lvl: 0, energy: 0, on: 0, want: 0, age: 9});
+function fxMove(s, x, y) { s.x = x; s.y = y; s.want = 1; s.energy = 1; }
+function fxClick(s, x, y) { fxMove(s, x, y); s.hx = x; s.hy = y; s.age = 0; s.lvl = Math.min(FX.max, s.lvl + 1); }
+function fxStep(s, dt) {
+  s.lvl *= Math.exp(-dt / FX.fade);
+  s.energy = Math.max(s.energy * Math.exp(-dt / FX.calm), s.lvl / FX.max);
+  s.on += (s.want - s.on) * Math.min(1, dt * 8);
+  s.age += dt;
+  return s.energy > .001 || Math.abs(s.want - s.on) > .004 || s.age < 1.5;
+}
+const BG = (() => {
+  const cv = $("#bg"), still = matchMedia("(prefers-reduced-motion: reduce)"), s = fxNew();
+  const gl = cv.getContext("webgl", {alpha: false, antialias: false, powerPreference: "low-power"});
+  const me = {source: "", load: async () => "", theme() {}};
+  if (!gl) { cv.hidden = true; return me; }
+  const FS = `
+#ifdef GL_FRAGMENT_PRECISION_HIGH
+precision highp float;
+#else
+precision mediump float;
+#endif
+uniform sampler2D img;
+uniform vec2 res, ptr, hit, fit;
+uniform float t, on, lvl, energy, age, k;
+float hash(float n) { return fract(sin(n * 12.9898) * 43758.5453); }
+vec3 look(vec2 px) { return texture2D(img, (px / res - .5) * fit + .5).rgb; }
+void main() {
+  vec2 px = gl_FragCoord.xy, d = px - ptr, away = px - hit;
+  float R = (120. + 24. * lvl) * k, r = length(d) / R;
+  float lens = on * (1. - smoothstep(0., 1., r)), near = on * (1. - smoothstep(.3, 1.7, r));
+  float ring = exp(-pow((length(away) - age * 1100. * k) / (46. * k), 2.)) * exp(-age * 2.6) * (.5 + .2 * lvl);
+  if (near <= 0. && ring < .003) { gl_FragColor = vec4(look(px), 1.); return; }
+  px += normalize(away + .001) * ring * 26. * k;
+  float band = floor(px.y / ((5. + 22. * hash(floor(t * 7.))) * k));
+  float cut = step(1. - (.08 + .05 * lvl), hash(band + floor(t * 13.) * 7.31));
+  float slip = cut * (hash(band * 3.7 + floor(t * 13.)) - .5) * (30. + 34. * lvl) * k * energy * near;
+  float bend = .55 + .1 * lvl, split = (.05 + .035 * lvl) * (1. + energy);
+  float rr = clamp(r, .0001, 1.);
+  vec2 pr = ptr + d * mix(1., pow(rr, bend * (1. + split)), on * step(r, 1.)) + vec2(slip * 1.5, 0.);
+  vec2 pg = ptr + d * mix(1., pow(rr, bend), on * step(r, 1.)) + vec2(slip, 0.);
+  vec2 pb = ptr + d * mix(1., pow(rr, bend * (1. - split)), on * step(r, 1.)) + vec2(slip * .5, 0.);
+  float soft = lens * (1.5 + 1.3 * lvl) * k;
+  vec3 c = vec3(0.);
+  for (int i = 0; i < 6; i++) {
+    float a = float(i) * 1.0472 + r * 9.;
+    vec2 o = vec2(cos(a), sin(a)) * soft;
+    c += vec3(look(pr + o).r, look(pg + o).g, look(pb + o).b);
   }
-  return [glass.join("\n"), stone.join("\n")];
-}
-let roseTimer = 0;
-function roseStart() {
-  clearInterval(roseTimer);
-  const g = $("#roseGlass"), s = $("#roseStone");
-  if (!g) return;
-  const still = matchMedia("(prefers-reduced-motion: reduce)").matches, t0 = performance.now();
-  const draw = () => {
-    if (!g.isConnected) return clearInterval(roseTimer);
-    if (document.hidden || !g.offsetParent) return;
-    const t = (performance.now() - t0) / 1000;
-    [g.textContent, s.textContent] = roseFrame(still ? 4 : t, still ? 1 : t / 1.6);
-    $("#rose").style.lineHeight = g.getBoundingClientRect().width / ROSE.h + "px";
+  c /= 6.;
+  c += on * smoothstep(.86, 1., r) * (1. - smoothstep(1., 1.03, r)) * .1;
+  c += cut * energy * near * .012 * lvl;
+  gl_FragColor = vec4(c, 1.);
+}`;
+  const sh = (kind, src) => { const o = gl.createShader(kind); gl.shaderSource(o, src); gl.compileShader(o); return o; };
+  const prog = gl.createProgram();
+  gl.attachShader(prog, sh(gl.VERTEX_SHADER, "attribute vec2 p; void main() { gl_Position = vec4(p, 0., 1.); }"));
+  gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, FS));
+  gl.linkProgram(prog);
+  if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) { cv.hidden = true; return me; }
+  gl.useProgram(prog);
+  gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+  gl.enableVertexAttribArray(0); gl.bindAttribLocation(prog, 0, "p"); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+  const U = Object.fromEntries(["res", "ptr", "hit", "fit", "t", "on", "lvl", "energy", "age", "k"]
+    .map(n => [n, gl.getUniformLocation(prog, n)]));
+  gl.bindTexture(gl.TEXTURE_2D, gl.createTexture());
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 1);
+  for (const [k, v] of [[gl.TEXTURE_MIN_FILTER, gl.LINEAR], [gl.TEXTURE_MAG_FILTER, gl.LINEAR],
+                        [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]])
+    gl.texParameteri(gl.TEXTURE_2D, k, v);
+  const LIMIT = Math.min(2048, gl.getParameter(gl.MAX_TEXTURE_SIZE));
+  let raf = 0, last = 0, iw = 1, ih = 1, k = 1;
+
+  function draw(now) {
+    const w = cv.width, h = cv.height, as = w / h, ai = iw / ih, calm = still.matches;
+    gl.uniform2f(U.res, w, h);
+    gl.uniform2f(U.fit, as > ai ? 1 : as / ai, as > ai ? ai / as : 1);
+    gl.uniform2f(U.ptr, s.x * k, h - s.y * k);
+    gl.uniform2f(U.hit, s.hx * k, h - s.hy * k);
+    gl.uniform1f(U.t, ((now || 0) / 1000) % 64);
+    gl.uniform1f(U.on, calm ? 0 : s.on);
+    gl.uniform1f(U.lvl, s.lvl);
+    gl.uniform1f(U.energy, s.energy);
+    gl.uniform1f(U.age, calm ? 9 : s.age);
+    gl.uniform1f(U.k, k);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+  }
+  function tick(now) {
+    raf = 0;
+    const live = fxStep(s, last ? Math.min(.05, (now - last) / 1000) : .016);
+    last = now;
+    draw(now);
+    if (live && !document.hidden && !still.matches) raf = requestAnimationFrame(tick);
+    else last = 0;
+  }
+  function wake() { if (!raf && !document.hidden && !still.matches) raf = requestAnimationFrame(tick); }
+  function rest() { cancelAnimationFrame(raf); raf = 0; last = 0; }
+  function size() {
+    k = Math.min(devicePixelRatio || 1, 2);
+    cv.width = Math.max(1, Math.round(innerWidth * k)); cv.height = Math.max(1, Math.round(innerHeight * k));
+    gl.viewport(0, 0, cv.width, cv.height);
+    draw();
+  }
+  function use(src) {
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, src);
+    iw = src.width; ih = src.height;
+    draw();
+  }
+  function paint() {
+    const c = document.createElement("canvas"), g = c.getContext("2d"), css = getComputedStyle(document.documentElement);
+    const light = document.documentElement.dataset.theme === "light", W = c.width = 1600, H = c.height = 1000;
+    g.fillStyle = css.getPropertyValue("--ground").trim() || "#0A0810"; g.fillRect(0, 0, W, H);
+    const glow = [[.16, .22, .55, css.getPropertyValue("--accent").trim() || "#CDB4FF"], [.82, .18, .5, "#4C8DFF"],
+                  [.7, .86, .6, "#FF6FB5"], [.26, .88, .45, "#2FD6C0"], [.5, .5, .35, "#FFC46B"]];
+    g.globalAlpha = light ? .5 : .62;
+    for (const [x, y, r, col] of glow) {
+      const f = g.createRadialGradient(x * W, y * H, 0, x * W, y * H, r * W);
+      f.addColorStop(0, col); f.addColorStop(1, "rgba(0,0,0,0)");
+      g.fillStyle = f; g.fillRect(0, 0, W, H);
+    }
+    g.globalAlpha = light ? .22 : .16; g.strokeStyle = light ? "#15101C" : "#FFFFFF"; g.lineWidth = 1;
+    g.beginPath();
+    for (let x = -H; x < W; x += 44) { g.moveTo(x, 0); g.lineTo(x + H, H); }
+    g.stroke();
+    g.globalAlpha = light ? .3 : .22; g.lineWidth = 2;
+    for (let i = 0; i < 9; i++) {
+      const q = 90 + (i * 53) % 210;
+      g.strokeRect((i * 197 + 80) % (W - q), (i * 331 + 60) % (H - q), q, q);
+    }
+    return c;
+  }
+  me.load = async () => {
+    me.source = "";
+    try {
+      const r = TOKEN && await fetch("/background", {headers: {"Authorization": "Bearer " + TOKEN}});
+      if (r && r.ok) {
+        const bmp = await createImageBitmap(await r.blob()), f = Math.min(1, LIMIT / Math.max(bmp.width, bmp.height));
+        const c = document.createElement("canvas");
+        c.width = Math.max(1, Math.round(bmp.width * f)); c.height = Math.max(1, Math.round(bmp.height * f));
+        c.getContext("2d").drawImage(bmp, 0, 0, c.width, c.height);
+        bmp.close();
+        use(c);
+        me.source = r.headers.get("X-Background") || "chosen";
+        return me.source;
+      }
+    } catch { /* not an image this browser can read: the built-in one stands */ }
+    use(paint());
+    return "";
   };
-  draw();
-  if (!still) roseTimer = setInterval(draw, 80);
+  me.theme = () => { if (me.source) draw(); else use(paint()); };
+
+  addEventListener("resize", size);
+  addEventListener("pointermove", e => { fxMove(s, e.clientX, e.clientY); wake(); }, {passive: true});
+  addEventListener("pointerdown", e => { fxClick(s, e.clientX, e.clientY); wake(); }, {passive: true});
+  for (const n of ["pointerup", "pointercancel"])
+    addEventListener(n, e => { if (e.pointerType !== "mouse") { s.want = 0; wake(); } }, {passive: true});
+  document.documentElement.addEventListener("pointerleave", () => { s.want = 0; wake(); });
+  document.addEventListener("visibilitychange", () => { if (document.hidden) rest(); else { draw(); wake(); } });
+  still.addEventListener("change", () => { rest(); draw(); wake(); });
+  size(); use(paint());
+  return me;
+})();
+async function setBackground(file) {
+  if (!file) return;
+  if (file.size > 8 * 2 ** 20) return toast("That image is larger than 8 MB.", true);
+  try {
+    const url = await new Promise((ok, no) => {
+      const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = () => no(new Error("Could not read that file."));
+      r.readAsDataURL(file); });
+    await api("/background", {method: "PUT", body: JSON.stringify({content_b64: url.slice(url.indexOf(",") + 1)})});
+    if (await BG.load() !== "chosen") toast("Saved, but this browser could not draw that image.", true);
+    else toast("Background set.");
+    if (S.pane === "settings" && !$("#control").hidden) openPane("settings");
+  } catch (e) { toast(e.message, true); }
 }
-function decode(el) {
-  if (!el || el.children.length || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-  const text = el.textContent, t0 = performance.now(), G = ROSE.noise;
-  const id = setInterval(() => {
-    const k = (performance.now() - t0) / 16;
-    el.textContent = [...text].map((c, i) => i < k || c === " " ? c : G[Math.floor(Math.random() * G.length)]).join("");
-    if (k >= text.length) clearInterval(id);
-  }, 30);
+async function removeBackground() {
+  try {
+    await api("/background", {method: "DELETE"});
+    await BG.load(); toast("Background removed.");
+    if (S.pane === "settings" && !$("#control").hidden) openPane("settings");
+  } catch (e) { toast(e.message, true); }
 }
-$("#frieze").textContent = $("#frieze").dataset.t = "┌─┐└─┘".repeat(120);
-setInterval(() => $("#frieze").classList.toggle("live", S.streams.size + S.drafting.size > 0), 400);
 
 new MutationObserver(() => document.querySelectorAll("i[data-pct]").forEach(i => {
   i.style.width = i.dataset.pct + "%";
 })).observe(document.body, {childList: true, subtree: true});
 
 (async () => {
-  applyTheme(); renderWelcome();
+  applyTheme().then(() => BG.load()); renderWelcome();
   try { if (localStorage.getItem("bucephalus-side") === "closed") $("#app").classList.add("side-closed"); } catch { /* open */ }
   setView(VIEW);
   if (!TOKEN) {

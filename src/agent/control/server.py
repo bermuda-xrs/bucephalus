@@ -185,6 +185,10 @@ class Upload(BaseModel):
     content_b64: str
 
 
+class BackgroundIn(BaseModel):
+    content_b64: str
+
+
 class EditIn(BaseModel):
     path: str
     text: str
@@ -1154,6 +1158,37 @@ def create_app(ctx: AgentContext) -> FastAPI:
         pkg = Path(__file__).resolve().parents[1]
         t = load(pkg / "themes" / "default.toml", pkg)
         return {"colors": t["colors"], "banner": banner_text(t, pkg, glyphs=True)}
+
+    @app.get("/background")
+    def get_background():
+        from fastapi.responses import Response
+
+        from . import background
+
+        got = background.current(ctx)
+        if not got:
+            raise HTTPException(404, "no background image")
+        return Response(got[0], media_type=got[1], headers={"Cache-Control": "no-store", "X-Background": got[2]})
+
+    @app.put("/background")
+    def put_background(body: BackgroundIn) -> dict:
+        from . import background
+
+        try:
+            return background.save(body.content_b64)
+        except background.NotBase64 as e:
+            raise HTTPException(400, str(e)) from None
+        except background.TooLarge as e:
+            raise HTTPException(413, str(e)) from None
+        except background.NotAnImage as e:
+            raise HTTPException(415, str(e)) from None
+
+    @app.delete("/background")
+    def delete_background() -> dict:
+        from . import background
+
+        background.clear()
+        return {"removed": True}
 
     @app.get("/health")
     def health() -> dict:
