@@ -10,6 +10,20 @@
 Dates are commit dates. `0.1.0` is not released yet — see "Unreleased" for
 what still stands between here and a first iteration.
 
+## Black glass: the console in black and white - 2026-11-21 (no HARNESS_VERSION change: console only)
+
+- Black and white only. Every colour is gone from the console, the graph and the code view; the integrity alarm
+  keeps its red, the one colour, because a broken record must not look like anything else. An approval is told
+  apart by a heavier rule and bold type, not amber. The console no longer takes colours from the theme file (the
+  terminal still does).
+- Minimalist gothic: Perpetua Titling capitals for names and titles, Sitka serif for the rest, hairline rules,
+  letter-spaced small labels. System faces only (with fallbacks off Windows); nothing is loaded from outside.
+- With no image chosen, the background is bare black (white in light); the painted default is gone.
+- The effect under the pointer: a lens that glides after it (no jump), stretches a little along fast motion, and
+  shows a hairline rim, fine grain and a faint light, so it reads on bare black too. It refracts, blurs and slips
+  thin bands sideways; each click adds a level (up to eight) and sends its own ripple (up to four at once). No colour
+  is added. It draws one pixel per CSS pixel, a quarter of the work on a high-DPI screen.
+
 ## Glass: the console's new look - 2026-11-17 (no HARNESS_VERSION change: console only)
 
 - Every surface is a square pane of translucent glass over one background. The basilica's character-drawn graphics

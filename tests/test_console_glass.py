@@ -141,10 +141,26 @@ def test_the_effect_fades_and_the_loop_stops_when_nothing_happens():
 const s = fxNew(); fxMove(s, 5, 5); fxClick(s, 5, 5); fxClick(s, 5, 5);
 const live = fxStep(s, 0.016), mid = s.lvl;
 let n = 0; while (fxStep(s, 0.05) && n < 100000) n++;
-process.stdout.write(JSON.stringify({live, mid, end: s.lvl, energy: s.energy, n}));""")
+process.stdout.write(JSON.stringify({live, mid, end: s.lvl, energy: s.energy, n, rips: s.rips.length}));""")
     assert out["live"] is True and 1.5 < out["mid"] <= 2
     assert out["n"] < 100000, "the loop never rests"
-    assert out["end"] < 0.01 and out["energy"] < 0.01
+    assert out["end"] < 0.01 and out["energy"] < 0.01 and out["rips"] == 0
+
+
+def test_the_lens_glides_after_the_pointer_and_each_click_sends_a_ripple():
+    out = _fx("""
+const s = fxNew(); fxMove(s, 0, 0); fxStep(s, 0.016); fxMove(s, 100, 0); fxStep(s, 0.016); const x1 = s.sx;
+for (let i = 0; i < 9; i++) fxClick(s, 10 * i, 10);
+process.stdout.write(JSON.stringify({x1, rips: s.rips.length, max: FX.rips, last: s.rips[s.rips.length - 1]}));""")
+    assert 0 < out["x1"] < 100, "the lens jumps to the pointer"
+    assert out["rips"] == out["max"] and out["last"]["x"] == 80
+
+
+def test_the_effect_adds_no_colour_and_draws_at_most_one_pixel_per_css_pixel():
+    bg = UI[UI.index("const BG ="):]
+    fs = bg[bg.index("const FS = `"):bg.index("`;", bg.index("const FS = `"))]
+    assert not re.search(r"\)\.(r|g|b)\b", fs), "colour channels are sampled apart"
+    assert "k = Math.min(devicePixelRatio || 1, 1)" in bg
 
 
 def test_the_effect_is_under_the_page_and_stops_for_reduced_motion_and_hidden_tabs():
@@ -273,3 +289,36 @@ def test_settings_offers_choosing_and_removing_the_image():
     pane = pane[:pane.index("\n  },")]
     assert 'data-change="setBackground"' in pane and 'accept="image/png,image/jpeg,image/webp"' in pane
     assert 'data-action="removeBackground"' in pane
+
+
+# ---------------------------------------------------------------- black and white
+
+_COLOUR = re.compile(r"#([0-9A-Fa-f]{6}|[0-9A-Fa-f]{3})\b|rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)")
+
+
+def _tinted(text: str) -> list[str]:
+    out = []
+    for m in _COLOUR.finditer(text):
+        if m.group(1):
+            h = m.group(1) if len(m.group(1)) == 6 else "".join(c * 2 for c in m.group(1))
+            rgb = [int(h[i:i + 2], 16) for i in (0, 2, 4)]
+        else:
+            rgb = [int(v) for v in m.group(2, 3, 4)]
+        if len(set(rgb)) > 1:
+            out.append(m.group(0))
+    return out
+
+
+def test_the_console_is_black_and_white_except_the_integrity_alarm():
+    css = BARE.replace("--danger: #FF4B4B;", "").replace("--danger: #B0102A;", "")
+    assert not _tinted(css), _tinted(css)
+    assert not _tinted(UI + HTML), _tinted(UI + HTML)
+    assert "--theme-" not in BARE, "the theme file's colours would tint it"
+    assert not re.search(r"\b(green|amber|purple|violet|blue|orange)\b", UI, re.I), "a legend names a colour"
+
+
+def test_with_no_image_the_background_is_the_bare_ground():
+    t = _palettes()
+    assert t["dark"]["ground"].upper() == "#000000" and t["light"]["ground"].upper() == "#FFFFFF"
+    bg = UI[UI.index("const BG ="):]
+    assert "createRadialGradient" not in bg and "strokeRect" not in bg

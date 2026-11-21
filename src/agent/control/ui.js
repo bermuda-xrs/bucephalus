@@ -57,10 +57,6 @@ const TERMINAL = s => !["pending", "running", "paused"].includes(s);
 async function applyTheme() {
   try {
     const t = await api("/theme");
-    const map = {accent: "--theme-accent", success: "--theme-success", warning: "--theme-warning",
-                 background: "--theme-background"};
-    for (const [k, v] of Object.entries(t.colors || {}))
-      if (map[k] && /^#[0-9a-f]{3,8}$/i.test(v)) document.documentElement.style.setProperty(map[k], v);
     $("#banner").textContent = t.banner || "";
   } catch { /* the first-paint values stand */ }
 }
@@ -462,7 +458,7 @@ function approvalCard(g) {
     <h3>It wants to use <code>${esc(g.tool)}</code> and is waiting for you</h3>
     <p>${esc(g.reason)}</p><pre>${esc(g.preview)}</pre>
     <div class="row">
-      <button class="btn amber" data-action="decide" ${args(g.id, "approve", g.task_id)}>Allow this once</button>
+      <button class="btn hold" data-action="decide" ${args(g.id, "approve", g.task_id)}>Allow this once</button>
       <button class="btn" data-action="decide" ${args(g.id, "deny", g.task_id)}>Refuse</button>
     </div></section>`;
 }
@@ -949,12 +945,12 @@ const GRAPH_KEYS = `    <ul class="fg-keys">
       <li><span class="lg lg-step"></span>Large dot: a step, one model call</li>
       <li><span class="lg lg-tool"></span>Grey dot: a tool call that reads or runs</li>
       <li><span class="lg lg-edit"></span>Ring: a tool call that changes a file</li>
-      <li><span class="lg lg-check"></span>Green dot: a check by a verifier or the reviewer</li>
-      <li><span class="lg lg-hold"></span>Dashed amber ring: a hold, where the harness stopped or warned the model</li>
+      <li><span class="lg lg-check"></span>Hollow pale ring: a check by a verifier or the reviewer</li>
+      <li><span class="lg lg-hold"></span>Dashed ring: a hold, where the harness stopped or warned the model</li>
       <li><span class="lg lg-human"></span>Diamond: you, a message or an allow or refuse</li>
       <li><span class="lg lg-end"></span>Last large dot: how the task finished</li>
       <li><span class="lg lg-file"></span>Square: a file the task changed</li>
-      <li><span class="lg lg-bad"></span>Solid amber: it failed</li>
+      <li><span class="lg lg-bad"></span>Solid dot in full ink: it failed</li>
     </ul>`;
 const HELP_ICON = `<svg class="q" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false">
     <circle cx="8" cy="8" r="7"/><path d="M6 6.2a2 2 0 1 1 2.9 1.8c-.6.3-.9.7-.9 1.3v.5"/><circle class="dot" cx="8" cy="11.9" r=".7"/></svg>`;
@@ -1099,7 +1095,7 @@ const MAP_HELP = `<summary aria-label="How this map is laid out" title="How this
     <ul class="fg-keys">
       <li><span class="lg lg-root"></span>Diamond at the top: everything shown</li>
       <li><span class="lg lg-session"></span>Square: a conversation</li>
-      <li><span class="lg lg-task"></span>Dot on the rail: a task. Green done, amber failed or stopped, accent running, grey waiting</li>
+      <li><span class="lg lg-task"></span>Dot on the rail: a task. Full ink: failed, stopped or running; pale: done; grey: waiting</li>
     </ul>
     <h4>Inside a task</h4>
     ${GRAPH_KEYS}
@@ -2603,16 +2599,29 @@ document.addEventListener("change", e => {
 });
 const roman = n => [[90, "XC"], [50, "L"], [40, "XL"], [10, "X"], [9, "IX"], [5, "V"], [4, "IV"], [1, "I"]]
   .reduce((s, [v, r]) => { while (n >= v) { s += r; n -= v; } return s; }, "");
-const FX = {max: 8, fade: 4, calm: .7};
-const fxNew = () => ({x: 0, y: 0, hx: 0, hy: 0, lvl: 0, energy: 0, on: 0, want: 0, age: 9});
-function fxMove(s, x, y) { s.x = x; s.y = y; s.want = 1; s.energy = 1; }
-function fxClick(s, x, y) { fxMove(s, x, y); s.hx = x; s.hy = y; s.age = 0; s.lvl = Math.min(FX.max, s.lvl + 1); }
+const FX = {max: 8, fade: 4, calm: .7, rips: 4, ripLife: 1.8, glide: 11};
+const fxNew = () => ({x: 0, y: 0, sx: 0, sy: 0, vx: 0, vy: 0, lvl: 0, energy: 0, on: 0, want: 0, rips: []});
+function fxMove(s, x, y) {
+  if (s.want === 0 && s.on < .01) { s.sx = x; s.sy = y; }
+  s.x = x; s.y = y; s.want = 1; s.energy = 1;
+}
+function fxClick(s, x, y) {
+  fxMove(s, x, y);
+  s.lvl = Math.min(FX.max, s.lvl + 1);
+  s.rips.push({x, y, age: 0, lvl: s.lvl});
+  if (s.rips.length > FX.rips) s.rips.shift();
+}
 function fxStep(s, dt) {
+  const px = s.sx, py = s.sy, a = 1 - Math.exp(-dt * FX.glide), b = 1 - Math.exp(-dt * 10), h = Math.max(dt, 1e-3);
+  s.sx += (s.x - s.sx) * a; s.sy += (s.y - s.sy) * a;
+  s.vx += ((s.sx - px) / h - s.vx) * b; s.vy += ((s.sy - py) / h - s.vy) * b;
   s.lvl *= Math.exp(-dt / FX.fade);
   s.energy = Math.max(s.energy * Math.exp(-dt / FX.calm), s.lvl / FX.max);
-  s.on += (s.want - s.on) * Math.min(1, dt * 8);
-  s.age += dt;
-  return s.energy > .001 || Math.abs(s.want - s.on) > .004 || s.age < 1.5;
+  s.on += (s.want - s.on) * Math.min(1, dt * 6);
+  for (const r of s.rips) r.age += dt;
+  s.rips = s.rips.filter(r => r.age < FX.ripLife);
+  return s.energy > .001 || Math.abs(s.want - s.on) > .004 || s.rips.length > 0
+    || Math.hypot(s.x - s.sx, s.y - s.sy) > .1 || Math.hypot(s.vx, s.vy) > 1;
 }
 const BG = (() => {
   const cv = $("#bg"), still = matchMedia("(prefers-reduced-motion: reduce)"), s = fxNew();
@@ -2626,69 +2635,78 @@ precision highp float;
 precision mediump float;
 #endif
 uniform sampler2D img;
-uniform vec2 res, ptr, hit, fit;
-uniform float t, on, lvl, energy, age, k;
-float hash(float n) { return fract(sin(n * 12.9898) * 43758.5453); }
+uniform vec2 res, ptr, vel, fit;
+uniform vec4 rip[4];
+uniform float t, on, lvl, energy, k, ink;
+float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
 vec3 look(vec2 px) { return texture2D(img, (px / res - .5) * fit + .5).rgb; }
 void main() {
-  vec2 px = gl_FragCoord.xy, d = px - ptr, away = px - hit;
-  float R = (120. + 24. * lvl) * k, r = length(d) / R;
-  float lens = on * (1. - smoothstep(0., 1., r)), near = on * (1. - smoothstep(.3, 1.7, r));
-  float ring = exp(-pow((length(away) - age * 1100. * k) / (46. * k), 2.)) * exp(-age * 2.6) * (.5 + .2 * lvl);
-  if (near <= 0. && ring < .003) { gl_FragColor = vec4(look(px), 1.); return; }
-  px += normalize(away + .001) * ring * 26. * k;
-  float band = floor(px.y / ((5. + 22. * hash(floor(t * 7.))) * k));
-  float cut = step(1. - (.08 + .05 * lvl), hash(band + floor(t * 13.) * 7.31));
-  float slip = cut * (hash(band * 3.7 + floor(t * 13.)) - .5) * (30. + 34. * lvl) * k * energy * near;
-  float bend = .55 + .1 * lvl, split = (.05 + .035 * lvl) * (1. + energy);
-  float rr = clamp(r, .0001, 1.);
-  vec2 pr = ptr + d * mix(1., pow(rr, bend * (1. + split)), on * step(r, 1.)) + vec2(slip * 1.5, 0.);
-  vec2 pg = ptr + d * mix(1., pow(rr, bend), on * step(r, 1.)) + vec2(slip, 0.);
-  vec2 pb = ptr + d * mix(1., pow(rr, bend * (1. - split)), on * step(r, 1.)) + vec2(slip * .5, 0.);
-  float soft = lens * (1.5 + 1.3 * lvl) * k;
-  vec3 c = vec3(0.);
-  for (int i = 0; i < 6; i++) {
-    float a = float(i) * 1.0472 + r * 9.;
-    vec2 o = vec2(cos(a), sin(a)) * soft;
-    c += vec3(look(pr + o).r, look(pg + o).g, look(pb + o).b);
+  vec2 px = gl_FragCoord.xy, d = px - ptr;
+  float R = (130. + 22. * lvl) * k, sp = length(vel), st = clamp(sp / (2600. * k), 0., .45);
+  vec2 dir = sp > 1. ? vel / sp : vec2(1., 0.);
+  float r = length(d - dir * dot(d, dir) * st / (1. + st)) / R;
+  float lens = on * (1. - smoothstep(0., 1., r)), halo = on * exp(-r * r * 2.2);
+  float wave = 0.;
+  vec2 push = vec2(0.);
+  for (int i = 0; i < 4; i++) {
+    vec2 q = px - rip[i].xy;
+    float L = length(q), w = exp(-pow((L - rip[i].z * 900. * k) / (38. * k), 2.)) * exp(-rip[i].z * 2.4) * rip[i].w;
+    wave += w; push += q / max(L, 1.) * w;
   }
-  c /= 6.;
-  c += on * smoothstep(.86, 1., r) * (1. - smoothstep(1., 1.03, r)) * .1;
-  c += cut * energy * near * .012 * lvl;
-  gl_FragColor = vec4(c, 1.);
+  if (halo < .002 && wave < .002) { gl_FragColor = vec4(look(px), 1.); return; }
+  vec2 src = ptr + d * mix(1., pow(clamp(r, .0001, 1.), .5 + .06 * lvl), lens * step(r, 1.)) - push * 22. * k;
+  float row = floor(px.y / ((3. + 14. * hash(vec2(floor(t * 9.), 1.))) * k));
+  float cut = step(1. - (.04 + .035 * lvl) * energy, hash(vec2(row, floor(t * 14.))));
+  src.x += cut * halo * (hash(vec2(row, floor(t * 14.) + 3.)) - .5) * (24. + 30. * lvl) * k;
+  float soft = (1. + 1.4 * lvl) * k * (lens + .4 * wave), spin = hash(px) * 6.2832;
+  vec3 c = vec3(0.);
+  for (int i = 0; i < 8; i++) {
+    float a = float(i) * .7854 + spin;
+    c += look(src + vec2(cos(a), sin(a)) * soft * (.5 + .5 * fract(float(i) * .618)));
+  }
+  c /= 8.;
+  float rim = on * exp(-pow((r - 1.) * R / (1.2 * k), 2.));
+  float light = .04 * halo * (1. + .2 * lvl) + .14 * rim + .12 * wave + .05 * cut * halo;
+  float grain = (hash(px + fract(t) * 91.7) - .5) * (.05 + .015 * lvl) * halo;
+  gl_FragColor = vec4(clamp(c + ink * (light + grain), 0., 1.), 1.);
 }`;
   const sh = (kind, src) => { const o = gl.createShader(kind); gl.shaderSource(o, src); gl.compileShader(o); return o; };
   const prog = gl.createProgram();
   gl.attachShader(prog, sh(gl.VERTEX_SHADER, "attribute vec2 p; void main() { gl_Position = vec4(p, 0., 1.); }"));
   gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, FS));
+  gl.bindAttribLocation(prog, 0, "p");
   gl.linkProgram(prog);
   if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) { cv.hidden = true; return me; }
   gl.useProgram(prog);
   gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
   gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
-  gl.enableVertexAttribArray(0); gl.bindAttribLocation(prog, 0, "p"); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
-  const U = Object.fromEntries(["res", "ptr", "hit", "fit", "t", "on", "lvl", "energy", "age", "k"]
+  gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+  const U = Object.fromEntries(["res", "ptr", "vel", "fit", "rip", "t", "on", "lvl", "energy", "k", "ink"]
     .map(n => [n, gl.getUniformLocation(prog, n)]));
   gl.bindTexture(gl.TEXTURE_2D, gl.createTexture());
   gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 1);
   for (const [k, v] of [[gl.TEXTURE_MIN_FILTER, gl.LINEAR], [gl.TEXTURE_MAG_FILTER, gl.LINEAR],
                         [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]])
     gl.texParameteri(gl.TEXTURE_2D, k, v);
-  const LIMIT = Math.min(2048, gl.getParameter(gl.MAX_TEXTURE_SIZE));
+  const LIMIT = Math.min(2048, gl.getParameter(gl.MAX_TEXTURE_SIZE)), rips = new Float32Array(16);
   let raf = 0, last = 0, iw = 1, ih = 1, k = 1;
 
   function draw(now) {
     const w = cv.width, h = cv.height, as = w / h, ai = iw / ih, calm = still.matches;
+    rips.fill(0);
+    s.rips.forEach((r, i) => rips.set([r.x * k, h - r.y * k, calm ? 99 : r.age, .5 + .07 * r.lvl], i * 4));
+    for (let i = s.rips.length; i < 4; i++) rips[i * 4 + 2] = 99;
     gl.uniform2f(U.res, w, h);
     gl.uniform2f(U.fit, as > ai ? 1 : as / ai, as > ai ? ai / as : 1);
-    gl.uniform2f(U.ptr, s.x * k, h - s.y * k);
-    gl.uniform2f(U.hit, s.hx * k, h - s.hy * k);
+    gl.uniform2f(U.ptr, s.sx * k, h - s.sy * k);
+    gl.uniform2f(U.vel, s.vx * k, -s.vy * k);
+    gl.uniform4fv(U.rip, rips);
     gl.uniform1f(U.t, ((now || 0) / 1000) % 64);
     gl.uniform1f(U.on, calm ? 0 : s.on);
     gl.uniform1f(U.lvl, s.lvl);
     gl.uniform1f(U.energy, s.energy);
-    gl.uniform1f(U.age, calm ? 9 : s.age);
     gl.uniform1f(U.k, k);
+    gl.uniform1f(U.ink, document.documentElement.dataset.theme === "light" ? -1 : 1);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
   function tick(now) {
@@ -2702,7 +2720,7 @@ void main() {
   function wake() { if (!raf && !document.hidden && !still.matches) raf = requestAnimationFrame(tick); }
   function rest() { cancelAnimationFrame(raf); raf = 0; last = 0; }
   function size() {
-    k = Math.min(devicePixelRatio || 1, 2);
+    k = Math.min(devicePixelRatio || 1, 1);
     cv.width = Math.max(1, Math.round(innerWidth * k)); cv.height = Math.max(1, Math.round(innerHeight * k));
     gl.viewport(0, 0, cv.width, cv.height);
     draw();
@@ -2712,28 +2730,11 @@ void main() {
     iw = src.width; ih = src.height;
     draw();
   }
-  function paint() {
-    const c = document.createElement("canvas"), g = c.getContext("2d"), css = getComputedStyle(document.documentElement);
-    const light = document.documentElement.dataset.theme === "light", W = c.width = 1600, H = c.height = 1000;
-    g.fillStyle = css.getPropertyValue("--ground").trim() || "#0A0810"; g.fillRect(0, 0, W, H);
-    const glow = [[.16, .22, .55, css.getPropertyValue("--accent").trim() || "#CDB4FF"], [.82, .18, .5, "#4C8DFF"],
-                  [.7, .86, .6, "#FF6FB5"], [.26, .88, .45, "#2FD6C0"], [.5, .5, .35, "#FFC46B"]];
-    g.globalAlpha = light ? .5 : .62;
-    for (const [x, y, r, col] of glow) {
-      const f = g.createRadialGradient(x * W, y * H, 0, x * W, y * H, r * W);
-      f.addColorStop(0, col); f.addColorStop(1, "rgba(0,0,0,0)");
-      g.fillStyle = f; g.fillRect(0, 0, W, H);
-    }
-    g.globalAlpha = light ? .22 : .16; g.strokeStyle = light ? "#15101C" : "#FFFFFF"; g.lineWidth = 1;
-    g.beginPath();
-    for (let x = -H; x < W; x += 44) { g.moveTo(x, 0); g.lineTo(x + H, H); }
-    g.stroke();
-    g.globalAlpha = light ? .3 : .22; g.lineWidth = 2;
-    for (let i = 0; i < 9; i++) {
-      const q = 90 + (i * 53) % 210;
-      g.strokeRect((i * 197 + 80) % (W - q), (i * 331 + 60) % (H - q), q, q);
-    }
-    return c;
+  function bare() {
+    const v = document.documentElement.dataset.theme === "light" ? 255 : 0;
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, 1, 1, 0, gl.RGB, gl.UNSIGNED_BYTE, new Uint8Array([v, v, v]));
+    iw = ih = 1;
+    draw();
   }
   me.load = async () => {
     me.source = "";
@@ -2749,11 +2750,11 @@ void main() {
         me.source = r.headers.get("X-Background") || "chosen";
         return me.source;
       }
-    } catch { /* not an image this browser can read: the built-in one stands */ }
-    use(paint());
+    } catch { /* not an image this browser can read: the bare ground stands */ }
+    bare();
     return "";
   };
-  me.theme = () => { if (me.source) draw(); else use(paint()); };
+  me.theme = () => { if (me.source) draw(); else bare(); };
 
   addEventListener("resize", size);
   addEventListener("pointermove", e => { fxMove(s, e.clientX, e.clientY); wake(); }, {passive: true});
@@ -2763,7 +2764,8 @@ void main() {
   document.documentElement.addEventListener("pointerleave", () => { s.want = 0; wake(); });
   document.addEventListener("visibilitychange", () => { if (document.hidden) rest(); else { draw(); wake(); } });
   still.addEventListener("change", () => { rest(); draw(); wake(); });
-  size(); use(paint());
+  gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+  size(); bare();
   return me;
 })();
 async function setBackground(file) {
