@@ -55,6 +55,38 @@ def test_the_run_list_carries_what_the_rail_shows(ctx, api):
     assert (other["conversation_id"], other["pending"], other["spent_usd"]) == (None, 0, 0.0)
 
 
+def test_measurement_runs_stay_out_of_the_rail(ctx, api):
+    mine = api.post("/tasks", json={"goal": "count the files", "artifact_scope": ["work"]}).json()["task_id"]
+    bench = api.post("/tasks", json={"goal": "suite task", "artifact_scope": ["work"]}).json()["task_id"]
+    legacy = api.post("/tasks", json={"goal": "old suite task [arm:B]", "artifact_scope": ["work"]}).json()["task_id"]
+    ctx.conn.execute("UPDATE tasks SET origin='bench' WHERE id=?", (bench,))
+    ctx.conn.commit()
+    ids = {r["task_id"] for r in api.get("/tasks?bench=false").json()["tasks"]}
+    assert mine in ids and bench not in ids and legacy not in ids
+    assert {mine, bench, legacy} <= {r["task_id"] for r in api.get("/tasks").json()["tasks"]}, "Files still lists them"
+    assert "bench=false" in _fn("loadSide")
+
+
+def test_search_and_archive_reach_past_the_newest_runs(ctx, api):
+    c = api.post("/conversations", json={}).json()
+    old = api.post(f"/conversations/{c['id']}/messages", json={"text": "rename the fixtures"}).json()["task_id"]
+    api.patch(f"/conversations/{c['id']}", json={"archived": True, "title": "Fixture work"})
+    for i in range(5):
+        api.post("/tasks", json={"goal": f"filler {i}", "artifact_scope": ["work"]})
+    get = lambda q: [r["task_id"] for r in api.get("/tasks?limit=3" + q).json()["tasks"]]  # noqa: E731
+    assert old not in get("")
+    assert get("&q=fixtures") == [old] and get("&q=fixture%20work") == [old]
+    assert get("&archived=true") == [old] and old not in get("&archived=false&q=fixtures")
+
+
+def test_the_rail_survives_what_it_cannot_name_and_a_lost_connection():
+    side = _fn("loadSide")
+    assert '|| "A delegated task"' in side
+    assert '$("#health").hidden = true' in side
+    assert "&archived=${S.archived}" in side and "&q=${encodeURIComponent(" in side
+    assert "!t.conversation_id" in _fn("openLooseList")
+
+
 def test_the_queue_has_a_decision_tier_and_a_review_tier():
     out = _node("""
       const tasks = [
@@ -63,7 +95,8 @@ def test_the_queue_has_a_decision_tier_and_a_review_tier():
         {task_id: "d", status: "done", plan_status: "approved", updated_at: 50},
         {task_id: "f", status: "failed", plan_status: "approved", updated_at: 50},
         {task_id: "old", status: "done", plan_status: "approved", updated_at: 5},
-        {task_id: "seen", status: "done", plan_status: "approved", updated_at: 50}];
+        {task_id: "seen", status: "done", plan_status: "approved", updated_at: 50},
+        {task_id: "shelved", status: "done", plan_status: "approved", updated_at: 50, archived: true}];
       const gates = [{id: "g1", task_id: "r", tool: "run_command"}];
       const t = tiers(tasks, gates, {since: 10, ids: new Set(["seen"])});
       process.stdout.write(JSON.stringify({decide: t.decide.map(x => x.kind + ":" + x.task_id),
@@ -74,9 +107,10 @@ def test_the_queue_has_a_decision_tier_and_a_review_tier():
 def test_runs_are_grouped_by_status():
     out = _node("""
       const tasks = ["running", "paused", "pending", "done", "done_unannounced", "failed", "budget_exhausted",
-                     "rejected"].map((s, i) => ({task_id: "t" + i, status: s}));
+                     "rejected", "done"].map((s, i) => ({task_id: "t" + i, status: s, pinned: i === 8}));
       process.stdout.write(JSON.stringify(runGroups(tasks).map(([g, xs]) => [g, xs.map(x => x.task_id)])));""")
-    assert out == [["Live", ["t0", "t1", "t2"]], ["Done", ["t3", "t4"]], ["Stopped", ["t5", "t6", "t7"]]]
+    assert out == [["Live", ["t0", "t1", "t2"]], ["Done", ["t8", "t3", "t4"]], ["Stopped", ["t5", "t6", "t7"]]]
+    assert "function dayGroup(" not in UI
 
 
 def test_an_approval_says_whether_the_signed_plan_expected_it():
@@ -110,6 +144,7 @@ def test_while_the_record_does_not_verify_nothing_can_be_signed_or_allowed():
 def test_only_decisions_notify_and_only_after_a_hold():
     notify_needs = _fn("notifyNeeds")
     assert "HOLD_MS" in notify_needs and "setTimeout(" in notify_needs
+    assert "await loadSide()" in notify_needs, "the recheck must read fresh state, not the last poll's"
     assert re.search(r"const HOLD_MS = 5000;", UI)
     assert 'notify("A task finished"' not in UI
 
@@ -145,6 +180,11 @@ def test_quiet_when_normal():
 def test_the_run_page_folds_the_other_runs_of_its_conversation():
     items = _fn("renderItems")
     assert "S.run" in items and 'class="earlier"' in items and "markSeen(" in items
+    assert "waiting(x)" in items, "a run that needs you is never folded away"
+    out = _node("""process.stdout.write(JSON.stringify([waiting({approvals: [{}], status: "paused"}),
+      waiting({approvals: [], status: "pending", plan: {status: "drafted"}}),
+      waiting({approvals: [], status: "done", plan: {status: "approved"}})]));""")
+    assert out == [True, True, False]
     assert "S.run = taskId" in _fn("openTaskOf")
     side = _fn("loadSide")
     assert 'api("/tasks' in side and "tiers(" in side and "runGroups(" in side

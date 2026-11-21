@@ -10,6 +10,19 @@
 Dates are commit dates. `0.1.0` is not released yet — see "Unreleased" for
 what still stands between here and a first iteration.
 
+## Inbox and run, fixes from a bug sweep - 2026-11-22 (no HARNESS_VERSION change: console only)
+
+- Measurement runs (`origin='bench'`, or an `[arm:` goal) stay out of the rail and To review; `GET /tasks?bench=false`
+  leaves them out, and the Files page still lists them.
+- Search and Show archived ask the server again (`GET /tasks` takes `q` and `archived`), so they reach past the newest
+  200 runs.
+- A run that needs you (an approval, or a plan to sign) is never folded away under a later run in its conversation.
+- The notification hold now rereads what is waiting before it notifies; before, it read the last poll, which ran less
+  often than the hold.
+- To review leaves out archived conversations; pinned runs come first in each group; an approval from a delegated
+  sub-task gets a label instead of a blank row; the health line hides again when the connection comes back; "Tasks
+  started elsewhere" lists only runs that have no conversation.
+
 ## Inbox and run: the console's new structure - 2026-11-22 (no HARNESS_VERSION change: console only)
 
 - What needs you is the spine. The rail holds Needs you (plans to sign and parked approvals) and, under it, To review

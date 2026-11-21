@@ -474,7 +474,10 @@ def create_app(ctx: AgentContext) -> FastAPI:
         return {"decisions": review_decisions(ctx.conn, task_id)}
 
     @app.get("/tasks")
-    def list_tasks(limit: int = 60) -> dict:
+    def list_tasks(limit: int = 60, q: str = "", archived: bool | None = None, bench: bool = True) -> dict:
+        from ..security.origin import BENCH
+
+        like = f"%{q.strip()}%"
         rows = ctx.conn.execute(
             """SELECT t.id, t.contract_json, t.status, t.created_at,
                       (SELECT p.status FROM plans p WHERE p.task_id = t.id
@@ -483,8 +486,11 @@ def create_app(ctx: AgentContext) -> FastAPI:
                       (SELECT COUNT(*) FROM approvals a WHERE a.task_id = t.id AND a.status = 'pending')
                FROM tasks t LEFT JOIN conversation_tasks x ON x.task_id = t.id
                             LEFT JOIN conversations c ON c.id = x.conversation_id
-              WHERE t.parent_id IS NULL
-              ORDER BY t.created_at DESC, t.rowid DESC LIMIT ?""", (max(1, min(limit, 500)),)
+              WHERE t.parent_id IS NULL AND (? OR (t.origin != ? AND t.contract_json NOT LIKE '%[arm:%'))
+                AND (? IS NULL OR COALESCE(c.archived, 0) = ?)
+                AND (? = '' OR t.contract_json LIKE ? OR c.title LIKE ?)
+              ORDER BY t.created_at DESC, t.rowid DESC LIMIT ?""",
+            (bench, BENCH, archived, archived, q.strip(), like, like, max(1, min(limit, 500)))
         ).fetchall()
         return {"tasks": [{"task_id": r[0], "goal": json.loads(r[1]).get("goal", ""),
                            "status": r[2], "created_at": r[3], "plan_status": r[4], "updated_at": r[5],
