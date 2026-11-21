@@ -478,12 +478,18 @@ def create_app(ctx: AgentContext) -> FastAPI:
         rows = ctx.conn.execute(
             """SELECT t.id, t.contract_json, t.status, t.created_at,
                       (SELECT p.status FROM plans p WHERE p.task_id = t.id
-                       ORDER BY p.created_at DESC, p.rowid DESC LIMIT 1)
-               FROM tasks t WHERE t.parent_id IS NULL
-               ORDER BY t.created_at DESC, t.rowid DESC LIMIT ?""", (max(1, min(limit, 500)),)
+                       ORDER BY p.created_at DESC, p.rowid DESC LIMIT 1),
+                      t.updated_at, t.budget_json, x.conversation_id, c.title, c.archived, c.pinned,
+                      (SELECT COUNT(*) FROM approvals a WHERE a.task_id = t.id AND a.status = 'pending')
+               FROM tasks t LEFT JOIN conversation_tasks x ON x.task_id = t.id
+                            LEFT JOIN conversations c ON c.id = x.conversation_id
+              WHERE t.parent_id IS NULL
+              ORDER BY t.created_at DESC, t.rowid DESC LIMIT ?""", (max(1, min(limit, 500)),)
         ).fetchall()
         return {"tasks": [{"task_id": r[0], "goal": json.loads(r[1]).get("goal", ""),
-                           "status": r[2], "created_at": r[3], "plan_status": r[4]}
+                           "status": r[2], "created_at": r[3], "plan_status": r[4], "updated_at": r[5],
+                           "spent_usd": json.loads(r[6]).get("spent_usd", 0.0), "conversation_id": r[7],
+                           "conversation": r[8], "archived": bool(r[9]), "pinned": bool(r[10]), "pending": r[11]}
                           for r in rows]}
 
     @app.get("/tasks/{task_id}/plan")

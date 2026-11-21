@@ -10,6 +10,26 @@
 Dates are commit dates. `0.1.0` is not released yet — see "Unreleased" for
 what still stands between here and a first iteration.
 
+## Inbox and run: the console's new structure - 2026-11-22 (no HARNESS_VERSION change: console only)
+
+- What needs you is the spine. The rail holds Needs you (plans to sign and parked approvals) and, under it, To review
+  (runs that ended since you last opened them; "seen" is kept in this browser). Below that, every run, grouped Live,
+  Done and Stopped, including those started by schedules, channels and the CLI, each with its conversation as a label.
+- A run is the page. Opening one shows it in full; the other runs of its conversation fold above it, still there.
+- At most three columns: rail, run, and an inspector that holds the trace or the files, one at a time, only when asked
+  for. The 22-button page rail is gone: its pages sit in three menus at the foot of the rail (Workspace, Settings,
+  System) and in the palette. Graph, Sessions and the Normal / Thinking / Verbose / Graph switch stay.
+- Approvals show what will happen first and the gate's reason after, and say whether the signed plan expected the stop
+  (matched by tool: approvals carry the loop step, not the plan step). Allow is never preselected. If a step that uses
+  the tool can't be undone, Allow waits until you type the tool's name. While the record does not verify, Sign and
+  Allow are disabled; Refuse still works.
+- Quiet when all is well: the health line shows only when something is wrong, the context ring from 60% of the
+  ceiling, and run settings (model, profile, workspace, budget) sit behind one disclosure. A desktop notification
+  comes only for something to sign or decide, five seconds after it appears and only if it is still waiting; a
+  finished run no longer notifies.
+- `GET /tasks` also returns each run's conversation, its title, archived and pinned, money spent, pending approvals
+  and `updated_at`.
+
 ## Black glass: the console in black and white - 2026-11-21 (no HARNESS_VERSION change: console only)
 
 - Black and white only. Every colour is gone from the console, the graph and the code view; the integrity alarm

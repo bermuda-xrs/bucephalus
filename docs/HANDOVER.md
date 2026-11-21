@@ -244,7 +244,13 @@ Plan, in order:
    Text holds WCAG AA over any image because each pane tints and filters what is behind it; where the browser cannot
    filter a backdrop the panes are solid. Open with the user: Roman numerals on plan steps, the BVCEPHALVS wordmark
    and the braille spinner stay until they say. Nothing is loaded from outside; all motion stops under reduced
-   motion and in a hidden tab (`tests/test_console_glass.py`). The layout
+   motion and in a hidden tab (`tests/test_console_glass.py`). Since 2026-11-22 the structure is "inbox and run"
+   (the user's request; research doc on claude.ai, candidate A): a rail with Needs you, To review and every run by
+   status; a run page with the conversation's other runs folded; one inspector for trace or files; pages in three
+   rail menus; approval cards effect first, plan-expected or not (by tool), type-to-allow on irreversible steps, all
+   blocked while the record does not verify (`tests/test_console_inbox.py`). Not done, the user to decide: grants for
+   a run or an hour and gate rules from approvals (advised against: they weaken the one-shot approval), naming the
+   untrusted argument on an approval (advised for; a schema change and a bump), server-side snooze. The layout
    underneath is still the one taken from the official Hermes Agent UI (NousResearch/hermes-agent, MIT; the user's
    choice 2026-11-07): restyled in our plain JS, no React, no build, no npm, their brand fonts and names not copied, the CSP
    unchanged. `tests/test_console_reskin_guards.py` holds every route, control, pane, view and slash command the

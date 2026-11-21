@@ -176,7 +176,10 @@ and the lock protecting it is process-wide.
 `serve` prints a link to a web console on 127.0.0.1. The bearer token lives in your config folder, outside the
 project, and every route needs it except the one webhook route below. It is black and white: panes of smoked glass over a
 bare black background, or one you set in Settings (PNG, JPEG or WebP, kept on this computer); the background bends under the
-pointer, and holds still if your system asks for reduced motion.
+pointer, and holds still if your system asks for reduced motion. The rail on the left puts what needs you first (plans
+to sign, approvals, then runs you haven't looked at since they ended), then every run by status; a run opens as a
+page, and the trace or the files open beside it when you ask. The other pages are in three menus at the foot of the
+rail and in the palette (Ctrl+K).
 
 - **Work:** conversations whose follow-ups see the earlier exchanges (delete one for good from Sessions; the
   integrity record keeps only a note of the removal; Cut here on any exchange starts a branch that still sees
