@@ -19,7 +19,8 @@ window.addEventListener("hashchange", () => {
 let RETURN_FOCUS = null;           // where focus goes back when a dialog closes
 const S = {conv: null, thread: null, loose: null, archived: false, streams: new Map(), trails: new Map(),
            drafting: new Set(), answers: new Map(), filesTask: null, filesPath: "", pane: "memory",
-           lastSide: "", rewind: null, changes: null, callsLoaded: new Set(), traceTask: null, trace: null, traceSel: null};
+           lastSide: "", rewind: null, changes: null, callsLoaded: new Set(), traceTask: null, trace: null, traceSel: null,
+           run: null, focus: null, unsafe: false, typed: new Map()};
 
 function toast(msg, bad) {
   const t = $("#toast"); t.textContent = msg; t.className = "show" + (bad ? " bad" : "");
@@ -54,6 +55,29 @@ function statusWord(s) {
 }
 const TERMINAL = s => !["pending", "running", "paused"].includes(s);
 
+// ------------------------------------------------------------ what needs you, and every run
+function tiers(tasks, gates, seen) {
+  const decide = gates.map(g => ({kind: "approval", task_id: g.task_id, id: g.id, tool: g.tool}))
+    .concat(tasks.filter(t => t.status === "pending" && t.plan_status === "drafted")
+      .map(t => ({kind: "plan", task_id: t.task_id})));
+  const review = tasks.filter(t => TERMINAL(t.status) && t.updated_at > seen.since && !seen.ids.has(t.task_id));
+  return {decide, review};
+}
+function runGroups(tasks) {
+  return [["Live", tasks.filter(t => !TERMINAL(t.status))],
+          ["Done", tasks.filter(t => t.status.startsWith("done"))],
+          ["Stopped", tasks.filter(t => TERMINAL(t.status) && !t.status.startsWith("done"))]].filter(([, xs]) => xs.length);
+}
+function expectedStop(plan, tool) {
+  if (!plan) return 0;
+  const want = new Set((plan.human_approvals_expected || []).map(String));
+  return (plan.steps || []).findIndex(s => want.has(String(s.id)) && (s.tools || []).includes(tool)) + 1;
+}
+function mustType(plan, tool) {
+  return !!plan && (plan.steps || []).some(s => s.reversible === false && (s.tools || []).includes(tool));
+}
+
+
 async function applyTheme() {
   try {
     const t = await api("/theme");
@@ -72,6 +96,9 @@ async function loadAlerts() {
   try {
     const a = await api("/alerts");
     const crit = (a.integrity || []).filter(f => f.severity === "critical");
+    const was = S.unsafe;
+    S.unsafe = crit.length > 0;
+    if (was !== S.unsafe) afterChange();
     const box = $("#integrity");
     box.hidden = !crit.length;
     box.innerHTML = crit.length ? `<strong>The record does not verify.</strong>
@@ -83,36 +110,34 @@ async function loadAlerts() {
 }
 
 async function loadSide() {
-  let convs = [], gates = [];
+  let tasks = [], gates = [];
   try {
-    [convs, gates] = await Promise.all([
-      api(`/conversations?archived=${S.archived}&q=${encodeURIComponent($("#convSearch").value)}`)
-        .then(d => d.conversations),
-      api("/approvals").then(d => d.pending)]);
-  } catch (e) { $("#health").textContent = "Can't reach the control plane"; return; }
-  const sig = JSON.stringify([convs, gates, S.conv]);
+    [tasks, gates] = await Promise.all([api("/tasks?limit=200").then(d => d.tasks), api("/approvals").then(d => d.pending)]);
+  } catch (e) { $("#health").hidden = false; $("#health").textContent = "Can't reach the control plane"; return; }
+  const q = $("#convSearch").value.trim().toLowerCase();
+  const sig = JSON.stringify([tasks, gates, S.focus, S.archived, q, SEEN_RUNS.ids.size]);
   if (sig === S.lastSide) return;
   S.lastSide = sig;
-  notifyNeeds(gates, convs);
-  const needs = [];
-  for (const g of gates) needs.push(`<button class="side-item needs-item" data-action="openTaskOf" ${args(g.task_id)}>
-      <span class="t">Wants to use <code>${esc(g.tool)}</code></span><span class="s">Parked for your decision</span></button>`);
-  for (const c of convs.filter(c => c.needs_you)) needs.push(`<button class="side-item needs-item" data-action="selectConversation" ${args(c.id)}>
-      <span class="t">${esc(c.title)}</span><span class="s">${c.needs_you} to sign or decide</span></button>`);
-  $("#needsList").innerHTML = needs.join("") || `<div class="empty">Nothing is waiting on you.</div>`;
-  $("#nNeeds").textContent = needs.length || "";
-  document.title = (needs.length ? `(${needs.length}) ` : "") + "Bucephalus";
-  const item = c => `<button class="side-item" data-action="selectConversation" ${args(c.id)}
-      ${c.id === S.conv ? 'aria-current="true"' : ""}><span class="t">${c.pinned ? '<span class="pin" aria-label="Pinned">●</span> ' : ""}${esc(c.title)}</span>
-      <span class="s">${c.branch_of ? "branch, " : ""}${c.n_tasks} ${c.n_tasks === 1 ? "task" : "tasks"}, ${ago(c.updated_at)}</span></button>`;
-  const groups = [];
-  for (const c of convs) {
-    const g = c.pinned ? "Pinned" : dayGroup(c.updated_at);
-    if (!groups.length || groups[groups.length - 1][0] !== g) groups.push([g, []]);
-    groups[groups.length - 1][1].push(item(c));
-  }
-  $("#convList").innerHTML = (groups.map(([g, xs]) => `<h3 class="group">${g}</h3>${xs.join("")}`).join("")
-    || `<div class="empty">${S.archived ? "Nothing archived." : "No conversations yet."}</div>`)
+  const t = tiers(tasks, gates, SEEN_RUNS);
+  notifyNeeds(new Set(t.decide.map(x => x.kind + ":" + x.task_id + ":" + (x.id || ""))));
+  const goal = id => (tasks.find(x => x.task_id === id) || {}).goal || "";
+  const decide = t.decide.map(x => `<button class="side-item needs-item" data-action="openTaskOf" ${args(x.task_id)}>
+      <span class="t">${esc(firstLine(goal(x.task_id)))}</span>
+      <span class="s">${x.kind === "plan" ? "A plan to sign" : `Wants to use <code>${esc(x.tool)}</code>`}</span></button>`);
+  const review = t.review.map(x => `<button class="side-item" data-action="openTaskOf" ${args(x.task_id)}>
+      <span class="t">${esc(firstLine(x.goal))}</span><span class="s">${esc(statusWord(x.status))}, not opened yet</span></button>`);
+  $("#needsList").innerHTML = (decide.join("") || `<div class="empty">Nothing is waiting on you.</div>`)
+    + (review.length ? `<h3 class="group">To review</h3>${review.join("")}` : "");
+  $("#nNeeds").textContent = decide.length || "";
+  document.title = (decide.length ? `(${decide.length}) ` : "") + "Bucephalus";
+  const shown = tasks.filter(x => (S.archived ? x.archived : !x.archived)
+    && (!q || `${x.goal} ${x.conversation || ""}`.toLowerCase().includes(q)));
+  const item = x => `<button class="side-item" data-action="openTaskOf" ${args(x.task_id)}
+      ${x.task_id === S.focus ? 'aria-current="true"' : ""}><span class="t">${x.pinned ? '<span class="pin" aria-label="Pinned">●</span> ' : ""}${esc(firstLine(x.goal))}</span>
+      <span class="s">${esc(statusWord(x.status))}${x.spent_usd ? `, $${x.spent_usd.toFixed(2)}` : ""}, ${ago(x.updated_at)}</span>
+      ${x.conversation && x.conversation !== firstLine(x.goal) ? `<span class="s">in ${esc(x.conversation)}</span>` : ""}</button>`;
+  $("#convList").innerHTML = (runGroups(shown).map(([g, xs]) => `<h3 class="group">${g}</h3>${xs.map(item).join("")}`).join("")
+    || `<div class="empty">${S.archived ? "Nothing archived." : q ? "No run matches." : "No runs yet."}</div>`)
     + `<button class="side-item" data-action="openLooseList"><span class="s">Tasks started elsewhere</span></button>`;
   $("#archToggle").textContent = S.archived ? "Show active" : "Show archived";
 }
@@ -121,12 +146,30 @@ function dayGroup(t) {
   const days = Math.round((new Date(now.toDateString()) - new Date(d.toDateString())) / 86400000);
   return days <= 0 ? "Today" : days === 1 ? "Yesterday" : days < 7 ? "This week" : "Earlier";
 }
-const SEEN = {needs: null, done: new Set()};
-function notifyNeeds(gates, convs) {
-  const keys = new Set([...gates.map(g => "g" + g.id), ...convs.filter(c => c.needs_you).map(c => "c" + c.id + ":" + c.needs_you)]);
+const SEEN = {needs: null};
+const HOLD_MS = 5000;
+function notifyNeeds(keys) {
   const fresh = SEEN.needs ? [...keys].filter(k => !SEEN.needs.has(k)) : [];
   SEEN.needs = keys;
-  if (fresh.length) notify("Something needs you", `${fresh.length} new: a plan to sign or a decision to make.`);
+  if (fresh.length) setTimeout(() => {
+    const still = fresh.filter(k => SEEN.needs.has(k));
+    if (still.length) notify("Something needs you", `${still.length} new: a plan to sign or a decision to make.`);
+  }, HOLD_MS);
+}
+const SEEN_RUNS = (() => {
+  try {
+    const v = JSON.parse(localStorage.getItem("bucephalus-seen") || "null");
+    if (v) return {since: v.since, ids: new Set(v.ids)};
+    localStorage.setItem("bucephalus-seen", JSON.stringify({since: Date.now() / 1000, ids: []}));
+  } catch { /* per-viewer only */ }
+  return {since: Date.now() / 1000, ids: new Set()};
+})();
+function markSeen(taskId) {
+  if (SEEN_RUNS.ids.has(taskId)) return;
+  SEEN_RUNS.ids.add(taskId);
+  try {
+    localStorage.setItem("bucephalus-seen", JSON.stringify({since: SEEN_RUNS.since, ids: [...SEEN_RUNS.ids].slice(-500)}));
+  } catch { /* per-viewer only */ }
 }
 function notify(title, body) {
   try {
@@ -138,7 +181,7 @@ function notify(title, body) {
 async function enableNotifications() {
   if (!("Notification" in window)) return toast("This browser can't show notifications.", true);
   const p = await Notification.requestPermission();
-  toast(p === "granted" ? "You'll be told when something needs you or a task finishes, while this tab is in the background."
+  toast(p === "granted" ? "You'll be told when something needs you, while this tab is in the background."
                         : "Notifications are off. The tab title still counts what needs you.", p !== "granted");
 }
 function toggleArchived() { S.archived = !S.archived; S.lastSide = ""; loadSide(); }
@@ -147,8 +190,8 @@ $("#convSearch").addEventListener("input", () => { clearTimeout(searchTimer);
   searchTimer = setTimeout(() => { S.lastSide = ""; loadSide(); }, 200); });
 
 async function newConversation() {
-  showPage(false); closeStreams(); S.conv = null; S.thread = null; S.loose = null; clearTrace();
-  $("#convTitle").textContent = "New conversation";
+  showPage(false); closeStreams(); S.conv = null; S.thread = null; S.loose = null; S.run = null; S.focus = null; clearTrace();
+  $("#convTitle").textContent = "New run";
   renderWelcome(); S.lastSide = ""; loadSide(); updateRing(null); $("#ask").focus();
   closeSideOnPhone();
 }
@@ -160,10 +203,10 @@ function renderWelcome() {
     questions and sign it. Only then does it run, and it comes back to you when it needs a decision.</p>
     <p>A follow-up in the same conversation is a new task, with its own plan.</p></div>`;
 }
-async function selectConversation(id) {
+async function selectConversation(id, run) {
   showPage(false);
   if (id !== S.conv) { closeStreams(); S.traceTask = null; S.trace = null; }
-  S.conv = id; S.loose = null; S.lastSide = "";
+  S.conv = id; S.loose = null; S.run = run || null; S.lastSide = "";
   await refreshThread(true); loadSide(); closeSideOnPhone();
 }
 async function refreshThread(scroll) {
@@ -175,12 +218,6 @@ async function refreshThread(scroll) {
   $("#archBtn").textContent = th.conversation.archived ? "Unarchive" : "Archive";
   $("#pinBtn").textContent = th.conversation.pinned ? "Unpin" : "Pin";
   $("#convSpent").textContent = th.items.length ? `$${th.spent.usd.toFixed(4)}, ${secs(th.spent.seconds)}` : "";
-  for (const it of th.items) {
-    if (TERMINAL(it.status) && S.trails.has(it.task_id) && !SEEN.done.has(it.task_id)) {
-      SEEN.done.add(it.task_id);
-      notify("A task finished", `${statusWord(it.status)}: ${firstLine(it.goal)}`);
-    }
-  }
   renderItems(th.items);
   syncTrace(th.items);
   const last = th.items[th.items.length - 1];
@@ -285,7 +322,14 @@ function renderItems(items) {
     ${args(from.conversation_id)}>${esc(from.title)}</button> after "${esc(from.goal)}". Follow-ups here see the
     exchanges up to there.</p>` : "";
   if (!items.length && !from) return renderWelcome();
-  $("#items").innerHTML = note + items.map(renderItem).join("");
+  const focus = items.some(x => x.task_id === S.run) ? S.run : items.length ? items[items.length - 1].task_id : null;
+  const it = items.find(x => x.task_id === focus);
+  if (it && TERMINAL(it.status)) markSeen(focus);
+  if (S.focus !== focus) { S.focus = focus; S.lastSide = ""; loadSide(); }
+  const open = new Set($$("#items details.earlier[open]").map(d => d.id));
+  $("#items").innerHTML = note + items.map(x => x.task_id === focus ? renderItem(x)
+    : `<details class="earlier" id="e-${esc(x.task_id)}" ${open.has("e-" + x.task_id) ? "open" : ""}>
+        <summary>${esc(firstLine(x.goal))}, ${esc(statusWord(x.status).toLowerCase())}</summary>${renderItem(x)}</details>`).join("");
 }
 function renderItem(it) {
   return `<article class="exchange" id="t-${esc(it.task_id)}" aria-label="${esc(firstLine(it.goal))}">
@@ -296,7 +340,7 @@ function renderItem(it) {
       ${S.conv ? `<button class="link" data-action="branchConversation" ${args(S.conv, it.task_id)}
         title="Move what follows into a new conversation that still sees the exchanges up to here">Cut here</button>` : ""}</div>
     ${stateCard(it)}
-    ${(it.approvals || []).map(approvalCard).join("")}
+    ${(it.approvals || []).map(g => approvalCard(g, it)).join("")}
   </article>`;
 }
 function stateCard(it) {
@@ -347,7 +391,7 @@ function planCard(it) {
       </div>
       <div class="row">
         <button class="btn" data-action="showSendBack" ${args(it.task_id)}>Send back</button>
-        <button class="btn primary" data-action="sign" ${args(it.task_id, id)}>Sign and run</button>
+        <button class="btn primary" data-action="sign" ${args(it.task_id, id)} ${S.unsafe ? "disabled" : ""}>Sign and run</button>
       </div>
       <div class="sendback" id="back-${esc(it.task_id)}" hidden>
         <input id="why-${esc(it.task_id)}" placeholder="What should change? This goes on the record with the plan." aria-label="What should change">
@@ -453,14 +497,26 @@ function goalOf(taskId) {
 }
 function askAgain(taskId) { send(goalOf(taskId)); }
 function editAsk(taskId) { const a = $("#ask"); a.value = goalOf(taskId); a.focus(); a.setSelectionRange(a.value.length, a.value.length); }
-function approvalCard(g) {
+function approvalCard(g, it) {
+  const plan = it && it.plan && it.plan.status === "approved" ? it.plan.body : null;
+  const n = expectedStop(plan, g.tool), typed = mustType(plan, g.tool), said = S.typed.get(g.id) || "";
   return `<section class="card approval" aria-label="Decision needed">
     <h3>It wants to use <code>${esc(g.tool)}</code> and is waiting for you</h3>
-    <p>${esc(g.reason)}</p><pre>${esc(g.preview)}</pre>
+    <pre>${esc(g.preview)}</pre>
+    ${plan ? `<p class="note">${n ? `The signed plan expected this stop, at step ${roman(n)}.` : "The signed plan did not expect this stop."}</p>` : ""}
+    <p>${esc(g.reason)}</p>
+    ${typed ? `<label class="confirm">A step that uses it can't be undone. Type <code>${esc(g.tool)}</code> to allow it.
+      <input data-confirm="${esc(g.tool)}" data-for="${esc(g.id)}" value="${esc(said)}" autocomplete="off"></label>` : ""}
+    ${S.unsafe ? `<p class="caveat">The record does not verify, so nothing can be allowed until that is explained.</p>` : ""}
     <div class="row">
-      <button class="btn hold" data-action="decide" ${args(g.id, "approve", g.task_id)}>Allow this once</button>
+      <button class="btn hold" id="al-${esc(g.id)}" data-action="decide" ${args(g.id, "approve", g.task_id)}
+        ${S.unsafe || (typed && said.trim() !== g.tool) ? "disabled" : ""}>Allow this once</button>
       <button class="btn" data-action="decide" ${args(g.id, "deny", g.task_id)}>Refuse</button>
     </div></section>`;
+}
+function confirmed(id) {
+  const c = $$("[data-confirm]").find(x => x.dataset.for === id);
+  return !c || c.value.trim() === c.dataset.confirm;
 }
 
 $("#composer").addEventListener("submit", e => { e.preventDefault(); send(); });
@@ -536,7 +592,7 @@ async function send(given) {
     const m = await post(`/conversations/${S.conv}/messages`, {text,
       artifact_scope: [$("#scope").value.trim() || "work"], budget_usd: usd === "" ? null : Number(usd), preset: S.preset});
     if (typeof given !== "string") $("#ask").value = "";
-    S.lastSide = ""; loadSide();
+    S.run = m.task_id; S.lastSide = ""; loadSide();
     await draft(m.task_id);
   } catch (err) { toast(err.message, true); }
 }
@@ -550,6 +606,7 @@ async function draft(taskId) {
 }
 function showSendBack(taskId) { $("#back-" + taskId).hidden = false; $("#why-" + taskId).focus(); }
 async function sign(taskId, planId) {
+  if (S.unsafe) return toast("The record does not verify. Nothing can be signed until that is explained.", true);
   try {
     await post(`/tasks/${taskId}/plan/approve`, {plan_id: planId, edits: []});
     const seal = $("#seal-" + taskId);
@@ -566,6 +623,8 @@ async function sendBack(taskId, planId) {
   } catch (e) { toast(e.message, true); }
 }
 async function decide(id, d, taskId) {
+  if (S.unsafe && d === "approve") return toast("The record does not verify. Nothing can be allowed until that is explained.", true);
+  if (d === "approve" && !confirmed(id)) return toast("Type the tool's name first.", true);
   try {
     await post("/approvals/" + id, {decision: d});
     try { await post(`/tasks/${taskId}/run`); } catch (e) { if (e.status !== 409) throw e; }
@@ -582,7 +641,8 @@ async function afterChange() {
 async function openTaskOf(taskId) {
   const t = await api("/tasks/" + taskId).catch(e => { toast(e.message, true); return null; });
   if (!t) return;
-  if (t.conversation_id) { await selectConversation(t.conversation_id);
+  S.run = taskId;
+  if (t.conversation_id) { await selectConversation(t.conversation_id, taskId);
     const el = $("#t-" + taskId); if (el) el.scrollIntoView({block: "center"}); return; }
   openTaskAlone(taskId);
 }
@@ -598,6 +658,8 @@ async function openTaskAlone(taskId) {
   showPage(false); closeStreams(); S.conv = null; S.thread = null; S.loose = taskId;
   const it = await looseItem(taskId);
   S.looseGoal = it.goal;
+  if (TERMINAL(it.status)) markSeen(taskId);
+  if (S.focus !== taskId) { S.focus = taskId; S.lastSide = ""; loadSide(); }
   $("#convTitle").textContent = firstLine(it.goal);
   $("#items").innerHTML = renderItem(it);
   S.traceTask = taskId; S.trace = null; loadTrace();
@@ -1416,6 +1478,7 @@ async function updateRing(taskId) {
   u.classList.toggle("near", m.used >= m.ceiling * 0.8);
   $("#ringCeiling").setAttribute("transform", `rotate(${ceil * 3.6} 18 18)`);
   $("#ringLabel").textContent = `${ktok(m.used)} of ${ktok(m.ceiling)}`;
+  $("#ringWrap").hidden = m.used < m.ceiling * 0.6;
   $("#ringWrap").title = `About ${m.used.toLocaleString()} tokens in use (estimated). It compacts at the ceiling,
 ${m.ceiling.toLocaleString()} tokens (${Math.round(m.fill_ratio * 100)}% of the ${m.window.toLocaleString()}-token window). The tick marks the ceiling.`;
 }
@@ -1687,8 +1750,7 @@ wireDrop($("#drop"));
 function showPage(on) {
   $("#control").hidden = !on; $(".thread").hidden = on;
   $("#app").classList.toggle("page-on", on);
-  $("#navChat").setAttribute("aria-current", String(!on));
-  if (!on) $$(".nav-list [data-pane]").forEach(b => b.setAttribute("aria-current", "false"));
+  if (!on) $$(".pages [data-pane]").forEach(b => b.setAttribute("aria-current", "false"));
 }
 function openControl() { openPane(S.pane); }
 function closeControl() { dropMap(); showPage(false); }
@@ -1696,7 +1758,8 @@ function restoreFocus() { const r = RETURN_FOCUS; RETURN_FOCUS = null; if (r && 
 async function openPane(name) {
   dropMap();
   S.pane = name; showPage(true); closeSideOnPhone();
-  $$(".nav-list [data-pane]").forEach(b => b.setAttribute("aria-current", String(b.dataset.pane === name)));
+  $$(".pages [data-pane]").forEach(b => b.setAttribute("aria-current", String(b.dataset.pane === name)));
+  $$(".pages details[open]").forEach(d => { d.open = false; });
   const body = $("#ccBody");
   body.innerHTML = `<p class="note"><span class="spin"></span> Loading</p>`;
   try { body.innerHTML = await PANES[name](); } catch (e) { body.innerHTML = `<p class="caveat">${esc(e.message)}</p>`; }
@@ -1707,7 +1770,7 @@ async function openPane(name) {
   if (name === "docs" && $("#docBody")) readDoc(S.doc || "README.md");
   if (name === "files" && $("#dropPg")) { wireDrop($("#dropPg")); if (S.filesTask) loadFiles(S.filesTask, S.filesPath || ""); }
 }
-$(".nav-list").addEventListener("click", e => { const b = e.target.closest("button[data-pane]"); if (b) openPane(b.dataset.pane); });
+$(".pages").addEventListener("click", e => { const b = e.target.closest("button[data-pane]"); if (b) openPane(b.dataset.pane); });
 
 const PANES = {
   async map() {
@@ -2104,7 +2167,7 @@ What to do, in the words a model reads.</textarea></label>
         ? "Showing the image named in your config (ui.background_image)." : "No image: showing the built-in background."}
         PNG, JPEG or WebP, up to 8 MB. It is kept on this computer, beside your other Bucephalus data, and stays until
         you remove it.</p>
-      <h4>Notifications</h4><p class="note">A desktop notification when something needs you or a watched task finishes,
+      <h4>Notifications</h4><p class="note">A desktop notification when something needs you, a few seconds after it arrives,
       only while this tab is in the background. ${"Notification" in window ? `Now: ${esc(Notification.permission)}.` : "Not available here."}</p>
       <button class="btn" data-action="enableNotifications">Turn on notifications</button>
       <h4>Presets</h4><p class="note">A named set of the model each role uses, the workspace and the budget. Apply one
@@ -2500,7 +2563,7 @@ async function savePolicy() {
   catch (e) { toast(e.message, true); }
 }
 const COMMANDS = [
-  ["New conversation", "newConversation"], ["Search conversations", "focusSearch"],
+  ["New run", "newConversation"], ["Search runs", "focusSearch"],
   ["Show or hide archived conversations", "toggleArchived"], ["Tasks started elsewhere", "openLooseList"],
   ["Show or hide the file panel", "toggleFiles"], ["Show or hide the sidebar", "toggleSide"],
   ["View: Normal, answers only", "setView", "normal"], ["View: Thinking", "setView", "thinking"],
@@ -2508,7 +2571,7 @@ const COMMANDS = [
   ["Switch light or dark", "toggleTheme"],
   ["Pin or unpin this conversation", "pinConversation"], ["Export this conversation as Markdown", "exportConversation", "md"],
   ["Export this conversation as JSON", "exportConversation", "json"], ["Turn on notifications", "enableNotifications"],
-  ["Open Control Center", "openControl"], ["Sessions", "openPane", "sessions"], ["Files", "openPane", "files"],
+  ["Reopen the last page", "openControl"], ["Sessions", "openPane", "sessions"], ["Files", "openPane", "files"],
   ["Models", "openPane", "models"], ["Analytics", "openPane", "analytics"], ["Memory", "openPane", "memory"], ["Schedules", "openPane", "schedules"],
   ["Channels", "openPane", "channels"], ["Skills", "openPane", "skills"], ["Eval suites", "openPane", "suites"],
   ["Reviewer policy", "openPane", "policy"], ["Integrity", "openPane", "integrity"],
@@ -2564,7 +2627,7 @@ document.addEventListener("keydown", e => {
   }
   else if (e.key === "Escape") {
     if (!$("#palette").hidden) closePalette();
-    else if ($("details.more[open]")) $("details.more[open]").open = false;
+    else if ($("details.more[open], .pages details[open]")) $("details.more[open], .pages details[open]").open = false;
     else closeSideOnPhone();
   }
 });
@@ -2579,13 +2642,19 @@ const ACTIONS = {ideDir, ideFile, ideTab, ideClose, ideNew, ideCopy, ideSave, id
   patchConversation, exportOne, sessArchived, pickWorkspace, useModel, useReviewer, loadModel, unloadModel, anDays, readDoc,
   editSchedule, cancelScheduleEdit, pauseSchedule, resumeSchedule, runSchedule, archiveOlder, newFolder, removeFile, makeBackup, getBackup, testMcp, saveKey, clearKey, fillSender, allowSender, revokeSender, closeMapInfo, reviewConfig, applyConfig, addHook, toggleHook, deleteHook};
 document.addEventListener("click", e => {
-  $$("details.more[open]").forEach(d => { if (!d.contains(e.target)) d.open = false; });
+  $$("details.more[open], .pages details[open]").forEach(d => { if (!d.contains(e.target)) d.open = false; });
   const el = e.target.closest("[data-action]");
   if (!el || !ACTIONS[el.dataset.action]) return;
   const menu = el.closest("details.more"); if (menu) menu.open = false;
   ACTIONS[el.dataset.action](...(el.dataset.args ? JSON.parse(el.dataset.args) : [el]));
 });
 document.addEventListener("input", e => {
+  if (e.target.dataset && e.target.dataset.confirm !== undefined) {
+    S.typed.set(e.target.dataset.for, e.target.value);
+    const b = document.getElementById("al-" + e.target.dataset.for);
+    if (b) b.disabled = S.unsafe || e.target.value.trim() !== e.target.dataset.confirm;
+    return;
+  }
   if (e.target.id !== "docQ") return;
   const q = e.target.value.trim().toLowerCase();
   $$(".doc-list .side-item").forEach(b => { b.hidden = !b.dataset.title.includes(q); });
@@ -2798,24 +2867,26 @@ new MutationObserver(() => document.querySelectorAll("i[data-pct]").forEach(i =>
   try { if (localStorage.getItem("bucephalus-side") === "closed") $("#app").classList.add("side-closed"); } catch { /* open */ }
   setView(VIEW);
   if (!TOKEN) {
+    $("#health").hidden = false;
     $("#health").textContent = "No session. Open the console from the desktop app, or the link bucephalus serve prints.";
     return;
   }
   try {
     const [h, st] = await Promise.all([api("/health"), api("/panels/settings")]);
     $("#health").textContent = `Connected. ${h.backends.length} models configured.`;
+    $("#health").hidden = true;
     $("#chipProfile").textContent = `Profile: ${st.profile}`;
     if ($("#budUsd").value === "") $("#budUsd").placeholder = String(st.limits.default_task_budget_usd);
-  } catch { $("#health").textContent = "Can't reach the control plane"; }
+  } catch { $("#health").hidden = false; $("#health").textContent = "Can't reach the control plane"; }
   loadAlerts(); loadModels(); await loadSide(); updateRing(null);
   if (OPEN.theme === "light" || OPEN.theme === "dark") setTheme(OPEN.theme);
   if (OPEN.task) openTaskOf(OPEN.task);
   else if (OPEN.conv) selectConversation(OPEN.conv);
   else if (OPEN.conv !== "") {
-    const first = $("#convList [data-action=selectConversation]");
-    if (first) selectConversation(JSON.parse(first.dataset.args)[0]);
+    const first = $("#convList [data-action=openTaskOf]");
+    if (first) openTaskOf(JSON.parse(first.dataset.args)[0]);
   }
   if (OPEN.pane && PANES[OPEN.pane]) openPane(OPEN.pane);
   setInterval(loadModels, 20000);
-  setInterval(() => { loadAlerts(); loadSide(); if (S.conv && !S.streams.size && !S.drafting.size && !S.rewind && !S.changes) refreshThread(); }, 6000);
+  setInterval(() => { loadAlerts(); loadSide(); if (S.conv && !S.streams.size && !S.drafting.size && !S.rewind && !S.changes && !$("[data-confirm]:focus")) refreshThread(); }, 6000);
 })();

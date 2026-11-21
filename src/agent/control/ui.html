@@ -11,57 +11,57 @@
 <canvas id="bg" aria-hidden="true"></canvas>
 <div class="app files-closed" id="app">
 
-  <aside class="nav" aria-label="Navigation">
-    <div class="brand" aria-hidden="true">
-      <pre id="banner" class="banner" aria-hidden="true"></pre>
-    </div>
-    <nav class="nav-list" aria-label="Pages">
-      <button class="nav-item" data-action="closeControl" id="navChat" aria-current="true">Chat</button>
-      <button class="nav-item" data-pane="sessions">Sessions</button>
-      <button class="nav-item" data-pane="files">Files</button>
-      <button class="nav-item" data-pane="models">Models</button>
-      <button class="nav-item" data-pane="map">Graph</button>
-      <button class="nav-item" data-pane="analytics">Analytics</button>
-      <button class="nav-group" data-action="openControl" title="Back to the page you last had open">Control Center</button>
-      <button class="nav-item" data-pane="memory">Memory</button>
-      <button class="nav-item" data-pane="schedules">Schedules</button>
-      <button class="nav-item" data-pane="channels">Channels</button>
-      <button class="nav-item" data-pane="skills">Skills</button>
-      <button class="nav-item" data-pane="suites">Eval suites</button>
-      <button class="nav-item" data-pane="policy">Reviewer policy</button>
-      <button class="nav-item" data-pane="integrity">Integrity</button>
-      <button class="nav-item" data-pane="measurement">Measurement</button>
-      <button class="nav-item" data-pane="settings">Settings</button>
-      <button class="nav-item" data-pane="logs">Logs</button>
-      <button class="nav-item" data-pane="docs">Docs</button>
-      <button class="nav-item" data-pane="system">System</button>
-      <button class="nav-item" data-pane="mcp">MCP</button>
-      <button class="nav-item" data-pane="keys">Keys</button>
-      <button class="nav-item" data-pane="config">Config</button>
-      <button class="nav-item" data-pane="webhooks">Webhooks</button>
-    </nav>
-    <footer class="nav-foot">
-      <p class="health" id="health">Connecting</p>
-      <div class="row">
-        <button class="quiet" data-action="toggleTheme">Light or dark</button>
-        <button class="quiet kbd" data-action="openPalette" aria-label="Command palette, Control K"><kbd>Ctrl</kbd><kbd>K</kbd></button>
-      </div>
-    </footer>
-  </aside>
-
-  <aside class="side" id="side" aria-label="Conversations">
-    <button class="btn new" data-action="newConversation">New conversation</button>
-    <input id="convSearch" class="search" type="search" placeholder="Search conversations"
-           aria-label="Search conversations" autocomplete="off">
+  <aside class="side" id="side" aria-label="What needs you, and every run">
+    <div class="brand" aria-hidden="true"><pre id="banner" class="banner" aria-hidden="true"></pre></div>
+    <button class="btn new" data-action="newConversation">New run</button>
+    <input id="convSearch" class="search" type="search" placeholder="Search runs"
+           aria-label="Search runs" autocomplete="off">
     <section class="needs" aria-labelledby="needsH">
       <h2 id="needsH">Needs you <span id="nNeeds" class="count"></span></h2>
       <div id="needsList"></div>
     </section>
     <section class="convs" aria-labelledby="convH">
-      <h2 id="convH">Conversations</h2>
-      <nav id="convList" aria-label="Conversation list"></nav>
+      <h2 id="convH">Runs</h2>
+      <nav id="convList" aria-label="Runs"></nav>
       <button class="quiet" id="archToggle" data-action="toggleArchived">Show archived</button>
     </section>
+    <footer class="side-foot">
+      <p class="health" id="health" hidden>Connecting</p>
+      <nav class="pages" aria-label="Pages">
+        <details><summary>Workspace</summary><div class="page-menu">
+          <button data-pane="sessions">Sessions</button>
+          <button data-pane="files">Files</button>
+          <button data-pane="map">Graph</button>
+          <button data-pane="memory">Memory</button>
+          <button data-pane="schedules">Schedules</button>
+          <button data-pane="channels">Channels</button>
+          <button data-pane="skills">Skills</button>
+          <button data-pane="suites">Eval suites</button>
+          <button data-pane="webhooks">Webhooks</button>
+        </div></details>
+        <details><summary>Settings</summary><div class="page-menu">
+          <button data-pane="settings">Settings</button>
+          <button data-pane="models">Models</button>
+          <button data-pane="policy">Reviewer policy</button>
+          <button data-pane="keys">Keys</button>
+          <button data-pane="mcp">MCP</button>
+          <button data-pane="config">Config</button>
+        </div></details>
+        <details><summary>System</summary><div class="page-menu">
+          <button data-pane="system">System</button>
+          <button data-pane="integrity">Integrity</button>
+          <button data-pane="measurement">Measurement</button>
+          <button data-pane="analytics">Analytics</button>
+          <button data-pane="logs">Logs</button>
+          <button data-pane="docs">Docs</button>
+        </div></details>
+      </nav>
+      <div class="row">
+        <button class="quiet" data-action="openControl" title="Back to the page you last had open">Last page</button>
+        <button class="quiet" data-action="toggleTheme">Light or dark</button>
+        <button class="quiet kbd" data-action="openPalette" aria-label="Command palette, Control K"><kbd>Ctrl</kbd><kbd>K</kbd></button>
+      </div>
+    </footer>
   </aside>
 
   <main class="thread" aria-label="Conversation">
@@ -95,14 +95,19 @@
       <textarea id="ask" rows="3" aria-label="What should it do?"
         placeholder="Describe the work. It drafts a plan first; nothing runs until you sign it."></textarea>
       <div class="controls">
-        <label class="chip field-chip" id="chipModel">Model <select id="modelPick" aria-label="Model the next task runs on"></select></label>
-        <button type="button" class="chip run-model" data-action="runModel" id="runModel" hidden>Run model</button>
+        <details class="run-settings">
+          <summary class="quiet">Run settings</summary>
+          <div class="controls">
+            <label class="chip field-chip" id="chipModel">Model <select id="modelPick" aria-label="Model the next task runs on"></select></label>
+            <button type="button" class="chip run-model" data-action="runModel" id="runModel" hidden>Run model</button>
+            <button type="button" class="chip" data-action="openPane" data-args='["settings"]' id="chipProfile" title="The profile this console runs under">Profile</button>
+            <label class="chip field-chip">Workspace <input id="scope" value="work" size="7" aria-describedby="scopeHelp"></label>
+            <span id="scopeHelp" class="sr">The folder this task may read and write. Everything else is refused.</span>
+            <label class="chip field-chip">Budget $ <input id="budUsd" type="number" min="0" step="0.01" size="5"></label>
+          </div>
+        </details>
         <p id="modelWarn" class="caveat model-warn" role="status" hidden></p>
-        <button type="button" class="chip" data-action="openPane" data-args='["settings"]' id="chipProfile" title="The profile this console runs under">Profile</button>
-        <label class="chip field-chip">Workspace <input id="scope" value="work" size="7" aria-describedby="scopeHelp"></label>
-        <span id="scopeHelp" class="sr">The folder this task may read and write. Everything else is refused.</span>
-        <label class="chip field-chip">Budget $ <input id="budUsd" type="number" min="0" step="0.01" size="5"></label>
-        <div class="ring-wrap" id="ringWrap">
+        <div class="ring-wrap" id="ringWrap" hidden>
           <svg class="ring" viewBox="0 0 36 36" role="img" aria-labelledby="ringLabel">
             <circle class="ring-track" cx="18" cy="18" r="15.5"/>
             <circle class="ring-used" id="ringUsed" cx="18" cy="18" r="15.5" pathLength="100"/>
@@ -119,6 +124,7 @@
     <header class="trace-head">
       <h2 id="traceTitle">Trace</h2>
       <span class="crumb" id="traceTask"></span>
+      <button class="quiet" data-action="toggleFiles" aria-controls="files">Files</button>
       <button class="quiet" data-action="closeTrace" aria-label="Close the trace">Close</button>
     </header>
     <div id="traceBody" class="trace-body" tabindex="0" aria-live="off"></div>
@@ -137,7 +143,8 @@
     <div class="drop" id="drop" tabindex="0">Drop or paste a file here to add it to this task's workspace. It is marked untrusted: the agent reads it as data, never as instructions.</div>
   </aside>
 
-  <main class="page" id="control" aria-label="Control Center" hidden>
+  <main class="page" id="control" aria-label="Page" hidden>
+    <button class="quiet back" data-action="closeControl">Back to runs</button>
     <section class="cc-body" id="ccBody" tabindex="-1"></section>
   </main>
 </div>

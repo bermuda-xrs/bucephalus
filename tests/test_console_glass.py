@@ -71,10 +71,10 @@ def test_every_surface_is_glass_and_square():
     assert re.search(r'<canvas id="bg" aria-hidden="true"></canvas>\s*<div class="app', HTML)
     bg = re.search(r"#bg\s*\{([^}]*)\}", BARE).group(1)
     assert "pointer-events: none" in bg and "position: fixed" in bg and re.search(r"z-index:\s*-1", bg)
-    glass = re.search(r"\n([^{}]*\.nav[^{}]*)\{([^}]*backdrop-filter:[^}]*)\}", BARE)
+    glass = re.search(r"\n([^{}]*\.side[^{}]*)\{([^}]*backdrop-filter:[^}]*)\}", BARE)
     assert glass, "no glass rule"
     panes, body = glass.groups()
-    for pane in (".nav", ".side", ".thread", ".trace", ".page", ".files", ".pal", "#toast", ".more-menu"):
+    for pane in (".side", ".thread", ".trace", ".page", ".files", ".pal", "#toast", ".more-menu", ".page-menu"):
         assert re.search(re.escape(pane) + r"\s*[,{]", panes + "{"), f"{pane} is not glass"
     want = "blur(var(--blur)) contrast(var(--back-contrast)) brightness(var(--back-bright))"
     assert f"backdrop-filter: {want}" in body and f"-webkit-backdrop-filter: {want}" in body
