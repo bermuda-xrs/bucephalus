@@ -67,6 +67,20 @@ def test_measurement_runs_stay_out_of_the_rail(ctx, api):
     assert "bench=false" in _fn("loadSide")
 
 
+def test_what_waits_is_listed_however_many_runs_came_after_it(ctx, api):
+    old = api.post("/tasks", json={"goal": "waiting for a signature", "artifact_scope": ["work"]}).json()["task_id"]
+    for i in range(4):
+        t = api.post("/tasks", json={"goal": f"filler {i}", "artifact_scope": ["work"]}).json()["task_id"]
+        ctx.conn.execute("UPDATE tasks SET status='done' WHERE id=?", (t,))
+    ctx.conn.commit()
+    get = lambda q: [r["task_id"] for r in api.get("/tasks?limit=2" + q).json()["tasks"]]  # noqa: E731
+    assert old not in get("") and get("&live=true") == [old]
+    assert "live=true" in _fn("loadSide")
+    out = _node("""process.stdout.write(JSON.stringify(
+      merged([{task_id: "a"}, {task_id: "b"}], [{task_id: "c"}, {task_id: "a"}]).map(t => t.task_id)));""")
+    assert out == ["a", "b", "c"]
+
+
 def test_search_and_archive_reach_past_the_newest_runs(ctx, api):
     c = api.post("/conversations", json={}).json()
     old = api.post(f"/conversations/{c['id']}/messages", json={"text": "rename the fixtures"}).json()["task_id"]
@@ -139,6 +153,21 @@ def test_while_the_record_does_not_verify_nothing_can_be_signed_or_allowed():
         assert re.search(r"if \(S\.unsafe\b", _fn(name)), name
     for name in ("approvalCard", "planCard"):
         assert "S.unsafe ? " in _fn(name), name
+
+
+def test_the_integrity_alarm_is_never_behind_a_page_or_a_drawer():
+    thread = HTML[HTML.index('<main class="thread"'):HTML.index("</main>")]
+    assert 'id="integrity"' not in thread, "a page hides the thread and the alarm with it"
+    assert re.search(r'<div class="app[^>]*>\s*<div id="integrity" class="integrity" role="alert" hidden></div>', HTML)
+    assert re.search(r"#integrity \{[^}]*grid-column: 1 / -1; grid-row: 1", CSS)
+    assert re.search(r"\.side, \.thread, \.trace, \.files, \.page \{[^}]*grid-row: 2", CSS)
+    drawers = re.findall(r"\n\s*\.(?:side|trace, \.files) \{([^}]*)\}", CSS)
+    assert drawers and not any("position: fixed" in d for d in drawers), "a fixed drawer covers the alarm"
+
+
+def test_opening_a_page_leaves_the_way_back_in_view():
+    pane = _fn("openPane")
+    assert "body.focus({preventScroll: true})" in pane and '$("#control").scrollTop = 0' in pane
 
 
 def test_only_decisions_notify_and_only_after_a_hold():

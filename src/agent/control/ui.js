@@ -63,6 +63,7 @@ function tiers(tasks, gates, seen) {
   const review = tasks.filter(t => TERMINAL(t.status) && !t.archived && t.updated_at > seen.since && !seen.ids.has(t.task_id));
   return {decide, review};
 }
+const merged = (a, b) => [...a, ...b.filter(x => !a.some(y => y.task_id === x.task_id))];
 function runGroups(all) {
   const tasks = [...all.filter(t => t.pinned), ...all.filter(t => !t.pinned)];
   return [["Live", tasks.filter(t => !TERMINAL(t.status))],
@@ -115,12 +116,14 @@ async function loadAlerts() {
 
 async function loadSide() {
   const q = $("#convSearch").value.trim();
-  let tasks = [], gates = [], listed = null;
+  let tasks = [], gates = [], listed = null, live = [];
   try {
-    [tasks, gates, listed] = await Promise.all([api("/tasks?limit=200&bench=false").then(d => d.tasks), api("/approvals").then(d => d.pending),
+    [tasks, gates, live, listed] = await Promise.all([api("/tasks?limit=200&bench=false").then(d => d.tasks), api("/approvals").then(d => d.pending),
+      api("/tasks?limit=500&bench=false&live=true").then(d => d.tasks),
       q || S.archived ? api(`/tasks?limit=200&bench=false&archived=${S.archived}&q=${encodeURIComponent(q)}`).then(d => d.tasks) : null]);
   } catch (e) { $("#health").hidden = false; $("#health").textContent = "Can't reach the control plane"; return; }
   $("#health").hidden = true;
+  tasks = merged(live, tasks);
   const sig = JSON.stringify([tasks, gates, listed, S.focus, S.archived, q, SEEN_RUNS.ids.size]);
   if (sig === S.lastSide) return;
   S.lastSide = sig;
@@ -1764,7 +1767,8 @@ async function openPane(name) {
   const body = $("#ccBody");
   body.innerHTML = `<p class="note"><span class="spin"></span> Loading</p>`;
   try { body.innerHTML = await PANES[name](); } catch (e) { body.innerHTML = `<p class="caveat">${esc(e.message)}</p>`; }
-  body.focus();
+  body.focus({preventScroll: true});
+  $("#control").scrollTop = 0;
   if (name === "suites") loadSuites();
   if (name === "map") drawMap();
   if (name === "skills" && $("#kFile")) $("#kFile").addEventListener("change", importSkillFile);

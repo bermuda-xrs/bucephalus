@@ -16,7 +16,11 @@ what still stands between here and a first iteration.
   leaves them out, and the Files page still lists them.
 - Search and Show archived ask the server again (`GET /tasks` takes `q` and `archived`), so they reach past the newest
   200 runs.
-- A run that needs you (an approval, or a plan to sign) is never folded away under a later run in its conversation.
+- A run that needs you (an approval, or a plan to sign) is never folded away under a later run in its conversation,
+  and never drops out of Needs you: unfinished runs are asked for on their own (`GET /tasks?live=true`), however many
+  runs came after them.
+- The integrity alarm sits above everything, so an open page, a drawer or the phone layout cannot hide it; opening a
+  page keeps Back to runs in view.
 - The notification hold now rereads what is waiting before it notifies; before, it read the last poll, which ran less
   often than the hold.
 - To review leaves out archived conversations; pinned runs come first in each group; an approval from a delegated
