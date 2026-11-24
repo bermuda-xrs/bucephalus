@@ -26,6 +26,13 @@ what still stands between here and a first iteration.
 - To review leaves out archived conversations; pinned runs come first in each group; an approval from a delegated
   sub-task gets a label instead of a blank row; the health line hides again when the connection comes back; "Tasks
   started elsewhere" lists only runs that have no conversation.
+- A task with no plan yet (a webhook delivery, a schedule's Run now) is in Needs you as "No plan yet: draft one";
+  before, it waited under Live where nothing pointed at it.
+- The Graph page is in the command palette, like every page in the rail menus.
+- Model switching: a backend without `model_server: ollama` cannot be picked or run from the console, by design
+  (2026-10-08). The console now says which line to add instead of "Not a local model". A desktop config written
+  before 2026-10-08 lacks that line on every backend, so the picker was off there; add it, or start from the current
+  default config.
 
 ## Inbox and run: the console's new structure - 2026-11-22 (no HARNESS_VERSION change: console only)
 

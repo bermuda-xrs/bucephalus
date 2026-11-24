@@ -56,10 +56,12 @@ function statusWord(s) {
 const TERMINAL = s => !["pending", "running", "paused"].includes(s);
 
 // ------------------------------------------------------------ what needs you, and every run
-function tiers(tasks, gates, seen) {
+function tiers(tasks, gates, seen, drafting = new Set()) {
   const decide = gates.map(g => ({kind: "approval", task_id: g.task_id, id: g.id, tool: g.tool}))
     .concat(tasks.filter(t => t.status === "pending" && t.plan_status === "drafted")
-      .map(t => ({kind: "plan", task_id: t.task_id})));
+      .map(t => ({kind: "plan", task_id: t.task_id})))
+    .concat(tasks.filter(t => t.status === "pending" && !t.plan_status && !drafting.has(t.task_id))
+      .map(t => ({kind: "draft", task_id: t.task_id})));
   const review = tasks.filter(t => TERMINAL(t.status) && !t.archived && t.updated_at > seen.since && !seen.ids.has(t.task_id));
   return {decide, review};
 }
@@ -127,12 +129,13 @@ async function loadSide() {
   const sig = JSON.stringify([tasks, gates, listed, S.focus, S.archived, q, SEEN_RUNS.ids.size]);
   if (sig === S.lastSide) return;
   S.lastSide = sig;
-  const t = tiers(tasks, gates, SEEN_RUNS);
+  const t = tiers(tasks, gates, SEEN_RUNS, S.drafting);
   notifyNeeds(new Set(t.decide.map(x => x.kind + ":" + x.task_id + ":" + (x.id || ""))));
   const goal = id => (tasks.find(x => x.task_id === id) || {}).goal || "";
   const decide = t.decide.map(x => `<button class="side-item needs-item" data-action="openTaskOf" ${args(x.task_id)}>
       <span class="t">${esc(firstLine(goal(x.task_id)) || "A delegated task")}</span>
-      <span class="s">${x.kind === "plan" ? "A plan to sign" : `Wants to use <code>${esc(x.tool)}</code>`}</span></button>`);
+      <span class="s">${x.kind === "plan" ? "A plan to sign" : x.kind === "draft" ? "No plan yet: draft one"
+        : `Wants to use <code>${esc(x.tool)}</code>`}</span></button>`);
   const review = t.review.map(x => `<button class="side-item" data-action="openTaskOf" ${args(x.task_id)}>
       <span class="t">${esc(firstLine(x.goal))}</span><span class="s">${esc(statusWord(x.status))}, not opened yet</span></button>`);
   $("#needsList").innerHTML = (decide.join("") || `<div class="empty">Nothing is waiting on you.</div>`)
@@ -2424,7 +2427,7 @@ async function loadModels() {
   if (!names.includes(ex.model)) names.unshift(ex.model);
   pick.innerHTML = names.map(n => `<option ${n === ex.model ? "selected" : ""}>${esc(n)}</option>`).join("");
   pick.disabled = !ex.local || !(srv && srv.up);
-  pick.title = !ex.local ? "Not a local model; set in the config" : srv && srv.up ? "The model the next task runs on"
+  pick.title = !ex.local ? "Not marked as a local model server: add model_server: ollama to this backend in the config, then restart" : srv && srv.up ? "The model the next task runs on"
              : "The model server is not running; Run model starts it";
   btn.hidden = !ex.local || !srv || !srv.managed;
   const loaded = srv && srv.loaded.some(m => m.name === pick.value);
@@ -2577,7 +2580,7 @@ const COMMANDS = [
   ["Pin or unpin this conversation", "pinConversation"], ["Export this conversation as Markdown", "exportConversation", "md"],
   ["Export this conversation as JSON", "exportConversation", "json"], ["Turn on notifications", "enableNotifications"],
   ["Reopen the last page", "openControl"], ["Sessions", "openPane", "sessions"], ["Files", "openPane", "files"],
-  ["Models", "openPane", "models"], ["Analytics", "openPane", "analytics"], ["Memory", "openPane", "memory"], ["Schedules", "openPane", "schedules"],
+  ["Models", "openPane", "models"], ["Graph of every conversation", "openPane", "map"], ["Analytics", "openPane", "analytics"], ["Memory", "openPane", "memory"], ["Schedules", "openPane", "schedules"],
   ["Channels", "openPane", "channels"], ["Skills", "openPane", "skills"], ["Eval suites", "openPane", "suites"],
   ["Reviewer policy", "openPane", "policy"], ["Integrity", "openPane", "integrity"],
   ["Measurement", "openPane", "measurement"], ["Settings", "openPane", "settings"], ["Logs", "openPane", "logs"], ["Docs", "openPane", "docs"], ["System", "openPane", "system"], ["MCP", "openPane", "mcp"], ["Keys", "openPane", "keys"], ["Config", "openPane", "config"], ["Webhooks", "openPane", "webhooks"],

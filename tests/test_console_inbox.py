@@ -110,12 +110,15 @@ def test_the_queue_has_a_decision_tier_and_a_review_tier():
         {task_id: "f", status: "failed", plan_status: "approved", updated_at: 50},
         {task_id: "old", status: "done", plan_status: "approved", updated_at: 5},
         {task_id: "seen", status: "done", plan_status: "approved", updated_at: 50},
-        {task_id: "shelved", status: "done", plan_status: "approved", updated_at: 50, archived: true}];
+        {task_id: "shelved", status: "done", plan_status: "approved", updated_at: 50, archived: true},
+        {task_id: "n", status: "pending", plan_status: null, updated_at: 50},
+        {task_id: "busy", status: "pending", plan_status: null, updated_at: 50}];
       const gates = [{id: "g1", task_id: "r", tool: "run_command"}];
-      const t = tiers(tasks, gates, {since: 10, ids: new Set(["seen"])});
+      const t = tiers(tasks, gates, {since: 10, ids: new Set(["seen"])}, new Set(["busy"]));
       process.stdout.write(JSON.stringify({decide: t.decide.map(x => x.kind + ":" + x.task_id),
                                            review: t.review.map(x => x.task_id)}));""")
-    assert out == {"decide": ["approval:r", "plan:p"], "review": ["d", "f"]}
+    assert out == {"decide": ["approval:r", "plan:p", "draft:n"], "review": ["d", "f"]}
+    assert "tiers(tasks, gates, SEEN_RUNS, S.drafting)" in _fn("loadSide") and '"draft"' in _fn("loadSide")
 
 
 def test_runs_are_grouped_by_status():
@@ -185,6 +188,12 @@ def test_three_columns_at_most_and_no_page_rail():
     pages = re.search(r'<nav class="pages"[^>]*>(.*?)</nav>', HTML, re.S).group(1)
     assert re.findall(r"<summary>(\w+)</summary>", pages) == ["Workspace", "Settings", "System"]
     assert set(re.findall(r'data-pane="(\w+)"', HTML)) == set(re.findall(r'data-pane="(\w+)"', pages))
+
+
+def test_every_page_in_the_rail_menus_is_in_the_palette():
+    palette = UI[UI.index("const COMMANDS = ["):UI.index("];", UI.index("const COMMANDS = ["))]
+    listed = set(re.findall(r'"openPane", "(\w+)"', palette))
+    assert set(re.findall(r'data-pane="(\w+)"', HTML)) <= listed
 
 
 def test_trace_and_files_share_one_inspector():

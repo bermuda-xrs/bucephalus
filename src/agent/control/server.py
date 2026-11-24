@@ -656,7 +656,7 @@ def create_app(ctx: AgentContext) -> FastAPI:
         b = ctx.backends.get(body.slot)
         server = b and local.server_of(b.cfg)
         if not server:
-            raise HTTPException(400, f"{body.slot} is not served by a local model server (model_server)")
+            raise HTTPException(400, f"{body.slot} is not marked as a local model server; add model_server: ollama to it in the config and restart")
         try:
             return local, b, local.guard(server, [x.cfg for x in ctx.backends.values()])
         except local.Refused as e:
