@@ -10,6 +10,7 @@
 <a class="skip" href="#ask">Skip to the composer</a>
 <canvas id="bg" aria-hidden="true"></canvas>
 <div class="app files-closed" id="app">
+  <div id="integrity" class="integrity" role="alert" hidden></div>
 
   <aside class="side" id="side" aria-label="What needs you, and every run">
     <div class="brand" aria-hidden="true"><pre id="banner" class="banner" aria-hidden="true"></pre></div>
@@ -89,7 +90,6 @@
         <button class="quiet" data-action="toggleFiles" aria-controls="files">Files</button>
       </div>
     </header>
-    <div id="integrity" class="integrity" role="alert" hidden></div>
     <div id="items" class="items"></div>
     <form id="composer" class="composer" aria-label="Ask for something">
       <textarea id="ask" rows="3" aria-label="What should it do?"

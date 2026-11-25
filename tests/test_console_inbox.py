@@ -55,6 +55,52 @@ def test_the_run_list_carries_what_the_rail_shows(ctx, api):
     assert (other["conversation_id"], other["pending"], other["spent_usd"]) == (None, 0, 0.0)
 
 
+def test_measurement_runs_stay_out_of_the_rail(ctx, api):
+    mine = api.post("/tasks", json={"goal": "count the files", "artifact_scope": ["work"]}).json()["task_id"]
+    bench = api.post("/tasks", json={"goal": "suite task", "artifact_scope": ["work"]}).json()["task_id"]
+    legacy = api.post("/tasks", json={"goal": "old suite task [arm:B]", "artifact_scope": ["work"]}).json()["task_id"]
+    ctx.conn.execute("UPDATE tasks SET origin='bench' WHERE id=?", (bench,))
+    ctx.conn.commit()
+    ids = {r["task_id"] for r in api.get("/tasks?bench=false").json()["tasks"]}
+    assert mine in ids and bench not in ids and legacy not in ids
+    assert {mine, bench, legacy} <= {r["task_id"] for r in api.get("/tasks").json()["tasks"]}, "Files still lists them"
+    assert "bench=false" in _fn("loadSide")
+
+
+def test_what_waits_is_listed_however_many_runs_came_after_it(ctx, api):
+    old = api.post("/tasks", json={"goal": "waiting for a signature", "artifact_scope": ["work"]}).json()["task_id"]
+    for i in range(4):
+        t = api.post("/tasks", json={"goal": f"filler {i}", "artifact_scope": ["work"]}).json()["task_id"]
+        ctx.conn.execute("UPDATE tasks SET status='done' WHERE id=?", (t,))
+    ctx.conn.commit()
+    get = lambda q: [r["task_id"] for r in api.get("/tasks?limit=2" + q).json()["tasks"]]  # noqa: E731
+    assert old not in get("") and get("&live=true") == [old]
+    assert "live=true" in _fn("loadSide")
+    out = _node("""process.stdout.write(JSON.stringify(
+      merged([{task_id: "a"}, {task_id: "b"}], [{task_id: "c"}, {task_id: "a"}]).map(t => t.task_id)));""")
+    assert out == ["a", "b", "c"]
+
+
+def test_search_and_archive_reach_past_the_newest_runs(ctx, api):
+    c = api.post("/conversations", json={}).json()
+    old = api.post(f"/conversations/{c['id']}/messages", json={"text": "rename the fixtures"}).json()["task_id"]
+    api.patch(f"/conversations/{c['id']}", json={"archived": True, "title": "Fixture work"})
+    for i in range(5):
+        api.post("/tasks", json={"goal": f"filler {i}", "artifact_scope": ["work"]})
+    get = lambda q: [r["task_id"] for r in api.get("/tasks?limit=3" + q).json()["tasks"]]  # noqa: E731
+    assert old not in get("")
+    assert get("&q=fixtures") == [old] and get("&q=fixture%20work") == [old]
+    assert get("&archived=true") == [old] and old not in get("&archived=false&q=fixtures")
+
+
+def test_the_rail_survives_what_it_cannot_name_and_a_lost_connection():
+    side = _fn("loadSide")
+    assert '|| "A delegated task"' in side
+    assert '$("#health").hidden = true' in side
+    assert "&archived=${S.archived}" in side and "&q=${encodeURIComponent(" in side
+    assert "!t.conversation_id" in _fn("openLooseList")
+
+
 def test_the_queue_has_a_decision_tier_and_a_review_tier():
     out = _node("""
       const tasks = [
@@ -63,20 +109,25 @@ def test_the_queue_has_a_decision_tier_and_a_review_tier():
         {task_id: "d", status: "done", plan_status: "approved", updated_at: 50},
         {task_id: "f", status: "failed", plan_status: "approved", updated_at: 50},
         {task_id: "old", status: "done", plan_status: "approved", updated_at: 5},
-        {task_id: "seen", status: "done", plan_status: "approved", updated_at: 50}];
+        {task_id: "seen", status: "done", plan_status: "approved", updated_at: 50},
+        {task_id: "shelved", status: "done", plan_status: "approved", updated_at: 50, archived: true},
+        {task_id: "n", status: "pending", plan_status: null, updated_at: 50},
+        {task_id: "busy", status: "pending", plan_status: null, updated_at: 50}];
       const gates = [{id: "g1", task_id: "r", tool: "run_command"}];
-      const t = tiers(tasks, gates, {since: 10, ids: new Set(["seen"])});
+      const t = tiers(tasks, gates, {since: 10, ids: new Set(["seen"])}, new Set(["busy"]));
       process.stdout.write(JSON.stringify({decide: t.decide.map(x => x.kind + ":" + x.task_id),
                                            review: t.review.map(x => x.task_id)}));""")
-    assert out == {"decide": ["approval:r", "plan:p"], "review": ["d", "f"]}
+    assert out == {"decide": ["approval:r", "plan:p", "draft:n"], "review": ["d", "f"]}
+    assert "tiers(tasks, gates, SEEN_RUNS, S.drafting)" in _fn("loadSide") and '"draft"' in _fn("loadSide")
 
 
 def test_runs_are_grouped_by_status():
     out = _node("""
       const tasks = ["running", "paused", "pending", "done", "done_unannounced", "failed", "budget_exhausted",
-                     "rejected"].map((s, i) => ({task_id: "t" + i, status: s}));
+                     "rejected", "done"].map((s, i) => ({task_id: "t" + i, status: s, pinned: i === 8}));
       process.stdout.write(JSON.stringify(runGroups(tasks).map(([g, xs]) => [g, xs.map(x => x.task_id)])));""")
-    assert out == [["Live", ["t0", "t1", "t2"]], ["Done", ["t3", "t4"]], ["Stopped", ["t5", "t6", "t7"]]]
+    assert out == [["Live", ["t0", "t1", "t2"]], ["Done", ["t8", "t3", "t4"]], ["Stopped", ["t5", "t6", "t7"]]]
+    assert "function dayGroup(" not in UI
 
 
 def test_an_approval_says_whether_the_signed_plan_expected_it():
@@ -107,9 +158,25 @@ def test_while_the_record_does_not_verify_nothing_can_be_signed_or_allowed():
         assert "S.unsafe ? " in _fn(name), name
 
 
+def test_the_integrity_alarm_is_never_behind_a_page_or_a_drawer():
+    thread = HTML[HTML.index('<main class="thread"'):HTML.index("</main>")]
+    assert 'id="integrity"' not in thread, "a page hides the thread and the alarm with it"
+    assert re.search(r'<div class="app[^>]*>\s*<div id="integrity" class="integrity" role="alert" hidden></div>', HTML)
+    assert re.search(r"#integrity \{[^}]*grid-column: 1 / -1; grid-row: 1", CSS)
+    assert re.search(r"\.side, \.thread, \.trace, \.files, \.page \{[^}]*grid-row: 2", CSS)
+    drawers = re.findall(r"\n\s*\.(?:side|trace, \.files) \{([^}]*)\}", CSS)
+    assert drawers and not any("position: fixed" in d for d in drawers), "a fixed drawer covers the alarm"
+
+
+def test_opening_a_page_leaves_the_way_back_in_view():
+    pane = _fn("openPane")
+    assert "body.focus({preventScroll: true})" in pane and '$("#control").scrollTop = 0' in pane
+
+
 def test_only_decisions_notify_and_only_after_a_hold():
     notify_needs = _fn("notifyNeeds")
     assert "HOLD_MS" in notify_needs and "setTimeout(" in notify_needs
+    assert "await loadSide()" in notify_needs, "the recheck must read fresh state, not the last poll's"
     assert re.search(r"const HOLD_MS = 5000;", UI)
     assert 'notify("A task finished"' not in UI
 
@@ -121,6 +188,12 @@ def test_three_columns_at_most_and_no_page_rail():
     pages = re.search(r'<nav class="pages"[^>]*>(.*?)</nav>', HTML, re.S).group(1)
     assert re.findall(r"<summary>(\w+)</summary>", pages) == ["Workspace", "Settings", "System"]
     assert set(re.findall(r'data-pane="(\w+)"', HTML)) == set(re.findall(r'data-pane="(\w+)"', pages))
+
+
+def test_every_page_in_the_rail_menus_is_in_the_palette():
+    palette = UI[UI.index("const COMMANDS = ["):UI.index("];", UI.index("const COMMANDS = ["))]
+    listed = set(re.findall(r'"openPane", "(\w+)"', palette))
+    assert set(re.findall(r'data-pane="(\w+)"', HTML)) <= listed
 
 
 def test_trace_and_files_share_one_inspector():
@@ -145,6 +218,11 @@ def test_quiet_when_normal():
 def test_the_run_page_folds_the_other_runs_of_its_conversation():
     items = _fn("renderItems")
     assert "S.run" in items and 'class="earlier"' in items and "markSeen(" in items
+    assert "waiting(x)" in items, "a run that needs you is never folded away"
+    out = _node("""process.stdout.write(JSON.stringify([waiting({approvals: [{}], status: "paused"}),
+      waiting({approvals: [], status: "pending", plan: {status: "drafted"}}),
+      waiting({approvals: [], status: "done", plan: {status: "approved"}})]));""")
+    assert out == [True, True, False]
     assert "S.run = taskId" in _fn("openTaskOf")
     side = _fn("loadSide")
     assert 'api("/tasks' in side and "tiers(" in side and "runGroups(" in side

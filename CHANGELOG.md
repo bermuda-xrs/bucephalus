@@ -10,6 +10,30 @@
 Dates are commit dates. `0.1.0` is not released yet — see "Unreleased" for
 what still stands between here and a first iteration.
 
+## Inbox and run, fixes from a bug sweep - 2026-11-22 (no HARNESS_VERSION change: console only)
+
+- Measurement runs (`origin='bench'`, or an `[arm:` goal) stay out of the rail and To review; `GET /tasks?bench=false`
+  leaves them out, and the Files page still lists them.
+- Search and Show archived ask the server again (`GET /tasks` takes `q` and `archived`), so they reach past the newest
+  200 runs.
+- A run that needs you (an approval, or a plan to sign) is never folded away under a later run in its conversation,
+  and never drops out of Needs you: unfinished runs are asked for on their own (`GET /tasks?live=true`), however many
+  runs came after them.
+- The integrity alarm sits above everything, so an open page, a drawer or the phone layout cannot hide it; opening a
+  page keeps Back to runs in view.
+- The notification hold now rereads what is waiting before it notifies; before, it read the last poll, which ran less
+  often than the hold.
+- To review leaves out archived conversations; pinned runs come first in each group; an approval from a delegated
+  sub-task gets a label instead of a blank row; the health line hides again when the connection comes back; "Tasks
+  started elsewhere" lists only runs that have no conversation.
+- A task with no plan yet (a webhook delivery, a schedule's Run now) is in Needs you as "No plan yet: draft one";
+  before, it waited under Live where nothing pointed at it.
+- The Graph page is in the command palette, like every page in the rail menus.
+- Model switching: a backend without `model_server: ollama` cannot be picked or run from the console, by design
+  (2026-10-08). The console now says which line to add instead of "Not a local model". A desktop config written
+  before 2026-10-08 lacks that line on every backend, so the picker was off there; add it, or start from the current
+  default config.
+
 ## Inbox and run: the console's new structure - 2026-11-22 (no HARNESS_VERSION change: console only)
 
 - What needs you is the spine. The rail holds Needs you (plans to sign and parked approvals) and, under it, To review

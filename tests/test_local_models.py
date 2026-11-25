@@ -221,7 +221,9 @@ def test_only_a_declared_model_server_is_managed():
 def test_a_backend_without_a_model_server_has_no_run_button(api, ctx):
     ctx.backends["cloud"].cfg.model_server = None
     assert api.get("/models").json()["executor"]["local"] is False
-    assert api.post("/models/run", json={"model": "granite4.1:3b"}).status_code == 400
+    r = api.post("/models/run", json={"model": "granite4.1:3b"})
+    assert r.status_code == 400 and "model_server: ollama" in r.json()["detail"]
+    assert "model_server: ollama" in UI[UI.index("async function loadModels("):UI.index("async function runModel(")]
 
 
 def _window(api, ctx, usable):

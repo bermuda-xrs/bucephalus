@@ -56,14 +56,18 @@ function statusWord(s) {
 const TERMINAL = s => !["pending", "running", "paused"].includes(s);
 
 // ------------------------------------------------------------ what needs you, and every run
-function tiers(tasks, gates, seen) {
+function tiers(tasks, gates, seen, drafting = new Set()) {
   const decide = gates.map(g => ({kind: "approval", task_id: g.task_id, id: g.id, tool: g.tool}))
     .concat(tasks.filter(t => t.status === "pending" && t.plan_status === "drafted")
-      .map(t => ({kind: "plan", task_id: t.task_id})));
-  const review = tasks.filter(t => TERMINAL(t.status) && t.updated_at > seen.since && !seen.ids.has(t.task_id));
+      .map(t => ({kind: "plan", task_id: t.task_id})))
+    .concat(tasks.filter(t => t.status === "pending" && !t.plan_status && !drafting.has(t.task_id))
+      .map(t => ({kind: "draft", task_id: t.task_id})));
+  const review = tasks.filter(t => TERMINAL(t.status) && !t.archived && t.updated_at > seen.since && !seen.ids.has(t.task_id));
   return {decide, review};
 }
-function runGroups(tasks) {
+const merged = (a, b) => [...a, ...b.filter(x => !a.some(y => y.task_id === x.task_id))];
+function runGroups(all) {
+  const tasks = [...all.filter(t => t.pinned), ...all.filter(t => !t.pinned)];
   return [["Live", tasks.filter(t => !TERMINAL(t.status))],
           ["Done", tasks.filter(t => t.status.startsWith("done"))],
           ["Stopped", tasks.filter(t => TERMINAL(t.status) && !t.status.startsWith("done"))]].filter(([, xs]) => xs.length);
@@ -72,6 +76,9 @@ function expectedStop(plan, tool) {
   if (!plan) return 0;
   const want = new Set((plan.human_approvals_expected || []).map(String));
   return (plan.steps || []).findIndex(s => want.has(String(s.id)) && (s.tools || []).includes(tool)) + 1;
+}
+function waiting(it) {
+  return !!(it.approvals || []).length || (it.status === "pending" && !!it.plan && it.plan.status === "drafted");
 }
 function mustType(plan, tool) {
   return !!plan && (plan.steps || []).some(s => s.reversible === false && (s.tools || []).includes(tool));
@@ -110,28 +117,32 @@ async function loadAlerts() {
 }
 
 async function loadSide() {
-  let tasks = [], gates = [];
+  const q = $("#convSearch").value.trim();
+  let tasks = [], gates = [], listed = null, live = [];
   try {
-    [tasks, gates] = await Promise.all([api("/tasks?limit=200").then(d => d.tasks), api("/approvals").then(d => d.pending)]);
+    [tasks, gates, live, listed] = await Promise.all([api("/tasks?limit=200&bench=false").then(d => d.tasks), api("/approvals").then(d => d.pending),
+      api("/tasks?limit=500&bench=false&live=true").then(d => d.tasks),
+      q || S.archived ? api(`/tasks?limit=200&bench=false&archived=${S.archived}&q=${encodeURIComponent(q)}`).then(d => d.tasks) : null]);
   } catch (e) { $("#health").hidden = false; $("#health").textContent = "Can't reach the control plane"; return; }
-  const q = $("#convSearch").value.trim().toLowerCase();
-  const sig = JSON.stringify([tasks, gates, S.focus, S.archived, q, SEEN_RUNS.ids.size]);
+  $("#health").hidden = true;
+  tasks = merged(live, tasks);
+  const sig = JSON.stringify([tasks, gates, listed, S.focus, S.archived, q, SEEN_RUNS.ids.size]);
   if (sig === S.lastSide) return;
   S.lastSide = sig;
-  const t = tiers(tasks, gates, SEEN_RUNS);
+  const t = tiers(tasks, gates, SEEN_RUNS, S.drafting);
   notifyNeeds(new Set(t.decide.map(x => x.kind + ":" + x.task_id + ":" + (x.id || ""))));
   const goal = id => (tasks.find(x => x.task_id === id) || {}).goal || "";
   const decide = t.decide.map(x => `<button class="side-item needs-item" data-action="openTaskOf" ${args(x.task_id)}>
-      <span class="t">${esc(firstLine(goal(x.task_id)))}</span>
-      <span class="s">${x.kind === "plan" ? "A plan to sign" : `Wants to use <code>${esc(x.tool)}</code>`}</span></button>`);
+      <span class="t">${esc(firstLine(goal(x.task_id)) || "A delegated task")}</span>
+      <span class="s">${x.kind === "plan" ? "A plan to sign" : x.kind === "draft" ? "No plan yet: draft one"
+        : `Wants to use <code>${esc(x.tool)}</code>`}</span></button>`);
   const review = t.review.map(x => `<button class="side-item" data-action="openTaskOf" ${args(x.task_id)}>
       <span class="t">${esc(firstLine(x.goal))}</span><span class="s">${esc(statusWord(x.status))}, not opened yet</span></button>`);
   $("#needsList").innerHTML = (decide.join("") || `<div class="empty">Nothing is waiting on you.</div>`)
     + (review.length ? `<h3 class="group">To review</h3>${review.join("")}` : "");
   $("#nNeeds").textContent = decide.length || "";
   document.title = (decide.length ? `(${decide.length}) ` : "") + "Bucephalus";
-  const shown = tasks.filter(x => (S.archived ? x.archived : !x.archived)
-    && (!q || `${x.goal} ${x.conversation || ""}`.toLowerCase().includes(q)));
+  const shown = listed || tasks.filter(x => !x.archived);
   const item = x => `<button class="side-item" data-action="openTaskOf" ${args(x.task_id)}
       ${x.task_id === S.focus ? 'aria-current="true"' : ""}><span class="t">${x.pinned ? '<span class="pin" aria-label="Pinned">●</span> ' : ""}${esc(firstLine(x.goal))}</span>
       <span class="s">${esc(statusWord(x.status))}${x.spent_usd ? `, $${x.spent_usd.toFixed(2)}` : ""}, ${ago(x.updated_at)}</span>
@@ -141,17 +152,13 @@ async function loadSide() {
     + `<button class="side-item" data-action="openLooseList"><span class="s">Tasks started elsewhere</span></button>`;
   $("#archToggle").textContent = S.archived ? "Show active" : "Show archived";
 }
-function dayGroup(t) {
-  const d = new Date(t * 1000), now = new Date();
-  const days = Math.round((new Date(now.toDateString()) - new Date(d.toDateString())) / 86400000);
-  return days <= 0 ? "Today" : days === 1 ? "Yesterday" : days < 7 ? "This week" : "Earlier";
-}
 const SEEN = {needs: null};
 const HOLD_MS = 5000;
 function notifyNeeds(keys) {
   const fresh = SEEN.needs ? [...keys].filter(k => !SEEN.needs.has(k)) : [];
   SEEN.needs = keys;
-  if (fresh.length) setTimeout(() => {
+  if (fresh.length) setTimeout(async () => {
+    S.lastSide = ""; await loadSide();
     const still = fresh.filter(k => SEEN.needs.has(k));
     if (still.length) notify("Something needs you", `${still.length} new: a plan to sign or a decision to make.`);
   }, HOLD_MS);
@@ -327,7 +334,7 @@ function renderItems(items) {
   if (it && TERMINAL(it.status)) markSeen(focus);
   if (S.focus !== focus) { S.focus = focus; S.lastSide = ""; loadSide(); }
   const open = new Set($$("#items details.earlier[open]").map(d => d.id));
-  $("#items").innerHTML = note + items.map(x => x.task_id === focus ? renderItem(x)
+  $("#items").innerHTML = note + items.map(x => x.task_id === focus || waiting(x) ? renderItem(x)
     : `<details class="earlier" id="e-${esc(x.task_id)}" ${open.has("e-" + x.task_id) ? "open" : ""}>
         <summary>${esc(firstLine(x.goal))}, ${esc(statusWord(x.status).toLowerCase())}</summary>${renderItem(x)}</details>`).join("");
 }
@@ -671,7 +678,7 @@ async function openLooseList() {
   showPage(false); closeStreams(); S.conv = null; S.loose = null; clearTrace();
   const d = await api("/tasks");
   const loose = [];
-  for (const t of d.tasks) loose.push(`<button class="side-item" data-action="openTaskAlone" ${args(t.task_id)}>
+  for (const t of d.tasks.filter(t => !t.conversation_id)) loose.push(`<button class="side-item" data-action="openTaskAlone" ${args(t.task_id)}>
       <span class="t">${esc(firstLine(t.goal))}</span><span class="s">${esc(statusWord(t.status))}, ${ago(t.created_at)}</span></button>`);
   $("#convTitle").textContent = "Tasks started elsewhere";
   $("#items").innerHTML = `<div class="card"><h3>From the CLI, the TUI, schedules and channels</h3>${loose.join("") || '<div class="empty">None.</div>'}</div>`;
@@ -1763,7 +1770,8 @@ async function openPane(name) {
   const body = $("#ccBody");
   body.innerHTML = `<p class="note"><span class="spin"></span> Loading</p>`;
   try { body.innerHTML = await PANES[name](); } catch (e) { body.innerHTML = `<p class="caveat">${esc(e.message)}</p>`; }
-  body.focus();
+  body.focus({preventScroll: true});
+  $("#control").scrollTop = 0;
   if (name === "suites") loadSuites();
   if (name === "map") drawMap();
   if (name === "skills" && $("#kFile")) $("#kFile").addEventListener("change", importSkillFile);
@@ -2419,7 +2427,7 @@ async function loadModels() {
   if (!names.includes(ex.model)) names.unshift(ex.model);
   pick.innerHTML = names.map(n => `<option ${n === ex.model ? "selected" : ""}>${esc(n)}</option>`).join("");
   pick.disabled = !ex.local || !(srv && srv.up);
-  pick.title = !ex.local ? "Not a local model; set in the config" : srv && srv.up ? "The model the next task runs on"
+  pick.title = !ex.local ? "Not marked as a local model server: add model_server: ollama to this backend in the config, then restart" : srv && srv.up ? "The model the next task runs on"
              : "The model server is not running; Run model starts it";
   btn.hidden = !ex.local || !srv || !srv.managed;
   const loaded = srv && srv.loaded.some(m => m.name === pick.value);
@@ -2572,7 +2580,7 @@ const COMMANDS = [
   ["Pin or unpin this conversation", "pinConversation"], ["Export this conversation as Markdown", "exportConversation", "md"],
   ["Export this conversation as JSON", "exportConversation", "json"], ["Turn on notifications", "enableNotifications"],
   ["Reopen the last page", "openControl"], ["Sessions", "openPane", "sessions"], ["Files", "openPane", "files"],
-  ["Models", "openPane", "models"], ["Analytics", "openPane", "analytics"], ["Memory", "openPane", "memory"], ["Schedules", "openPane", "schedules"],
+  ["Models", "openPane", "models"], ["Graph of every conversation", "openPane", "map"], ["Analytics", "openPane", "analytics"], ["Memory", "openPane", "memory"], ["Schedules", "openPane", "schedules"],
   ["Channels", "openPane", "channels"], ["Skills", "openPane", "skills"], ["Eval suites", "openPane", "suites"],
   ["Reviewer policy", "openPane", "policy"], ["Integrity", "openPane", "integrity"],
   ["Measurement", "openPane", "measurement"], ["Settings", "openPane", "settings"], ["Logs", "openPane", "logs"], ["Docs", "openPane", "docs"], ["System", "openPane", "system"], ["MCP", "openPane", "mcp"], ["Keys", "openPane", "keys"], ["Config", "openPane", "config"], ["Webhooks", "openPane", "webhooks"],
