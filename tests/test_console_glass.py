@@ -322,3 +322,44 @@ def test_with_no_image_the_background_is_the_bare_ground():
     assert t["dark"]["ground"].upper() == "#000000" and t["light"]["ground"].upper() == "#FFFFFF"
     bg = UI[UI.index("const BG ="):]
     assert "createRadialGradient" not in bg and "strokeRect" not in bg
+
+
+def test_the_theme_button_names_the_other_theme_after_a_switch():
+    body = UI[UI.index("function setTheme(mode) {"):UI.index("function toggleTheme()")]
+    assert 'querySelectorAll(".btn[data-action=toggleTheme]")' in body
+    assert 'b.textContent = `Switch to ${mode === "light" ? "dark" : "light"}`' in body
+
+
+# ---------------------------------------------------------------- liquid glass
+
+def test_the_liquid_glass_map_bends_only_the_rim_and_inward():
+    out = _node("function statusWord(", "async function applyTheme(",
+                "const m = lgMap(40, 20, 6), at = (x, y) => [m[(y * 40 + x) * 4], m[(y * 40 + x) * 4 + 2]];"
+                "process.stdout.write(JSON.stringify([at(20, 10), at(0, 10), at(39, 10), at(20, 0), at(20, 19),"
+                " at(0, 0), m[3]]));")
+    centre, left, right, top, bottom, corner, alpha = out
+    assert centre == [128, 128]
+    assert left[0] > 200 and right[0] < 56 and left[1] == right[1] == 128
+    assert top[1] > 200 and bottom[1] < 56 and top[0] == bottom[0] == 128
+    assert corner[0] > 200 and corner[1] > 200 and alpha == 255
+
+
+def test_liquid_glass_is_ported_not_installed():
+    lg = UI[UI.index("const LG ="):]
+    assert "react" not in UI.lower() and "liquid-glass-react" not in HTML
+    assert lg.count("feDisplacementMap") == 1, "one bend, no chromatic split: the console stays black and white"
+    assert 'setAttribute("style"' not in UI and "style=" not in lg
+    assert 'style.setProperty("--lg"' in lg
+    assert "navigator.userAgentData" in lg and "prefers-reduced-transparency: reduce" in lg
+
+
+def test_liquid_glass_bends_the_backdrop_and_does_not_leak_into_children():
+    assert re.search(r"@property --lg \{\s*syntax: \"\*\";\s*inherits: false;\s*\}", BARE)
+    panes = re.search(r"\.lg-on :is\(\.side, [^{]*\{([^}]*)\}", BARE)
+    assert panes and "brightness(var(--back-bright)) var(--lg, )" in panes.group(1)
+    assert re.search(r"\.lg-on :is\([^{]*\.btn[^{]*\{\s*backdrop-filter: var\(--lg, \);", BARE)
+
+
+def test_the_notice_names_liquid_glass_react():
+    notes = (CONTROL.parents[2] / "THIRD_PARTY_NOTICES.md").read_text(encoding="utf-8")
+    assert "liquid-glass-react" in notes and "Copyright 2025 MAX ROVENSKY" in notes

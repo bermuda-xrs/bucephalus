@@ -10,6 +10,15 @@
 Dates are commit dates. `0.1.0` is not released yet — see "Unreleased" for
 what still stands between here and a first iteration.
 
+## Liquid glass - 2026-11-28 (no HARNESS_VERSION change: console only)
+
+- Every pane, menu, card, field and button bends the background at its rim, like a lens: an SVG displacement sized
+  to each surface, after liquid-glass-react (MIT, ported, nothing installed). Square, monochrome (no colour split),
+  no elastic motion. The tint and blur that keep text legible are unchanged.
+- Chromium only (the desktop app's WebView2 is Chromium); other browsers keep the frosted glass. Off under
+  prefers-reduced-transparency.
+- Settings, Appearance: the theme button now names the other theme right after a switch (it kept its old label).
+
 ## Files page leaves out measurement runs - 2026-11-28 (no HARNESS_VERSION change: console only)
 
 - The Files page lists your own tasks; measurement runs (`origin='bench'`) show only after Show measurement runs.
