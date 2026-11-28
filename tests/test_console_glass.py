@@ -360,6 +360,28 @@ def test_liquid_glass_bends_the_backdrop_and_does_not_leak_into_children():
     assert re.search(r"\.lg-on :is\([^{]*\.btn[^{]*\{\s*backdrop-filter: var\(--lg, \);", BARE)
 
 
+def test_liquid_glass_is_clear_and_overlays_keep_their_frost():
+    assert re.search(r":root\.lg-on \{\s*--blur: 2px;\s*\}", BARE)
+    assert re.search(r"\.pal, #toast, [^{]*\{\s*--blur: 22px;", BARE)
+
+
+@pytest.mark.parametrize("sel", [":root.lg-on", ':root[data-theme="light"].lg-on'])
+def test_liquid_glass_has_a_lit_rim_brightest_at_the_top_left(sel):
+    m = re.search(re.escape(sel) + r" \{[^}]*--edge: linear-gradient\(135deg, rgba\(255, 255, 255, ([.\d]+)\)([^;]*);", BARE)
+    assert m, f"{sel}: no diagonal rim"
+    assert float(m.group(1)) >= .7
+    alphas = [float(a) for a in re.findall(r"rgba\(\d+, \d+, \d+, ([.\d]+)\)", m.group(2))]
+    assert alphas and max(alphas) < float(m.group(1))
+
+
+def test_the_lens_reaches_well_in_and_bends_hard():
+    kinds = re.findall(r'", (\d+), (\d+)\]', UI[UI.index("const KINDS"):UI.index("const ALL")])
+    assert len(kinds) == 4
+    for bezel, scale in kinds:
+        assert int(scale) >= 2 * int(bezel)
+    assert int(kinds[0][0]) >= 64
+
+
 def test_the_notice_names_liquid_glass_react():
     notes = (CONTROL.parents[2] / "THIRD_PARTY_NOTICES.md").read_text(encoding="utf-8")
     assert "liquid-glass-react" in notes and "Copyright 2025 MAX ROVENSKY" in notes
