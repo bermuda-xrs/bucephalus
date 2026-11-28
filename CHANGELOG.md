@@ -10,6 +10,10 @@
 Dates are commit dates. `0.1.0` is not released yet — see "Unreleased" for
 what still stands between here and a first iteration.
 
+## No ring around the cursor - 2026-11-29 (no HARNESS_VERSION change: console only)
+
+- The lens that follows the pointer no longer draws a white ring at its edge.
+
 ## Liquid glass, take two - 2026-11-29 (no HARNESS_VERSION change: console only)
 
 - The first take read as smoked frost. Now the panes are clear (2 px blur; menus and the palette keep their
