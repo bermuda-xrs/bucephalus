@@ -83,6 +83,17 @@ function waiting(it) {
 function mustType(plan, tool) {
   return !!plan && (plan.steps || []).some(s => s.reversible === false && (s.tools || []).includes(tool));
 }
+function lgMap(w, h, b) {
+  const px = new Uint8ClampedArray(w * h * 4), bend = d => { const t = Math.max(0, 1 - d / b); return t * t; };
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const i = (y * w + x) * 4;
+    px[i] = 128 + 127 * (bend(x + .5) - bend(w - x - .5));
+    px[i + 1] = 128;
+    px[i + 2] = 128 + 127 * (bend(y + .5) - bend(h - y - .5));
+    px[i + 3] = 255;
+  }
+  return px;
+}
 
 
 async function applyTheme() {
@@ -2847,6 +2858,55 @@ void main() {
   gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
   size(); bare();
   return me;
+})();
+const LG = (() => {
+  const KINDS = [[".side, .thread, .trace, .page, .files", 40, 64],
+    [".pal, #toast, .more-menu, .page-menu, .fg-legend", 24, 40],
+    [".card:not(.run, .answer, .drafting), .composer, .changes, .rewind, .split, .chart, .stats, .search, "
+      + ".field input, .field textarea, .field select, .sendback input", 16, 28],
+    [".btn, .tab", 8, 14]];
+  const ALL = KINDS.map(k => k[0]).join(", ");
+  if (!navigator.userAgentData || !CSS.supports("backdrop-filter", "url(#lg)")
+      || matchMedia("(prefers-reduced-transparency: reduce)").matches) return null;
+  const made = new Map(), seen = new Set(), cv = document.createElement("canvas"), hold = document.createElement("div");
+  hold.innerHTML = '<svg class="lg-defs" aria-hidden="true"></svg>';
+  const svg = hold.firstChild;
+  const at = (tag, a) => { const e = document.createElementNS(svg.namespaceURI, tag); for (const k in a) e.setAttribute(k, a[k]); return e; };
+  document.body.append(svg);
+  document.documentElement.classList.add("lg-on");
+  let n = 0, pend = 0;
+  function filter(w, h, b, s) {
+    const key = `${w}x${h}x${b}`;
+    if (!made.has(key)) {
+      const q = Math.max(1, Math.round(b / 6)), mw = Math.ceil(w / q), mh = Math.ceil(h / q), box = {x: 0, y: 0, width: w, height: h};
+      cv.width = mw; cv.height = mh;
+      cv.getContext("2d").putImageData(new ImageData(lgMap(mw, mh, b / q), mw, mh), 0, 0);
+      const f = at("filter", {id: "lg" + n++, ...box, filterUnits: "userSpaceOnUse", primitiveUnits: "userSpaceOnUse",
+                              "color-interpolation-filters": "sRGB"});
+      f.append(at("feImage", {...box, href: cv.toDataURL(), preserveAspectRatio: "none", result: "map"}),
+               at("feDisplacementMap", {in: "SourceGraphic", in2: "map", scale: s, xChannelSelector: "R", yChannelSelector: "B"}));
+      svg.append(f);
+      made.set(key, f);
+    }
+    return made.get(key).id;
+  }
+  function fit(el) {
+    const w = Math.round(el.offsetWidth / 2) * 2, h = Math.round(el.offsetHeight / 2) * 2, kind = KINDS.find(k => el.matches(k[0]));
+    if (!w || !h || !kind) return;
+    const b = Math.min(kind[1], Math.floor(Math.min(w, h) / 4));
+    el.style.setProperty("--lg", `url(#${filter(w, h, b, Math.round(kind[2] * b / kind[1]))})`);
+  }
+  const ro = new ResizeObserver(es => es.forEach(e => fit(e.target)));
+  function scan() {
+    pend = 0;
+    document.querySelectorAll(ALL).forEach(el => { if (!seen.has(el)) { seen.add(el); ro.observe(el); } });
+    for (const el of seen) if (!el.isConnected) { seen.delete(el); ro.unobserve(el); }
+    const used = new Set([...seen].map(el => el.style.getPropertyValue("--lg")));
+    for (const [k, f] of made) if (!used.has(`url(#${f.id})`)) { f.remove(); made.delete(k); }
+  }
+  new MutationObserver(() => { pend ||= requestAnimationFrame(scan); }).observe(document.body, {childList: true, subtree: true});
+  scan();
+  return {made};
 })();
 async function setBackground(file) {
   if (!file) return;

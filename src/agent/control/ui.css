@@ -577,6 +577,15 @@ button.tr-row:hover, .tr-row.sel { background: var(--g-raised); }
   border: 1px solid; border-image: var(--edge) 1; box-shadow: 0 16px 48px var(--shade); }
 .pal, #toast, .more-menu, .page-menu, .fg-legend, .code .gut, .doc-list .search { --blur: 22px; }
 .side, .thread, .trace, .page, .files { margin-left: var(--gap); }
+/* Liquid glass, after liquid-glass-react (MIT, THIRD_PARTY_NOTICES.md): ui.js (LG) gives each surface an SVG
+   displacement sized to it, which bends the backdrop at the rim only. Chromium only; elsewhere the frost stands. */
+@property --lg { syntax: "*"; inherits: false; }
+.lg-defs { position: absolute; width: 0; height: 0; overflow: hidden; pointer-events: none; }
+.lg-on :is(.side, .thread, .trace, .page, .files, .pal, #toast, .more-menu, .page-menu, .fg-legend) {
+  backdrop-filter: blur(var(--blur)) contrast(var(--back-contrast)) brightness(var(--back-bright)) var(--lg, ); }
+.lg-on :is(.card:not(.run, .answer, .drafting), .composer, .changes, .rewind, .split, .chart, .stats, .search,
+           .field input, .field textarea, .field select, .sendback input, .btn, .tab) {
+  backdrop-filter: var(--lg, ); }
 .card, .composer, .ask-bubble, .cc-body table, .cc-body .kv, .split, .chart, .stats, .changes, .rewind {
   border-image: var(--edge) 1; }
 .composer, .plan, .approval { box-shadow: 0 10px 32px var(--shade); }
