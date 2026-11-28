@@ -2862,11 +2862,11 @@ void main() {
   return me;
 })();
 const LG = (() => {
-  const KINDS = [[".side, .thread, .trace, .page, .files", 40, 64],
-    [".pal, #toast, .more-menu, .page-menu, .fg-legend", 24, 40],
+  const KINDS = [[".side, .thread, .trace, .page, .files", 64, 128],
+    [".pal, #toast, .more-menu, .page-menu, .fg-legend", 40, 80],
     [".card:not(.run, .answer, .drafting), .composer, .changes, .rewind, .split, .chart, .stats, .search, "
-      + ".field input, .field textarea, .field select, .sendback input", 16, 28],
-    [".btn, .tab", 8, 14]];
+      + ".field input, .field textarea, .field select, .sendback input", 24, 48],
+    [".btn, .tab", 12, 24]];
   const ALL = KINDS.map(k => k[0]).join(", ");
   if (!navigator.userAgentData || !CSS.supports("backdrop-filter", "url(#lg)")
       || matchMedia("(prefers-reduced-transparency: reduce)").matches) return null;

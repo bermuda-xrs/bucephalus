@@ -37,7 +37,7 @@
   --glass: 100%;
   --blur: 6px;
   --back-contrast: 1;
-  --back-bright: .45;
+  --back-bright: .48;
   --g-panel: color-mix(in srgb, var(--panel) var(--glass), transparent);
   --g-raised: color-mix(in srgb, var(--raised) var(--glass), transparent);
   --display: "Perpetua Titling MT", "Trajan Pro", "Bodoni MT", Didot, "Bodoni 72", "Cormorant SC", Garamond,
@@ -70,7 +70,7 @@
                           rgba(0, 0, 0, .16));
   --shade: rgba(0, 0, 0, .10);
   --back-contrast: .4;
-  --back-bright: 1.8;
+  --back-bright: 1.45;
   color-scheme: light;
 }
 @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
@@ -578,11 +578,20 @@ button.tr-row:hover, .tr-row.sel { background: var(--g-raised); }
 .pal, #toast, .more-menu, .page-menu, .fg-legend, .code .gut, .doc-list .search { --blur: 22px; }
 .side, .thread, .trace, .page, .files { margin-left: var(--gap); }
 /* Liquid glass, after liquid-glass-react (MIT, THIRD_PARTY_NOTICES.md): ui.js (LG) gives each surface an SVG
-   displacement sized to it, which bends the backdrop at the rim only. Chromium only; elsewhere the frost stands. */
+   displacement sized to it, which bends the backdrop toward the rim. Clear (overlays keep their frost), with a
+   lit diagonal rim. The tint stays where WCAG AA puts it. Chromium only; elsewhere the frost stands. */
 @property --lg { syntax: "*"; inherits: false; }
+:root.lg-on { --blur: 2px; }
+:root.lg-on {
+  --edge: linear-gradient(135deg, rgba(255, 255, 255, .8), rgba(255, 255, 255, .14) 28%, rgba(255, 255, 255, .05) 62%,
+                          rgba(255, 255, 255, .42)); }
+:root[data-theme="light"].lg-on {
+  --edge: linear-gradient(135deg, rgba(255, 255, 255, 1), rgba(0, 0, 0, .12) 30%, rgba(0, 0, 0, .08) 62%,
+                          rgba(0, 0, 0, .3)); }
 .lg-defs { position: absolute; width: 0; height: 0; overflow: hidden; pointer-events: none; }
 .lg-on :is(.side, .thread, .trace, .page, .files, .pal, #toast, .more-menu, .page-menu, .fg-legend) {
-  backdrop-filter: blur(var(--blur)) contrast(var(--back-contrast)) brightness(var(--back-bright)) var(--lg, ); }
+  backdrop-filter: blur(var(--blur)) contrast(var(--back-contrast)) brightness(var(--back-bright)) var(--lg, );
+  box-shadow: inset 1px 1px 0 rgba(255, 255, 255, .22), 0 16px 48px var(--shade); }
 .lg-on :is(.card:not(.run, .answer, .drafting), .composer, .changes, .rewind, .split, .chart, .stats, .search,
            .field input, .field textarea, .field select, .sendback input, .btn, .tab) {
   backdrop-filter: var(--lg, ); }

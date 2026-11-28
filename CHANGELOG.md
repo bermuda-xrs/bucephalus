@@ -10,6 +10,14 @@
 Dates are commit dates. `0.1.0` is not released yet — see "Unreleased" for
 what still stands between here and a first iteration.
 
+## Liquid glass, take two - 2026-11-29 (no HARNESS_VERSION change: console only)
+
+- The first take read as smoked frost. Now the panes are clear (2 px blur; menus and the palette keep their
+  frost), every pane and card has a lit diagonal rim, and the lens reaches about twice as far in and bends twice
+  as hard.
+- The tint barely moves: in dark the dimmest text caps what shows through at about 29% grey (was 25%), the
+  WCAG AA sum in tests/test_console_glass.py. Light glass lets more through (brightness 1.8 to 1.45).
+
 ## Liquid glass - 2026-11-28 (no HARNESS_VERSION change: console only)
 
 - Every pane, menu, card, field and button bends the background at its rim, like a lens: an SVG displacement sized
