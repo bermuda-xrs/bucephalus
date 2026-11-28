@@ -156,6 +156,11 @@ process.stdout.write(JSON.stringify({x1, rips: s.rips.length, max: FX.rips, last
     assert out["rips"] == out["max"] and out["last"]["x"] == 80
 
 
+def test_the_cursor_lens_draws_no_ring():
+    fs = UI[UI.index("const FS = `"):UI.index("}`;", UI.index("const FS = `"))]
+    assert "float rim" not in fs and "* rim" not in fs
+
+
 def test_the_effect_adds_no_colour_and_draws_at_most_one_pixel_per_css_pixel():
     bg = UI[UI.index("const BG ="):]
     fs = bg[bg.index("const FS = `"):bg.index("`;", bg.index("const FS = `"))]

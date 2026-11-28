@@ -2758,8 +2758,7 @@ void main() {
     c += look(src + vec2(cos(a), sin(a)) * soft * (.5 + .5 * fract(float(i) * .618)));
   }
   c /= 8.;
-  float rim = on * exp(-pow((r - 1.) * R / (1.2 * k), 2.));
-  float light = .04 * halo * (1. + .2 * lvl) + .14 * rim + .12 * wave + .05 * cut * halo;
+  float light = .04 * halo * (1. + .2 * lvl) + .12 * wave + .05 * cut * halo;
   float grain = (hash(px + fract(t) * 91.7) - .5) * (.05 + .015 * lvl) * halo;
   gl_FragColor = vec4(clamp(c + ink * (light + grain), 0., 1.), 1.);
 }`;
