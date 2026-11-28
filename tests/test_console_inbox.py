@@ -196,6 +196,14 @@ def test_every_page_in_the_rail_menus_is_in_the_palette():
     assert set(re.findall(r'data-pane="(\w+)"', HTML)) <= listed
 
 
+def test_the_files_page_leaves_out_measurement_runs_unless_asked():
+    i = UI.index("  async files() {")
+    pane = UI[i:UI.index("\n  },", i)]
+    assert 'api("/tasks?limit=100&bench=" + (S.filesBench ? "true" : "false"))' in pane
+    assert 'data-action="filesBench"' in pane and "filesBench," in UI[UI.index("const ACTIONS = {"):]
+    assert "function filesBench() { S.filesBench = !S.filesBench; openPane(\"files\"); }" in UI
+
+
 def test_trace_and_files_share_one_inspector():
     assert re.search(r"\.trace, \.files \{[^}]*grid-column: 3", CSS)
     files = re.search(r"\n\.files \{([^}]*)\}", CSS).group(1)
