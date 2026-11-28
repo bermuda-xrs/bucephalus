@@ -105,6 +105,8 @@ async function applyTheme() {
 function setTheme(mode) {
   document.documentElement.dataset.theme = mode;
   BG.theme();
+  document.querySelectorAll(".btn[data-action=toggleTheme]").forEach(b => {
+    b.textContent = `Switch to ${mode === "light" ? "dark" : "light"}`; });
   try { localStorage.setItem("bucephalus-theme", mode); } catch { /* per-viewer only */ }
 }
 function toggleTheme() { setTheme(document.documentElement.dataset.theme === "light" ? "dark" : "light"); }

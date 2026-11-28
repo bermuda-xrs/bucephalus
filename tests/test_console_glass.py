@@ -324,6 +324,12 @@ def test_with_no_image_the_background_is_the_bare_ground():
     assert "createRadialGradient" not in bg and "strokeRect" not in bg
 
 
+def test_the_theme_button_names_the_other_theme_after_a_switch():
+    body = UI[UI.index("function setTheme(mode) {"):UI.index("function toggleTheme()")]
+    assert 'querySelectorAll(".btn[data-action=toggleTheme]")' in body
+    assert 'b.textContent = `Switch to ${mode === "light" ? "dark" : "light"}`' in body
+
+
 # ---------------------------------------------------------------- liquid glass
 
 def test_the_liquid_glass_map_bends_only_the_rim_and_inward():

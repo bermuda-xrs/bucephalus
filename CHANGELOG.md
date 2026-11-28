@@ -17,6 +17,7 @@ what still stands between here and a first iteration.
   no elastic motion. The tint and blur that keep text legible are unchanged.
 - Chromium only (the desktop app's WebView2 is Chromium); other browsers keep the frosted glass. Off under
   prefers-reduced-transparency.
+- Settings, Appearance: the theme button now names the other theme right after a switch (it kept its old label).
 
 ## Files page leaves out measurement runs - 2026-11-28 (no HARNESS_VERSION change: console only)
 
