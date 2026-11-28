@@ -1823,9 +1823,11 @@ const PANES = {
         ? "Nothing archived." : "No conversations yet."}</td></tr>`}</table>`;
   },
   async files() {
-    const d = await api("/tasks?limit=100");
+    const d = await api("/tasks?limit=100&bench=" + (S.filesBench ? "true" : "false"));
     return `<h3>Files</h3><p class="lede">Each task reads and writes only its own workspace. A file you add is marked
       untrusted: the agent reads it as data, never as instructions.</p>
+      <p class="note"><button class="quiet" data-action="filesBench">${S.filesBench ? "Hide measurement runs"
+        : "Show measurement runs"}</button></p>
       <div class="split ide"><nav class="task-list" aria-label="Tasks">${d.tasks.map(t => `<button class="side-item"
         data-action="pickWorkspace" ${args(t.task_id)} aria-current="${t.task_id === S.filesTask}">
         <span class="t">${esc(firstLine(t.goal))}</span><span class="s">${esc(statusWord(t.status))}, ${ago(t.created_at)}</span></button>`).join("")
@@ -2222,6 +2224,7 @@ function exportOne(id, title) {
   download(`/conversations/${id}/export?format=md`, `${String(title).slice(0, 60).replace(/[^\w.-]+/g, "-")}.md`);
 }
 function sessArchived() { S.sessArch = !S.sessArch; openPane("sessions"); }
+function filesBench() { S.filesBench = !S.filesBench; openPane("files"); }
 function pickWorkspace(id) {
   S.filesPath = "";
   $$(".task-list .side-item").forEach(b => b.setAttribute("aria-current", String(b.dataset.args === JSON.stringify([id]))));
@@ -2647,7 +2650,7 @@ const ACTIONS = {ideDir, ideFile, ideTab, ideClose, ideNew, ideCopy, ideSave, id
   toggleTheme, removeBackground, acceptMemory, createSuite, saveTask, closeSuite, addSkill, savePolicy,
   openSuite, delSuite, delTask, checkGate, pinConversation, exportConversation, enableNotifications,
   runModel, stopTask, resumeTask, toggleTool, setView, closeTrace, traceTask, traceNode, closeTraceDetail, showRewind, showChanges, doRewind, askAgain, editAsk, copyAnswer, copyCode, forgetMemory, addSchedule, removeSchedule, viewSkill,
-  patchConversation, exportOne, sessArchived, pickWorkspace, useModel, useReviewer, loadModel, unloadModel, anDays, readDoc,
+  patchConversation, exportOne, sessArchived, filesBench, pickWorkspace, useModel, useReviewer, loadModel, unloadModel, anDays, readDoc,
   editSchedule, cancelScheduleEdit, pauseSchedule, resumeSchedule, runSchedule, archiveOlder, newFolder, removeFile, makeBackup, getBackup, testMcp, saveKey, clearKey, fillSender, allowSender, revokeSender, closeMapInfo, reviewConfig, applyConfig, addHook, toggleHook, deleteHook};
 document.addEventListener("click", e => {
   $$("details.more[open], .pages details[open]").forEach(d => { if (!d.contains(e.target)) d.open = false; });

@@ -10,6 +10,11 @@
 Dates are commit dates. `0.1.0` is not released yet — see "Unreleased" for
 what still stands between here and a first iteration.
 
+## Files page leaves out measurement runs - 2026-11-28 (no HARNESS_VERSION change: console only)
+
+- The Files page lists your own tasks; measurement runs (`origin='bench'`) show only after Show measurement runs.
+  After an eval, its runs no longer push your tasks off the list.
+
 ## Inbox and run, fixes from a bug sweep - 2026-11-22 (no HARNESS_VERSION change: console only)
 
 - Measurement runs (`origin='bench'`, or an `[arm:` goal) stay out of the rail and To review; `GET /tasks?bench=false`
